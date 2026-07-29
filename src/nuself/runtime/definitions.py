@@ -29,6 +29,14 @@ class DefinitionRegistrySealedError(RuntimeError):
         self.namespace = namespace
 
 
+class DefinitionRegistryUnsealedError(RuntimeError):
+    """Runtime lookup started before composition was sealed."""
+
+    def __init__(self, namespace: str) -> None:
+        super().__init__(f"{namespace} definition registry is not sealed")
+        self.namespace = namespace
+
+
 class UnknownDefinitionError(LookupError):
     """A registry does not own the requested definition key."""
 
@@ -72,6 +80,8 @@ class DefinitionRegistry(Generic[DefinitionKey, Definition]):
 
     def resolve(self, key: DefinitionKey) -> Definition:
         with self._lock:
+            if not self._sealed:
+                raise DefinitionRegistryUnsealedError(self._namespace)
             try:
                 return self._definitions[key]
             except KeyError as exc:

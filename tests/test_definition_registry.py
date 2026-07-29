@@ -7,6 +7,7 @@ import pytest
 from nuself.runtime.definitions import (
     DefinitionRegistry,
     DefinitionRegistrySealedError,
+    DefinitionRegistryUnsealedError,
     DuplicateDefinitionError,
     UnknownDefinitionError,
 )
@@ -52,7 +53,7 @@ def test_definition_registry_rejects_unknown_keys() -> None:
     registry = DefinitionRegistry[str, _Definition](
         lambda definition: definition.name,
         namespace="test",
-    )
+    ).seal()
 
     with pytest.raises(UnknownDefinitionError) as captured:
         registry.resolve("missing")
@@ -65,9 +66,22 @@ def test_definition_registry_can_store_none_as_a_definition() -> None:
     registry = DefinitionRegistry[str, None](
         lambda definition: "none",
         namespace="test",
-    ).register(None)
+    ).register(None).seal()
 
     assert registry.resolve("none") is None
+
+
+def test_definition_registry_rejects_lookup_before_seal() -> None:
+    registry = DefinitionRegistry[str, _Definition](
+        lambda definition: definition.name,
+        namespace="test",
+    ).register(_Definition("first", 1))
+
+    with pytest.raises(DefinitionRegistryUnsealedError) as captured:
+        registry.resolve("first")
+
+    assert captured.value.namespace == "test"
+    assert registry.definitions == (_Definition("first", 1),)
 
 
 def test_definition_registry_rejects_registration_after_seal() -> None:

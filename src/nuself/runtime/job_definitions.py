@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from nuself.runtime.definitions import (
     DefinitionRegistry,
     DefinitionRegistrySealedError,
+    DefinitionRegistryUnsealedError,
     DuplicateDefinitionError,
     UnknownDefinitionError,
 )
@@ -126,6 +127,10 @@ class JobDefinitionRegistry:
     def resolve(self, name: str) -> RuntimeJobDefinition:
         try:
             return self._registry.resolve(name)
+        except DefinitionRegistryUnsealedError as exc:
+            raise JobDefinitionRegistryUnsealedError(
+                "job definition registry must be sealed before runtime use"
+            ) from exc
         except UnknownDefinitionError as exc:
             raise UnknownJobDefinitionError(
                 f"runtime job is not registered: {name!r}"

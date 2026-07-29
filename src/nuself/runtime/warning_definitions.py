@@ -6,7 +6,10 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from nuself.runtime.definitions import DefinitionRegistry
+from nuself.runtime.definitions import (
+    DefinitionRegistry,
+    DefinitionRegistryUnsealedError,
+)
 from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     emit_runtime_warning,
@@ -21,6 +24,10 @@ _WARNING_IDENTITY_RE = re.compile(
 
 class TerminalWarningSchemaError(ValueError):
     """A terminal warning producer violated its registered contract."""
+
+
+class TerminalWarningRegistryUnsealedError(RuntimeError):
+    """Warning rendering started before composition was sealed."""
 
 
 def _accept_metadata(_metadata: Mapping[str, object]) -> None:
@@ -97,7 +104,12 @@ class TerminalWarningRegistry:
         return self
 
     def resolve(self, event: str) -> TerminalWarningDefinition:
-        return self._registry.resolve(event)
+        try:
+            return self._registry.resolve(event)
+        except DefinitionRegistryUnsealedError as exc:
+            raise TerminalWarningRegistryUnsealedError(
+                "terminal warning registry must be sealed before runtime use"
+            ) from exc
 
     def seal(self) -> TerminalWarningRegistry:
         self._registry.seal()

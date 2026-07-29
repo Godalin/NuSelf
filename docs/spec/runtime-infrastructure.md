@@ -543,6 +543,14 @@ using `(producer, name)` keys; persisted lifecycle audits use event-slug keys.
 The shared primitive does not merge their definition types, namespaces,
 extension rules, or delivery behavior.
 
+`resolve()` is a runtime operation and rejects an unsealed
+`DefinitionRegistry`; composition code uses registration and immutable
+definition snapshots instead. Domain adapters translate this state failure into
+their typed unsealed-registry errors. Runtime owners must reject an unsealed
+adapter during construction rather than retain a registry whose supported
+identity set can change after the owner starts. `EventPublisher` applies this
+check before accepting projections or publishing.
+
 Runtime events and persisted audits remain distinct boundaries. Runtime events
 are synchronous immutable-envelope publication to projections; lifecycle
 audits are direct best-effort log projections with fixed presentation defaults.

@@ -7,6 +7,7 @@ import pytest
 from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditDefinitionRegistrySealedError,
+    AuditDefinitionRegistryUnsealedError,
     AuditEventDefinition,
     AuditSchemaError,
     DuplicateAuditDefinitionError,
@@ -50,6 +51,20 @@ def test_audit_definition_registry_rejects_unknown_identity() -> None:
     registry = AuditDefinitionRegistry().seal()
 
     with pytest.raises(UnknownAuditDefinitionError):
+        registry.resolve("memory", "entry_created")
+
+
+def test_audit_definition_registry_rejects_lookup_before_seal() -> None:
+    registry = AuditDefinitionRegistry().register(
+        AuditEventDefinition(
+            "memory",
+            "entry_created",
+            "info",
+            "created",
+        )
+    )
+
+    with pytest.raises(AuditDefinitionRegistryUnsealedError):
         registry.resolve("memory", "entry_created")
 
 

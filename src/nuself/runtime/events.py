@@ -69,6 +69,7 @@ class EventPublisher:
             if definitions is not None
             else build_event_definition_registry()
         )
+        self._definitions.require_sealed()
         self._publisher_id = uuid4()
         self._next_projection_id = 1
         self._projections: dict[

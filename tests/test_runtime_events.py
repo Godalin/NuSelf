@@ -14,6 +14,7 @@ from nuself.runtime import (
     DuplicateEventDefinitionError,
     EventDefinitionRegistry,
     EventDefinitionRegistrySealedError,
+    EventDefinitionRegistryUnsealedError,
     EventDeliveryError,
     EventPublisher,
     RuntimeLogEventPayload,
@@ -484,6 +485,41 @@ def test_event_definition_registry_rejects_duplicates_and_late_changes() -> None
                 description="A durable memory entry was deleted.",
             )
         )
+
+
+def test_event_publisher_rejects_unsealed_definitions_at_composition() -> None:
+    registry = EventDefinitionRegistry().register(
+        RuntimeEventDefinition(
+            producer="memory",
+            name="entry.changed",
+            description="A durable memory entry changed.",
+        )
+    )
+
+    with pytest.raises(EventDefinitionRegistryUnsealedError):
+        EventPublisher(registry)
+
+    registry.register(
+        RuntimeEventDefinition(
+            producer="memory",
+            name="entry.deleted",
+            description="A durable memory entry was deleted.",
+        )
+    )
+    assert len(registry.definitions) == 2
+
+
+def test_event_definition_lookup_rejects_unsealed_registry() -> None:
+    registry = EventDefinitionRegistry().register(
+        RuntimeEventDefinition(
+            producer="memory",
+            name="entry.changed",
+            description="A durable memory entry changed.",
+        )
+    )
+
+    with pytest.raises(EventDefinitionRegistryUnsealedError):
+        registry.resolve("memory", "entry.changed")
 
 
 def test_event_definition_rejects_non_callable_payload_validator() -> None:

@@ -10,6 +10,7 @@ from nuself.runtime.audit_types import LOG_COMPONENTS, LogComponent, LogLevel
 from nuself.runtime.definitions import (
     DefinitionRegistry,
     DefinitionRegistrySealedError,
+    DefinitionRegistryUnsealedError,
     DuplicateDefinitionError,
     UnknownDefinitionError,
 )
@@ -30,6 +31,10 @@ class DuplicateAuditDefinitionError(ValueError):
 
 class AuditDefinitionRegistrySealedError(RuntimeError):
     """A sealed audit definition registry was mutated."""
+
+
+class AuditDefinitionRegistryUnsealedError(RuntimeError):
+    """Audit lookup started before composition was sealed."""
 
 
 class UnknownAuditDefinitionError(LookupError):
@@ -148,6 +153,10 @@ class AuditDefinitionRegistry:
     ) -> AuditEventDefinition:
         try:
             return self._registry.resolve((component, event))
+        except DefinitionRegistryUnsealedError as exc:
+            raise AuditDefinitionRegistryUnsealedError(
+                "audit definition registry must be sealed before runtime use"
+            ) from exc
         except UnknownDefinitionError as exc:
             raise UnknownAuditDefinitionError(
                 f"direct audit is not registered: {(component, event)!r}"

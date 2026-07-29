@@ -12,6 +12,7 @@ from nuself.runtime.definitions import (
 from nuself.runtime.warning_definitions import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
+    TerminalWarningRegistryUnsealedError,
     TerminalWarningSchemaError,
     emit_registered_terminal_warning,
 )
@@ -46,6 +47,15 @@ def test_terminal_warning_registry_is_duplicate_safe_and_sealed() -> None:
         )
     with pytest.raises(UnknownDefinitionError):
         registry.resolve("test/unknown")
+
+
+def test_terminal_warning_registry_rejects_lookup_before_seal() -> None:
+    registry = TerminalWarningRegistry().register(
+        TerminalWarningDefinition("test/failed", ())
+    )
+
+    with pytest.raises(TerminalWarningRegistryUnsealedError):
+        registry.resolve("test/failed")
 
 
 def test_terminal_warning_render_is_exact_ordered_and_redacted() -> None:

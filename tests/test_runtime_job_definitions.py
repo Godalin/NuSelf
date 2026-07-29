@@ -81,6 +81,8 @@ def test_job_definition_registry_rejects_create_before_sealing() -> None:
     registry = JobDefinitionRegistry().register(_definition())
 
     with pytest.raises(JobDefinitionRegistryUnsealedError):
+        registry.resolve("example.job")
+    with pytest.raises(JobDefinitionRegistryUnsealedError):
         registry.validate(_message())
     with pytest.raises(JobDefinitionRegistryUnsealedError):
         registry.create(

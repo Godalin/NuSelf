@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Definition lookup now requires an explicitly sealed registry, and runtime
+  owners such as `EventPublisher` reject partially composed registries before
+  use so late registration cannot change their supported identity set.
 - Local runtime jobs are now created through their sealed semantic registry;
   unknown names, disallowed producers, and invalid domain data fail before a
   `JobMessage` is returned, while queue ingress still revalidates decoded data.

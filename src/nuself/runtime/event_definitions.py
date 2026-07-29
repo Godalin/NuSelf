@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from nuself.runtime.definitions import (
     DefinitionRegistry,
     DefinitionRegistrySealedError,
+    DefinitionRegistryUnsealedError,
     DuplicateDefinitionError,
     UnknownDefinitionError,
 )
@@ -28,6 +29,10 @@ class DuplicateEventDefinitionError(ValueError):
 
 class EventDefinitionRegistrySealedError(RuntimeError):
     """Raised when a sealed definition registry is mutated."""
+
+
+class EventDefinitionRegistryUnsealedError(RuntimeError):
+    """Raised when event runtime use starts before composition is sealed."""
 
 
 class UnknownEventDefinitionError(LookupError):
@@ -100,6 +105,10 @@ class EventDefinitionRegistry:
     def resolve(self, producer: str, name: str) -> RuntimeEventDefinition:
         try:
             return self._registry.resolve((producer, name))
+        except DefinitionRegistryUnsealedError as exc:
+            raise EventDefinitionRegistryUnsealedError(
+                "event definition registry must be sealed before runtime use"
+            ) from exc
         except UnknownDefinitionError as exc:
             raise UnknownEventDefinitionError(
                 f"runtime event is not registered: {(producer, name)!r}"
@@ -108,6 +117,12 @@ class EventDefinitionRegistry:
     def seal(self) -> EventDefinitionRegistry:
         self._registry.seal()
         return self
+
+    def require_sealed(self) -> None:
+        if not self._registry.is_sealed:
+            raise EventDefinitionRegistryUnsealedError(
+                "event definition registry must be sealed before runtime use"
+            )
 
     @property
     def definitions(self) -> tuple[RuntimeEventDefinition, ...]:

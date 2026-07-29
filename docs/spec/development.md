@@ -233,6 +233,11 @@ Code requiring independent progress, network I/O, retries, or an unbounded wait
 must own a bounded queue and worker lifecycle instead of attaching a callback
 to the publisher.
 
+Shared definition lookup is runtime-only: seal a `DefinitionRegistry` before
+calling `resolve()` or injecting its semantic adapter into a runtime owner.
+Composition-time inspection uses `definitions`; runtime owners must not retain
+a registry that remains open to late registration.
+
 Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
 `queue.Queue` or `SimpleQueue`. Capacity, identity coalescing, in-flight
 ownership, and explicit completion are shared transport mechanics; manifest
