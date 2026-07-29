@@ -60,11 +60,18 @@ target.
 - Full suite: 2170 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
+- Development CI run `30441324777` passed all Python 3.12-3.14 jobs, builds,
+  and clean-wheel smoke tests, but reported that checkout/setup-python v4 use
+  the deprecated Node 20 action runtime.
+- Official current action generations were verified before updating CI and
+  release to `actions/checkout@v7` and `actions/setup-python@v6`; workflow
+  validation and publication are pending.
 
 ## Publication
 
-Recoverable Memory candidate acceptance was implemented in `651c134`;
-milestone publication is pending this goal update, push, and development CI.
+Recoverable Memory candidate acceptance was implemented in `651c134`; current
+action runtimes were adopted in `9fd2e02`. Milestone publication is pending
+this goal update, push, and development CI.
 
 ## Next Review Batch
 
