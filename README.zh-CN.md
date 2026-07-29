@@ -61,6 +61,8 @@ turn 中的 durable signal，不再由英文 marker 单独决定是否调用模�
 rate-limit 和 transient server status，不会匹配 provider error 文本。
 Email notification HTML 会分别转义 body 和 link attribute，只接受 canonical 的
 受支持 `nuself://` deep link，并在连接 SMTP 前拒绝 header injection。
+共享 runtime timeout validator 统一了 job admission、delayed scheduling 和
+owned call 对 bool、NaN、infinity 与负数的拒绝语义。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。

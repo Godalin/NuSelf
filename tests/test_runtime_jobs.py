@@ -81,3 +81,14 @@ def test_job_admission_rejects_invalid_capacity_and_empty_reads() -> None:
     admission = JobAdmissionQueue(capacity=1)
     with pytest.raises(queue.Empty):
         admission.get_nowait()
+
+
+@pytest.mark.parametrize(
+    "timeout",
+    [-1, float("nan"), float("inf"), True],
+)
+def test_job_admission_rejects_invalid_timeout(timeout: float) -> None:
+    admission = JobAdmissionQueue(capacity=1)
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        admission.get(timeout=timeout)

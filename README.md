@@ -72,6 +72,8 @@ rendered provider error text.
 Email notification HTML escapes body and link attributes independently, accepts
 only canonical supported `nuself://` deep links, and rejects header injection
 before opening SMTP.
+Shared runtime timeout validation now gives job admission, delayed scheduling,
+and owned calls identical bool/NaN/infinity/negative-value behavior.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

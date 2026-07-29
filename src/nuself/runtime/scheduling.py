@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Hashable
-from math import isfinite
+
+from nuself.runtime.validation import validate_timeout
 
 
 class DelayedTaskScheduler:
@@ -25,14 +26,12 @@ class DelayedTaskScheduler:
     ) -> bool:
         """Schedule one unique key, returning false when closed or duplicate."""
 
-        if (
-            isinstance(delay_seconds, bool)
-            or not isfinite(delay_seconds)
-            or delay_seconds < 0
-        ):
-            raise ValueError(
-                "delayed task delay must be finite and non-negative"
-            )
+        checked_delay = validate_timeout(
+            delay_seconds,
+            field_name="delayed task delay",
+            allow_none=False,
+        )
+        assert checked_delay is not None
         if not callable(callback):
             raise TypeError("delayed task callback must be callable")
         if on_callback_error is not None and not callable(on_callback_error):
@@ -41,7 +40,7 @@ class DelayedTaskScheduler:
             if self._closed or key in self._timers:
                 return False
             timer = threading.Timer(
-                delay_seconds,
+                checked_delay,
                 self._run,
                 args=(key, callback, on_callback_error),
             )

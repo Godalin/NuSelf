@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from math import isfinite
 import threading
 from typing import Generic, TypeVar, cast
+
+from nuself.runtime.validation import validate_timeout
 
 ResultT = TypeVar("ResultT")
 _MISSING = object()
@@ -107,7 +108,8 @@ class OwnedCall(Generic[ResultT]):
 
 
 def _validate_timeout(timeout: float | None) -> None:
-    if timeout is None:
-        return
-    if isinstance(timeout, bool) or not isfinite(timeout) or timeout < 0:
-        raise ValueError("owned call timeout must be finite and non-negative")
+    validate_timeout(
+        timeout,
+        field_name="owned call timeout",
+        allow_none=True,
+    )

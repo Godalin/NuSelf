@@ -11,6 +11,7 @@ from threading import Condition
 from typing import Literal, cast
 
 from nuself.runtime.messages import RuntimeEnvelope
+from nuself.runtime.validation import validate_timeout
 
 JobSink = Callable[["JobMessage"], None]
 JobAdmissionResult = Literal["admitted", "duplicate", "full"]
@@ -131,9 +132,16 @@ class JobAdmissionQueue:
     def get(self, *, timeout: float | None = None) -> JobMessage:
         """Acquire one message while retaining its identity as in-flight."""
 
-        if timeout is not None and timeout < 0:
-            raise ValueError("job admission timeout must not be negative")
-        deadline = None if timeout is None else time.monotonic() + timeout
+        checked_timeout = validate_timeout(
+            timeout,
+            field_name="job admission timeout",
+            allow_none=True,
+        )
+        deadline = (
+            None
+            if checked_timeout is None
+            else time.monotonic() + checked_timeout
+        )
         with self._condition:
             while not self._pending:
                 if deadline is None:

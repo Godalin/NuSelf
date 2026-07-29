@@ -122,6 +122,17 @@ def test_delayed_scheduler_rolls_back_failed_start(
     assert _FakeTimer.instances[0].cancelled
 
 
+@pytest.mark.parametrize(
+    "delay",
+    [-1, float("nan"), float("inf"), True],
+)
+def test_delayed_scheduler_rejects_invalid_delay(delay: float) -> None:
+    scheduler = DelayedTaskScheduler()
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        scheduler.schedule("job-1", delay, lambda: None)
+
+
 def test_delayed_scheduler_close_cancels_and_blocks_callbacks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

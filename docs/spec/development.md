@@ -293,6 +293,12 @@ task, deadlock a callback that schedules more work, or silently lose callback
 failure. Observer failure remains chained to the callback failure rather than
 being mistaken for successful observation.
 
+Shared runtime components validate optional wait/delay timeouts through one
+`validate_timeout` boundary. Present values must be real finite numbers,
+excluding booleans, and must be non-negative; `None` is accepted only when the
+caller explicitly allows an unbounded wait. Components may add a stricter
+positive-only domain rule, but must not duplicate bool/NaN/infinity handling.
+
 Local job producers use a sealed `JobDefinitionRegistry.create(...)`; they do
 not construct `JobMessage` fields directly. Queue ingress still validates
 messages because decoded or externally supplied envelopes are untrusted.

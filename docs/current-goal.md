@@ -114,6 +114,10 @@ trustworthy 0.3.0 release candidate.
   deep links, rejects fragments/external schemes, and rejects configuration
   header control characters.
 - Focused email, deep-link, and notification-loop tests: 61 passed.
+- Job admission, delayed scheduling, and owned calls now use one shared finite
+  non-negative timeout validator; bool, NaN, infinity, and negative cases are
+  consistent.
+- Focused runtime job/scheduling/execution/export tests: 63 passed.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -123,4 +127,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Shared timeout validation and portable thought-pack names.
+Portable thought-pack names.
