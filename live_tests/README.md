@@ -16,3 +16,15 @@ The suite checks raw transport, structured output, ordinary NuSelf chat, and
 the production-critical combination of tool calling plus a structured final
 response. Failures are reported through NuSelf's credential-redacting LLM
 diagnostic formatter.
+
+The maintained OpenCode Go matrix is explicit and cost-bearing:
+
+```bash
+uv run --locked pytest live_tests -m live_api --run-live-api \
+  --live-opencode-go-matrix
+```
+
+It covers representative OpenAI-compatible and Anthropic Messages models.
+Strict xfails describe stable unsupported capability layers; non-strict xfails
+retain observed unstable layers. Repeat `--live-model provider:model` to test
+custom models with every layer required.

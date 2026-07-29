@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import replace
 from typing import Literal, NoReturn
 
 import pytest
@@ -16,9 +17,11 @@ from nuself.agent.middleware import ToolOutcome
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.llm import (
     LangChainLLMEndpoint,
+    build_langchain_endpoint,
     configured_langchain_chat_models,
     redacted_llm_diagnostic,
 )
+from nuself.live_testing import LiveModelCase
 
 pytestmark = pytest.mark.live_api
 
@@ -31,15 +34,28 @@ class _LiveStructuredOutput(BaseModel):
     status: Literal["LIVE_STRUCTURED_OK"]
 
 
-@pytest.fixture(scope="module")
-def live_endpoints() -> tuple[LangChainLLMEndpoint, ...]:
+@pytest.fixture
+def live_endpoint(
+    live_model_case: LiveModelCase | None,
+) -> LangChainLLMEndpoint:
     endpoints = configured_langchain_chat_models(PROJECT_ROOT)
     if not endpoints:
         pytest.fail(
             "no configured LLM endpoint with a non-empty API key",
             pytrace=False,
         )
-    return endpoints
+    template = endpoints[0]
+    if live_model_case is None:
+        return template
+    live_model_spec = live_model_case.spec
+    return build_langchain_endpoint(
+        template.index,
+        replace(
+            template.settings,
+            provider=live_model_spec.provider,
+            model=live_model_spec.model,
+        ),
+    )
 
 
 def _fail_live_layer(layer: str, error: Exception) -> NoReturn:
@@ -50,10 +66,10 @@ def _fail_live_layer(layer: str, error: Exception) -> NoReturn:
 
 
 def test_live_model_transport(
-    live_endpoints: tuple[LangChainLLMEndpoint, ...],
+    live_endpoint: LangChainLLMEndpoint,
 ) -> None:
     try:
-        result = live_endpoints[0].model.invoke(
+        result = live_endpoint.model.invoke(
             [
                 HumanMessage(
                     content=(
@@ -71,11 +87,11 @@ def test_live_model_transport(
 
 
 def test_live_langchain_structured_output(
-    live_endpoints: tuple[LangChainLLMEndpoint, ...],
+    live_endpoint: LangChainLLMEndpoint,
 ) -> None:
     agent = LangChainStructuredAgent(
         _LiveStructuredOutput,
-        endpoints=live_endpoints,
+        endpoints=(live_endpoint,),
         project_root=PROJECT_ROOT,
         component="chat",
     )
@@ -97,12 +113,12 @@ def test_live_langchain_structured_output(
 
 
 def test_live_nuself_chat_response(
-    live_endpoints: tuple[LangChainLLMEndpoint, ...],
+    live_endpoint: LangChainLLMEndpoint,
     tmp_path: Path,
 ) -> None:
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
-        langchain_models=live_endpoints,
+        langchain_models=(live_endpoint,),
         tools=(),
         log_tool_outcome=lambda _outcome: None,
     )
@@ -133,13 +149,13 @@ def _live_echo(value: str) -> str:
 
 
 def test_live_nuself_tool_and_structured_response(
-    live_endpoints: tuple[LangChainLLMEndpoint, ...],
+    live_endpoint: LangChainLLMEndpoint,
     tmp_path: Path,
 ) -> None:
     outcomes: list[ToolOutcome] = []
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
-        langchain_models=live_endpoints,
+        langchain_models=(live_endpoint,),
         tools=(_live_echo,),
         log_tool_outcome=outcomes.append,
     )

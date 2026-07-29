@@ -209,6 +209,20 @@ uv run --locked pytest live_tests -m live_api --run-live-api
 This explicit command incurs provider traffic and cost. Normal pytest and CI
 do not collect `live_tests/`.
 
+Run the maintained five-model OpenCode Go capability matrix explicitly:
+
+```bash
+uv run --locked pytest live_tests -m live_api --run-live-api \
+  --live-opencode-go-matrix
+```
+
+The matrix covers GLM-5.1, Kimi K2.6, DeepSeek V4 Flash, MiniMax M2.7, and
+Qwen3.7 Plus across transport, structured output, chat, and tool-plus-final
+response. Expected unsupported capabilities are strict xfails; observed
+unstable capabilities remain visible as XFAIL/XPASS without randomly failing
+the run. Repeat `--live-model provider:model` instead for an explicit custom
+all-capability matrix.
+
 ## Configuration
 
 NuSelf configuration is unified in a single YAML file:
@@ -235,14 +249,15 @@ llm:
   #   model: claude-sonnet-4-5
 ```
 
-Provider protocol is explicit. OpenCode Go's MiniMax M2.7 route is
-OpenAI-compatible:
+Provider protocol is explicit. OpenCode Go currently publishes MiniMax M2.7
+through its Anthropic Messages route:
 
 ```yaml
 llm:
   - base_url: https://opencode.ai/zen/go/v1
     api_key: ""
     model: minimax-m2.7
+    anthropic: true
 ```
 
 Use the protocol documented by the gateway for the selected model; NuSelf does

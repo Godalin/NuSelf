@@ -179,6 +179,19 @@ uv run --locked pytest live_tests -m live_api --run-live-api
 该显式命令会产生 provider 流量和费用；普通 pytest 与 CI 不收集
 `live_tests/`。
 
+显式运行维护中的五模型 OpenCode Go 能力矩阵：
+
+```bash
+uv run --locked pytest live_tests -m live_api --run-live-api \
+  --live-opencode-go-matrix
+```
+
+矩阵覆盖 GLM-5.1、Kimi K2.6、DeepSeek V4 Flash、MiniMax M2.7 和
+Qwen3.7 Plus 的 transport、结构化输出、chat、工具调用后最终回复四层。
+已知不支持的能力使用 strict xfail；已观测到波动的能力以 XFAIL/XPASS
+保留证据，但不会随机令整次运行失败。自定义且要求全能力通过的矩阵可重复传入
+`--live-model provider:model`。
+
 ## 配置
 
 NuSelf 所有配置都集中在一个 YAML 文件中：
@@ -205,13 +218,15 @@ llm:
   #   model: claude-sonnet-4-5
 ```
 
-provider 协议必须显式配置。OpenCode Go 的 MiniMax M2.7 路由兼容 OpenAI：
+provider 协议必须显式配置。OpenCode Go 当前通过 Anthropic Messages 路由
+提供 MiniMax M2.7：
 
 ```yaml
 llm:
   - base_url: https://opencode.ai/zen/go/v1
     api_key: ""
     model: minimax-m2.7
+    anthropic: true
 ```
 
 应按照网关为所选模型公布的协议配置；NuSelf 不会根据 URL 或模型名推断协议。

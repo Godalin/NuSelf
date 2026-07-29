@@ -21,6 +21,21 @@
   output, NuSelf's final chat response boundary, and tool calling combined
   with a structured final response so daemon readiness is not mistaken for a
   working provider.
+- Real-provider tests default to the configured endpoint only. A caller may
+  repeat an explicit `--live-model provider:model` option to run the same
+  capability layers as a model matrix using the configured endpoint's base URL
+  and credential. Supported provider labels are `openai` and `anthropic`;
+  malformed, duplicate, or blank specifications fail collection before any
+  provider request. Matrix selection is never inferred from model names.
+- Documentation may publish a representative OpenCode Go command derived from
+  its current endpoint table, but the explicit command is cost-bearing and the
+  provider's model catalog remains authoritative because it can change.
+- A documented matrix records each capability as supported, unsupported, or
+  unstable. Supported cases must pass. Unsupported cases use strict xfail so a
+  provider improvement becomes an actionable XPASS failure. Unstable cases use
+  non-strict xfail so both XFAIL and XPASS remain visible without making the
+  cost-bearing suite randomly fail. A capability cannot occupy both degraded
+  states.
 - User-facing changes must update both `README.md` and `README.zh-CN.md`.
 - Use [`../current-goal.md`](../current-goal.md) as the single active execution
   board and [`../TODOs.md`](../TODOs.md) for unresolved backlog.
