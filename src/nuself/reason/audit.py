@@ -32,6 +32,7 @@ ReasonAuditEvent = Literal[
     "scheduler_advance_completed",
     "llm_failover_suppressed_after_tool_call",
     "advance_failed",
+    "completion_load_failed",
     "reason_output_planned",
     "reason_output_chunk_skipped",
     "reason_output_chunk_started",
@@ -61,6 +62,7 @@ ReasonFailureEvent = Literal[
     "scheduler_advance_failed",
     "llm_failover_suppressed_after_tool_call",
     "advance_failed",
+    "completion_load_failed",
     "reason_output_chunk_failed",
     "reason_output_pdf_failed",
     "export_job_enqueue_failed",
@@ -121,6 +123,7 @@ _MESSAGES: dict[ReasonAuditEvent, str] = {
         "Reason endpoint failover suppressed after tool execution"
     ),
     "advance_failed": "Reason advance failed",
+    "completion_load_failed": "Failed to load Reason thread completions",
     "reason_output_planned": "Reason output planned",
     "reason_output_chunk_skipped": "Reason output chunk skipped",
     "reason_output_chunk_started": "Reason output chunk started",
@@ -462,6 +465,10 @@ def _build_registry() -> AuditDefinitionRegistry:
         ),
         AuditEventDefinition(
             "reasoning", "advance_failed", "error", "failed",
+            error_policy="required",
+        ),
+        AuditEventDefinition(
+            "reasoning", "completion_load_failed", "warning", "degraded",
             error_policy="required",
         ),
         AuditEventDefinition(

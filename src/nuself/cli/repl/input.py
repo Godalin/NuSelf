@@ -21,7 +21,7 @@ from nuself.cli.repl.registry import (
     tokens_for,
 )
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.runtime.observability import run_observed_best_effort
+from nuself.reason.audit import run_reason_observed
 
 
 class DedupFileHistory(FileHistory):
@@ -129,13 +129,10 @@ class InteractiveCompleter(Completer):
             return [f"{t.id} ({t.status}, {t.topic[:40]})" for t in repo.list_threads(status="all")]
 
         return (
-            run_observed_best_effort(
+            run_reason_observed(
                 load,
-                component="reasoning",
                 event="completion_load_failed",
-                message="Failed to load reason thread completions",
                 project_root=self._project_root,
-                metadata={"completion": "reason_threads"},
             )
             or []
         )

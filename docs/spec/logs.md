@@ -210,7 +210,7 @@ metadata.
 | `llm_endpoint_state_write_failed` | `degraded` | required error, `endpoint_index` |
 | `interactive_history_load_failed` | `error` | required error, `thread_id` |
 | `interactive_history_write_failed` | `degraded` | required error, no metadata |
-| `completion_load_failed` | `degraded` | required error, completion kind |
+| Chat `completion_load_failed` | `degraded` | required error, exact `completion` kind |
 | `interactive_prompt_failed` | `degraded` | required error, fixed fallback kind |
 | `turn_retry` | `retry` | attempt bounds, failure phase, possible-completion flag |
 | `activity_transport_degraded` | `degraded` | stage, error kind, optional connection decision fields and subscription-presence flag |
@@ -221,6 +221,11 @@ Messages are fixed operational descriptions. User messages, assistant
 responses, tool arguments/results, endpoint URLs, previous exception text,
 subscription ids, and duplicated request ids are forbidden in these metadata
 schemas.
+
+Reason owns a separate `reasoning/completion_load_failed` event with
+`level=warning`, `status=degraded`, a required error, and no metadata. Its
+identity already states that Reason thread completions failed, so it must not
+duplicate a `reason_threads` completion kind.
 
 ## Chat Turn Logs
 

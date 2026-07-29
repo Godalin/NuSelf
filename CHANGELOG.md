@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- REPL Reason thread completion failures now resolve through the sealed Reason
+  audit registry instead of caller-selected generic observability; the event
+  no longer stores redundant `completion=reason_threads` metadata.
 - Shared Chat, Memory, Persona, Reason, and Reflection endpoint failover
   observations now use one sealed audit contract with fixed presentation and
   exact safe metadata; endpoint base URLs are no longer persisted.

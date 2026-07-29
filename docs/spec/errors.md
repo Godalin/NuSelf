@@ -433,6 +433,12 @@ raised exception identity, aggregate capability failure, or domain-specific
 retry behavior. Failure to persist the audit remains secondary and uses the
 shared terminal-warning boundary.
 
+Dynamic REPL completion reads are secondary UI effects. Chat thread completion
+failures use the sealed Chat adapter, and Reason thread completion failures use
+the sealed Reason adapter. Either adapter may degrade to an empty suggestion
+set, but a caller must not select an unregistered message, status, metadata
+shape, or generic observability projection.
+
 Chat's local response policy is not an exception sink for implementation
 defects. Before any tool executes, the shared policy rejects assertion,
 attribute, import, lookup, memory exhaustion, name resolution, unimplemented

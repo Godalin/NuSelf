@@ -859,10 +859,17 @@ Lifecycle and peripheral `reasoning` events:
 | `scheduler_advance_completed` | `info` | `completed` | forbidden | step id and kind; runtime context carries thread |
 | `llm_failover_suppressed_after_tool_call` | `warning` | `failed` | required | none; runtime context carries thread |
 | `advance_failed` | `error` | `failed` | required | none; runtime context carries thread |
+| `completion_load_failed` | `warning` | `degraded` | required | none |
 
 Messages are fixed by the registry and contain no topic, summary, tool output,
 terminal reason, exception type, or filesystem path. The caught exception is
 represented once by the canonical error chain.
+
+REPL Reason completion is an optional Reason-owned read projection. Its failure
+returns no suggestions and cannot reject input or command execution. The REPL
+invokes `run_reason_observed` and does not choose the message, component, level,
+status, error policy, or metadata. The former `completion=reason_threads`
+metadata is redundant with the component/event identity and is forbidden.
 
 `service_tool_called` remains the shared service-tool event shape rather than
 a Reason-domain lifecycle event. Its full step-local snapshots and rendering

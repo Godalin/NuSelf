@@ -85,6 +85,7 @@ _CANONICAL: tuple[
         None,
     ),
     ("reasoning", "advance_failed", {}, None),
+    ("reasoning", "completion_load_failed", {}, None),
     (
         "reasoning",
         "reason_output_planned",
@@ -321,3 +322,46 @@ def test_reason_audit_rejects_unknown_event_before_sink(
         )
 
     assert sink_calls == 0
+
+
+def test_reason_completion_observer_uses_fixed_projection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    def run_observed(
+        operation: object,
+        **kwargs: object,
+    ) -> None:
+        calls.append((operation, kwargs))
+
+    monkeypatch.setattr(
+        audit,
+        "run_observed_best_effort",
+        run_observed,
+    )
+    operation = lambda: ["reason-1"]
+
+    result = audit.run_reason_observed(
+        operation,
+        event="completion_load_failed",
+        project_root=tmp_path,
+    )
+
+    assert result is None
+    assert calls == [
+        (
+            operation,
+            {
+                "component": "reasoning",
+                "event": "completion_load_failed",
+                "message": "Failed to load Reason thread completions",
+                "project_root": tmp_path,
+                "metadata": {},
+                "errors": (Exception,),
+                "level": "warning",
+                "status": "degraded",
+            },
+        )
+    ]

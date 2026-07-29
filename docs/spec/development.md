@@ -360,7 +360,9 @@ under the same package.
   unknown-command help. It depends on REPL command/session APIs and never
   imports the CLI composition root; the root only wires it as a callback.
 - `cli/repl/input.py` owns prompt-toolkit input, deduplicated history,
-  completion, and top-level interactive help.
+  completion, and top-level interactive help. Completion control flow invokes
+  Chat- or Reason-owned audit adapters and does not construct subsystem audit
+  presentation.
 - `cli/repl/activity.py` owns incremental activity reads, transcript capture
   inclusion, user-visible event filtering, failure classification, and
   rendering. It also owns the bound send thread and daemon activity

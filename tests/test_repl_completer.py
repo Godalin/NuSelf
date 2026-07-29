@@ -120,4 +120,4 @@ def test_reason_completion_failure_is_observed(
     )[-1]
     assert event.event == "completion_load_failed"
     assert event.error == "reason index unavailable"
-    assert event.metadata == {"completion": "reason_threads"}
+    assert event.metadata == {}
