@@ -55,6 +55,8 @@ reconciliation，使 durable non-terminal job 无需重启 daemon 即可恢复�
 持久化 chat thread 现在采用 fail-closed 解码：每条 message 都必须是合法
 object，index 拒绝 bool，absolute next index 必须与保留的 message window
 严格一致。
+Memory curator 的短文本 fast gate 现在会识别英文、简繁中文、日文和混合语言
+turn 中的 durable signal，不再由英文 marker 单独决定是否调用模型。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。

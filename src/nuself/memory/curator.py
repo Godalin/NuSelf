@@ -52,6 +52,71 @@ from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import write_json_atomic
 from nuself.trace.service import TraceRecorder
 
+DURABLE_SIGNAL_MARKERS: tuple[str, ...] = (
+    "prefer",
+    "remember",
+    "important",
+    "decide",
+    "decision",
+    "should",
+    "goal",
+    "plan",
+    "because",
+    "why",
+    "question",
+    "always",
+    "never",
+    "记住",
+    "記住",
+    "牢记",
+    "牢記",
+    "以后",
+    "以後",
+    "今后",
+    "今後",
+    "总是",
+    "總是",
+    "永远",
+    "永遠",
+    "不要",
+    "不再",
+    "偏好",
+    "喜欢",
+    "喜歡",
+    "重要",
+    "决定",
+    "決定",
+    "目标",
+    "目標",
+    "计划",
+    "計劃",
+    "因为",
+    "因為",
+    "为什么",
+    "為什麼",
+    "问题",
+    "問題",
+    "应该",
+    "應該",
+    "尽量",
+    "儘量",
+    "覚えて",
+    "記憶して",
+    "これから",
+    "いつも",
+    "常に",
+    "二度と",
+    "好み",
+    "好き",
+    "決め",
+    "計画",
+    "なぜ",
+    "質問",
+    "べき",
+    "ください",
+)
+
+
 @dataclass(frozen=True)
 class MemoryCuratorSettings:
     """Policy for one background memory curation run."""
@@ -733,19 +798,4 @@ def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: 
     if len(user_text.strip()) >= min_quality_chars:
         return True
     normalized = user_text.casefold()
-    durable_markers = {
-        "prefer",
-        "remember",
-        "important",
-        "decide",
-        "decision",
-        "should",
-        "goal",
-        "plan",
-        "because",
-        "why",
-        "question",
-        "always",
-        "never",
-    }
-    return any(marker in normalized for marker in durable_markers)
+    return any(marker in normalized for marker in DURABLE_SIGNAL_MARKERS)

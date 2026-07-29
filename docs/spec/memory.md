@@ -189,7 +189,14 @@ errors are not degraded and continue to the daemon request backstop.
 ### Quality Gate (`_has_memory_worthy_signal`)
 
 - Inspect only `role=="user"` messages.
-- If concatenated user text `< 120` chars AND contains none of the durable markers (`prefer`, `remember`, `important`, `decide`, `decision`, `should`, `goal`, `plan`, `because`, `why`, `question`, `always`, `never`), return `processed_messages=0` without LLM call.
+- If concatenated user text `< 120` chars AND contains none of the registered
+  durable markers, return `processed_messages=0` without an LLM call. Marker
+  matching uses the union of English, Simplified/Traditional Chinese, and
+  Japanese durable-signal registries so mixed-language text is not excluded by
+  the fast gate. The registries cover explicit remembering, future behavior,
+  preferences, importance, decisions, goals/plans, reasons/questions, and
+  always/never instructions. Language preference may guide the model response
+  but must not restrict which registry is checked.
 
 ### Curator Agent Decision Contract
 

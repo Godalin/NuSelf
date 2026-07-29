@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Short Chinese, Traditional Chinese, Japanese, and mixed-language durable
+  memory signals now pass the curator fast gate instead of being excluded by
+  an English-only marker list.
 - Chat thread decoding now rejects malformed message members, boolean indexes,
   unknown message fields, and inconsistent absolute message indexes instead of
   silently dropping or repairing persisted data.

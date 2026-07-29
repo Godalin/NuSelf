@@ -64,6 +64,8 @@ without a daemon restart or an immediate retry loop.
 Persisted chat threads are decoded fail-closed: every message must be a valid
 object, indexes reject booleans, and the absolute next index must exactly match
 the retained message window.
+The memory curator's short-text fast gate recognizes durable signals across
+English, Simplified/Traditional Chinese, Japanese, and mixed-language turns.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

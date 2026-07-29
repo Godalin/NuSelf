@@ -730,6 +730,47 @@ def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Pa
     assert repo.list() == []
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        "请记住我不喜欢早会。",
+        "以后回答尽量简洁。",
+        "今後は簡潔に答えてください。",
+        "Please 記住 this preference。",
+    ],
+)
+def test_memory_curator_fast_gate_accepts_multilingual_durable_signal(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    thread_store = ThreadStore(tmp_path)
+    thread_store.save(
+        ThreadState(
+            thread_id="default",
+            messages=[ThreadMessage(role="user", content=content)],
+        )
+    )
+    agent = _curator_agent(
+        '{"actions":[{"action":"create","type":"preference",'
+        '"title":"Response preference","body":"The user stated a durable '
+        'response preference.","tags":["preference"],"confidence":0.8,'
+        '"reason":"explicit durable preference"}]}'
+    )
+    curator = MemoryCurator(
+        tmp_path,
+        agent=agent,
+        thread_store=thread_store,
+        settings=MemoryCuratorSettings(auto_accept=False),
+    )
+
+    result = curator.run_once()
+
+    assert result.processed_messages == 1
+    assert result.created == 1
+    assert len(agent.calls) == 1
+    assert len(MemoryCandidateRepository(tmp_path).list()) == 1
+
+
 def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(

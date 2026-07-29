@@ -96,6 +96,12 @@ trustworthy 0.3.0 release candidate.
 - Thread/chat/curator/CLI/reflection coverage: 500 checks passed across the
   main run and corrected fixture rerun; pyright reported 0 errors and 0
   warnings.
+- The curator fast gate now checks a shared union of English,
+  Simplified/Traditional Chinese, and Japanese durable markers. Chinese,
+  Japanese, and mixed-language short-turn tests prove the model boundary is
+  reached and a candidate is staged.
+- Focused memory-curator tests: 41 passed; pyright reported 0 errors and 0
+  warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 
@@ -105,4 +111,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Multilingual memory-curator signal gating.
+Structured HTTP status failover classification.
