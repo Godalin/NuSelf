@@ -1,0 +1,18 @@
+{
+  "id": "reason_v025",
+  "topic": "Preserve old reasoning state",
+  "status": "active",
+  "working_summary": "A 0.2.5 reasoning thread.",
+  "active_items_data": [],
+  "pending_items_data": [],
+  "next_steps_data": [],
+  "mandates_data": [],
+  "reasoning_prompt": "",
+  "evidence_refs": ["mem_v025"],
+  "priority": "normal",
+  "last_advanced_at": null,
+  "skip_next_advance_until": null,
+  "next_review_after": null,
+  "created_at": "2026-07-01T00:00:00+00:00",
+  "updated_at": "2026-07-01T00:00:00+00:00"
+}

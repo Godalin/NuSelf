@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- File-to-SQLite upgrades now normalize 0.2.x memory relation fields at the
+  explicit migration boundary, and the release gate reads a frozen 0.2.5
+  private-data fixture through the current repositories.
 - The development package is now `0.3.0rc1`; release metadata gates enforce
   tag/package/runtime/changelog agreement, unified `uv build`, clean-wheel
   smoke tests, checksums, and Linux/macOS CI coverage.

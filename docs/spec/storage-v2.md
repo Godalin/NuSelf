@@ -358,6 +358,11 @@ Reason 的 step + thread 更新必须使用 backend transaction，避免只写�
   验证 ID，再删除旧列；不允许直接 drop `payload`。
 - migration 测试必须从真实旧 schema fixture 开始，验证条数、ID 和完整 wire
   数据在升级后保持一致，并验证失败时回滚。
+- 从文件后端迁移 0.2.x memory entry、candidate 或 profile item 时，迁移边界
+  必须把旧顶层及嵌入 payload 的 `supersedes` 合并到
+  `relations.supersedes`，把 `related_memory_ids` 合并到
+  `relations.related_to`，随后删除旧字段。当前领域解码器仍必须拒绝未经显式
+  迁移的旧关系形状。
 
 ### 核心表清单
 

@@ -23,7 +23,8 @@ trustworthy 0.3.0 release candidate.
 6. Repair confirmed online recovery, strict decode, failover, multilingual
    curation, email safety, timeout, and portable-name issues.
 7. Align version/release/platform contracts and add release-candidate gates.
-8. Run focused fault injection and full quality gates; commit by functional
+8. Gate the file-to-SQLite upgrade with frozen 0.2.5 private data.
+9. Run focused fault injection and full quality gates; commit by functional
    boundary, push, and confirm final development-branch CI.
 
 ## Out Of Scope
@@ -136,6 +137,11 @@ trustworthy 0.3.0 release candidate.
 - A clean uv-managed Python 3.14 environment installed the wheel and all
   declared runtime dependencies from the package index; import smoke and the
   installed `nuself --version` command passed.
+- A frozen 0.2.5 private-data fixture now migrates file-backed memory,
+  notification, and reasoning records into SQLite and is read through current
+  repositories. The migration explicitly normalizes legacy memory relation
+  fields while malformed relation shapes remain fail-closed.
+- Focused storage migration and memory repository coverage: 94 passed.
 - Full pyright remains the only local gate pending after its cache attempted a
   blocked refresh and the explicit retry approval service disconnected.
 - Remaining external findings require fault-injection or contract-level
@@ -147,4 +153,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Release/version/platform gates and full validation.
+Pinned release automation, build provenance, and full validation.

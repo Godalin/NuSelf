@@ -1,0 +1,22 @@
+{
+  "id": "mem_v025",
+  "type": "belief",
+  "title": "Legacy durable belief",
+  "body": "This record was persisted by the 0.2.5 memory wire contract.",
+  "tags": ["legacy", "migration"],
+  "source_refs": ["thread:default:0-2"],
+  "confidence": 0.8,
+  "importance": 0.0,
+  "privacy": "private",
+  "review_state": "reviewed",
+  "created_at": "2026-07-01T00:00:00+00:00",
+  "updated_at": "2026-07-01T00:00:00+00:00",
+  "revisit_at": null,
+  "observed_at": "2026-07-01T00:00:00+00:00",
+  "valid_from": null,
+  "valid_until": null,
+  "temporal_note": "",
+  "supersedes": ["mem_older"],
+  "related_memory_ids": ["mem_related"],
+  "evidence": []
+}

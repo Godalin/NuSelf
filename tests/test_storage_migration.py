@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 
+from nuself.agent.chat import ThreadStore
+from nuself.memory.repository import MemoryEntryRepository
+from nuself.notification import NotificationOutbox
+from nuself.reason.repository import ReasonRepository
 from nuself.storage import (
     COLLECTION_NAMES,
     StorageBackend,
@@ -123,3 +128,117 @@ def test_migrate_multiple_items(tmp_path: Path) -> None:
     count = migrate_collection(src, dst, "trace_nodes")
     assert count == 16
     assert len(dst.collection("trace_nodes").list()) == 16
+
+
+def test_migrate_normalizes_legacy_candidate_payload_relations(
+    tmp_path: Path,
+) -> None:
+    source = _file_backend(tmp_path / "source")
+    source.collection("memory_candidates").put(
+        "candidate_legacy",
+        {
+            "id": "candidate_legacy",
+            "relations": {"supports": ["mem_current"]},
+            "related_memory_ids": ["mem_related"],
+            "payload": {
+                "relations": {"supersedes": ["mem_current"]},
+                "supersedes": ["mem_older", "mem_current"],
+            },
+        },
+    )
+    destination = _sqlite_backend(tmp_path / "destination")
+
+    migrate_collection(source, destination, "memory_candidates")
+
+    migrated = destination.collection("memory_candidates").get(
+        "candidate_legacy"
+    )
+    assert migrated == {
+        "id": "candidate_legacy",
+        "relations": {
+            "supports": ["mem_current"],
+            "related_to": ["mem_related"],
+        },
+        "payload": {
+            "relations": {
+                "supersedes": ["mem_current", "mem_older"],
+            },
+        },
+    }
+
+
+def test_migrate_preserves_malformed_legacy_relation_shape(
+    tmp_path: Path,
+) -> None:
+    source = _file_backend(tmp_path / "source")
+    source.collection("memory_entries").put(
+        "mem_invalid",
+        {
+            "id": "mem_invalid",
+            "relations": "invalid",
+            "supersedes": ["mem_old"],
+        },
+    )
+    destination = _sqlite_backend(tmp_path / "destination")
+
+    migrate_collection(source, destination, "memory_entries")
+
+    assert destination.collection("memory_entries").get("mem_invalid") == {
+        "id": "mem_invalid",
+        "relations": "invalid",
+        "supersedes": ["mem_old"],
+    }
+
+
+def test_real_v025_private_fixture_migrates_and_reads_in_current_runtime(
+    tmp_path: Path,
+) -> None:
+    fixture = (
+        Path(__file__).parent
+        / "fixtures"
+        / "migrations"
+        / "v0.2.5"
+        / "private"
+    )
+    private_root = tmp_path / "private"
+    shutil.copytree(fixture, private_root)
+    source = create_file_backend(root=private_root)
+    destination = create_sqlite_backend(
+        db_path=private_root / "nuself.sqlite"
+    )
+
+    result = migrate_all(source, destination, clear_dst=True)
+
+    assert result == {
+        "memory_entries": 1,
+        "reason_threads": 1,
+        "notification_outbox": 1,
+    }
+    memory = MemoryEntryRepository(
+        tmp_path,
+        backend=destination,
+    ).get("mem_v025")
+    assert memory.importance == 0.0
+    assert memory.title == "Legacy durable belief"
+    assert memory.relations == {
+        "supersedes": ("mem_older",),
+        "related_to": ("mem_related",),
+    }
+    notification = NotificationOutbox(
+        tmp_path,
+        backend=destination,
+    ).get("out_v025")
+    assert notification.context.request_id is None
+    assert notification.required_adapters == ()
+    assert notification.deliveries == {}
+    reason = ReasonRepository(
+        tmp_path,
+        backend=destination,
+    ).get_thread("reason_v025")
+    assert reason.topic == "Preserve old reasoning state"
+    thread = ThreadStore(tmp_path).load("default")
+    assert thread.next_message_index == 2
+    assert [message.role for message in thread.messages] == [
+        "user",
+        "assistant",
+    ]

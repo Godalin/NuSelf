@@ -585,9 +585,58 @@ def migrate_collection(
     for item in src_col.list():
         item_id = item.get("id")
         if isinstance(item_id, str):
-            dst_col.put(item_id, item)
+            dst_col.put(item_id, _upgrade_legacy_wire(name, item))
             count += 1
     return count
+
+
+_LEGACY_MEMORY_COLLECTIONS = frozenset(
+    {"memory_entries", "memory_candidates", "profile_items"}
+)
+
+
+def _upgrade_legacy_wire(
+    collection_name: str,
+    item: dict[str, object],
+) -> dict[str, object]:
+    """Normalize persisted 0.2.x shapes at the explicit migration boundary."""
+    if collection_name not in _LEGACY_MEMORY_COLLECTIONS:
+        return item
+
+    upgraded = dict(item)
+    _upgrade_legacy_relations(upgraded)
+    payload = upgraded.get("payload")
+    if isinstance(payload, dict):
+        upgraded_payload = dict(payload)
+        _upgrade_legacy_relations(upgraded_payload)
+        upgraded["payload"] = upgraded_payload
+    return upgraded
+
+
+def _upgrade_legacy_relations(data: dict[str, object]) -> None:
+    relations = data.get("relations")
+    if relations is not None and not isinstance(relations, dict):
+        return
+    upgraded_relations = dict(relations) if isinstance(relations, dict) else {}
+    mappings = (
+        ("supersedes", "supersedes"),
+        ("related_memory_ids", "related_to"),
+    )
+    changed = False
+    for legacy_name, relation_name in mappings:
+        legacy_targets = data.get(legacy_name)
+        if not isinstance(legacy_targets, list):
+            continue
+        data.pop(legacy_name)
+        current_targets = upgraded_relations.get(relation_name)
+        merged = list(current_targets) if isinstance(current_targets, list) else []
+        for target in legacy_targets:
+            if target not in merged:
+                merged.append(target)
+        upgraded_relations[relation_name] = merged
+        changed = True
+    if changed:
+        data["relations"] = upgraded_relations
 
 
 def migrate_all(
