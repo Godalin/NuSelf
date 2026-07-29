@@ -28,6 +28,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   `observability_projection_failed` and
   `internal_event_delivery_failed`. Domain-specific write/delivery failure
   aliases and free-form failure projections were removed.
+- Daemon request rejection, chat completion/failure, and shutdown acceptance
+  now resolve through one sealed request-audit registry. Request handlers no
+  longer choose audit presentation or schema, and accepted shutdown records
+  carry an explicit `accepted` status.
 - Internal job wake-ups now resolve through sealed name, producer, and payload
   definitions before queue mutation; Reason export workers reject invalid jobs
   at ingress instead of queueing and later emitting

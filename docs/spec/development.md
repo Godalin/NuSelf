@@ -259,8 +259,10 @@ under the same package.
   adapter only translates that capability to CLI result and output contracts.
 - `daemon/request_handlers.py` owns typed request dispatch and response
   construction. Chat failure/completion and accepted-shutdown audit records
-  use shared observability and cannot replace the already-decided response or
-  shutdown flag.
+  resolve through `daemon/request_audit.py` and cannot replace the
+  already-decided response or shutdown flag. Handlers do not choose request
+  audit messages, levels, statuses, error policy, duration policy, or metadata
+  shape.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
   exact per-event schema validation, and best-effort audit sink boundary.
 - `runtime/definitions.py` owns generic sealed definition-registry mechanics.

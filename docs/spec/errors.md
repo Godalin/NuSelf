@@ -80,6 +80,25 @@ When daemon chat handling fails:
   `shutdown_requested` audit failure cannot prevent the flag or success
   response.
 
+The daemon request layer owns one sealed audit contract:
+
+| Event | Level | Status | Error / duration | Exact metadata |
+|---|---|---|---|---|
+| `request_rejected` | warning | `error` | required error, no duration | `request_type` |
+| `chat_turn_failed` | error | `error` | required error, no duration | none |
+| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references`, boolean `memory_changed` |
+| `shutdown_requested` | info | `accepted` | no error or duration | none |
+
+Messages are fixed by the request audit adapter. Producers supply only event
+schema data and correlation; they cannot choose messages, levels, statuses, or
+error policy. Unknown events, missing or extra metadata, invalid counts,
+non-boolean flags, and invalid duration/error combinations fail before the
+best-effort sink.
+
+Request events are distinct from Chat runtime events: Chat `turn.*` describes
+agent execution, while daemon request audits describe the response or shutdown
+decision at the request boundary.
+
 ## Daemon Transport Failures
 
 Clean EOF before a request frame is a normal abandoned connection and produces

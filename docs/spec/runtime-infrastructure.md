@@ -591,6 +591,12 @@ fail. Delivery failure always uses `internal_event_delivery_failed` with exact
 `event` and `producer` metadata derived from that envelope; callers cannot
 invent subsystem-specific failure projections.
 
+Daemon request dispatch owns a separate sealed audit registry for
+`request_rejected`, `chat_turn_failed`, `chat_turn_completed`, and
+`shutdown_requested`. The registry fixes presentation and validates exact
+metadata before observability. Request handlers never write these records
+directly.
+
 ## Cross-Process Activity
 
 Interactive daemon activity uses an explicit subscription transport over the
