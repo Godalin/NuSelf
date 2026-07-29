@@ -44,5 +44,11 @@ findings identified by external audit.
   mismatched record IDs. Commit-level verification: 68 SQLite tests passed,
   including blocked-read commit/rollback cases and dual-backend schema
   mutation; locked Pyright reported 0 errors and 0 warnings.
+- File backends now hold shared lifecycle authority leases and migration holds
+  the exclusive cross-process lease through publication. External `--db`
+  destinations fail before filesystem mutation. Commit-level verification:
+  78 storage/migration/CLI tests passed, including a spawned active-runtime
+  fence and external-mode preservation; locked Pyright reported 0 errors and
+  0 warnings.
 - Pending: the remaining external findings need implementation and direct
   regression evidence, followed by the complete stable-release gate.

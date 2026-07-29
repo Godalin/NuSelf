@@ -156,6 +156,16 @@ from `delete` means the unlink and parent-directory synchronization both
 succeeded; a post-unlink sync failure raises the typed visible-but-uncertain
 delete error rather than reporting a normal failure or silently succeeding.
 
+Each live `FileStorageBackend` holds a shared cross-process authority lease on
+`private/.storage-authority.lock` until `close()`. Lease acquisition is
+non-blocking: a command that races an authority migration fails rather than
+waiting and then continuing to use the obsolete file backend. File-to-SQLite
+migration takes the exclusive lease before inspecting source or destination
+state and holds it through atomic publication. If any daemon, CLI, or other
+file-backed runtime still owns a shared lease, migration fails without reading,
+copying, or publishing data. This is the enforced stop-the-world authority
+switch for v0.3.0.
+
 ### Repository 模式变更（示例）
 
 ```python
@@ -272,6 +282,12 @@ Final-name SQLite WAL/SHM/journal sidecars without a main database are also an
 incomplete/conflicting destination and block migration. Conversely,
 `auto_backend()` ignores uniquely named `.migrating-*` siblings: before atomic
 replacement they are never evidence that SQLite owns runtime authority.
+
+The optional `--db` destination must resolve inside the selected project's
+NuSelf-owned `private/` tree. Absolute or relative paths that resolve outside
+that tree, including paths escaping through a symlink, fail before any
+directory creation or permission change. Migration may harden managed private
+directories, but it never chmods an arbitrary external parent directory.
 
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always

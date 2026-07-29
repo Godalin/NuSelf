@@ -12,7 +12,13 @@ import fcntl
 import os
 from pathlib import Path
 import threading
-from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    BinaryIO,
+    Protocol,
+    cast,
+    runtime_checkable,
+)
 from uuid import uuid4
 
 from nuself.config import runtime_paths
@@ -161,6 +167,10 @@ class AtomicDeleteDurabilityError(RuntimeError):
 
 class StorageMigrationValidationError(ValueError):
     """Authoritative file data cannot be migrated without loss."""
+
+
+class FileStorageAuthorityError(RuntimeError):
+    """File-backed storage authority is held by an incompatible operation."""
 
 
 def _read_json_record(path: Path) -> dict[str, object]:
@@ -430,6 +440,7 @@ class FileStorageBackend:
         collection_map: dict[str, str] | None = None,
         *,
         project_root: Path | None = None,
+        _acquire_authority: bool = True,
     ) -> None:
         self._root = root
         self._map = collection_map or COLLECTION_DIR_MAP
@@ -441,6 +452,23 @@ class FileStorageBackend:
         self._transaction_lock = threading.RLock()
         self._transaction_state = threading.local()
         self._transaction_lock_path = self._root / ".storage-transaction.lock"
+        self._authority_handle: BinaryIO | None = None
+        if _acquire_authority:
+            self._authority_handle = _open_file_authority(
+                self._root,
+                exclusive=False,
+            )
+
+    def close(self) -> None:
+        """Release this backend's shared file-authority lease."""
+        handle = self._authority_handle
+        if handle is None:
+            return
+        self._authority_handle = None
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
 
     def collection(self, name: str) -> _FileCollection:
         relative = self._map.get(name)
@@ -503,13 +531,17 @@ def validate_storage_key(key: str) -> None:
 
 
 def create_file_backend(
-    project_root: Path | None = None, *, root: Path | None = None
+    project_root: Path | None = None,
+    *,
+    root: Path | None = None,
+    _acquire_authority: bool = True,
 ) -> FileStorageBackend:
     """Create a ``FileStorageBackend`` rooted at ``private/``."""
     base = root if root is not None else runtime_paths(project_root).private_root
     return FileStorageBackend(
         base,
         project_root=runtime_paths(project_root).project_root,
+        _acquire_authority=_acquire_authority,
     )
 
 
@@ -723,6 +755,22 @@ def migrate_file_backend_atomically(
         if db_path is not None
         else paths.private_root / "nuself.sqlite"
     )
+    _validate_managed_migration_destination(
+        destination_path,
+        private_root=paths.private_root,
+    )
+    with _exclusive_file_authority(paths.private_root):
+        return _migrate_file_backend_with_authority(
+            paths.project_root,
+            destination_path=destination_path,
+        )
+
+
+def _migrate_file_backend_with_authority(
+    project_root: Path,
+    *,
+    destination_path: Path,
+) -> tuple[dict[str, int], Path]:
     conflicting_paths = (
         destination_path,
         *(
@@ -744,7 +792,10 @@ def migrate_file_backend_atomically(
     temporary = destination_path.with_name(
         f"{destination_path.name}.migrating-{uuid4().hex}"
     )
-    source = create_file_backend(project_root)
+    source = create_file_backend(
+        project_root,
+        _acquire_authority=False,
+    )
     destination: SqliteStorageBackend | None = None
     published = False
     try:
@@ -788,6 +839,58 @@ def migrate_file_backend_atomically(
                     cleanup_error=cleanup_error,
                 ) from primary_error
         raise
+
+
+def _validate_managed_migration_destination(
+    destination: Path,
+    *,
+    private_root: Path,
+) -> None:
+    resolved_private = private_root.resolve(strict=False)
+    resolved_destination = destination.resolve(strict=False)
+    if (
+        resolved_destination == resolved_private
+        or not resolved_destination.is_relative_to(resolved_private)
+    ):
+        raise ValueError(
+            "SQLite migration destination must be inside the project "
+            "private directory"
+        )
+
+
+@contextmanager
+def _exclusive_file_authority(
+    private_root: Path,
+) -> Generator[None, None, None]:
+    handle = _open_file_authority(private_root, exclusive=True)
+    try:
+        yield
+    finally:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
+
+
+def _open_file_authority(
+    private_root: Path,
+    *,
+    exclusive: bool,
+) -> BinaryIO:
+    ensure_private_directory(private_root)
+    lock_path = private_root / ".storage-authority.lock"
+    ensure_private_file(lock_path)
+    handle = lock_path.open("ab")
+    operation = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+    try:
+        fcntl.flock(handle.fileno(), operation | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        handle.close()
+        role = "migration" if exclusive else "file-backed runtime"
+        raise FileStorageAuthorityError(
+            f"cannot start {role} while file storage authority is active"
+        ) from exc
+    return handle
 
 
 def _remove_sqlite_migration_sidecars(database: Path) -> None:

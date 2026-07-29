@@ -9,6 +9,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Shared SQLite backends now isolate reads from uncommitted writes, immediately
   observe dynamic columns added by other processes, and reject mismatched
   record IDs instead of silently rewriting them.
+- File-to-SQLite migration now refuses to run while any file-backed runtime is
+  active, blocks new file authority during publication, and rejects `--db`
+  destinations outside the managed private tree without changing external
+  directory permissions.
 - Tests now use a domain-oriented hierarchy under `tests/unit/` with concise
   module names; opt-in real-provider checks live alongside them in
   `tests/live/` without entering default pytest or CI collection.

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import multiprocessing
+from multiprocessing.context import SpawnContext
+from multiprocessing.synchronize import Event
 from pathlib import Path
 import shutil
+import stat
 
 import pytest
 
@@ -14,6 +18,7 @@ from nuself.reason.repository import ReasonRepository
 from nuself.storage import (
     AtomicWriteDurabilityError,
     COLLECTION_NAMES,
+    FileStorageAuthorityError,
     FileStorageBackend,
     StorageMigrationValidationError,
     StorageBackend,
@@ -24,6 +29,24 @@ from nuself.storage import (
     migrate_all,
     migrate_collection,
 )
+
+
+def _spawn_context() -> SpawnContext:
+    return multiprocessing.get_context("spawn")
+
+
+def _hold_file_storage_authority(
+    project_root: str,
+    ready: Event,
+    release: Event,
+) -> None:
+    backend = create_file_backend(Path(project_root))
+    ready.set()
+    try:
+        if not release.wait(timeout=10):
+            raise RuntimeError("parent did not release file backend")
+    finally:
+        backend.close()
 
 
 def _file_backend(tmp_path: Path) -> StorageBackend:
@@ -145,6 +168,7 @@ def test_atomic_file_migration_publishes_only_validated_database(
         "mem_atomic",
         {"id": "mem_atomic", "title": "Atomic"},
     )
+    source.close()
 
     result, database = migrate_file_backend_atomically(tmp_path)
 
@@ -173,6 +197,7 @@ def test_atomic_file_migration_failure_never_publishes_partial_database(
         "mem_atomic",
         {"id": "mem_atomic"},
     )
+    source.close()
     original = migrate_collection
 
     def fail_after_first_collection(
@@ -250,6 +275,7 @@ def test_atomic_file_migration_rejects_missing_record_id(
         "missing_id",
         {"title": "Must not be skipped"},
     )
+    source.close()
 
     with pytest.raises(
         StorageMigrationValidationError,
@@ -305,6 +331,7 @@ def test_atomic_file_migration_reports_visible_uncertain_publication(
         "mem_atomic",
         {"id": "mem_atomic"},
     )
+    source.close()
     destination = tmp_path / "private" / "nuself.sqlite"
 
     def fail_directory_sync(path: Path) -> None:
@@ -326,6 +353,59 @@ def test_atomic_file_migration_reports_visible_uncertain_publication(
     assert not list(
         destination.parent.glob("nuself.sqlite.migrating-*")
     )
+
+
+def test_atomic_file_migration_rejects_active_file_runtime(
+    tmp_path: Path,
+) -> None:
+    context = _spawn_context()
+    ready = context.Event()
+    release = context.Event()
+    process = context.Process(
+        target=_hold_file_storage_authority,
+        args=(str(tmp_path), ready, release),
+    )
+    process.start()
+    try:
+        assert ready.wait(timeout=10)
+
+        with pytest.raises(
+            FileStorageAuthorityError,
+            match="migration",
+        ):
+            migrate_file_backend_atomically(tmp_path)
+
+        assert not (tmp_path / "private" / "nuself.sqlite").exists()
+    finally:
+        release.set()
+        process.join(timeout=10)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=10)
+    assert process.exitcode == 0
+
+
+def test_migration_rejects_external_db_without_chmod(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    external = tmp_path / "shared"
+    external.mkdir(mode=0o755)
+    external.chmod(0o755)
+    destination = external / "nuself.sqlite"
+
+    with pytest.raises(
+        ValueError,
+        match="inside the project private directory",
+    ):
+        migrate_file_backend_atomically(
+            project,
+            db_path=destination,
+        )
+
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
+    assert not destination.exists()
+    assert not (project / "private").exists()
 
 
 def test_migrate_normalizes_legacy_candidate_payload_relations(
