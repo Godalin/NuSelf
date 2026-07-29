@@ -50,5 +50,11 @@ findings identified by external audit.
   78 storage/migration/CLI tests passed, including a spawned active-runtime
   fence and external-mode preservation; locked Pyright reported 0 errors and
   0 warnings.
+- Notification entries now use stable cross-process delivery locks and persist
+  `delivering` before adapter effects; recovered in-flight states become
+  terminal `uncertain` without replay. Commit-level verification: 348
+  notification/CLI regressions passed, plus spawned-process tests proved one
+  external effect and dismiss serialization; locked Pyright reported 0 errors
+  and 0 warnings.
 - Pending: the remaining external findings need implementation and direct
   regression evidence, followed by the complete stable-release gate.

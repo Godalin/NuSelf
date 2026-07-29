@@ -13,6 +13,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   active, blocks new file authority during publication, and rejects `--db`
   destinations outside the managed private tree without changing external
   directory permissions.
+- Notification delivery, dismissal, and deletion now serialize per entry
+  across processes. Adapter attempts persist `delivering` before external
+  effects and recover interrupted attempts as `uncertain` without automatic
+  replay, preventing silent duplicate SMTP-style sends.
 - Tests now use a domain-oriented hierarchy under `tests/unit/` with concise
   module names; opt-in real-provider checks live alongside them in
   `tests/live/` without entering default pytest or CI collection.

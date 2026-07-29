@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 from collections.abc import Mapping
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
@@ -18,10 +20,24 @@ from nuself.runtime.context import (
     use_runtime_context,
 )
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.private_fs import (
+    ensure_private_directory,
+    ensure_private_file,
+)
+from nuself.storage import (
+    StorageBackend,
+    get_default_backend,
+    validate_storage_key,
+)
 
 OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
-AdapterDeliveryStatus = Literal["pending", "sent", "failed"]
+AdapterDeliveryStatus = Literal[
+    "pending",
+    "delivering",
+    "sent",
+    "failed",
+    "uncertain",
+]
 
 
 @dataclass(frozen=True)
@@ -33,7 +49,13 @@ class AdapterDelivery:
     sent_at: str | None = None
 
     def __post_init__(self) -> None:
-        if self.status not in {"pending", "sent", "failed"}:
+        if self.status not in {
+            "pending",
+            "delivering",
+            "sent",
+            "failed",
+            "uncertain",
+        }:
             raise ValueError(f"unsupported adapter delivery status: {self.status}")
         if type(self.attempts) is not int or self.attempts < 0:
             raise ValueError("adapter delivery attempts must be a non-negative integer")
@@ -194,6 +216,22 @@ class NotificationOutbox:
         self._backend = be
         self._col = be.collection("notification_outbox")
         self._project_root = runtime_paths(project_root).project_root
+        self._entry_lock_directory = (
+            runtime_paths(project_root).private_root
+            / "notifications"
+            / "locks"
+        )
+
+    def lock_entry(
+        self,
+        entry_id: str,
+    ) -> AbstractContextManager[None]:
+        """Serialize one entry across delivery, dismiss, and deletion."""
+        validate_storage_key(entry_id)
+        ensure_private_directory(self._entry_lock_directory)
+        return _NotificationEntryLock(
+            self._entry_lock_directory / f"{entry_id}.lock"
+        )
 
     def list(self, status: OutboxStatus | None = None) -> list[OutboxEntry]:
         entries: list[OutboxEntry] = []
@@ -265,14 +303,61 @@ class NotificationOutbox:
                 raise ValueError(
                     f"adapter is not required for outbox entry: {adapter_id}"
                 )
-            if state.status != "pending":
+            if state.status != "delivering":
                 return entry
             deliveries = dict(entry.deliveries)
             deliveries[adapter_id] = AdapterDelivery(
                 status="sent" if success else "failed",
-                attempts=state.attempts + 1,
+                attempts=state.attempts,
                 sent_at=utc_now_iso() if success else None,
             )
+            updated = replace(entry, deliveries=deliveries)
+            self._write_entry(updated)
+            return updated
+
+    def begin_adapter_delivery(
+        self,
+        entry_id: str,
+        adapter_id: str,
+    ) -> OutboxEntry:
+        with self._backend.transaction():
+            entry = self.get(entry_id)
+            state = entry.deliveries.get(adapter_id)
+            if state is None:
+                raise ValueError(
+                    f"adapter is not required for outbox entry: {adapter_id}"
+                )
+            if state.status != "pending":
+                return entry
+            deliveries = dict(entry.deliveries)
+            deliveries[adapter_id] = AdapterDelivery(
+                status="delivering",
+                attempts=state.attempts + 1,
+            )
+            updated = replace(entry, deliveries=deliveries)
+            self._write_entry(updated)
+            return updated
+
+    def recover_interrupted_deliveries(
+        self,
+        entry_id: str,
+    ) -> OutboxEntry:
+        with self._backend.transaction():
+            entry = self.get(entry_id)
+            interrupted = tuple(
+                adapter_id
+                for adapter_id, state in entry.deliveries.items()
+                if state.status == "delivering"
+            )
+            if not interrupted:
+                return entry
+            deliveries = dict(entry.deliveries)
+            for adapter_id in interrupted:
+                state = deliveries[adapter_id]
+                deliveries[adapter_id] = AdapterDelivery(
+                    status="uncertain",
+                    attempts=state.attempts,
+                )
             updated = replace(entry, deliveries=deliveries)
             self._write_entry(updated)
             return updated
@@ -281,7 +366,10 @@ class NotificationOutbox:
         with self._backend.transaction():
             entry = self.get(entry_id)
             states = tuple(entry.deliveries.values())
-            if not states or any(state.status == "pending" for state in states):
+            if not states or any(
+                state.status in {"pending", "delivering"}
+                for state in states
+            ):
                 status: OutboxStatus = "pending"
             elif all(state.status == "sent" for state in states):
                 status = "sent"
@@ -299,17 +387,24 @@ class NotificationOutbox:
             return updated
 
     def dismiss(self, entry_id: str) -> OutboxEntry:
-        with self._backend.transaction():
-            entry = self.get(entry_id)
-            updated = replace(entry, status="dismissed")
-            self._write_entry(updated)
-            return updated
+        with self.lock_entry(entry_id):
+            with self._backend.transaction():
+                entry = self.get(entry_id)
+                updated = replace(entry, status="dismissed")
+                self._write_entry(updated)
+                return updated
 
     def clear(self, status: OutboxStatus) -> int:
         removed = 0
         for entry in self.list(status=status):
-            self._col.delete(entry.id)
-            removed += 1
+            with self.lock_entry(entry.id):
+                try:
+                    current = self.get(entry.id)
+                except OutboxEntryNotFound:
+                    continue
+                if current.status == status:
+                    self._col.delete(entry.id)
+                    removed += 1
         return removed
 
     def clear_dismissed_older_than(self, days: int) -> int:
@@ -323,8 +418,14 @@ class NotificationOutbox:
                 field_name="created_at",
             )
             if created.timestamp() < cutoff:
-                self._col.delete(entry.id)
-                removed += 1
+                with self.lock_entry(entry.id):
+                    try:
+                        current = self.get(entry.id)
+                    except OutboxEntryNotFound:
+                        continue
+                    if current.status == "dismissed":
+                        self._col.delete(entry.id)
+                        removed += 1
         return removed
 
     def _find_by_idempotency_key(self, key: str) -> OutboxEntry | None:
@@ -374,22 +475,56 @@ def deliver_entry_once(
 ) -> OutboxEntry:
     """Run or recover one frozen adapter plan without implicit retries."""
     indexed = _index_adapters(adapters)
-    entry = outbox.get(entry_id)
-    if entry.status != "pending":
-        return entry
-    prepared = outbox.prepare_delivery(entry_id, tuple(indexed))
-    for adapter_id in prepared.required_adapters:
-        current = outbox.get(entry_id)
-        if current.deliveries[adapter_id].status != "pending":
-            continue
-        adapter = indexed.get(adapter_id)
-        success = adapter.send(current) if adapter is not None else False
-        outbox.record_adapter_result(
-            entry_id,
-            adapter_id,
-            success=success,
-        )
-    return outbox.finalize_delivery(entry_id)
+    with outbox.lock_entry(entry_id):
+        entry = outbox.get(entry_id)
+        if entry.status != "pending":
+            return entry
+        outbox.prepare_delivery(entry_id, tuple(indexed))
+        recovered = outbox.recover_interrupted_deliveries(entry_id)
+        for adapter_id in recovered.required_adapters:
+            current = outbox.get(entry_id)
+            if current.deliveries[adapter_id].status != "pending":
+                continue
+            started = outbox.begin_adapter_delivery(
+                entry_id,
+                adapter_id,
+            )
+            adapter = indexed.get(adapter_id)
+            success = adapter.send(started) if adapter is not None else False
+            outbox.record_adapter_result(
+                entry_id,
+                adapter_id,
+                success=success,
+            )
+        return outbox.finalize_delivery(entry_id)
+
+
+class _NotificationEntryLock:
+    """One stable blocking cross-process lock for an outbox entry."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._file = None
+
+    def __enter__(self) -> None:
+        ensure_private_file(self._path)
+        self._file = self._path.open("ab")
+        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
+
+    def __exit__(
+        self,
+        exc_type: object,
+        exc_value: object,
+        traceback: object,
+    ) -> None:
+        del exc_type, exc_value, traceback
+        if self._file is None:
+            return
+        try:
+            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
+        finally:
+            self._file.close()
+            self._file = None
 
 
 def _decode_context(data: dict[str, object]) -> RuntimeContext:
@@ -470,7 +605,13 @@ def _expect_adapter_delivery_status(
     field_name: str,
 ) -> AdapterDeliveryStatus:
     value = _expect_str(data, field_name)
-    if value not in {"pending", "sent", "failed"}:
+    if value not in {
+        "pending",
+        "delivering",
+        "sent",
+        "failed",
+        "uncertain",
+    }:
         raise ValueError(f"unsupported adapter delivery status: {value}")
     return cast(AdapterDeliveryStatus, value)
 

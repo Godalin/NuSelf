@@ -21,7 +21,7 @@ Sources that may create outbox entries:
 |---|---|
 | `pending` | Awaiting delivery |
 | `sent` | Successfully delivered by all adapters |
-| `failed` | At least one adapter failed |
+| `failed` | At least one adapter failed or has uncertain delivery |
 | `dismissed` | User explicitly dismissed |
 
 The global status is a compatibility projection over durable per-adapter
@@ -29,12 +29,14 @@ delivery state, not the sole delivery truth. Each entry may contain:
 
 - `required_adapters`: the ordered, unique stable adapter IDs frozen on its
   first delivery attempt;
-- `deliveries`: one state per required adapter with `pending`, `sent`, or
-  `failed`, its own attempt count, and optional successful-delivery timestamp.
+- `deliveries`: one state per required adapter with `pending`, `delivering`,
+  `sent`, `failed`, or `uncertain`, its own attempt count, and optional
+  successful-delivery timestamp.
 
 `sent` means every required adapter is `sent`; `failed` means at least one
-required adapter is `failed` after an attempt completes; otherwise the entry
-remains `pending`. `dismissed` remains an explicit user override. Records from
+required adapter is `failed` or `uncertain` after an attempt completes;
+otherwise the entry remains `pending`. `dismissed` remains an explicit user
+override. Records from
 before adapter delivery state existed decode with an empty plan and acquire it
 atomically on their first subsequent delivery attempt.
 
@@ -49,9 +51,10 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
 ```
 
 There is no legacy whole-entry `mark_sent` or `mark_failed` transition.
-Delivery always freezes a required adapter plan, records each adapter result,
-then derives the compatibility status. `dismiss()` changes only the global
-status and preserves the complete adapter plan and history.
+Delivery always freezes a required adapter plan, records each attempt before
+its external effect and each known result afterward, then derives the
+compatibility status. `dismiss()` changes only the global status and preserves
+the complete adapter plan and history.
 
 ### Persistence
 
@@ -64,6 +67,11 @@ status and preserves the complete adapter plan and history.
   same file or SQLite store therefore return one existing record rather than
   creating multiple records for one idempotency key.
 - `get()` raises `OutboxEntryNotFound` if file missing.
+- Every delivery, dismiss, and deletion operation for one entry holds the same
+  stable cross-process lock under `private/notifications/locks/` from its
+  authoritative read through its final persistence mutation. Two processes
+  cannot send the same adapter concurrently, and dismiss/clear cannot race a
+  completed external effect or be overwritten by delivery finalization.
 - `created_at` and present `sent_at` values are non-empty, timezone-aware
   ISO-8601 strings. Naive timestamps are invalid because retention decisions
   must not depend on the host timezone.
@@ -103,13 +111,17 @@ pending entries.
    `delivery_id` values, then atomically freezes those IDs as the entry's
    required plan if it has no plan yet. Duplicate or invalid IDs fail before
    any adapter side effect.
-4. Iterates the frozen required adapter IDs in order. Every adapter with a
-   durable terminal result (`sent` or `failed`) is skipped. Each available
-   `pending` adapter is invoked once and its success or failure is persisted
-   immediately before the next adapter runs.
+4. Converts any recovered `delivering` state to `uncertain`; such an attempt is
+   never automatically replayed because the external effect may already have
+   occurred.
+5. Iterates the frozen required adapter IDs in order. Every adapter with a
+   durable terminal result (`sent`, `failed`, or `uncertain`) is skipped. Each
+   available `pending` adapter is first persisted as `delivering` with its
+   incremented attempt count, then invoked once, and its success or failure is
+   persisted immediately before the next adapter runs.
    A required adapter missing from the current configuration is persisted as
    failed without inventing a replacement identity.
-5. After every required adapter has a durable result, derives and persists the
+6. After every required adapter has a durable result, derives and persists the
    global status. A crash after a failed result but before finalization leaves
    the entry globally `pending`; the next run skips both successful and failed
    terminal adapter states and only finalizes the projection.
@@ -126,11 +138,13 @@ request/thread/turn/trace fields plus the delivery-owned source.
 
 ### Retry Behavior
 
-**No automatic retry after a completed failed attempt.** A globally failed
-entry stays `failed` forever. Crash recovery of an incomplete pending attempt
-is not a retry of adapters already recorded as sent or failed. A future retry
-feature must explicitly reset selected failed adapter states to `pending`;
-normal delivery and finalization cannot do so.
+**No automatic retry after a completed or uncertain attempt.** A globally
+failed entry stays `failed` forever. SMTP and other non-idempotent adapters are
+therefore at-most-once after intent persistence: a crash after the external
+send but before result persistence may leave delivery uncertain, but normal
+recovery will not duplicate the effect. A future retry command must explicitly
+reset selected failed or uncertain adapter states to `pending`; normal
+delivery and finalization cannot do so.
 
 ### Daemon Integration
 

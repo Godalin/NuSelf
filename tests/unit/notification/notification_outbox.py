@@ -163,6 +163,7 @@ def test_outbox_terminal_adapter_result_cannot_be_overwritten(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
     outbox.prepare_delivery("e1", ("email",))
+    outbox.begin_adapter_delivery("e1", "email")
     failed = outbox.record_adapter_result(
         "e1",
         "email",
@@ -186,7 +187,9 @@ def test_outbox_dismiss_preserves_adapter_history(tmp_path: Path) -> None:
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
     outbox.prepare_delivery("e1", ("email", "macos"))
+    outbox.begin_adapter_delivery("e1", "email")
     outbox.record_adapter_result("e1", "email", success=True)
+    outbox.begin_adapter_delivery("e1", "macos")
     outbox.record_adapter_result("e1", "macos", success=False)
     before = outbox.get("e1")
 

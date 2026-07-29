@@ -3350,11 +3350,13 @@ def test_notify_send_preserves_existing_adapter_plan_and_history(
         )
     )
     outbox.prepare_delivery("existing-plan", ("email", "macos"))
+    outbox.begin_adapter_delivery("existing-plan", "email")
     outbox.record_adapter_result(
         "existing-plan",
         "email",
         success=True,
     )
+    outbox.begin_adapter_delivery("existing-plan", "macos")
     outbox.record_adapter_result(
         "existing-plan",
         "macos",

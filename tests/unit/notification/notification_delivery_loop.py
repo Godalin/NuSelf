@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
+import multiprocessing
+from multiprocessing.context import SpawnContext
+from multiprocessing.synchronize import Event
 from pathlib import Path
 from typing import cast
 
@@ -16,6 +19,7 @@ from nuself.notification import (
     NotificationDeliveryLoop,
     NotificationOutbox,
     OutboxEntry,
+    deliver_entry_once,
 )
 from nuself.notification.email import EmailNotificationAdapter
 from nuself.runtime.context import (
@@ -48,6 +52,69 @@ class FakeAdapter:
         self.sent_entries.append(entry)
         self.contexts.append(current_runtime_context())
         return self.succeed
+
+
+class _ProcessRecordingAdapter:
+    delivery_id = "process"
+
+    def __init__(
+        self,
+        effect_path: str,
+        started: Event | None = None,
+        release: Event | None = None,
+    ) -> None:
+        self._effect_path = Path(effect_path)
+        self._started = started
+        self._release = release
+
+    def send(self, entry: OutboxEntry) -> bool:
+        with self._effect_path.open("a", encoding="utf-8") as stream:
+            stream.write(f"{entry.id}\n")
+            stream.flush()
+        if self._started is not None:
+            self._started.set()
+        if self._release is not None and not self._release.wait(timeout=10):
+            raise RuntimeError("parent did not release notification adapter")
+        return True
+
+
+def _spawn_context() -> SpawnContext:
+    return multiprocessing.get_context("spawn")
+
+
+def _deliver_in_process(
+    project_root: str,
+    entry_id: str,
+    effect_path: str,
+    start: Event,
+    started: Event | None = None,
+    release: Event | None = None,
+) -> None:
+    if not start.wait(timeout=10):
+        raise RuntimeError("parent did not start notification delivery")
+    outbox = NotificationOutbox(Path(project_root))
+    deliver_entry_once(
+        outbox,
+        entry_id,
+        [
+            _ProcessRecordingAdapter(
+                effect_path,
+                started=started,
+                release=release,
+            )
+        ],
+    )
+
+
+def _dismiss_in_process(
+    project_root: str,
+    entry_id: str,
+    attempted: Event,
+    done: Event,
+) -> None:
+    attempted.set()
+    NotificationOutbox(Path(project_root)).dismiss(entry_id)
+    done.set()
 
 
 class DeleteFailingCollection:
@@ -125,6 +192,7 @@ def test_outbox_context_round_trip_and_legacy_decode(
 
     assert stored.context == entry.context
     outbox.prepare_delivery(entry.id, ("log",))
+    outbox.begin_adapter_delivery(entry.id, "log")
     outbox.record_adapter_result(entry.id, "log", success=True)
     assert outbox.finalize_delivery(entry.id).context == entry.context
     assert outbox.dismiss(entry.id).context == entry.context
@@ -334,7 +402,7 @@ def test_delivery_loop_all_adapters_must_succeed(tmp_path: Path) -> None:
     assert failed.deliveries["bad"].attempts == 1
 
 
-def test_delivery_loop_resumes_without_repeating_sent_adapter(
+def test_delivery_loop_marks_crash_after_send_uncertain_without_replay(
     tmp_path: Path,
 ) -> None:
     class RaisingAdapter:
@@ -365,7 +433,7 @@ def test_delivery_loop_resumes_without_repeating_sent_adapter(
     interrupted = outbox.get("resume")
     assert interrupted.status == "pending"
     assert interrupted.deliveries["first"].status == "sent"
-    assert interrupted.deliveries["second"].status == "pending"
+    assert interrupted.deliveries["second"].status == "delivering"
     assert len(first.sent_entries) == 1
 
     recovered_second = FakeAdapter(delivery_id="second")
@@ -374,13 +442,122 @@ def test_delivery_loop_resumes_without_repeating_sent_adapter(
         adapters=[first, recovered_second],
     ).run_once()
 
-    assert delivered == 1
+    assert delivered == 0
     assert len(first.sent_entries) == 1
-    assert len(recovered_second.sent_entries) == 1
+    assert recovered_second.sent_entries == []
     completed = outbox.get("resume")
-    assert completed.status == "sent"
+    assert completed.status == "failed"
     assert completed.deliveries["first"].attempts == 1
+    assert completed.deliveries["second"].status == "uncertain"
     assert completed.deliveries["second"].attempts == 1
+
+
+def test_cross_process_delivery_sends_one_external_effect(
+    tmp_path: Path,
+) -> None:
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="one-effect",
+            title="One",
+            body="Only once.",
+            status="pending",
+            idempotency_key="one-effect",
+        )
+    )
+    effect_path = tmp_path / "effects.log"
+    context = _spawn_context()
+    start = context.Event()
+    processes = [
+        context.Process(
+            target=_deliver_in_process,
+            args=(
+                str(tmp_path),
+                "one-effect",
+                str(effect_path),
+                start,
+            ),
+        )
+        for _ in range(2)
+    ]
+    for process in processes:
+        process.start()
+    start.set()
+    for process in processes:
+        process.join(timeout=10)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=10)
+
+    assert [process.exitcode for process in processes] == [0, 0]
+    assert effect_path.read_text(encoding="utf-8").splitlines() == [
+        "one-effect"
+    ]
+    assert outbox.get("one-effect").status == "sent"
+
+
+def test_dismiss_waits_for_delivery_entry_lock(
+    tmp_path: Path,
+) -> None:
+    outbox = NotificationOutbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="dismiss-race",
+            title="Race",
+            body="Serialize state.",
+            status="pending",
+            idempotency_key="dismiss-race",
+        )
+    )
+    effect_path = tmp_path / "effects.log"
+    context = _spawn_context()
+    start = context.Event()
+    adapter_started = context.Event()
+    release_adapter = context.Event()
+    dismiss_attempted = context.Event()
+    dismiss_done = context.Event()
+    delivery = context.Process(
+        target=_deliver_in_process,
+        args=(
+            str(tmp_path),
+            "dismiss-race",
+            str(effect_path),
+            start,
+            adapter_started,
+            release_adapter,
+        ),
+    )
+    dismiss = context.Process(
+        target=_dismiss_in_process,
+        args=(
+            str(tmp_path),
+            "dismiss-race",
+            dismiss_attempted,
+            dismiss_done,
+        ),
+    )
+    delivery.start()
+    start.set()
+    assert adapter_started.wait(timeout=10)
+    dismiss.start()
+    try:
+        assert dismiss_attempted.wait(timeout=10)
+        assert not dismiss_done.wait(timeout=0.2)
+    finally:
+        release_adapter.set()
+        delivery.join(timeout=10)
+        dismiss.join(timeout=10)
+        for process in (delivery, dismiss):
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=10)
+
+    assert delivery.exitcode == 0
+    assert dismiss.exitcode == 0
+    assert effect_path.read_text(encoding="utf-8").splitlines() == [
+        "dismiss-race"
+    ]
+    assert outbox.get("dismiss-race").status == "dismissed"
 
 
 def test_delivery_loop_finalizes_without_repeating_failed_adapter(
@@ -399,6 +576,10 @@ def test_delivery_loop_finalizes_without_repeating_failed_adapter(
     outbox.prepare_delivery(
         "failed-before-finalize",
         ("failed", "remaining"),
+    )
+    outbox.begin_adapter_delivery(
+        "failed-before-finalize",
+        "failed",
     )
     outbox.record_adapter_result(
         "failed-before-finalize",
