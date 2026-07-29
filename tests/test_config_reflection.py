@@ -75,7 +75,7 @@ llm:
     assert config.llm.endpoints[0].base_url == "https://primary.example/v1"
     assert config.llm.endpoints[1].model == "claude-model"
     assert config.llm.endpoints[1].anthropic is True
-    assert config.llm.endpoints[1].base_url == "https://api.anthropic.com/v1"
+    assert config.llm.endpoints[1].base_url == "https://api.anthropic.com"
     assert ConfigSystem().as_flat_dict(config)["llm.count"] == 2
 
 

@@ -92,12 +92,26 @@ def _configured_llm_endpoints(project_root: Path | None = None) -> tuple[LangCha
             provider="anthropic" if ep_cfg.anthropic else "openai",
             timeout_seconds=ep_cfg.timeout_seconds,
         )
-        model = _endpoint_langchain_chat_model(settings)
-        result.append(LangChainLLMEndpoint(index=index, settings=settings, model=model))
+        result.append(build_langchain_endpoint(index, settings))
     return tuple(result)
 
 
-def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
+def build_langchain_endpoint(
+    index: int,
+    settings: LLMSettings,
+) -> LangChainLLMEndpoint:
+    """Build one typed endpoint through the production provider adapters."""
+
+    if index < 0:
+        raise ValueError("LLM endpoint index must be non-negative")
+    return LangChainLLMEndpoint(
+        index=index,
+        settings=settings,
+        model=_langchain_chat_model(settings),
+    )
+
+
+def _langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
     model_args: dict[str, object] = {
         "api_key": settings.api_key,
         "timeout": settings.timeout_seconds,
@@ -108,7 +122,8 @@ def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
         anthropic_model = cast(Any, ChatAnthropic)
         return cast(BaseChatModel, anthropic_model(
             model_name=settings.model,
-            base_url=settings.base_url,
+            base_url=_anthropic_sdk_base_url(settings.base_url),
+            thinking={"type": "disabled"},
             **model_args,
         ))
     openai_model = cast(Any, ChatOpenAI)
@@ -117,6 +132,15 @@ def _endpoint_langchain_chat_model(settings: LLMSettings) -> BaseChatModel:
         base_url=settings.base_url,
         **model_args,
     ))
+
+
+def _anthropic_sdk_base_url(base_url: str) -> str:
+    """Return the API root expected by an SDK that appends ``/v1/messages``."""
+
+    normalized = base_url.rstrip("/")
+    if normalized.endswith("/v1"):
+        return normalized[:-3]
+    return normalized
 
 
 # ============================================================================

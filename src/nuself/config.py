@@ -93,7 +93,7 @@ class LlmEndpointConfig(BaseModel):
     @model_validator(mode="after")
     def _fill_anthropic_url(self) -> LlmEndpointConfig:
         if not self.base_url and self.anthropic:
-            object.__setattr__(self, "base_url", "https://api.anthropic.com/v1")
+            object.__setattr__(self, "base_url", "https://api.anthropic.com")
         return self
 
 

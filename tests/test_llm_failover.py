@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from nuself.logs import read_log_events
-from nuself.llm import LLMSettings
+from nuself.llm import LLMSettings, build_langchain_endpoint
 
 
 def test_llm_settings_repr_excludes_api_key() -> None:
@@ -17,6 +17,48 @@ def test_llm_settings_repr_excludes_api_key() -> None:
 
     assert secret not in repr(settings)
     assert "api_key" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        (
+            "https://api.anthropic.com",
+            "https://api.anthropic.com",
+        ),
+        (
+            "https://api.anthropic.com/v1",
+            "https://api.anthropic.com",
+        ),
+        (
+            "https://opencode.ai/zen/go/v1/",
+            "https://opencode.ai/zen/go",
+        ),
+    ],
+)
+def test_anthropic_sdk_base_url_uses_api_root(
+    configured: str,
+    expected: str,
+) -> None:
+    from nuself.llm import _anthropic_sdk_base_url  # pyright: ignore[reportPrivateUsage]
+
+    assert _anthropic_sdk_base_url(configured) == expected
+
+
+def test_anthropic_endpoint_disables_thinking_for_forced_tools() -> None:
+    endpoint = build_langchain_endpoint(
+        0,
+        LLMSettings(
+            base_url="https://example.invalid/v1",
+            api_key="test",
+            model="example",
+            provider="anthropic",
+        ),
+    )
+
+    assert getattr(endpoint.model, "thinking") == {
+        "type": "disabled",
+    }
 
 
 @pytest.mark.parametrize(

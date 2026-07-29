@@ -102,12 +102,25 @@ Rules:
 
 - `llm` is an ordered list of endpoints. The first item is the default endpoint.
 - Endpoints default to OpenAI-compatible behavior.
-- If an endpoint has `anthropic: true`, NuSelf uses Anthropic Messages API semantics for that endpoint. `base_url` defaults to `https://api.anthropic.com/v1` when omitted.
+- If an endpoint has `anthropic: true`, NuSelf uses Anthropic Messages API
+  semantics for that endpoint. `base_url` defaults to
+  `https://api.anthropic.com` when omitted. Configuration may use either the
+  API root or its trailing `/v1` prefix; NuSelf removes exactly one terminal
+  `/v1` before passing the root to the Anthropic SDK because that SDK appends
+  `/v1/messages` itself.
+- NuSelf explicitly disables Anthropic extended thinking at the provider
+  adapter. Framework-native structured output forces a tool choice, while the
+  Anthropic protocol forbids forced tool choice in thinking mode. This is a
+  runtime-contract requirement, not model-name inference.
 - Provider selection is explicit configuration. NuSelf does not infer
   OpenAI-compatible versus Anthropic semantics from a model name or endpoint
   URL; gateways that expose different models through different protocols must
   set `anthropic` per endpoint.
 - Each endpoint may set `timeout_seconds`. It controls the provider HTTP request timeout for that endpoint. If omitted, the default is 60 seconds.
+- The LLM composition boundary exposes one endpoint builder from typed
+  `LLMSettings`. Runtime configuration and opt-in live matrix tests use that
+  same builder so provider selection, timeout, retry, and temperature behavior
+  cannot drift.
 - The old nested `llm.openai` shape is not part of v0.2.0. Configuration should use the direct `llm` list shape.
 - If every configured endpoint has an empty API key, no LangChain endpoint is
   available. Chat returns its deterministic local configuration guidance;
