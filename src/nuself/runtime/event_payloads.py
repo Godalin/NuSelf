@@ -94,7 +94,7 @@ class RuntimeLogEventPayload:
 def validate_runtime_log_event_payload(
     payload: Mapping[str, object],
 ) -> None:
-    """Validate one core event payload before subscriber delivery."""
+    """Validate one core event payload before projection delivery."""
 
     RuntimeLogEventPayload.from_mapping(payload)
 

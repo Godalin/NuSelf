@@ -14,27 +14,27 @@ from nuself.runtime.event_definitions import (
 )
 from nuself.runtime.messages import RuntimeEnvelope
 
-EventSubscriber = Callable[[RuntimeEnvelope], None]
+EventProjection = Callable[[RuntimeEnvelope], None]
 
 
 @dataclass(frozen=True)
-class EventSubscription:
-    """Opaque subscription handle owned by one publisher."""
+class EventProjectionHandle:
+    """Opaque projection handle owned by one publisher."""
 
     publisher_id: UUID
-    subscription_id: int
+    projection_id: int
 
 
 @dataclass(frozen=True)
 class EventDeliveryFailure:
-    """One subscriber failure captured after independent delivery."""
+    """One projection failure captured after independent delivery."""
 
-    subscription: EventSubscription
+    projection: EventProjectionHandle
     error: Exception
 
 
 class EventDeliveryError(RuntimeError):
-    """Raised after all matching subscribers received an event."""
+    """Raised after all matching projections received an event."""
 
     def __init__(
         self,
@@ -49,7 +49,7 @@ class EventDeliveryError(RuntimeError):
             for failure in failures
         )
         super().__init__(
-            f"{len(failures)} subscriber(s) failed for runtime event "
+            f"{len(failures)} projection(s) failed for runtime event "
             f"{event.name!r}: {details}"
         )
         self.event = event
@@ -57,7 +57,7 @@ class EventDeliveryError(RuntimeError):
 
 
 class EventPublisher:
-    """Owns ordered subscribers and delivers events synchronously."""
+    """Owns ordered projections and delivers events synchronously."""
 
     def __init__(
         self,
@@ -70,44 +70,44 @@ class EventPublisher:
             else build_event_definition_registry()
         )
         self._publisher_id = uuid4()
-        self._next_subscription_id = 1
-        self._subscribers: dict[
+        self._next_projection_id = 1
+        self._projections: dict[
             int,
-            tuple[tuple[str, str] | None, EventSubscriber],
+            tuple[tuple[str, str] | None, EventProjection],
         ] = {}
 
-    def subscribe(
+    def attach_projection(
         self,
-        subscriber: EventSubscriber,
+        projection: EventProjection,
         *,
         producer: str | None = None,
         name: str | None = None,
-    ) -> EventSubscription:
-        """Subscribe to one exact event identity, or all registered events."""
+    ) -> EventProjectionHandle:
+        """Attach a synchronous projection to one identity, or all events."""
 
-        if not callable(subscriber):
-            raise TypeError("event subscriber must be callable")
+        if not callable(projection):
+            raise TypeError("event projection must be callable")
         if (producer is None) != (name is None):
             raise ValueError(
-                "event subscription producer and name must be supplied together"
+                "event projection producer and name must be supplied together"
             )
         selector: tuple[str, str] | None = None
         if producer is not None and name is not None:
             self._definitions.resolve(producer, name)
             selector = (producer, name)
         with self._lock:
-            subscription_id = self._next_subscription_id
-            self._next_subscription_id += 1
-            self._subscribers[subscription_id] = (selector, subscriber)
-        return EventSubscription(self._publisher_id, subscription_id)
+            projection_id = self._next_projection_id
+            self._next_projection_id += 1
+            self._projections[projection_id] = (selector, projection)
+        return EventProjectionHandle(self._publisher_id, projection_id)
 
-    def unsubscribe(self, subscription: EventSubscription) -> bool:
-        """Remove a subscription, returning whether it belonged to this publisher."""
+    def detach_projection(self, projection: EventProjectionHandle) -> bool:
+        """Detach a projection, returning whether it belonged to this publisher."""
 
-        if subscription.publisher_id != self._publisher_id:
+        if projection.publisher_id != self._publisher_id:
             return False
         with self._lock:
-            return self._subscribers.pop(subscription.subscription_id, None) is not None
+            return self._projections.pop(projection.projection_id, None) is not None
 
     def publish(
         self,
@@ -133,7 +133,7 @@ class EventPublisher:
         return event
 
     def publish_envelope(self, event: RuntimeEnvelope) -> None:
-        """Deliver an existing event to every matching subscriber in order."""
+        """Deliver an existing event to every matching projection in order."""
 
         if event.kind != "event":
             raise ValueError("event publisher requires an event envelope")
@@ -151,20 +151,20 @@ class EventPublisher:
         """Deliver one definition-validated immutable event."""
 
         with self._lock:
-            subscribers = tuple(self._subscribers.items())
+            projections = tuple(self._projections.items())
         failures: list[EventDeliveryFailure] = []
-        for subscription_id, (selector, subscriber) in subscribers:
+        for projection_id, (selector, projection) in projections:
             if selector is not None and selector != (
                 event.producer,
                 event.name,
             ):
                 continue
             try:
-                subscriber(event)
-            except Exception as exc:  # noqa: BLE001 - isolate independent subscribers
+                projection(event)
+            except Exception as exc:  # noqa: BLE001 - isolate independent projections
                 failures.append(
                     EventDeliveryFailure(
-                        EventSubscription(self._publisher_id, subscription_id),
+                        EventProjectionHandle(self._publisher_id, projection_id),
                         exc,
                     )
                 )

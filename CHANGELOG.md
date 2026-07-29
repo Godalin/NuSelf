@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Runtime events now expose explicit synchronous projection attachment instead
+  of a general subscriber API. Projection callbacks must be bounded in-process
+  work; independently progressing effects require an owned bounded queue.
 - Reason export retry delays now use a shared owned scheduler that removes
   completed tasks promptly, rolls back failed starts, and cancels outstanding
   work atomically during shutdown.

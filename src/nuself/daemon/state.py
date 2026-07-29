@@ -35,7 +35,7 @@ class DaemonState:
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()
-        self.event_publisher.subscribe(
+        self.event_publisher.attach_projection(
             runtime_event_log_sink(project_root)
         )
         self._worker_supervisor = DaemonWorkerSupervisor(

@@ -617,7 +617,7 @@ def runtime_event_log_sink(
     *,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
 ) -> Callable[[RuntimeEnvelope], None]:
-    """Build an event subscriber that persists audit projections."""
+    """Build a bounded synchronous event-to-audit projection."""
 
     def sink(envelope: RuntimeEnvelope) -> None:
         write_runtime_event(

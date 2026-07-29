@@ -38,7 +38,7 @@ def _worker_supervisor(
     shutdown_requested: threading.Event | None = None,
 ) -> DaemonWorkerSupervisor:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
     return DaemonWorkerSupervisor(
         tmp_path,
         (
@@ -121,7 +121,7 @@ def test_daemon_state_owns_worker_event_and_audit_composition(
 ) -> None:
     state = DaemonState(tmp_path)
     received: list[RuntimeEnvelope] = []
-    state.event_publisher.subscribe(received.append)
+    state.event_publisher.attach_projection(received.append)
     state.shutdown_requested.set()
 
     state.start_background_memory_curator()
@@ -177,7 +177,7 @@ def test_daemon_chat_uses_state_event_publisher(
         if event.producer == "chat":
             received.append(event)
 
-    state.event_publisher.subscribe(collect_chat_event)
+    state.event_publisher.attach_projection(collect_chat_event)
     subscription_id = state.activity_broker.open("turn-1")
 
     response = handle_request(

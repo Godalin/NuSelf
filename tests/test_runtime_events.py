@@ -24,16 +24,16 @@ from nuself.runtime import (
 )
 
 
-def test_event_publisher_delivers_matching_subscribers_in_order() -> None:
+def test_event_publisher_delivers_matching_projections_in_order() -> None:
     publisher = EventPublisher()
     received: list[str] = []
-    publisher.subscribe(lambda event: received.append(f"all:{event.name}"))
-    publisher.subscribe(
+    publisher.attach_projection(lambda event: received.append(f"all:{event.name}"))
+    publisher.attach_projection(
         lambda event: received.append(f"named:{event.name}"),
         producer="daemon",
         name="worker.started",
     )
-    publisher.subscribe(
+    publisher.attach_projection(
         lambda event: received.append(f"other:{event.name}"),
         producer="daemon",
         name="worker.stopped",
@@ -54,18 +54,18 @@ def test_event_publisher_delivers_independently_then_reports_failures() -> None:
     received: list[str] = []
 
     def fail(_event: RuntimeEnvelope) -> None:
-        raise RuntimeError("subscriber failed")
+        raise RuntimeError("projection failed")
 
-    failed_subscription = publisher.subscribe(fail)
-    publisher.subscribe(lambda event: received.append(event.name))
+    failed_projection = publisher.attach_projection(fail)
+    publisher.attach_projection(lambda event: received.append(event.name))
 
     with pytest.raises(EventDeliveryError) as exc_info:
         publisher.publish(name="worker.started", producer="daemon")
 
     assert received == ["worker.started"]
     assert len(exc_info.value.failures) == 1
-    assert exc_info.value.failures[0].subscription == failed_subscription
-    assert str(exc_info.value.failures[0].error) == "subscriber failed"
+    assert exc_info.value.failures[0].projection == failed_projection
+    assert str(exc_info.value.failures[0].error) == "projection failed"
 
 
 def test_event_delivery_retains_exception_with_broken_string_renderer() -> None:
@@ -75,39 +75,39 @@ def test_event_delivery_retains_exception_with_broken_string_renderer() -> None:
         def __str__(self) -> str:
             raise RuntimeError("message rendering failed")
 
-    subscriber_error = BrokenMessageError()
+    projection_error = BrokenMessageError()
 
     def fail(_event: RuntimeEnvelope) -> None:
-        raise subscriber_error
+        raise projection_error
 
-    failed_subscription = publisher.subscribe(fail)
+    failed_projection = publisher.attach_projection(fail)
 
     with pytest.raises(EventDeliveryError) as exc_info:
         publisher.publish(name="worker.started", producer="daemon")
 
     [failure] = exc_info.value.failures
-    assert failure.subscription == failed_subscription
-    assert failure.error is subscriber_error
+    assert failure.projection == failed_projection
+    assert failure.error is projection_error
     assert "BrokenMessageError: <no message>" in str(exc_info.value)
 
 
-def test_event_subscription_can_be_removed() -> None:
+def test_event_projection_can_be_removed() -> None:
     publisher = EventPublisher()
     received: list[str] = []
-    subscription = publisher.subscribe(lambda event: received.append(event.name))
+    projection = publisher.attach_projection(lambda event: received.append(event.name))
 
-    assert publisher.unsubscribe(subscription) is True
-    assert publisher.unsubscribe(subscription) is False
+    assert publisher.detach_projection(projection) is True
+    assert publisher.detach_projection(projection) is False
     publisher.publish(name="worker.started", producer="daemon")
 
     assert received == []
 
 
-def test_event_publisher_rejects_non_callable_subscriber() -> None:
+def test_event_publisher_rejects_non_callable_projection() -> None:
     publisher = EventPublisher()
 
-    with pytest.raises(TypeError, match="event subscriber must be callable"):
-        publisher.subscribe(None)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="event projection must be callable"):
+        publisher.attach_projection(None)  # type: ignore[arg-type]
 
     publisher.publish(name="worker.started", producer="daemon")
 
@@ -119,7 +119,7 @@ def test_event_publisher_rejects_non_callable_subscriber() -> None:
         (None, "worker.started"),
     ),
 )
-def test_event_publisher_rejects_partial_subscription_identity(
+def test_event_publisher_rejects_partial_projection_identity(
     producer: str | None,
     name: str | None,
 ) -> None:
@@ -129,25 +129,25 @@ def test_event_publisher_rejects_partial_subscription_identity(
         ValueError,
         match="producer and name must be supplied together",
     ):
-        publisher.subscribe(
+        publisher.attach_projection(
             lambda _event: None,
             producer=producer,
             name=name,
         )
 
 
-def test_event_publisher_rejects_unknown_exact_subscription() -> None:
+def test_event_publisher_rejects_unknown_exact_projection() -> None:
     publisher = EventPublisher()
 
     with pytest.raises(UnknownEventDefinitionError):
-        publisher.subscribe(
+        publisher.attach_projection(
             lambda _event: None,
             producer="chat",
             name="worker.started",
         )
 
 
-def test_exact_subscription_isolates_same_name_across_producers() -> None:
+def test_exact_projection_isolates_same_name_across_producers() -> None:
     definitions = build_event_definition_registry(
         (
             RuntimeEventDefinition(
@@ -159,7 +159,7 @@ def test_exact_subscription_isolates_same_name_across_producers() -> None:
     )
     publisher = EventPublisher(definitions)
     received: list[tuple[str, str]] = []
-    publisher.subscribe(
+    publisher.attach_projection(
         lambda event: received.append((event.producer, event.name)),
         producer="daemon",
         name="worker.started",
@@ -171,40 +171,40 @@ def test_exact_subscription_isolates_same_name_across_producers() -> None:
     assert received == [("daemon", "worker.started")]
 
 
-def test_event_subscription_is_bound_to_one_publisher_lifetime() -> None:
+def test_event_projection_is_bound_to_one_publisher_lifetime() -> None:
     earlier_publisher = EventPublisher()
     current_publisher = EventPublisher()
-    earlier_subscription = earlier_publisher.subscribe(lambda _event: None)
+    earlier_projection = earlier_publisher.attach_projection(lambda _event: None)
     received: list[str] = []
-    current_subscription = current_publisher.subscribe(
+    current_projection = current_publisher.attach_projection(
         lambda event: received.append(event.name)
     )
 
-    assert earlier_subscription.subscription_id == current_subscription.subscription_id
-    assert earlier_subscription.publisher_id != current_subscription.publisher_id
-    assert current_publisher.unsubscribe(earlier_subscription) is False
+    assert earlier_projection.projection_id == current_projection.projection_id
+    assert earlier_projection.publisher_id != current_projection.publisher_id
+    assert current_publisher.detach_projection(earlier_projection) is False
 
     current_publisher.publish(name="worker.started", producer="daemon")
 
     assert received == ["worker.started"]
-    assert current_publisher.unsubscribe(current_subscription) is True
+    assert current_publisher.detach_projection(current_projection) is True
 
 
-def test_subscription_mutations_do_not_change_active_delivery_snapshot() -> None:
+def test_projection_mutations_do_not_change_active_delivery_snapshot() -> None:
     publisher = EventPublisher()
     received: list[str] = []
 
-    def mutate_subscriptions(event: RuntimeEnvelope) -> None:
+    def mutate_projections(event: RuntimeEnvelope) -> None:
         received.append(f"mutator:{event.name}")
         if event.name != "worker.started":
             return
-        assert publisher.unsubscribe(removed_subscription) is True
-        publisher.subscribe(
+        assert publisher.detach_projection(removed_projection) is True
+        publisher.attach_projection(
             lambda later_event: received.append(f"added:{later_event.name}")
         )
 
-    publisher.subscribe(mutate_subscriptions)
-    removed_subscription = publisher.subscribe(
+    publisher.attach_projection(mutate_projections)
+    removed_projection = publisher.attach_projection(
         lambda event: received.append(f"removed:{event.name}")
     )
 
@@ -225,7 +225,7 @@ def test_subscription_mutations_do_not_change_active_delivery_snapshot() -> None
     ]
 
 
-def test_subscription_mutations_are_visible_to_nested_publication() -> None:
+def test_projection_mutations_are_visible_to_nested_publication() -> None:
     publisher = EventPublisher()
     received: list[str] = []
 
@@ -233,14 +233,14 @@ def test_subscription_mutations_are_visible_to_nested_publication() -> None:
         received.append(f"publisher:{event.name}")
         if event.name != "worker.started":
             return
-        assert publisher.unsubscribe(removed_subscription) is True
-        publisher.subscribe(
+        assert publisher.detach_projection(removed_projection) is True
+        publisher.attach_projection(
             lambda nested_event: received.append(f"added:{nested_event.name}")
         )
         publisher.publish(name="worker.stopped", producer="daemon")
 
-    publisher.subscribe(publish_nested)
-    removed_subscription = publisher.subscribe(
+    publisher.attach_projection(publish_nested)
+    removed_projection = publisher.attach_projection(
         lambda event: received.append(f"removed:{event.name}")
     )
 
@@ -256,7 +256,7 @@ def test_subscription_mutations_are_visible_to_nested_publication() -> None:
 
 def test_runtime_event_log_sink_preserves_event_identity(tmp_path: Path) -> None:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
 
     event = publisher.publish(
         name="worker.started",
@@ -279,7 +279,7 @@ def test_runtime_event_log_sink_sanitizes_without_mutating_envelope(
     tmp_path: Path,
 ) -> None:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
     payload = {
         "message": "worker started api_key=message-secret",
         "status": "started",
@@ -317,10 +317,10 @@ def test_event_publisher_rejects_unknown_or_wrong_producer() -> None:
         publisher.publish(name="domain.changed", producer="memory")
 
 
-def test_core_event_payload_is_validated_before_subscriber_delivery() -> None:
+def test_core_event_payload_is_validated_before_projection_delivery() -> None:
     publisher = EventPublisher()
     received: list[RuntimeEnvelope] = []
-    publisher.subscribe(received.append)
+    publisher.attach_projection(received.append)
 
     with pytest.raises(
         ValueError,
@@ -338,7 +338,7 @@ def test_core_event_payload_is_validated_before_subscriber_delivery() -> None:
 def test_existing_core_event_envelope_is_validated_before_delivery() -> None:
     publisher = EventPublisher()
     received: list[RuntimeEnvelope] = []
-    publisher.subscribe(received.append)
+    publisher.attach_projection(received.append)
     envelope = RuntimeEnvelope(
         kind="event",
         name="worker.started",
@@ -424,7 +424,7 @@ def test_event_publish_validates_canonical_payload_exactly_once() -> None:
     publisher = EventPublisher(
         build_event_definition_registry((definition,))
     )
-    publisher.subscribe(lambda event: received.append(event.payload))
+    publisher.attach_projection(lambda event: received.append(event.payload))
     payload = {"entries": ["m1"]}
 
     event = publisher.publish(

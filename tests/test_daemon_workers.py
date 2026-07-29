@@ -20,7 +20,7 @@ from nuself.runtime import (
 
 def _supervisor(tmp_path: Path) -> DaemonWorkerSupervisor:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
     return DaemonWorkerSupervisor(
         tmp_path,
         threading.Event(),
@@ -123,12 +123,12 @@ def test_worker_lifecycle_subscriber_failure_does_not_skip_target_or_stop(
     tmp_path: Path,
 ) -> None:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
 
     def fail_subscriber(_event: object) -> None:
         raise RuntimeError("subscriber unavailable")
 
-    publisher.subscribe(fail_subscriber)
+    publisher.attach_projection(fail_subscriber)
     supervisor = DaemonWorkerSupervisor(
         tmp_path,
         threading.Event(),

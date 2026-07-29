@@ -206,7 +206,7 @@ class ConversationGraphRuntime:
         project_root: Path | None,
     ) -> EventPublisher:
         publisher = EventPublisher()
-        publisher.subscribe(runtime_event_log_sink(project_root))
+        publisher.attach_projection(runtime_event_log_sink(project_root))
         return publisher
 
     def respond(

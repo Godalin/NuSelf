@@ -236,7 +236,7 @@ duplicate a `reason_threads` completion kind.
 ## Chat Turn Logs
 
 Every chat turn publishes registered lifecycle events from the chat component;
-the audit subscriber writes their log projections:
+the audit projection writes their log records:
 
 | Event            | Status      | Meaning                                                                                      |
 | ---------------- | ----------- | -------------------------------------------------------------------------------------------- |
@@ -285,16 +285,16 @@ Rules:
   messages, levels, statuses, forbidden errors/durations, and exact metadata.
   Decorators do not choose projection defaults locally.
 
-Observed runtime-event publication treats only subscriber delivery failure as
-a best-effort projection failure. If one or more subscribers fail, all matching
-subscribers are still attempted, the structured delivery diagnostic is
+Observed runtime-event publication treats only projection delivery failure as
+a best-effort projection failure. If one or more projections fail, all matching
+projections are still attempted, the structured delivery diagnostic is
 best-effort, and the already-created envelope remains the publication result.
 Event-definition, producer, envelope, and payload validation failures occur
 before delivery and propagate to the producer; they must not be mislabeled or
-suppressed as subscriber failures.
+suppressed as projection failures.
 
 Unfiltered runtime log sinks deliberately receive every registered event.
-Filtered `EventPublisher` subscribers must bind the complete registered
+Filtered `EventPublisher` projections must bind the complete registered
 `(producer, name)` identity; event name alone is not an ownership boundary.
 
 Core runtime events that project into logs use one shared typed payload
@@ -303,7 +303,7 @@ contract. The only fields are `message`, `level`, `node`, `duration_ms`,
 silently ignored. Present scalar fields have their exact documented types,
 duration is a non-negative integer, metadata is a mapping, and the complete
 payload remains strict JSON. Core event definitions validate this contract
-before the envelope is created or any subscriber runs. Chat/worker producers
+before the envelope is created or any projection runs. Chat/worker producers
 and `write_runtime_event()` use the same payload type, so producer and sink
 validation cannot drift. Extension event definitions may supply a different
 validator when their payload is not a log projection.
@@ -442,7 +442,8 @@ Auxiliary evidence uses
   fields retain the failed audit component/event plus the observed and sink
   error chains. A caller-specific `{component}/{event}` string is not reused as
   the warning identity.
-- An `EventPublisher` may attach `runtime_event_log_sink(...)`; this projection
+- An `EventPublisher` may attach `runtime_event_log_sink(...)`; this bounded
+  synchronous projection
   retains the published event's ID and correlation context.
 - Writes are serialized by a per-path process lock and an advisory file lock;
   one complete JSON line is flushed before releasing the locks.

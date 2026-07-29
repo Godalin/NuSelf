@@ -222,10 +222,16 @@ Middleware order is outer-to-inner registration order, and wrappers must
 preserve the original handler exception identity unless the middleware's
 documented policy explicitly translates it.
 
-Runtime event registration, publication, and filtered subscription all use the
-same `(producer, name)` identity. New internal consumers must subscribe to all
-events intentionally or bind both fields; partial event-name selectors are
-forbidden.
+Runtime event registration, publication, and filtered projection attachment
+all use the same `(producer, name)` identity. New internal projections must
+attach to all events intentionally or bind both fields; partial event-name
+selectors are forbidden.
+
+`EventPublisher.attach_projection(...)` is reserved for bounded synchronous
+in-process projections whose completion deliberately belongs to publication.
+Code requiring independent progress, network I/O, retries, or an unbounded wait
+must own a bounded queue and worker lifecycle instead of attaching a callback
+to the publisher.
 
 Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
 `queue.Queue` or `SimpleQueue`. Capacity, identity coalescing, in-flight

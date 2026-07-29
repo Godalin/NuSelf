@@ -33,8 +33,8 @@ from nuself.runtime.events import (
     EventDeliveryError,
     EventDeliveryFailure,
     EventPublisher,
-    EventSubscriber,
-    EventSubscription,
+    EventProjection,
+    EventProjectionHandle,
 )
 from nuself.runtime.handlers import (
     DuplicateHandlerError,
@@ -85,8 +85,8 @@ __all__ = [
     "EventDeliveryError",
     "EventDeliveryFailure",
     "EventPublisher",
-    "EventSubscriber",
-    "EventSubscription",
+    "EventProjection",
+    "EventProjectionHandle",
     "HandlerRegistry",
     "HandlerMiddleware",
     "HandlerRegistrySealedError",

@@ -387,7 +387,7 @@ def test_observed_event_reports_subscriber_failure_and_returns_envelope(
     def fail_subscriber(_event: object) -> None:
         raise RuntimeError("subscriber unavailable")
 
-    publisher.subscribe(fail_subscriber)
+    publisher.attach_projection(fail_subscriber)
 
     result = publish_observed_event(
         publisher,

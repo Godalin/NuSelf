@@ -658,7 +658,7 @@ def test_chat_completed_event_is_published_after_thread_persistence(
 ) -> None:
     thread_store = ThreadStore(tmp_path)
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
     observed: list[RuntimeEnvelope] = []
 
     def inspect_persisted_state(event: RuntimeEnvelope) -> None:
@@ -671,7 +671,7 @@ def test_chat_completed_event_is_published_after_thread_persistence(
             )
         observed.append(event)
 
-    publisher.subscribe(inspect_persisted_state)
+    publisher.attach_projection(inspect_persisted_state)
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),
@@ -743,7 +743,7 @@ def test_chat_reused_event_does_not_rerun_graph(
     llm = FakeResponseService()
     publisher = EventPublisher()
     observed: list[RuntimeEnvelope] = []
-    publisher.subscribe(observed.append)
+    publisher.attach_projection(observed.append)
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=llm,
@@ -763,12 +763,12 @@ def test_chat_event_subscriber_failure_does_not_replace_original_failure(
     tmp_path: Path,
 ) -> None:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
 
     def fail_subscriber(_event: RuntimeEnvelope) -> None:
         raise RuntimeError("subscriber unavailable")
 
-    publisher.subscribe(fail_subscriber)
+    publisher.attach_projection(fail_subscriber)
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=FailingResponseService(),
@@ -796,12 +796,12 @@ def test_chat_event_subscriber_failure_does_not_replace_completed_turn(
     tmp_path: Path,
 ) -> None:
     publisher = EventPublisher()
-    publisher.subscribe(runtime_event_log_sink(tmp_path))
+    publisher.attach_projection(runtime_event_log_sink(tmp_path))
 
     def fail_subscriber(_event: RuntimeEnvelope) -> None:
         raise RuntimeError("subscriber unavailable")
 
-    publisher.subscribe(fail_subscriber)
+    publisher.attach_projection(fail_subscriber)
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),

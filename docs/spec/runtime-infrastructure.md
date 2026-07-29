@@ -37,7 +37,7 @@ Every internal exchange belongs to exactly one of these categories:
 | Category | Cardinality | Reply | Durability | Examples |
 | --- | --- | --- | --- | --- |
 | Request | one handler | required | transport-defined | daemon request, CLI command |
-| Event | zero or more subscribers | none | optional projection | worker lifecycle, tool activity |
+| Event | zero or more projections | none | optional projection | worker lifecycle, tool activity |
 | Job | one worker at a time | completion state | required when retryable | reason export |
 | Audit record | readers only | none | append-only | structured logs |
 | Notification | adapter fan-out | delivery state | durable | outbox entry |
@@ -460,46 +460,55 @@ The reason scope is restored after agent completion or failure. Tool providers
 must fail clearly if invoked without an active reason thread rather than
 reading process-global mutable state or guessing a workspace.
 
-## Event Delivery
+## Event Projection Delivery
 
-Ephemeral events use an in-process publisher/subscriber interface:
+Ephemeral events use an in-process publisher/projection interface:
 
-- publishing is synchronous by default so ordering and failures are explicit;
-- subscribers are independently registered and cannot mutate the envelope;
-- a logging subscriber may persist an audit projection;
+- publishing is synchronous so projection ordering and completion are explicit;
+- projections are independently attached and cannot mutate the envelope;
+- a logging projection may persist an audit record;
 - event delivery never performs hidden retries;
 - cross-process live activity requires an explicit transport or cursor store,
   not repeated full-file scans presented as an event bus.
 
-`nuself.runtime.events.EventPublisher` implements this boundary. Subscriptions
-may target one event name or all events, preserve registration order, and are
-removed through publisher-scoped opaque handles. Each publisher creates one
+`nuself.runtime.events.EventPublisher` implements this boundary. This API is
+not a general asynchronous event bus: every attached projection must be a
+bounded in-process operation whose completion is intentionally part of
+`publish()` completion. Network calls, unbounded waits, retries, notifications,
+and other independently progressing effects require a separately owned bounded
+queue and worker lifecycle; they must not be attached as projections merely to
+reuse event routing.
+
+Projections may target one complete event identity or all events, preserve
+attachment order, and are detached through publisher-scoped opaque handles.
+Each publisher creates one
 non-address lifetime token and copies it into its handles; ownership checks
 must not use `id(publisher)` or another identity that can be reused after the
 publisher is destroyed. A handle from another or earlier publisher therefore
-cannot remove a current subscription, even if process memory addresses are
-reused. Delivery continues across subscriber failures and raises one
-`EventDeliveryError` containing every failure after all matching subscribers
+cannot detach a current projection, even if process memory addresses are
+reused. Delivery continues across projection failures and raises one
+`EventDeliveryError` containing every failure after all matching projections
 have run; each failure carries the same lifetime-bound handle as the failed
-registration. Its compact message includes each subscriber exception type and
+attachment. Its compact message includes each projection exception type and
 non-empty message so best-effort observability does not discard the actionable
 failure cause.
 
 Building `EventDeliveryError` is a reporting boundary: an exception whose
 `__str__` fails must still remain in `failures`, and its type plus a stable
 fallback must appear in the aggregate message. Diagnostic formatting must not
-replace the subscriber failure set.
+replace the projection failure set.
 
-Each publication captures one ordered subscription snapshot under the
-publisher lock, then invokes callbacks without holding that lock. Subscribing
-or unsubscribing from a callback never changes the active snapshot: a removed
-subscriber still receives the current event if it was present at publication
-start, and a newly added subscriber starts with the next publication.
+Each publication captures one ordered projection snapshot under the
+publisher lock, then invokes callbacks without holding that lock. Attaching or
+detaching a projection from a callback never changes the active snapshot: a
+detached projection still receives the current event if it was present at
+publication start, and a newly attached projection starts with the next
+publication.
 Mutations are visible to a nested publication started after the mutation.
 Callbacks may therefore publish recursively without deadlocking the publisher.
 
-Subscribers and optional event-definition payload validators must be callable
-at composition time. Invalid subscribers fail in `subscribe(...)`; invalid
+Projections and optional event-definition payload validators must be callable
+at composition time. Invalid projections fail in `attach_projection(...)`; invalid
 validators fail while constructing the definition. They must not survive until
 publication and be misreported as delivery or payload failures.
 
@@ -529,19 +538,19 @@ The shared primitive does not merge their definition types, namespaces,
 extension rules, or delivery behavior.
 
 Runtime events and persisted audits remain distinct boundaries. Runtime events
-are synchronous immutable-envelope publication to subscribers; lifecycle
+are synchronous immutable-envelope publication to projections; lifecycle
 audits are direct best-effort log projections with fixed presentation defaults.
 Writing an audit never publishes an in-process event, publishing an event never
 implicitly creates a lifecycle audit except through an explicitly attached log
-subscriber, and replaying persisted records never invokes subscribers.
+projection, and replaying persisted records never invokes projections.
 
 Each publication validates exactly once against the recursively frozen payload
-stored in the `RuntimeEnvelope` and delivered to subscribers. The convenience
+stored in the `RuntimeEnvelope` and delivered to projections. The convenience
 `publish(...)` path must not validate the caller's mutable mapping and then
 validate the envelope again. `publish_envelope(...)` validates the supplied
 envelope once before entering the same already-validated delivery path.
 
-`runtime_event_log_sink(...)` is an optional subscriber. Its audit projection
+`runtime_event_log_sink(...)` is an optional projection. Its audit projection
 preserves the original envelope ID; attaching it never changes event delivery
 into log-driven control flow.
 
@@ -550,7 +559,8 @@ request/job path with idempotency and explicit user approval. Replaying an
 audit log must never repeat the action.
 
 Daemon worker lifecycle is the first production event boundary. `DaemonState`
-owns one `EventPublisher`, attaches `runtime_event_log_sink(...)`, and injects
+owns one `EventPublisher`, attaches `runtime_event_log_sink(...)` as a
+synchronous projection, and injects
 the publisher into `DaemonWorkerSupervisor`.
 
 - Every registered worker target publishes `daemon/worker.started` immediately
@@ -562,7 +572,7 @@ the publisher into `DaemonWorkerSupervisor`.
   exists.
 - Worker event envelopes inherit the active worker or job `RuntimeContext`.
   Their audit projections retain the same message ID and correlation fields.
-- Event publication is observational. A failed audit or future subscriber is
+- Event publication is observational. A failed audit or future projection is
   reported through the shared best-effort observability boundary and cannot
   skip the target, terminate a schedule, replace worker health updates, or
   prevent the stopped event attempt.
@@ -591,24 +601,24 @@ subscriber.
   `source="chat_runtime"` context containing the thread and optional turn ID.
   Their audit and daemon live-activity projections retain the envelope ID and
   correlation.
-- Event publication is secondary. Subscriber failure cannot prevent graph
+- Event publication is secondary. Projection failure cannot prevent graph
   execution, replace a completed response, mask the original failure, or alter
   thread persistence.
 
 `publish_observed_event(...)` is the shared best-effort event-publication
 boundary used by worker and chat lifecycle owners. It delegates delivery to
 `EventPublisher`, reports delivery failure through structured observability,
-and returns the immutable published envelope even when one or more subscribers
+and returns the immutable published envelope even when one or more projections
 fail. Delivery failure always uses `internal_event_delivery_failed` with exact
 `event` and `producer` metadata derived from that envelope; callers cannot
 invent subsystem-specific failure projections.
 
-Event subscriptions use the same complete identity as the sealed definition
-registry. A subscriber either receives every registered event or supplies both
+Event projections use the same complete identity as the sealed definition
+registry. A projection either receives every registered event or supplies both
 `producer` and `name`; supplying only one field is invalid. Exact selectors are
-resolved during subscription, so unknown identities fail at composition time.
-Name-only and producer-only wildcard subscriptions are not supported. Events
-with the same name but another producer never reach an exact subscriber.
+resolved during attachment, so unknown identities fail at composition time.
+Name-only and producer-only wildcard projections are not supported. Events
+with the same name but another producer never reach an exact projection.
 
 Daemon request dispatch owns a separate sealed audit registry for
 `request_rejected`, `chat_turn_failed`, `chat_turn_completed`, and

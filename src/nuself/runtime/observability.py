@@ -284,7 +284,7 @@ def publish_observed_event(
     project_root: Path | None,
     failure_component: LogComponent,
 ) -> RuntimeEnvelope:
-    """Publish an event without letting subscriber failure alter primary work."""
+    """Publish an event without letting projection failure alter primary work."""
 
     try:
         return publisher.publish(
@@ -307,7 +307,7 @@ def report_internal_event_delivery_failure(
     component: LogComponent,
     project_root: Path | None,
 ) -> None:
-    """Report subscriber delivery failure from its immutable envelope."""
+    """Report projection delivery failure from its immutable envelope."""
 
     metadata: dict[str, object] = {
         "event": exc.event.name,
