@@ -5,10 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close six externally identified runtime-boundary gaps: direct LangChain
-dependency ownership, thought-pack export containment, typed agent failures,
-structured endpoint availability classification, complete chat-compression
-fallback, and observable compression degradation.
+Make bounded daemon activity delivery loss-aware. Queue overflow must be
+represented in the protocol and force the interactive client onto persisted
+turn-scoped log recovery instead of silently presenting an incomplete stream.
 
 ## Active Branch
 
@@ -16,50 +15,47 @@ fallback, and observable compression degradation.
 
 ## Ordered Work
 
-1. Verify every external finding against source, tests, and dependency metadata.
-2. Declare the directly imported `langchain` distribution and lock it.
-3. Restrict pack export names to contained portable file names.
-4. Define distinct model-unavailable, invalid-output, and protocol agent errors.
-5. Replace error-message failover matching with typed/structured exception
-   classification.
-6. Make every recoverable compression-agent failure fall back locally and emit
-   one sealed Chat degradation audit.
-7. Run focused and full quality gates, commit by functional boundary, and push.
+1. Inventory activity queue overflow, protocol payloads, client polling,
+   cursor de-duplication, and fallback tests.
+2. Update runtime-infrastructure, CLI, log, and protocol contracts first.
+3. Track dropped events per subscription and return an exact non-negative count
+   with each activity batch.
+4. Raise a typed client-side stream-gap failure before presenting a partial
+   batch.
+5. Reuse the existing degradation audit and persisted turn-scoped cursor
+   fallback without replaying already delivered event identities.
+6. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No provider retry-count or endpoint-order change.
-- No failover based on provider exception message text.
-- No change to pack import or inspect path resolution.
-- No persistence of raw prompts, summaries, provider responses, or endpoint
-  URLs in compression fallback audits.
+- No unbounded activity queue.
+- No retry or replay of chat commands.
+- No change to authoritative log persistence or retention.
+- No cross-turn recovery; fallback remains scoped to the active `turn_id`.
 
 ## Completion Evidence
 
-- CLI warning isolation completed in `2abfc63`.
-- Direct runtime dependency ownership and pack export containment completed in
-  `7047269`.
-- Typed Agent failure contracts and structured provider availability
-  classification completed in `5807ee5`.
-- Complete observable chat compression fallback completed in `47e2139`.
-- Pack focused tests: 22 passed.
-- Agent invocation/failover focused tests: 107 passed.
-- Chat compression/audit focused tests: 124 passed.
-- Full suite: 2081 passed.
+- Loss-aware activity delivery completed in `699a46e`.
+- Each subscription tracks exact evictions since its previous read.
+- `ActivityEventsResponsePayload` requires exact `events` and non-negative
+  integer `dropped_count` fields; booleans and missing/invalid counts fail
+  protocol decoding.
+- `ActivityStreamGapError` retains the dropped count and enters the existing
+  application-degradation recovery path before a partial batch is presented.
+- Focused activity/protocol/transport/REPL tests: 78 passed.
+- Full suite: 2082 passed.
 - Pyright: 0 errors, 0 warnings.
-- Static searches prove production failover no longer classifies rendered
-  exception text, compression no longer catches only two exception classes,
-  and production code no longer assigns `warnings.warn`.
 - `git diff --check`: passed.
 
 ## Publication
 
-The external review batch is implemented in `7047269`, `5807ee5`, and
-`47e2139`; milestone publication is pending this goal update and push.
+Activity stream-gap recovery was implemented in `699a46e`; milestone
+publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Resume the shared-infrastructure review at internal message delivery: inventory
-`RuntimeEnvelope`, publisher/subscriber failure isolation, correlation-context
-propagation, queue/backpressure policy, and duplicate event transport shapes
-before selecting the next aggressive consolidation.
+Review `EventPublisher` subscription ownership next. Named subscriptions
+currently filter only by event name even though definitions are keyed by
+producer and name; determine whether producer-blind subscriptions can leak
+same-named events across subsystem boundaries, then make subscription selectors
+match the registered event identity rather than a partial string when needed.
