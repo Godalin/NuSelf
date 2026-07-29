@@ -34,6 +34,7 @@ ReasonAuditEvent = Literal[
     "advance_failed",
     "completion_load_failed",
     "reason_output_planned",
+    "reason_output_section_plan_fallback",
     "reason_output_chunk_skipped",
     "reason_output_chunk_started",
     "reason_output_chunk_failed",
@@ -64,6 +65,7 @@ ReasonFailureEvent = Literal[
     "llm_failover_suppressed_after_tool_call",
     "advance_failed",
     "completion_load_failed",
+    "reason_output_section_plan_fallback",
     "reason_output_chunk_failed",
     "reason_output_pdf_failed",
     "export_job_enqueue_failed",
@@ -128,6 +130,9 @@ _MESSAGES: dict[ReasonAuditEvent, str] = {
     "advance_failed": "Reason advance failed",
     "completion_load_failed": "Failed to load Reason thread completions",
     "reason_output_planned": "Reason output planned",
+    "reason_output_section_plan_fallback": (
+        "Reason output section planning used deterministic fallback"
+    ),
     "reason_output_chunk_skipped": "Reason output chunk skipped",
     "reason_output_chunk_started": "Reason output chunk started",
     "reason_output_chunk_failed": "Reason output chunk failed",
@@ -363,6 +368,11 @@ def _planned(metadata: Mapping[str, object]) -> None:
     _integer(metadata, "step_count", positive=True)
 
 
+def _output_mode(metadata: Mapping[str, object]) -> None:
+    _require_exact(metadata, frozenset({"mode"}))
+    _enum(metadata, "mode", _OUTPUT_MODES)
+
+
 def _completed_chunk(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
@@ -480,6 +490,14 @@ def _build_registry() -> AuditDefinitionRegistry:
         AuditEventDefinition(
             "reasoning", "reason_output_planned", "info", "created",
             metadata_validator=_planned,
+        ),
+        AuditEventDefinition(
+            "reasoning",
+            "reason_output_section_plan_fallback",
+            "warning",
+            "degraded",
+            error_policy="required",
+            metadata_validator=_output_mode,
         ),
         AuditEventDefinition(
             "reasoning", "reason_output_chunk_skipped", "info", None,

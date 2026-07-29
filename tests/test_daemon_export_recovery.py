@@ -291,6 +291,60 @@ def test_reason_export_section_planner_rejects_partial_range_plan(
         for section in sections
         for step_id in section.step_ids
     ) == ("step-0", "step-1", "step-2")
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="reasoning",
+    )
+    assert event.event == "reason_output_section_plan_fallback"
+    assert event.level == "warning"
+    assert event.status == "degraded"
+    assert event.metadata == {"mode": "report"}
+
+
+def test_section_plan_diagnostic_failure_preserves_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = _SectionAgent(
+        ReasonSectionPlanOutput(
+            sections=[
+                ReasonSectionOutput(
+                    title="Partial",
+                    focus="Skips the final step",
+                    step_start=0,
+                    step_end=1,
+                )
+            ]
+        )
+    )
+
+    def fail_log(*_args: object, **_kwargs: object) -> object:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+    planner = build_reason_export_section_planner(
+        tmp_path,
+        agent=agent,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="runtime/observability_sink_failed",
+    ):
+        sections = planner(
+            ReasoningThread(id="thread-1", topic="Fallback export"),
+            _reason_steps(),
+            "report",
+        )
+
+    assert tuple(
+        step_id
+        for section in sections
+        for step_id in section.step_ids
+    ) == ("step-0", "step-1", "step-2")
 
 
 def test_reason_export_worker_composes_with_injected_text_agent(

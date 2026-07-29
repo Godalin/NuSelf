@@ -103,6 +103,12 @@ _CANONICAL: tuple[
     ),
     (
         "reasoning",
+        "reason_output_section_plan_fallback",
+        {"mode": "report"},
+        None,
+    ),
+    (
+        "reasoning",
         "reason_output_chunk_skipped",
         {"thread_id": "thread-1", "job_id": "job-1", "chunk_index": 0},
         None,

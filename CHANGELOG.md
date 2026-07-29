@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Invalid typed reason-export section plans now record a sealed
+  `reason_output_section_plan_fallback` degradation before using the
+  deterministic plan; diagnostic failure cannot replace that fallback.
 - Memory-backed persona definition loading now records a sealed
   `persona_definition_load_failed` degradation when it falls back to builtin
   personas; diagnostic storage failure cannot replace the fallback.

@@ -63,6 +63,13 @@ constructor. The planner is instance-scoped and is used only by that service's
   the conversation runtime and reason-export tool factory.
 - CLI, tests, and callers that do not inject a planner use the deterministic
   `plan_sections()` fallback.
+- An injected planner whose typed output fails semantic materialization also
+  returns the deterministic `plan_sections()` result. This degraded path
+  records sealed `reasoning/reason_output_section_plan_fallback` with warning
+  level, `status=degraded`, a required canonical error, and exact `mode`
+  metadata. It never records source steps or generated section text.
+  Diagnostic persistence failure cannot replace or alter the deterministic
+  plan.
 - No module-level setter or mutable process-global planner is allowed.
 - Constructing or starting one daemon/runtime must not alter planner behavior
   in another project or service instance.

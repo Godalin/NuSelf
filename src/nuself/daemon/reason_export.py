@@ -228,7 +228,13 @@ def build_reason_export_section_planner(
                 ]
             )
             sections = _materialize_section_plan(output, steps)
-        except ValueError:
+        except ValueError as exc:
+            report_reason_failure(
+                exc,
+                event="reason_output_section_plan_fallback",
+                project_root=project_root,
+                metadata={"mode": mode},
+            )
             return fallback_plan(thread, list(steps), mode=mode)
         return tuple(
             ReasonOutputSection(
