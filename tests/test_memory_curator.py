@@ -24,7 +24,11 @@ from nuself.memory.curator import (
     MemoryCuratorSettings,
     _actions_from_output,  # pyright: ignore[reportPrivateUsage]
 )
-from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
+from nuself.memory.repository import (
+    MemoryCandidateCommitError,
+    MemoryCandidateRepository,
+    MemoryEntryRepository,
+)
 from nuself.profile.repository import ProfileItemRepository
 
 
@@ -1003,9 +1007,25 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
     assert "rejected by test descriptor" in event.error
 
 
-def test_memory_curator_propagates_unexpected_auto_accept_failure(
+@pytest.mark.parametrize(
+    ("accept_error", "expected_error"),
+    [
+        (OSError("candidate storage unavailable"), "candidate storage unavailable"),
+        (
+            MemoryCandidateCommitError(
+                primary_error=OSError("candidate commit failed"),
+                compensation_error=OSError("target compensation failed"),
+            ),
+            "memory candidate acceptance failed and target compensation failed",
+        ),
+    ],
+    ids=["storage-failure", "compensation-failure"],
+)
+def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    accept_error: Exception,
+    expected_error: str,
 ) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
@@ -1015,8 +1035,8 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
                 ThreadMessage(
                     role="user",
                     content=(
-                        "Remember that storage failures must stop cursor "
-                        "advancement because a partial promotion may exist."
+                        "Remember that a durable candidate must prevent source "
+                        "replay even when automatic acceptance storage fails."
                     ),
                 )
             ],
@@ -1024,9 +1044,9 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
     )
     agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode",'
-        '"title":"Storage boundary","body":"Do not suppress storage.",'
+        '"title":"Storage boundary","body":"Keep the durable candidate.",'
         '"tags":["memory"],"confidence":0.8,'
-        '"reason":"partial write safety"}]}'
+        '"reason":"source replay safety"}]}'
     )
     candidate_repo = MemoryCandidateRepository(tmp_path)
 
@@ -1036,7 +1056,7 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
         target_review_state: Literal["draft", "reviewed"] = "draft",
     ) -> MemoryEntry:
         assert target_review_state == "reviewed"
-        raise OSError("candidate storage unavailable")
+        raise accept_error
 
     monkeypatch.setattr(candidate_repo, "accept", fail_accept)
     curator = MemoryCurator(
@@ -1046,8 +1066,8 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
         candidate_repository=candidate_repo,
     )
 
-    with pytest.raises(OSError, match="candidate storage unavailable"):
-        curator.run_once()
+    result = curator.run_once()
+    second = curator.run_once()
 
     cursor_path = (
         tmp_path
@@ -1056,12 +1076,28 @@ def test_memory_curator_propagates_unexpected_auto_accept_failure(
         / "cursors"
         / "default.json"
     )
-    assert not cursor_path.exists()
-    assert len(candidate_repo.list()) == 1
-    assert all(
-        event.event != "auto_accept_failed"
-        for event in read_log_events(
+    assert result.created == 1
+    assert second.processed_messages == 0
+    assert len(agent.calls) == 1
+    [candidate] = candidate_repo.list()
+    assert candidate.review_state == "pending"
+    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+        "thread_id": "default",
+        "processed_message_count": 1,
+    }
+    event = [
+        item
+        for item in read_log_events(
             project_root=tmp_path,
             component="memory",
         )
-    )
+        if item.event == "auto_accept_failed"
+    ][-1]
+    assert event.metadata == {
+        "candidate_id": candidate.id,
+        "action": "create",
+        "memory_type": "episode",
+        "target_entry_id": None,
+    }
+    assert event.error is not None
+    assert expected_error in event.error

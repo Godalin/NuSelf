@@ -5,10 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Fold curator auto-accept's `draft` to `reviewed` promotion into the candidate
-acceptance commit. A promotion failure must leave the candidate pending and
-restore the target rather than producing an accepted candidate with an
-unreviewed or partially promoted entry.
+Make the durable candidate the curator's authoritative success boundary.
+Auto-accept failures after that point must remain observable without preventing
+cursor advancement and replaying the same source into duplicate candidates.
 
 ## Active Branch
 
@@ -16,57 +15,54 @@ unreviewed or partially promoted entry.
 
 ## Ordered Work
 
-1. Inspect curator behavior after candidate acceptance succeeds.
-2. Reproduce target reviewed-state persistence outside the acceptance commit.
-3. Specify requested final target review state and quarantine preservation.
-4. Promote non-quarantined targets before candidate accepted-state persistence.
-5. Reuse transaction and compensation for promotion failure.
+1. Verify candidate audit and memory trace failures are already isolated.
+2. Reproduce an ordinary auto-accept storage failure after candidate save.
+3. Define candidate durability as the authoritative curation boundary.
+4. Degrade ordinary auto-accept exceptions through the registered audit event.
+5. Prove the cursor advances and the source is not sent to the model twice.
 6. Run focused and full quality gates, commit by functional boundary, push,
    and confirm development-branch CI.
 
 ## Out Of Scope
 
-- No candidate or MemoryEntry wire-schema change.
-- Manual acceptance continues to produce `draft` MemoryEntry targets.
-- ProfileItem targets remain unaffected by MemoryEntry review states.
-- Unknown types remain quarantined rather than being forced to reviewed.
-- No change to cursor or trace best-effort policy.
+- No candidate, cursor, or MemoryEntry wire-schema change.
+- No suppression of process-control `BaseException` subclasses.
+- No claim that a double failure leaves the target repaired; it remains
+  observable for operator intervention.
+- No change to candidate acceptance transaction or compensation mechanics.
+- No change to audit/trace best-effort policy, which is already correct.
 
 ## Completion Evidence
 
-- Candidate acceptance now commits target mutation and candidate final state
-  through one transaction/compensation boundary.
-- Curator currently calls ordinary `accept(candidate.id)`, receives a draft
-  MemoryEntry, then writes a reviewed copy after candidate acceptance is final.
-- If that reviewed write fails, the candidate is already accepted and cannot
-  be retried through the candidate state machine; the cursor remains
-  unadvanced, allowing duplicate candidate generation on the next pass.
-- MemoryEntryRepository quarantine behavior must still run on the initial draft
-  save before any reviewed promotion.
-- `MemoryCandidateRepository.accept` and `merge` now accept an explicit final
-  target review state, defaulting to `draft` for manual review.
-- Curator requests `reviewed`; non-quarantined targets are promoted before the
-  candidate accepted-state write.
-- A failed create promotion removes the new target; a failed merge promotion
-  restores the exact prior target. In both cases the candidate remains pending
-  and the original exception propagates unchanged.
-- Unknown target types remain quarantined even when reviewed was requested.
-- Regression tests cover successful reviewed commit, quarantine preservation,
-  and create/merge promotion failure compensation.
-- Focused candidate repository and curator tests: 55 passed.
-- Full suite: 2174 passed.
+- Candidate audit persistence already uses the shared best-effort log
+  projection. Existing failure injection proves audit sink failure cannot
+  replay a committed candidate.
+- Memory trace recording already runs through `run_memory_observed`. Existing
+  failure injection proves trace and diagnostic sink failure cannot replace a
+  reviewed entry or replay its source.
+- The candidate is saved before `_auto_accept`, so it is already a durable,
+  reviewable curation result when auto-accept begins.
+- `_auto_accept` previously caught only `ValueError` and
+  `MemoryEntryNotFound`; an `OSError` prevented cursor persistence and caused
+  the same source range to be modeled again.
+- Auto-accept now degrades every ordinary `Exception` through the registered
+  `auto_accept_failed` event. `BaseException` remains outside that boundary.
+- Regression tests inject both a storage failure and
+  `MemoryCandidateCommitError`; each leaves one pending candidate, advances the
+  cursor, emits the failure event, and calls the model only once.
+- Focused curator tests: 32 passed.
+- Full suite: 2175 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
-- Development-branch CI is already configured for pushes to every `dev/**`
-  branch. Run `30446653041` passed Python 3.12-3.14 type checks, tests, builds,
-  and clean-wheel smoke tests.
+- The full gate exposed a pre-existing cross-thread log-order assumption in
+  the daemon join-timeout test. The test now selects the unique
+  `thread_timeout` event by identity; its focused test and the full suite pass.
 
 ## Publication
 
-Atomic curator auto-accept was implemented and published in `17ee110`;
-development CI run `30446653041` passed.
+Pending implementation, validation, publication, and final-push CI.
 
 ## Next Review Batch
 
-After this boundary is complete, inspect candidate audit/trace secondary
-effects for false failure reporting after authoritative persistence.
+After this boundary is complete, inspect cursor persistence failure itself;
+candidate durability and cursor durability still do not share one transaction.

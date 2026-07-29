@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Curator auto-accept storage failures now preserve the durable candidate,
+  advance the source cursor, and avoid generating duplicates on the next run.
 - Curator auto-accept now commits a reviewed MemoryEntry and accepted candidate
   together instead of promoting the entry in a separate post-commit write.
 - Memory candidate acceptance now rolls back target create, merge, or delete

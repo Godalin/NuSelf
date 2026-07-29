@@ -187,8 +187,14 @@ errors are not degraded and continue to the daemon request backstop.
     `pending`, emit `memory/auto_accept_failed` with its identity and compact
     exception chain, and allow the curator cursor to advance so the same source
     turn is not converted into another candidate.
-  - Undeclared storage or implementation failures propagate and prevent cursor
-    advance; auto-accept must not broadly suppress a potentially partial write.
+  - Once the candidate is durable, auto-accept is a downstream convenience
+    rather than the authoritative curation write. Any ordinary `Exception`
+    retains the candidate's repository-visible final state, emits
+    `memory/auto_accept_failed`, and allows the cursor to advance. This includes
+    a typed compensation failure: its candidate/target state may require
+    repair, but replaying the source through the model would create an
+    additional candidate and is forbidden.
+  - Process-control `BaseException` subclasses are not degraded.
 - When `auto_accept=False`, candidates remain `pending`.
 - A successful auto-accept memory-update trace records the candidate's actual
   `create` or `update` action. Trace recording is best effort through shared

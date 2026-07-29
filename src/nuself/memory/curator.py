@@ -513,7 +513,6 @@ class MemoryCurator:
                 "memory_type": candidate.type,
                 "target_entry_id": candidate.target_entry_id,
             },
-            errors=(ValueError, MemoryEntryNotFound),
         )
         if (
             isinstance(result, MemoryEntry)
