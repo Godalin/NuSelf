@@ -21,6 +21,10 @@
 - `feature/*` branches are isolated experimental work for a single feature or fix.
 - Each `feature/*` branch should merge back into `dev/v0.3.x` before anything is promoted toward `main`.
 - Release work should land on the stabilization or stable branch first, then be tagged from the release commit.
+- CI runs for pushes to `main` and every `dev/**` development branch. Pull
+  requests targeting either `main` or `dev/**` run the same validation matrix,
+  so ordinary development is verified before and after integration rather than
+  only when promoted to the stable branch.
 
 ## Commit And Push Policy
 
