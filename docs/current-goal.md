@@ -5,9 +5,10 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close the shutdown-versus-readiness race. If daemon shutdown is requested while
-workers are starting, the process must enter cleanup rather than publish
-`daemon/started` merely because every worker thread remains temporarily alive.
+Make Memory candidate acceptance one recoverable logical commit. A failure
+after target create/merge/delete but before candidate `accepted` persistence
+must not leave a pending candidate paired with a silently mutated durable
+target.
 
 ## Active Branch
 
@@ -15,57 +16,57 @@ workers are starting, the process must enter cleanup rather than publish
 
 ## Ordered Work
 
-1. Evaluate whether one last-attempt timestamp can represent all worker modes.
-2. Reject misleading staleness semantics that omit export reconciliation and
-   idle queue behavior.
-3. Inspect shutdown interaction with the existing readiness check.
-4. Specify shutdown as a negative readiness condition.
-5. Reject readiness through the same typed supervisor boundary.
+1. Scan multi-write persistence paths for partial commit behavior.
+2. Reproduce candidate target mutation followed by accepted-state write
+   failure.
+3. Specify transaction and compensation behavior for each candidate action.
+4. Wrap create, merge/update, and delete acceptance in backend transactions.
+5. Compensate file-backed target mutation and retain double failures.
 6. Run focused and full quality gates, commit by functional boundary, push,
    and confirm development-branch CI.
 
 ## Out Of Scope
 
-- No `last_attempt_at` field without a consistent cross-worker heartbeat and
-  staleness threshold.
-- No automatic worker restart or replacement.
-- No change to runtime health response schema.
-- No readiness revocation for shutdown requested after the publication
-  boundary.
-- No change to cleanup aggregation or signal ownership.
+- No candidate state or wire-schema change.
+- No process-crash atomicity claim for the multi-file backend.
+- No silent suppression of either the accepted-state write failure or a
+  compensation failure.
+- No change to reject/edit operations, which mutate one candidate record.
+- No change to curator auto-accept policy.
 
 ## Completion Evidence
 
-- Scheduled workers attempt configured periodic operations; the export worker
-  also performs startup/requested reconciliation, idle queue polling, and
-  per-job composition. A single `last_attempt_at` would not identify the same
-  lifecycle event across these modes and cannot support a universal stale
-  decision without an expected heartbeat interval.
-- Before this change `require_all_running()` checked liveness but did not reject
-  the shared shutdown event.
-- A shutdown request may race with the five worker starts while all threads are
-  still alive, allowing `daemon/started` immediately before cleanup.
-- The supervisor already owns both the shutdown event and the authoritative
-  readiness boundary, so it can reject this state without parallel ownership.
-- `require_all_running()` now rejects an already-set shutdown event with
-  `DaemonWorkerReadinessError` before inspecting worker liveness.
-- Regression tests prove an alive worker cannot satisfy readiness after
-  shutdown is requested, then exits cleanly through the normal join path.
-- Process-lifecycle fixtures now model shutdown as a negative readiness
-  condition, while request-driven shutdown remains a graceful post-readiness
-  transition.
-- Focused worker and daemon lifecycle tests: 59 passed.
-- Full suite: 2165 passed.
+- `accept(create)` writes a new MemoryEntry/ProfileItem before the candidate is
+  marked accepted.
+- `accept(update|merge)` overwrites the target before the candidate final-state
+  write; retry can append source references and evidence again.
+- `accept(delete)` deletes the target before the candidate final-state write;
+  retry then fails because the target no longer exists.
+- SQLite transactions can roll these writes back, but the repository does not
+  currently enter one; file-backend transactions only serialize writes and
+  require explicit compensation for in-process failures.
+- Accept create, merge/update, and delete now run inside the shared backend
+  transaction.
+- If the accepted-state write fails, create removes its new target, merge
+  restores the exact prior target, and delete restores its removed target.
+- Successful compensation propagates the original exception unchanged and
+  leaves the candidate pending.
+- `MemoryCandidateCommitError` retains `primary_error` and
+  `compensation_error`, chained from the primary failure, when rollback also
+  fails.
+- Regression tests cover MemoryEntry and ProfileItem creation, entry merge,
+  entry deletion, exact original exception identity, and double failure.
+- Focused candidate repository and curator tests: 51 passed.
+- Full suite: 2170 passed.
 - Pyright: 0 errors, 0 warnings.
 - `git diff --check` passed.
-- Development-branch CI run `30437552038` completed successfully.
 
 ## Publication
 
-Shutdown-aware daemon readiness was implemented in `ce0db53` and published
-through `a72212d`; the resulting development-branch CI run passed.
+Recoverable Memory candidate acceptance was implemented in `651c134`;
+milestone publication is pending this goal update, push, and development CI.
 
 ## Next Review Batch
 
-After this boundary is complete, continue reviewing silent partial-success and
-multi-step persistence paths.
+After this boundary is complete, inspect curator auto-accept's post-accept
+review-state promotion for the same partial-success classification.
