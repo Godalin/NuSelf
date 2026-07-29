@@ -42,7 +42,7 @@ from nuself.daemon.types import WorkerHealth
 from nuself.logs import project_log_events
 from nuself.memory.audit import run_memory_observed
 from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
-from nuself.runtime.handlers import HandlerRegistry, UnknownHandlerError
+from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 
 
@@ -99,16 +99,16 @@ def handle_request(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     """Dispatch a validated daemon request through the sealed registry."""
+    if request.type not in DAEMON_REQUEST_HANDLERS.registered_keys:
+        return DaemonResponse.fail(
+            request.request_id,
+            f"unsupported request type: {request.type}",
+        )
     try:
         return DAEMON_REQUEST_HANDLERS.dispatch(
             request.type,
             request,
             state,
-        )
-    except UnknownHandlerError:
-        return DaemonResponse.fail(
-            request.request_id,
-            f"unsupported request type: {request.type}",
         )
     except ProtocolError as exc:
         response = DaemonResponse.fail_from_exception(

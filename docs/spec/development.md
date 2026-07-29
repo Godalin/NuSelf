@@ -228,6 +228,13 @@ Middleware order is outer-to-inner registration order, and wrappers must
 preserve the original handler exception identity unless the middleware's
 documented policy explicitly translates it.
 
+Dispatch boundaries must distinguish registry lookup failure from an
+invocation that raises the same exception type. A sealed closed-catalog owner
+checks membership before dispatch when mapping an unknown key to a transport
+response; it must not surround handler invocation with
+`except UnknownHandlerError`, because that would relabel failures from
+middleware, nested registries, or the handler itself.
+
 Runtime event registration, publication, and filtered projection attachment
 all use the same `(producer, name)` identity. New internal projections must
 attach to all events intentionally or bind both fields; partial event-name

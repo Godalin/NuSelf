@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon request dispatch now distinguishes an unsupported request key from an
+  `UnknownHandlerError` raised during registered handler invocation, preserving
+  nested registry and middleware failure identity instead of mislabeling it.
 - Closed daemon and REPL handler catalogs now prove exact registered-key
   coverage through the shared sealed `HandlerRegistry`, with typed missing and
   extra key failures instead of boundary-specific `RuntimeError` checks.

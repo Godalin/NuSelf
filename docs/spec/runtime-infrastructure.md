@@ -81,6 +81,11 @@ request-dispatch primitive.
   responses. Business handlers do not read sockets or argparse internals.
 - Boundary-specific exception handling wraps registry dispatch rather than
   being duplicated in each handler.
+- A boundary may translate `UnknownHandlerError` only when registry lookup
+  itself failed. With a sealed catalog, it checks key membership before
+  invocation and must not catch that type around the handler call:
+  middleware, nested registries, and handlers may raise the same exception,
+  and invocation exceptions preserve their exact identity.
 
 The daemon request registry must be complete for every declared
 `RequestType`. CLI and REPL registries should migrate only where the shared
@@ -115,6 +120,10 @@ activity projection is active for the complete handler invocation. Individual
 handlers may add thread, turn, job, or trace fields through nested context
 scopes. Unknown request mapping and unexpected exception-to-response encoding
 remain daemon transport responsibilities outside the middleware pipeline.
+Unsupported-request mapping is decided from the sealed registry key set before
+dispatch. Once invocation starts, an `UnknownHandlerError` raised by the
+request-scope middleware or business handler is not relabeled as an unsupported
+daemon request.
 
 ## Daemon Payload Contracts
 

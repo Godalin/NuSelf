@@ -18,7 +18,11 @@ from nuself.daemon.request_handlers import (
 )
 from nuself.logs import LogEvent, write_log_event
 from nuself.runtime.context import RuntimeContext, current_runtime_context
-from nuself.runtime.handlers import HandlerRegistryCoverageError
+from nuself.runtime.handlers import (
+    HandlerRegistry,
+    HandlerRegistryCoverageError,
+    UnknownHandlerError,
+)
 
 
 class RecordingActivityBroker:
@@ -67,6 +71,45 @@ def test_daemon_request_registry_uses_shared_catalog_coverage(
 
     assert captured.value.missing == frozenset()
     assert captured.value.extra == frozenset({"ping"})
+
+
+def test_registered_handler_unknown_error_is_not_reclassified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    failure = UnknownHandlerError("nested registry lookup failed")
+    registry = HandlerRegistry[
+        RequestType,
+        [DaemonRequest, DaemonRequestState],
+        DaemonResponse,
+    ]()
+
+    def fail(
+        request: DaemonRequest,
+        state: DaemonRequestState,
+    ) -> DaemonResponse:
+        del request, state
+        raise failure
+
+    registry.register("ping", fail)
+    registry.seal()
+    monkeypatch.setattr(
+        request_handlers,
+        "DAEMON_REQUEST_HANDLERS",
+        registry,
+    )
+
+    with pytest.raises(UnknownHandlerError) as captured:
+        handle_request(
+            DaemonRequest(
+                type="ping",
+                payload={},
+                request_id="nested-lookup",
+            ),
+            cast(DaemonRequestState, MiddlewareState(tmp_path)),
+        )
+
+    assert captured.value is failure
 
 
 def test_daemon_middleware_applies_context_and_activity_observation(
