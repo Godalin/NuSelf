@@ -767,6 +767,10 @@ unreported tool-log callback failure and for a failure reporter that itself
 fails. These are terminal observation diagnostics, not tool execution events;
 they contain only safe callback/reporter error facts.
 
+Daemon lifecycle composes the single raw process-log rotation warning
+definition. This terminal retention-maintenance diagnostic remains distinct
+from structured component-log rotation and never attempts a structured write.
+
 Shared observability owns a sealed one-event terminal-warning registry:
 
 | Warning | Exact ordered fields |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
@@ -14,8 +15,47 @@ from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
 from nuself.daemon.instance import daemon_instance_owned
 from nuself.private_fs import ensure_private_file
-from nuself.runtime.diagnostics import emit_runtime_warning
 from nuself.runtime.observability import report_corrupt_record
+from nuself.runtime.warning_definitions import (
+    TerminalWarningDefinition,
+    TerminalWarningRegistry,
+    TerminalWarningSchemaError,
+    emit_registered_terminal_warning,
+)
+
+DAEMON_PROCESS_LOG_ROTATION_FAILED = (
+    "daemon/process_log_rotation_failed"
+)
+
+
+def _validate_process_log_rotation_warning(
+    metadata: Mapping[str, object],
+) -> None:
+    error_type = metadata["error_type"]
+    if not isinstance(error_type, str) or not error_type.strip():
+        raise TerminalWarningSchemaError(
+            "daemon process-log warning error_type must be non-blank"
+        )
+
+
+def _build_daemon_lifecycle_warning_registry() -> TerminalWarningRegistry:
+    return (
+        TerminalWarningRegistry()
+        .register(
+            TerminalWarningDefinition(
+                DAEMON_PROCESS_LOG_ROTATION_FAILED,
+                ("error_type",),
+                _validate_process_log_rotation_warning,
+                suffix="continuing startup",
+            )
+        )
+        .seal()
+    )
+
+
+DAEMON_LIFECYCLE_WARNING_REGISTRY = (
+    _build_daemon_lifecycle_warning_registry()
+)
 
 
 @dataclass(frozen=True)
@@ -324,9 +364,10 @@ def start(
             process_log_retention,
         )
     except OSError as exc:
-        emit_runtime_warning(
-            "daemon/process_log_rotation_failed: "
-            f"error_type={type(exc).__name__}; continuing startup",
+        emit_registered_terminal_warning(
+            DAEMON_LIFECYCLE_WARNING_REGISTRY,
+            DAEMON_PROCESS_LOG_ROTATION_FAILED,
+            {"error_type": type(exc).__name__},
             stacklevel=2,
         )
     ensure_private_file(paths.daemon_process_log_path)

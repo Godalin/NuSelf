@@ -12,6 +12,17 @@ from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
 from nuself.logs import read_log_events
 from nuself.private import ensure_private_root
+from nuself.runtime.definitions import DefinitionRegistrySealedError
+
+
+def test_daemon_lifecycle_warning_registry_is_complete_and_sealed() -> None:
+    [definition] = lifecycle.DAEMON_LIFECYCLE_WARNING_REGISTRY.definitions
+    assert definition.event == lifecycle.DAEMON_PROCESS_LOG_ROTATION_FAILED
+    assert definition.fields == ("error_type",)
+    assert definition.suffix == "continuing startup"
+
+    with pytest.raises(DefinitionRegistrySealedError):
+        lifecycle.DAEMON_LIFECYCLE_WARNING_REGISTRY.register(definition)
 
 
 def _no_sleep(seconds: float) -> None:
@@ -495,8 +506,10 @@ def test_process_log_rotation_failure_warns_safely_and_continues_start(
     assert result.outcome == "started"
     assert result.status is running
     warning = str(captured[0].message)
-    assert "process_log_rotation_failed" in warning
-    assert "error_type=PermissionError" in warning
+    assert warning == (
+        "daemon/process_log_rotation_failed: "
+        "error_type=PermissionError; continuing startup"
+    )
     assert "private rotation failure" not in warning
     assert str(private_path) not in warning
 

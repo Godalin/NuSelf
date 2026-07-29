@@ -296,6 +296,9 @@ under the same package.
 - `runtime/warning_definitions.py` owns reusable sealed terminal-warning
   definition and rendering mechanics. `logs.py` composes its closed six-event
   taxonomy and supplies typed facts, never free-form warning strings.
+- `daemon/lifecycle.py` owns the sealed raw process-log rotation warning
+  contract. Startup supplies only the caught exception type and never
+  constructs terminal warning presentation.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
   surfaces.

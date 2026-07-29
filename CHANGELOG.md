@@ -14,6 +14,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Daemon raw process-log rotation failures now use a sealed warning contract
+  with only the exception type and a fixed startup-continuation suffix.
 - Agent tool-log callback and failure-reporter terminal diagnostics now use two
   sealed warning contracts with exact safe error fields instead of middleware
   string interpolation.

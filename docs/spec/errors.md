@@ -197,6 +197,10 @@ the child process:
 - The failure retains the latest `DaemonStatus`, but terminal output never
   reads or echoes the raw daemon process log. That stream may contain private
   provider or application output.
+- Raw process-log rotation failure resolves the sealed
+  `daemon/process_log_rotation_failed` terminal warning with only the exception
+  type and a fixed startup-continuation suffix. It cannot block spawn or expose
+  the exception message, project path, or process-log content.
 - The startup timeout and polling interval are positive finite values owned by
   the shared injectable lifecycle wait policy. Polling uses `time.monotonic()`
   and never sleeps beyond the remaining deadline. Each readiness ping also

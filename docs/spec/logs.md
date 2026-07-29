@@ -380,7 +380,10 @@ spawn, the owner rotates this raw stream when it has reached 5 MiB and retains
 three numbered backups. Rotation happens before the child inherits its
 descriptor; a single long-running daemon may exceed the threshold until its
 next start. Rotation failure emits one content-safe terminal warning and cannot
-block daemon startup.
+block daemon startup. Daemon lifecycle owns a sealed one-event warning registry:
+`daemon/process_log_rotation_failed` has exact `error_type` metadata and the
+fixed suffix `continuing startup`. It contains no exception message, path, or
+process-log content.
 
 Display name mapping: `persona` → `selves`.
 
