@@ -64,14 +64,16 @@ target.
   and clean-wheel smoke tests, but reported that checkout/setup-python v4 use
   the deprecated Node 20 action runtime.
 - Official current action generations were verified before updating CI and
-  release to `actions/checkout@v7` and `actions/setup-python@v6`; workflow
-  validation and publication are pending.
+  release to `actions/checkout@v7` and `actions/setup-python@v6`.
+- Workflow YAML parsing passed. Development CI run `30445870397` passed all
+  matrix, build, and wheel-smoke jobs on the new actions without the prior
+  Node 20 deprecation annotation.
 
 ## Publication
 
 Recoverable Memory candidate acceptance was implemented in `651c134`; current
-action runtimes were adopted in `9fd2e02`. Milestone publication is pending
-this goal update, push, and development CI.
+action runtimes were adopted in `9fd2e02`. Both were published through
+`afb5f2f`, and the resulting development CI run passed.
 
 ## Next Review Batch
 
