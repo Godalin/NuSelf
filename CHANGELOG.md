@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory candidate acceptance now rolls back target create, merge, or delete
+  when persisting the final accepted state fails.
 - Daemon startup now refuses readiness when shutdown was requested while
   background workers were starting.
 - Daemon startup now verifies that every registered background worker remains

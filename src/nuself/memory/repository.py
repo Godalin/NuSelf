@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from dataclasses import asdict
 from pathlib import Path
@@ -184,6 +184,22 @@ class MemoryEntryNotFound(KeyError):
 
 class MemoryCandidateNotFound(KeyError):
     """Raised when a memory candidate does not exist."""
+
+
+class MemoryCandidateCommitError(RuntimeError):
+    """Raised when candidate acceptance and compensation both fail."""
+
+    def __init__(
+        self,
+        *,
+        primary_error: BaseException,
+        compensation_error: BaseException,
+    ) -> None:
+        super().__init__(
+            "memory candidate acceptance failed and target compensation failed"
+        )
+        self.primary_error = primary_error
+        self.compensation_error = compensation_error
 
 
 def _entry_from_wire(data: dict[str, object]) -> MemoryEntry:
@@ -466,6 +482,7 @@ class MemoryCandidateRepository:
             if backend is not None
             else get_default_backend(project_root)
         )
+        self._backend = be
         self._col = be.collection("memory_candidates")
         self._paths = runtime_paths(project_root)
         self._entry_repository = entry_repository or MemoryEntryRepository(
@@ -516,16 +533,32 @@ class MemoryCandidateRepository:
         if candidate.action == "delete":
             if candidate.target_entry_id is None:
                 raise ValueError(f"delete candidate requires target_entry_id: {candidate_id}")
-            entry = self._delete_target(candidate)
-            self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
-            return entry
+            with self._backend.transaction():
+                entry = self._delete_target(candidate)
+                try:
+                    self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
+                except BaseException as operation_error:
+                    self._compensate_target(
+                        operation_error,
+                        lambda: self._restore_target(entry),
+                    )
+                    raise
+                return entry
         if candidate.action in {"update", "merge"}:
             if candidate.target_entry_id is None:
                 raise ValueError(f"{candidate.action} candidate requires target_entry_id: {candidate_id}")
             return self.merge(candidate_id, candidate.target_entry_id)
-        entry = self._save_target(candidate)
-        self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
-        return entry
+        with self._backend.transaction():
+            entry = self._save_target(candidate)
+            try:
+                self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry.id))
+            except BaseException as operation_error:
+                self._compensate_target(
+                    operation_error,
+                    lambda: self._delete_saved_target(entry),
+                )
+                raise
+            return entry
 
     def reject(self, candidate_id: str) -> MemoryCandidate:
         candidate = self.get(candidate_id)
@@ -564,9 +597,18 @@ class MemoryCandidateRepository:
         candidate = self.get(candidate_id)
         if candidate.review_state != "pending":
             raise ValueError(f"candidate is already {candidate.review_state}: {candidate_id}")
-        merged = self._merge_target(candidate, entry_id)
-        self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry_id))
-        return merged
+        with self._backend.transaction():
+            previous = self._get_target(candidate, entry_id)
+            merged = self._merge_target(candidate, entry_id)
+            try:
+                self.save(candidate.with_updates(review_state="accepted", target_entry_id=entry_id))
+            except BaseException as operation_error:
+                self._compensate_target(
+                    operation_error,
+                    lambda: self._restore_target(previous),
+                )
+                raise
+            return merged
 
     def _save_target(self, candidate: MemoryCandidate) -> MemoryEntry | ProfileItem:
         if candidate.type == "profile_fact":
@@ -612,6 +654,40 @@ class MemoryCandidateRepository:
         entry = self._entry_repository.get(candidate.target_entry_id or "")
         self._entry_repository.delete(candidate.target_entry_id or "")
         return entry
+
+    def _get_target(
+        self,
+        candidate: MemoryCandidate,
+        target_id: str,
+    ) -> MemoryEntry | ProfileItem:
+        if candidate.type == "profile_fact":
+            return self._profile_repository.get(target_id)
+        return self._entry_repository.get(target_id)
+
+    def _restore_target(self, target: MemoryEntry | ProfileItem) -> None:
+        if isinstance(target, ProfileItem):
+            self._profile_repository.save(target)
+            return
+        self._entry_repository.save(target)
+
+    def _delete_saved_target(self, target: MemoryEntry | ProfileItem) -> None:
+        if isinstance(target, ProfileItem):
+            self._profile_repository.delete(target.id)
+            return
+        self._entry_repository.delete(target.id)
+
+    @staticmethod
+    def _compensate_target(
+        operation_error: BaseException,
+        compensate: Callable[[], None],
+    ) -> None:
+        try:
+            compensate()
+        except BaseException as compensation_error:
+            raise MemoryCandidateCommitError(
+                primary_error=operation_error,
+                compensation_error=compensation_error,
+            ) from operation_error
 
 
 def memory_stats(project_root: Path | None = None) -> MemoryStats:

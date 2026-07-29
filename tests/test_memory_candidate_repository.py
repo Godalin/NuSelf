@@ -7,6 +7,7 @@ import pytest
 
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.repository import (
+    MemoryCandidateCommitError,
     MemoryCandidateNotFound,
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -127,6 +128,164 @@ def test_memory_candidate_repository_accepts_profile_fact_into_profile_repositor
     assert accepted.id == profile_item.id
     assert repo.get(candidate.id).review_state == "accepted"
     assert repo.get(candidate.id).target_entry_id == profile_item.id
+
+
+@pytest.mark.parametrize("target_type", ["memory", "profile"])
+def test_accept_create_rolls_back_target_when_candidate_commit_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target_type: str,
+) -> None:
+    repo = MemoryCandidateRepository(tmp_path)
+    candidate = repo.save(
+        MemoryCandidate(
+            type="profile_fact" if target_type == "profile" else "belief",
+            title="Atomic candidate",
+            body="The target must not outlive a failed candidate commit.",
+        )
+    )
+    operation_error = OSError("candidate commit failed")
+
+    def fail_accepted_save(updated: MemoryCandidate) -> MemoryCandidate:
+        if updated.review_state == "accepted":
+            raise operation_error
+        return updated
+
+    monkeypatch.setattr(repo, "save", fail_accepted_save)
+
+    with pytest.raises(OSError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value is operation_error
+    assert repo.get(candidate.id).review_state == "pending"
+    assert MemoryEntryRepository(tmp_path).list() == []
+    assert ProfileItemRepository(tmp_path).list() == []
+
+
+def test_accept_merge_restores_target_when_candidate_commit_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    original = entry_repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Original",
+            body="Original body.",
+            source_refs=["source:original"],
+        )
+    )
+    repo = MemoryCandidateRepository(
+        tmp_path,
+        entry_repository=entry_repo,
+    )
+    candidate = repo.save(
+        MemoryCandidate(
+            action="update",
+            type="belief",
+            title="Changed",
+            body="Changed body.",
+            source_refs=["source:update"],
+            target_entry_id=original.id,
+        )
+    )
+    operation_error = OSError("candidate commit failed")
+
+    def fail_accepted_save(updated: MemoryCandidate) -> MemoryCandidate:
+        if updated.review_state == "accepted":
+            raise operation_error
+        return updated
+
+    monkeypatch.setattr(repo, "save", fail_accepted_save)
+
+    with pytest.raises(OSError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value is operation_error
+    assert entry_repo.get(original.id) == original
+    assert repo.get(candidate.id).review_state == "pending"
+
+
+def test_accept_delete_restores_target_when_candidate_commit_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    original = entry_repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Retained",
+            body="Deletion must roll back.",
+        )
+    )
+    repo = MemoryCandidateRepository(
+        tmp_path,
+        entry_repository=entry_repo,
+    )
+    candidate = repo.save(
+        MemoryCandidate(
+            action="delete",
+            type="belief",
+            title=original.title,
+            body=original.body,
+            target_entry_id=original.id,
+        )
+    )
+    operation_error = OSError("candidate commit failed")
+
+    def fail_accepted_save(updated: MemoryCandidate) -> MemoryCandidate:
+        if updated.review_state == "accepted":
+            raise operation_error
+        return updated
+
+    monkeypatch.setattr(repo, "save", fail_accepted_save)
+
+    with pytest.raises(OSError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value is operation_error
+    assert entry_repo.get(original.id) == original
+    assert repo.get(candidate.id).review_state == "pending"
+
+
+def test_accept_retains_commit_and_compensation_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entry_repo = MemoryEntryRepository(tmp_path)
+    repo = MemoryCandidateRepository(
+        tmp_path,
+        entry_repository=entry_repo,
+    )
+    candidate = repo.save(
+        MemoryCandidate(
+            type="belief",
+            title="Double failure",
+            body="Both failures must remain inspectable.",
+        )
+    )
+    operation_error = OSError("candidate commit failed")
+    compensation_error = OSError("target rollback failed")
+
+    def fail_accepted_save(updated: MemoryCandidate) -> MemoryCandidate:
+        if updated.review_state == "accepted":
+            raise operation_error
+        return updated
+
+    def fail_delete(entry_id: str) -> None:
+        raise compensation_error
+
+    monkeypatch.setattr(repo, "save", fail_accepted_save)
+    monkeypatch.setattr(entry_repo, "delete", fail_delete)
+
+    with pytest.raises(MemoryCandidateCommitError) as captured:
+        repo.accept(candidate.id)
+
+    assert captured.value.primary_error is operation_error
+    assert captured.value.compensation_error is compensation_error
+    assert captured.value.__cause__ is operation_error
+    assert len(entry_repo.list()) == 1
+    assert repo.get(candidate.id).review_state == "pending"
 
 
 def test_memory_candidate_repository_missing_candidate(tmp_path: Path) -> None:

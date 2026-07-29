@@ -293,6 +293,18 @@ correlation rather than duplicating the thread id.
 - **Reject**: Flips `review_state` to `rejected`.
 - **Edit**: Updates any subset of `title`, `body`, `tags`, `importance`, temporal fields.
 
+Accepting a candidate is one logical commit across the target collection and
+the candidate review record. The repository enters the shared backend
+transaction before creating, merging, or deleting the target and before
+writing `review_state="accepted"`. SQLite provides atomic rollback. Because
+the file backend serializes but cannot make multiple files crash-atomic, an
+in-process failure writing the accepted candidate must synchronously compensate
+the target mutation: delete a newly created target, restore the pre-merge
+target, or restore a deleted target. After successful compensation the original
+write exception propagates unchanged and the candidate remains pending. If
+compensation also fails, a typed commit error retains both the primary and
+rollback exceptions; it must never report acceptance.
+
 ### Entry Review States
 
 | State | Meaning |
