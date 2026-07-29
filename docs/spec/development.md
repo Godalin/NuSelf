@@ -25,6 +25,9 @@
   requests targeting either `main` or `dev/**` run the same validation matrix,
   so ordinary development is verified before and after integration rather than
   only when promoted to the stable branch.
+- Repository-owned workflows use maintained GitHub-hosted action generations
+  that run on the current Node action runtime. CI and release must not retain an
+  action major that GitHub reports as runtime-deprecated.
 
 ## Commit And Push Policy
 
