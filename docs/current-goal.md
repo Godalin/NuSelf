@@ -60,7 +60,9 @@ discard must require an exact thread plus explicit destructive acknowledgement.
 
 ## Publication
 
-Pending implementation, validation, publication, and final-push CI.
+Curator plan diagnostics, explicit repair, modularization, and local validation
+are committed in `afd4e69`. Publication and final-push CI are the remaining
+gates.
 
 ## Next Review Batch
 
