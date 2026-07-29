@@ -48,6 +48,33 @@ def test_pack_export_creates_sqlite(tmp_path: Path) -> None:
     assert stat.S_IMODE(export.stat().st_mode) == 0o600
 
 
+@pytest.mark.parametrize(
+    "name",
+    (
+        "../escaped",
+        "nested/escaped",
+        "/tmp/escaped",
+        ".hidden",
+        "..",
+        "",
+    ),
+)
+def test_pack_export_rejects_path_like_names(
+    tmp_path: Path,
+    name: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["--project-root", str(tmp_path), "dev", "migrate"]) == 0
+    capsys.readouterr()
+
+    assert main(
+        ["--project-root", str(tmp_path), "pack", "export", name]
+    ) == 1
+
+    assert "Invalid pack name" in capsys.readouterr().err
+    assert not (tmp_path / "private" / "escaped.sqlite").exists()
+
+
 def test_pack_export_fails_without_db(tmp_path: Path) -> None:
     result = main(["--project-root", str(tmp_path), "pack", "export", "no-db"])
     assert result != 0

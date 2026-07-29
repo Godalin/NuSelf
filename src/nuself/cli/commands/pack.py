@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from nuself.storage_sqlite import (
     import_sqlite_thought_pack,
     inspect_sqlite_thought_pack,
 )
+
+_PACK_EXPORT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def handle_pack_export(args: argparse.Namespace) -> int:
@@ -31,7 +34,14 @@ def handle_pack_export(args: argparse.Namespace) -> int:
     exports = paths.private_root / "exports"
     ensure_private_directory(exports)
     name = args.name.removesuffix(".sqlite")
-    destination = (exports / name).with_suffix(".sqlite")
+    if _PACK_EXPORT_NAME.fullmatch(name) is None:
+        print(
+            "Invalid pack name: use letters, digits, '.', '_', or '-' "
+            "and start with a letter or digit.",
+            file=sys.stderr,
+        )
+        return 1
+    destination = exports / f"{name}.sqlite"
     backend = get_default_backend(args.project_root)
     if not isinstance(backend, SqliteStorageBackend):
         raise RuntimeError(

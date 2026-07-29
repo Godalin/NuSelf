@@ -456,6 +456,13 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
 
 ### 导出约束
 
+- Export names are portable file names, not paths. After an optional trailing
+  `.sqlite` is removed, the name must start with an ASCII letter or digit and
+  contain only ASCII letters, digits, `.`, `_`, or `-`. Empty names, hidden
+  names, separators, absolute paths, and traversal components are rejected
+  before opening the destination.
+- The destination is always exactly `private/exports/<name>.sqlite`; user input
+  cannot select another directory.
 - Export uses SQLite's online backup API through the shared project backend;
   it never copies only the main database file. The snapshot includes committed
   WAL data and remains consistent while another connection is writing.

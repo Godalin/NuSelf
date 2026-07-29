@@ -14,6 +14,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Thought-pack export names are now validated as portable file names, preventing
+  absolute paths and traversal outside `private/exports/`.
+- The directly imported `langchain` distribution is now an explicit runtime
+  dependency instead of an accidental transitive dependency.
 - CLI startup no longer replaces the process-global `warnings.warn` callable;
   the known LangGraph serializer deprecation is filtered only around the chat
   adapter import, while unrelated dependency warnings remain visible.
