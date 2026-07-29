@@ -310,11 +310,15 @@ are callable delivery effects, not serializable correlation identity.
 - Each observer is best effort. One observer failure cannot suppress later
   observers, undo the audit write, or fail the business operation that logged.
 - Observer failures produce a best-effort `daemon/log_observer_failed`
-  diagnostic with observation temporarily suspended. Diagnostic failure is
-  reported once as a `RuntimeWarning` containing both the observer failure and
-  structured-log failure. The warning is the terminal fallback: it does not
-  recurse, retry, or escape into the business operation, including when
-  process warning policy promotes runtime warnings to errors.
+  diagnostic with observation temporarily suspended. Logging core owns this
+  event in a sealed infrastructure audit registry: the message is fixed, the
+  level is `warning`, the status is `error`, the error is required, and
+  metadata is forbidden. Callable names and exception type names are not
+  persisted. Diagnostic failure is reported once as a `RuntimeWarning`
+  containing both the observer failure and structured-log failure. The warning
+  is the terminal fallback: it does not recurse, retry, or escape into the
+  business operation, including when process warning policy promotes runtime
+  warnings to errors.
 - Observer failure records and terminal warnings use the shared safe diagnostic
   formatter for each exception. Broken exception renderers cannot replace the
   audit result, and credential-like values are removed before persistence or

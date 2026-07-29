@@ -439,6 +439,14 @@ the sealed Reason adapter. Either adapter may degrade to an empty suggestion
 set, but a caller must not select an unregistered message, status, metadata
 shape, or generic observability projection.
 
+Process-local log observer failure is a recursive-sensitive logging-core
+boundary, not a daemon lifecycle failure or generic secondary projection. Its
+sealed log infrastructure definition is validated while observation is
+suspended, then persisted directly. If validation or persistence fails, the
+single credential-safe runtime warning remains the terminal diagnostic and
+cannot alter the original audit write, later observer delivery, or business
+operation.
+
 Chat's local response policy is not an exception sink for implementation
 defects. Before any tool executes, the shared policy rejects assertion,
 attribute, import, lookup, memory exhaustion, name resolution, unimplemented

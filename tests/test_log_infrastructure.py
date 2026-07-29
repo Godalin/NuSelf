@@ -31,6 +31,21 @@ from nuself.runtime import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
 )
+from nuself.runtime.audit_definitions import (
+    AuditDefinitionRegistrySealedError,
+)
+
+
+def test_log_infrastructure_audit_registry_is_complete_and_sealed() -> None:
+    assert [
+        (definition.component, definition.event)
+        for definition in logs.LOG_INFRASTRUCTURE_AUDIT_REGISTRY.definitions
+    ] == [("daemon", "log_observer_failed")]
+
+    with pytest.raises(AuditDefinitionRegistrySealedError):
+        logs.LOG_INFRASTRUCTURE_AUDIT_REGISTRY.register(
+            logs.LOG_INFRASTRUCTURE_AUDIT_REGISTRY.definitions[0]
+        )
 
 
 def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
@@ -299,7 +314,11 @@ def test_log_observer_failure_is_isolated_from_later_observers(
         component="daemon",
     )
     assert diagnostic.event == "log_observer_failed"
+    assert diagnostic.message == "process-local log observer failed"
+    assert diagnostic.level == "warning"
+    assert diagnostic.status == "error"
     assert diagnostic.error == "projection failed api_key=***"
+    assert diagnostic.metadata is None
     assert observer_secret not in str(diagnostic.to_record())
 
 

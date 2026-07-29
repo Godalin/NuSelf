@@ -14,6 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Process-local log observer failures now use a sealed logging-core audit
+  contract; diagnostics no longer persist callable class names or duplicated
+  exception type metadata.
 - REPL Reason thread completion failures now resolve through the sealed Reason
   audit registry instead of caller-selected generic observability; the event
   no longer stores redundant `completion=reason_threads` metadata.

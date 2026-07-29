@@ -23,6 +23,10 @@ from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
 )
+from nuself.runtime.audit_definitions import (
+    AuditDefinitionRegistry,
+    AuditEventDefinition,
+)
 from nuself.runtime.audit_types import (
     LOG_COMPONENTS,
     LogComponent,
@@ -79,6 +83,28 @@ LogEventObserver = Callable[["LogEvent"], None]
 _CURRENT_LOG_EVENT_OBSERVERS: ContextVar[tuple[LogEventObserver, ...]] = ContextVar(
     "nuself_log_event_observers",
     default=(),
+)
+_LOG_OBSERVER_FAILURE_MESSAGE = "process-local log observer failed"
+
+
+def _build_log_infrastructure_audit_registry() -> AuditDefinitionRegistry:
+    return (
+        AuditDefinitionRegistry()
+        .register(
+            AuditEventDefinition(
+                component="daemon",
+                event="log_observer_failed",
+                level="warning",
+                status="error",
+                error_policy="required",
+            )
+        )
+        .seal()
+    )
+
+
+LOG_INFRASTRUCTURE_AUDIT_REGISTRY = (
+    _build_log_infrastructure_audit_registry()
 )
 
 
@@ -524,7 +550,6 @@ def _append_log_event(
             observer(event_record)
         except Exception as exc:
             _report_log_observer_failure(
-                observer,
                 exc,
                 project_root=paths.project_root,
             )
@@ -718,7 +743,6 @@ def _report_log_rotation_failure(
 
 
 def _report_log_observer_failure(
-    observer: LogEventObserver,
     exc: Exception,
     *,
     project_root: Path,
@@ -726,18 +750,25 @@ def _report_log_observer_failure(
     token = _CURRENT_LOG_EVENT_OBSERVERS.set(())
     try:
         try:
-            write_log_event(
+            definition = LOG_INFRASTRUCTURE_AUDIT_REGISTRY.resolve(
                 "daemon",
                 "log_observer_failed",
-                "process-local log observer failed",
+            )
+            error = diagnostic_exception_message(exc)
+            definition.validate(
+                level=definition.level,
+                status=definition.status,
+                error=error,
+                metadata={},
+            )
+            write_log_event(
+                definition.component,
+                definition.event,
+                _LOG_OBSERVER_FAILURE_MESSAGE,
                 project_root=project_root,
-                level="warning",
-                status="error",
-                error=diagnostic_exception_message(exc),
-                metadata={
-                    "error_type": type(exc).__name__,
-                    "observer_type": type(observer).__name__,
-                },
+                level=definition.level,
+                status=definition.status,
+                error=error,
             )
         except Exception as log_exc:
             observer_error = diagnostic_exception_message(exc)
