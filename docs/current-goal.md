@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close agent tool middleware terminal warning ownership so callback and failure
-reporter failures use two exact sealed contracts.
+Close daemon process-log rotation terminal warning ownership so the final
+domain warning producer uses a sealed typed contract.
 
 ## Active Branch
 
@@ -14,47 +14,47 @@ reporter failures use two exact sealed contracts.
 
 ## Ordered Work
 
-1. Inventory outcome construction, log callback, failure reporter, warning
-   fallback, redaction, and primary tool semantics.
-2. Separate missing-reporter callback failure from reporter failure as two
-   exact terminal states.
-3. Update agent-tools, error, runtime-infrastructure, and development specs.
-4. Define a sealed two-event agent middleware warning registry with exact safe
-   error fields and no tool payload facts.
-5. Route both warning branches through registered rendering without changing
-   callback ordering or result/exception preservation.
-6. Remove direct `emit_runtime_warning` and free-form interpolation without
-   compatibility aliases.
+1. Inventory process-log rotation, startup continuation, safe fields,
+   stacklevel, warning policy, and tests.
+2. Keep raw daemon process-log retention distinct from structured log rotation.
+3. Update log, error, runtime-infrastructure, and development specs first.
+4. Define one sealed `daemon/process_log_rotation_failed` warning with exact
+   exception-type metadata and a fixed startup-continuation suffix.
+5. Route daemon startup through registered rendering without changing rotation,
+   hardening, open, spawn, or readiness behavior.
+6. Remove the final production domain `emit_runtime_warning` call and
+   free-form interpolation without compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to tool execution, cache, capture ordering, or outcome identity.
-- No hidden tool retry after projection failure.
-- No tool name, arguments, result, or tool exception payload added to warning
-  metadata beyond the safe callback diagnostics.
-- No migration of daemon process-log warnings in this batch.
+- No change to retention thresholds, backup order, or rotation operations.
+- No exception message, project path, or process-log content in the warning.
+- No structured diagnostic write or startup retry.
+- No change to daemon status validation, spawn, or readiness semantics.
 
 ## Completion Evidence
 
-- Agent middleware terminal warning ownership completed in `ec9a92a`.
-- `AGENT_MIDDLEWARE_WARNING_REGISTRY` is sealed and owns the exact
-  callback-failed and failure-reporter-failed definitions.
-- Middleware no longer calls `emit_runtime_warning` or interpolates fallback
-  strings; registered rendering owns both credential-safe projections.
-- Tests prove both reporter states preserve the successful `ToolMessage`,
-  redact both diagnostics, and expose no tool payload facts.
-- Focused tests: 56 passed.
-- Full suite: 2068 passed.
+- Daemon process-log rotation warning ownership completed in `eb6f76d`.
+- `DAEMON_LIFECYCLE_WARNING_REGISTRY` is sealed and owns the exact
+  `daemon/process_log_rotation_failed` contract.
+- Rotation failure warning retains only `error_type` plus the fixed
+  `continuing startup` suffix and cannot expose its message or path.
+- Full-tree search proves production domain code no longer calls
+  `emit_runtime_warning` directly; only the primitive and registered renderer
+  remain.
+- Focused tests: 363 passed.
+- Full suite: 2069 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Agent middleware terminal warning ownership was implemented in `ec9a92a`;
+Daemon process-log rotation warning ownership was implemented in `eb6f76d`;
 milestone publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Close daemon process-log rotation warning ownership next. It is now the only
-production domain call site that invokes `emit_runtime_warning` directly.
+Remove the CLI import-time global `warnings.warn` monkeypatch next. Warning
+suppression must be scoped to the specific third-party import and must not
+alter process-wide warning behavior after `nuself.cli` loads.
