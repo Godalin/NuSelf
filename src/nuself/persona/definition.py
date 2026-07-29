@@ -214,7 +214,14 @@ def load_persona_definitions(project_root: Path | None = None) -> tuple[PersonaD
     try:
         repo = MemoryEntryRepository(project_root)
         entries = repo.search("", filters=MemorySearchFilters(type="persona_instruction"))
-    except RuntimeError:
+    except RuntimeError as exc:
+        from nuself.persona.audit import report_persona_failure
+
+        report_persona_failure(
+            exc,
+            event="persona_definition_load_failed",
+            project_root=project_root,
+        )
         return BUILTIN_PERSONAS
 
     definitions: list[PersonaDefinition] = []

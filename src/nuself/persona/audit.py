@@ -28,6 +28,7 @@ PersonaAuditEvent = Literal[
     "persona_discussion_degraded",
     "persona_completion_failed",
     "persona_activation_failed",
+    "persona_definition_load_failed",
     "trace_recording_failed",
     "interactive_command_failed",
 ]
@@ -185,6 +186,13 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required",
         ),
         AuditEventDefinition(
+            "persona",
+            "persona_definition_load_failed",
+            "warning",
+            "degraded",
+            error_policy="required",
+        ),
+        AuditEventDefinition(
             "persona", "trace_recording_failed", "warning", "degraded",
             error_policy="required",
             metadata_validator=_trace_failed,
@@ -212,6 +220,9 @@ _MESSAGES: dict[PersonaAuditEvent, str] = {
     "persona_discussion_degraded": "Persona discussion used fallback",
     "persona_completion_failed": "Persona completion used fallback",
     "persona_activation_failed": "Persona activation used fallback",
+    "persona_definition_load_failed": (
+        "Persona definitions used builtin fallback"
+    ),
     "trace_recording_failed": "Persona lifecycle trace recording failed",
     "interactive_command_failed": "Interactive persona command failed",
 }

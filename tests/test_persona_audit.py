@@ -34,6 +34,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     ("persona_discussion_degraded", {"stage": "scoring"}),
     ("persona_completion_failed", {"stage": "contribution"}),
     ("persona_activation_failed", {}),
+    ("persona_definition_load_failed", {}),
     (
         "trace_recording_failed",
         {"persona_prompt_id": "persona-1", "action": "create"},

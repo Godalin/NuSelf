@@ -173,7 +173,12 @@ The activation result surfaces:
 `load_persona_definitions(project_root)` loads custom persona definitions from
 durable memory entries with `type="persona_instruction"`. These entries must have
 payload fields `persona_id` and `description`. Falls back to `BUILTIN_PERSONAS` when
-no memory entries exist or on error.
+no memory entries exist. A `RuntimeError` while opening or searching durable
+memory also returns `BUILTIN_PERSONAS`, but records the degradation through the
+sealed `persona/persona_definition_load_failed` audit with warning level,
+`status=degraded`, a required canonical error, and no metadata. Audit
+persistence failure may emit the shared terminal warning but cannot replace or
+alter the builtin fallback.
 
 ## Source
 

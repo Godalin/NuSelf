@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+import pytest
 from langchain_core.messages import BaseMessage
 
 from nuself.persona import (
     AgentBackedActivationPolicy,
+    BUILTIN_PERSONAS,
     load_persona_definitions,
 )
 from nuself.persona.definition import (
@@ -22,6 +24,7 @@ from nuself.domain.memory import (
     default_memory_type_registry,
 )
 from nuself.domain.memory import MemoryEntry
+from nuself.logs import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
 
 
@@ -115,6 +118,54 @@ def test_load_persona_definitions_from_memory(tmp_path: Path) -> None:
     assert "custom_self" in ids
     custom = next(p for p in personas if p.id == "custom_self")
     assert custom.description == "A custom persona."
+
+
+def test_load_persona_definitions_observes_storage_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_search(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("persona memory unavailable")
+
+    monkeypatch.setattr(MemoryEntryRepository, "search", fail_search)
+
+    personas = load_persona_definitions(tmp_path)
+
+    assert personas == BUILTIN_PERSONAS
+    [event] = read_log_events(
+        project_root=tmp_path,
+        component="persona",
+    )
+    assert event.event == "persona_definition_load_failed"
+    assert event.level == "warning"
+    assert event.status == "degraded"
+    assert event.error == "persona memory unavailable"
+    assert event.metadata == {}
+
+
+def test_persona_definition_diagnostic_failure_preserves_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_search(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("persona memory unavailable")
+
+    def fail_log(*_args: object, **_kwargs: object) -> object:
+        raise OSError("audit store unavailable")
+
+    monkeypatch.setattr(MemoryEntryRepository, "search", fail_search)
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_log_event",
+        fail_log,
+    )
+
+    with pytest.warns(
+        RuntimeWarning,
+        match="runtime/observability_sink_failed",
+    ):
+        personas = load_persona_definitions(tmp_path)
+
+    assert personas == BUILTIN_PERSONAS
 
 
 class _FakeActivationAgent:

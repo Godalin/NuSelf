@@ -175,6 +175,11 @@ memory. The activation policy operates on `PersonaDefinition` (which has no
 `disabled` flag). Dynamic `PersonaPrompt` personas are **not** part of the
 activation policy — they are tool-callable only.
 
+Failure to load the memory-backed instruction set is an observable degraded
+mode, not an empty result. It returns the static builtins and records
+`persona_definition_load_failed` through the Persona sealed audit registry;
+diagnostic storage failure cannot replace that fallback.
+
 **Design decision**: Since dynamic personas are tool-called (not activated),
 the activation policy is **unchanged**. The disable filter applies at the
 tool level (`persona_list`, `persona_think`) and at the CLI/REPL.
