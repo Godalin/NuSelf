@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Unify secondary observability failure diagnostics so audit writes and internal
-event delivery cannot invent ad hoc failure names, messages, or metadata.
+Close daemon request audit ownership so request rejection, chat completion and
+failure, and shutdown intent use one exact validated contract.
 
 ## Active Branch
 
@@ -14,51 +14,54 @@ event delivery cannot invent ad hoc failure names, messages, or metadata.
 
 ## Ordered Work
 
-1. Inventory every `failure_event`, failure message, metadata shape, owner,
-   renderer, and test expectation.
-2. Separate audit-sink projection failures from runtime event-delivery
-   failures and preserve the original primary operation boundary.
-3. Update observability, log, runtime-infrastructure, and development specs
-   before implementation.
-4. Define one closed diagnostic taxonomy with fixed projection defaults and
-   exact metadata variants.
-5. Migrate domain audit adapters, request/worker/chat delivery, and tool
-   outcome projection through the shared contracts.
-6. Remove subsystem-specific write-failure aliases, free-form messages, and
-   duplicate exception details.
+1. Inventory every daemon request audit producer, message, status/error policy,
+   duration, metadata, correlation, and renderer/test consumer.
+2. Separate request decision records from transport and Chat-domain audits;
+   remove semantic duplication where an owner already records the event.
+3. Update error, daemon protocol, log, and development specs before
+   implementation.
+4. Define one sealed daemon-request audit registry with fixed messages and
+   exact per-event metadata.
+5. Route rejection, chat result, and shutdown boundaries through the shared
+   adapter without changing response or shutdown decisions.
+6. Remove `_write_request_audit_event`, raw request log calls, free-form
+   defaults, and compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and
    push.
 
 ## Out Of Scope
 
-- No change to primary domain event identities or payloads.
-- No swallowing of schema/programming errors before the best-effort boundary.
-- No process-global registry combining primary domain audit definitions.
-- No change to subscriber invocation or audit persistence semantics.
+- No change to daemon request/response wire payloads.
+- No change to request handler dispatch or middleware ordering.
+- No change to ConversationGraphRuntime ownership.
+- No change to socket transport delivery diagnostics.
 
 ## Completion Evidence
 
-- Approval audit ownership completed in `fe3b2f1`.
-- `approval_prompted` and `approval_decided` now use one sealed registry with
-  fixed messages/statuses and exact metadata.
-- Affirmative, explicit decline, and EOF safe decline are durably
-  distinguished; decisions are observed before execution or return.
-- The stale `service_tool_approved` identity and raw decorator-local event
-  builder were removed.
-- Initial next-batch inventory finds 13 explicit failure-event names across
-  domain audit writes, request rejection, tool projection, and internal event
-  delivery.
-- Focused tests: 340 passed; final approval contract tests: 19 passed.
-- Full suite: 2020 passed.
+- Observability failure ownership completed in `427cf31`.
+- All secondary log writes now use
+  `observability_projection_failed` with exact `failed_event` metadata.
+- All observed EventPublisher subscriber failures now use
+  `internal_event_delivery_failed` with exact envelope event/producer
+  metadata.
+- Thirteen subsystem-specific write/delivery aliases and all caller-selected
+  failure projection parameters were removed.
+- Auxiliary log schema validation now runs before the best-effort sink
+  boundary.
+- Initial next-batch inspection finds raw daemon request events for
+  `request_rejected`, `chat_turn_failed`, `chat_turn_completed`, and
+  `shutdown_requested`.
+- Focused migration tests: 251 passed; observability boundary tests: 26 passed.
+- Full suite: 2021 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Approval audit ownership was implemented in `fe3b2f1`; milestone publication
-is pending this goal update and push.
+Observability failure ownership was implemented in `427cf31`; milestone
+publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Continue shared handler/log/message infrastructure review after observability
-failure diagnostics are verified and published.
+Continue shared handler/log/message infrastructure review after daemon request
+audit ownership is verified and published.
