@@ -158,7 +158,7 @@ def test_observed_log_persists_the_exact_frozen_envelope(
 
 
 def test_domains_do_not_rebuild_observed_log_projection() -> None:
-    source_root = Path(__file__).parents[1] / "src" / "nuself"
+    source_root = Path(__file__).parents[3] / "src" / "nuself"
     violations: list[str] = []
     for path in source_root.rglob("*.py"):
         if path == source_root / "runtime" / "observability.py":

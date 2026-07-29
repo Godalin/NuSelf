@@ -6,7 +6,11 @@ from typing import Any, cast
 
 
 def test_config_json_schema_uses_direct_llm_endpoint_list() -> None:
-    schema_path = Path(__file__).resolve().parents[1] / "docs" / "nuself-config.schema.json"
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "nuself-config.schema.json"
+    )
     schema = cast(dict[str, Any], json.loads(schema_path.read_text(encoding="utf-8")))
     properties = cast(dict[str, Any], schema["properties"])
     llm_schema = cast(dict[str, Any], properties["llm"])
@@ -27,7 +31,11 @@ def test_config_json_schema_uses_direct_llm_endpoint_list() -> None:
 
 
 def test_config_json_schema_exposes_chat_request_timeout() -> None:
-    schema_path = Path(__file__).resolve().parents[1] / "docs" / "nuself-config.schema.json"
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "docs"
+        / "nuself-config.schema.json"
+    )
     schema = cast(dict[str, Any], json.loads(schema_path.read_text(encoding="utf-8")))
     properties = cast(dict[str, Any], schema["properties"])
     chat_schema = cast(dict[str, Any], properties["chat"])
@@ -37,7 +45,7 @@ def test_config_json_schema_exposes_chat_request_timeout() -> None:
 
 
 def test_experimental_schema_has_no_removed_langmem_runtime() -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[3]
     schema = cast(
         dict[str, Any],
         json.loads(

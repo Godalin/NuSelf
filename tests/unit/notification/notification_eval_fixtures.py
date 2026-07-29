@@ -7,7 +7,9 @@ from pathlib import Path
 
 from nuself.notification_eval import run_notification_eval
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures" / "notifications"
+FIXTURES_DIR = (
+    Path(__file__).parents[2] / "fixtures" / "notifications"
+)
 
 
 def test_notification_eval_returns_one_result_per_scenario(

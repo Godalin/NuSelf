@@ -6,11 +6,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Tests now use a domain-oriented hierarchy under `tests/unit/` with concise
+  module names; opt-in real-provider checks live alongside them in
+  `tests/live/` without entering default pytest or CI collection.
 - The Anthropic adapter now avoids duplicate `/v1` paths and disables thinking
   so framework-forced structured tools remain valid.
 - Real-provider verification now supports explicit `provider:model` selections
   and a maintained five-model OpenCode Go capability matrix.
-- Added an explicit opt-in `live_tests/` suite for real LLM transport,
+- Added an explicit opt-in `tests/live/` suite for real LLM transport,
   LangChain structured-output, and NuSelf chat-boundary checks. Default pytest
   and CI never collect these network- and cost-bearing tests.
 - Chat now preserves a valid final LangChain message from OpenAI-compatible

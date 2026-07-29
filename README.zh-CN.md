@@ -170,19 +170,22 @@ uv run --locked pytest
 uv run --locked pyright
 ```
 
+普通测试按子系统组织在 `tests/unit/`，pytest 默认只收集这棵目录。测试体系
+结构见 [`tests/README.md`](tests/README.md)。
+
 真实 provider API 检查与默认测试隔离，并且只发送固定的合成 prompt：
 
 ```bash
-uv run --locked pytest live_tests -m live_api --run-live-api
+uv run --locked pytest tests/live -m live_api --run-live-api
 ```
 
 该显式命令会产生 provider 流量和费用；普通 pytest 与 CI 不收集
-`live_tests/`。
+`tests/live/`。
 
 显式运行维护中的五模型 OpenCode Go 能力矩阵：
 
 ```bash
-uv run --locked pytest live_tests -m live_api --run-live-api \
+uv run --locked pytest tests/live -m live_api --run-live-api \
   --live-opencode-go-matrix
 ```
 

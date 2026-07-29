@@ -10,8 +10,12 @@
   them transitively.
 - Built wheel smoke tests must install the artifact into a clean environment
   and import the CLI/runtime boundary.
-- Real-provider tests live under top-level `live_tests/`, outside pytest's
-  default `tests/` collection root. They run only when that path and the
+- Tests live in a domain-oriented hierarchy under `tests/`, and test module
+  filenames omit the redundant `test_` prefix. Ordinary tests live under
+  `tests/unit/` and are the only default pytest collection root.
+- Real-provider tests live under `tests/live/`, inside the unified test tree
+  but outside pytest's default `tests/unit/` collection root. They run only
+  when that path and the
   explicit `--run-live-api` opt-in are both supplied; every case also carries
   the `live_api` marker. Live tests may load endpoint
   credentials from the local private configuration, but must send only fixed

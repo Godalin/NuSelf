@@ -25,7 +25,7 @@ from nuself.live_testing import LiveModelCase
 
 pytestmark = pytest.mark.live_api
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class _LiveStructuredOutput(BaseModel):

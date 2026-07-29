@@ -392,7 +392,7 @@ def test_real_v025_private_fixture_migrates_and_reads_in_current_runtime(
     tmp_path: Path,
 ) -> None:
     fixture = (
-        Path(__file__).parent
+        Path(__file__).parents[2]
         / "fixtures"
         / "migrations"
         / "v0.2.5"

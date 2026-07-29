@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def test_codebase_does_not_render_caught_exceptions_directly() -> None:
-    source_root = Path(__file__).parents[1] / "src" / "nuself"
+    source_root = Path(__file__).parents[3] / "src" / "nuself"
     violations: list[str] = []
 
     for path in source_root.rglob("*.py"):

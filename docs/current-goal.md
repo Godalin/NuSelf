@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The OpenCode Go protocol matrix and Anthropic configuration publication
-are complete.
+Idle. The domain-oriented unified test hierarchy is complete.
 
 ## Active Branch
 
@@ -19,12 +18,21 @@ are complete.
 ## Out Of Scope
 
 - No implementation work is active.
-- Live provider tests remain outside default pytest and CI and retain explicit
-  network/cost opt-in.
+- Real-provider tests remain outside default pytest and CI collection and
+  retain explicit network/cost opt-in.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
 
+- Ordinary tests now live under domain directories in `tests/unit/`, test
+  module filenames omit `test_`, and `tests/README.md` documents the hierarchy.
+- Real-provider tests now live under `tests/live/`. Explicit path selection
+  without `--run-live-api` reported 4 skipped; explicit opt-in collection
+  reported exactly 4 cases without sending provider requests.
+- Pytest's default root is `tests/unit/`: collection found 2366 ordinary tests
+  and no live-provider cases, and the full run reported 2366 passed.
+- Locked Pyright reported 0 errors and 0 warnings. Layout regression tests
+  enforce the default root, concise filenames, and live opt-in gate.
 - The JSON Schema and example configuration now publish the Anthropic API root
   used by the adapter while documenting that one trailing `/v1` is accepted
   and normalized.

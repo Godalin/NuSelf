@@ -199,20 +199,24 @@ uv run --locked pytest
 uv run --locked pyright
 ```
 
+Ordinary tests are grouped by subsystem under `tests/unit/`; pytest collects
+that tree by default. See [`tests/README.md`](tests/README.md) for the suite
+layout.
+
 Real-provider API checks are isolated from the default suite and send only
 fixed synthetic prompts:
 
 ```bash
-uv run --locked pytest live_tests -m live_api --run-live-api
+uv run --locked pytest tests/live -m live_api --run-live-api
 ```
 
 This explicit command incurs provider traffic and cost. Normal pytest and CI
-do not collect `live_tests/`.
+do not collect `tests/live/`.
 
 Run the maintained five-model OpenCode Go capability matrix explicitly:
 
 ```bash
-uv run --locked pytest live_tests -m live_api --run-live-api \
+uv run --locked pytest tests/live -m live_api --run-live-api \
   --live-opencode-go-matrix
 ```
 

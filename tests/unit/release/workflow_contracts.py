@@ -8,7 +8,9 @@ import tomllib
 from typing import cast
 
 
-WORKFLOWS = Path(__file__).parent.parent / ".github" / "workflows"
+WORKFLOWS = (
+    Path(__file__).parents[3] / ".github" / "workflows"
+)
 FULL_SHA_ACTION = re.compile(
     r"^\s*(?:-\s*)?uses:\s+[^@\s]+@([0-9a-f]{40})"
     r"(?:\s+#\s+\S+)?\s*$",

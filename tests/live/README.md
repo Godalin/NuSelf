@@ -8,7 +8,7 @@ They are outside the default pytest collection root and also require an
 explicit network/cost opt-in:
 
 ```bash
-uv run --locked pytest live_tests -m live_api --run-live-api
+uv run --locked pytest tests/live -m live_api --run-live-api
 ```
 
 Running `uv run --locked pytest` or normal CI does not collect this directory.
@@ -20,7 +20,7 @@ diagnostic formatter.
 The maintained OpenCode Go matrix is explicit and cost-bearing:
 
 ```bash
-uv run --locked pytest live_tests -m live_api --run-live-api \
+uv run --locked pytest tests/live -m live_api --run-live-api \
   --live-opencode-go-matrix
 ```
 
