@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close shared observability sink-failure terminal warning ownership so fallback
-diagnostics use one fixed infrastructure identity and exact safe fields.
+Close agent tool middleware terminal warning ownership so callback and failure
+reporter failures use two exact sealed contracts.
 
 ## Active Branch
 
@@ -14,50 +14,47 @@ diagnostics use one fixed infrastructure identity and exact safe fields.
 
 ## Ordered Work
 
-1. Inventory every sink-failure warning consumer, dynamic field, exception
-   diagnostic, redaction path, stacklevel, and outcome-preservation test.
-2. Separate the fixed infrastructure warning identity from the failed business
-   audit component/event.
-3. Update runtime-infrastructure, log, error, and development specs first.
-4. Define one sealed `runtime/observability_sink_failed` warning contract with
-   exact component, event, observed-error chain, and sink-error fields.
-5. Route `report_observed_failure` through the shared registered renderer
-   without changing persistence attempts or result/exception preservation.
-6. Remove direct warning interpolation and redundant local final redaction
-   without compatibility aliases.
+1. Inventory outcome construction, log callback, failure reporter, warning
+   fallback, redaction, and primary tool semantics.
+2. Separate missing-reporter callback failure from reporter failure as two
+   exact terminal states.
+3. Update agent-tools, error, runtime-infrastructure, and development specs.
+4. Define a sealed two-event agent middleware warning registry with exact safe
+   error fields and no tool payload facts.
+5. Route both warning branches through registered rendering without changing
+   callback ordering or result/exception preservation.
+6. Remove direct `emit_runtime_warning` and free-form interpolation without
+   compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and push.
 
 ## Out Of Scope
 
-- No change to primary audit construction, metadata sanitization, or write
-  attempts.
-- No retry or recursive structured diagnostic after sink failure.
-- No change to caller return values, raised primary exceptions, or fallback
-  decisions.
-- No migration of tool middleware or daemon process-log warnings in this batch.
+- No change to tool execution, cache, capture ordering, or outcome identity.
+- No hidden tool retry after projection failure.
+- No tool name, arguments, result, or tool exception payload added to warning
+  metadata beyond the safe callback diagnostics.
+- No migration of daemon process-log warnings in this batch.
 
 ## Completion Evidence
 
-- Observability sink-failure warning ownership completed in `50dc7de`.
-- `OBSERVABILITY_TERMINAL_WARNING_REGISTRY` is sealed and owns the single fixed
-  `runtime/observability_sink_failed` definition with four exact ordered
-  fields.
-- `report_observed_failure` no longer calls `emit_runtime_warning`, constructs
-  a dynamic warning identity, or performs local final redaction.
-- The observed error retains its compact chain while the sink error excludes
-  active primary context, eliminating duplicate primary diagnostics.
-- Focused tests: 167 passed.
-- Full suite: 2066 passed.
+- Agent middleware terminal warning ownership completed in `ec9a92a`.
+- `AGENT_MIDDLEWARE_WARNING_REGISTRY` is sealed and owns the exact
+  callback-failed and failure-reporter-failed definitions.
+- Middleware no longer calls `emit_runtime_warning` or interpolates fallback
+  strings; registered rendering owns both credential-safe projections.
+- Tests prove both reporter states preserve the successful `ToolMessage`,
+  redact both diagnostics, and expose no tool payload facts.
+- Focused tests: 56 passed.
+- Full suite: 2068 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Observability sink-failure warning ownership was implemented in `50dc7de`;
+Agent middleware terminal warning ownership was implemented in `ec9a92a`;
 milestone publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Close agent tool middleware terminal warning ownership next.
-`agent/middleware.py` still has two caller-formatted warning variants for a
-failed tool-log callback with and without a failed failure reporter.
+Close daemon process-log rotation warning ownership next. It is now the only
+production domain call site that invokes `emit_runtime_warning` directly.
