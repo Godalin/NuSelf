@@ -607,7 +607,8 @@ def _upgrade_legacy_wire(
     _upgrade_legacy_relations(upgraded)
     payload = upgraded.get("payload")
     if isinstance(payload, dict):
-        upgraded_payload = dict(payload)
+        payload_wire = cast(dict[str, object], payload)
+        upgraded_payload: dict[str, object] = dict(payload_wire)
         _upgrade_legacy_relations(upgraded_payload)
         upgraded["payload"] = upgraded_payload
     return upgraded
@@ -617,7 +618,11 @@ def _upgrade_legacy_relations(data: dict[str, object]) -> None:
     relations = data.get("relations")
     if relations is not None and not isinstance(relations, dict):
         return
-    upgraded_relations = dict(relations) if isinstance(relations, dict) else {}
+    upgraded_relations: dict[str, object]
+    if isinstance(relations, dict):
+        upgraded_relations = dict(cast(dict[str, object], relations))
+    else:
+        upgraded_relations = {}
     mappings = (
         ("supersedes", "supersedes"),
         ("related_memory_ids", "related_to"),
@@ -629,8 +634,12 @@ def _upgrade_legacy_relations(data: dict[str, object]) -> None:
             continue
         data.pop(legacy_name)
         current_targets = upgraded_relations.get(relation_name)
-        merged = list(current_targets) if isinstance(current_targets, list) else []
-        for target in legacy_targets:
+        merged: list[object] = (
+            list(cast(list[object], current_targets))
+            if isinstance(current_targets, list)
+            else []
+        )
+        for target in cast(list[object], legacy_targets):
             if target not in merged:
                 merged.append(target)
         upgraded_relations[relation_name] = merged

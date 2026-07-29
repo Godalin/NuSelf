@@ -150,12 +150,13 @@ trustworthy 0.3.0 release candidate.
   as YAML.
 - The final `uv build` rerun produced the 0.3.0rc1 sdist and wheel in an
   isolated temporary output directory.
-- Full pyright remains the only local gate pending after its cache attempted a
-  blocked refresh and the explicit retry approval service disconnected.
+- Final full pyright after migration/provenance work: 0 errors, 0 warnings.
+- Final full pytest rerun after the pyright-driven wire-type narrowing:
+  2322 passed.
 - The original external review has been re-audited item by item against the
   current tree. All 13 code findings and every RC engineering deliverable have
   implementation plus focused regression evidence; completion remains
-  intentionally unclaimed until full pyright and final branch CI pass.
+  intentionally unclaimed until final branch CI passes.
 
 ## Publication
 
@@ -163,4 +164,4 @@ Work begins after the completed infrastructure review at `c0a82e3`.
 
 ## Next Review Batch
 
-Full local validation, final push, and development-branch CI.
+Final push and development-branch CI.
