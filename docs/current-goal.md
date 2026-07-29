@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close shared storage cleanup audit ownership so backend close and CLI cleanup
-failure use one exact validated contract without losing aggregated errors.
+Close shared agent endpoint failover audit ownership so Chat, Memory, Persona,
+and Reason use one exact safe contract without persisting endpoint URLs.
 
 ## Active Branch
 
@@ -14,49 +14,50 @@ failure use one exact validated contract without losing aggregated errors.
 
 ## Ordered Work
 
-1. Inventory default backend close and CLI cleanup failure producers,
-   aggregation, exception identity, metadata, and consumers.
-2. Decide one storage-owned contract that preserves every cleanup error
-   without duplicating primary exception text.
-3. Update storage, error, log, and development specs before implementation.
-4. Define one sealed storage operations audit registry with fixed messages and
-   exact per-event metadata.
-5. Route storage reset and CLI lifecycle cleanup through the shared adapter
-   without changing close attempts, aggregation, or raised exceptions.
-6. Remove raw storage/CLI `report_observed_failure` calls, lossy step-only
+1. Inventory every shared endpoint runner caller, component, event consumer,
+   retry/failover boundary, metadata, and redaction path.
+2. Separate per-endpoint failover observations from final aggregate
+   capability failure and domain-specific retry events.
+3. Update config, error, log, agent-tool, and development specs before
+   implementation.
+4. Define one sealed endpoint audit registry with fixed messages, statuses,
+   exact safe metadata, and allowed caller components.
+5. Route the shared endpoint runner through the adapter without changing
+   retry/failover decisions or exception identity.
+6. Remove `_report_endpoint_failure`, raw observability calls, endpoint URL
    metadata, and compatibility aliases.
 7. Run focused and full quality gates, commit by functional boundary, and
    push.
 
 ## Out Of Scope
 
-- No change to backend selection or process-global backend ownership.
-- No change to close/reset ordering or attempt count.
-- No change to `DefaultBackendResetError` or `CliLifecycleError` propagation.
-- No change to daemon cleanup contracts.
+- No change to endpoint ordering or persisted successful-endpoint preference.
+- No change to availability classification or attempts per endpoint.
+- No change to domain-specific retry observers.
+- No change to final raised aggregate failure.
 
 ## Completion Evidence
 
-- Daemon operations audit ownership completed in `3b00e68`.
-- Worker join timeout and daemon cleanup failure now use one sealed operations
+- Storage cleanup audit ownership completed in `f643a8e`.
+- Backend close and CLI cleanup failure now use one sealed storage operations
   registry.
-- Cleanup diagnostics preserve ordered `{step,error}` records; timeout
-  metadata no longer duplicates `status="timed_out"`.
-- Server/worker owners no longer construct operational audit presentation.
-- Initial next-batch inspection finds raw storage events for
-  `backend_close_failed` and CLI `cli_cleanup_failed`; the latter currently
-  retains only step names rather than nested errors.
-- Focused tests: 58 passed.
-- Full suite: 2035 passed.
+- `runtime.cleanup` owns canonical ordered `{step,error}` projection shared by
+  daemon and storage lifecycle owners.
+- Storage/CLI no longer construct cleanup audit presentation.
+- Initial next-batch inspection finds shared agent failover events for
+  `llm_endpoint_failed_over` and `llm_endpoint_unavailable` emitted across
+  Chat, Memory, Persona, and Reason; metadata currently includes `base_url`.
+- Focused tests: 100 passed.
+- Full suite: 2040 passed.
 - Pyright: 0 errors, 0 warnings.
 - Static search and `git diff --check`: passed.
 
 ## Publication
 
-Daemon operations audit ownership was implemented in `3b00e68`; milestone
+Storage cleanup audit ownership was implemented in `f643a8e`; milestone
 publication is pending this goal update and push.
 
 ## Next Review Batch
 
-Continue shared handler/log/message infrastructure review after storage
-cleanup audit ownership is verified and published.
+Continue shared handler/log/message infrastructure review after agent endpoint
+failover audit ownership is verified and published.
