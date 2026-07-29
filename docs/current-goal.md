@@ -5,8 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The 0.3 RC migration, notification-state, ambiguous-commit, and release
-reproducibility review is complete.
+Idle. The OpenCode Go chat-response and opt-in live-provider test goal is
+complete.
 
 ## Active Branch
 
@@ -19,11 +19,39 @@ reproducibility review is complete.
 ## Out Of Scope
 
 - No implementation work is active.
-- Do not infer a new feature scope from this completed review.
+- Live provider tests remain outside default pytest and CI and retain explicit
+  network/cost opt-in.
 - No 0.3.0 release tag until every release-candidate gate is proven.
 
 ## Completion Evidence
 
+- Diagnosis: the OpenCode Go route and OpenAI-compatible provider selection
+  are correct. Anthropic Messages semantics return an HTML page on this route.
+- Diagnosis: the failed turn reached the provider but returned no LangChain
+  `structured_response`; NuSelf exhausted retries, persisted its misleading
+  no-API local fallback, and recorded the turn as completed.
+- Diagnosis: `nuself dev config` redacted `llm.0.api_key` but also printed the
+  raw aggregate `llm.endpoints` value produced by generic flattening.
+- The private OpenCode Go endpoint remains `/zen/go/v1` without
+  `anthropic: true`; daemon reload and effective-config inspection confirm
+  `provider: openai`.
+- Effective configuration recursively flattens endpoint sequences to scalar
+  leaves and redacts every API key; no aggregate endpoint value is printed.
+- Configured endpoint exhaustion now returns visible failure guidance with
+  `epistemic_status=unsupported` instead of falsely claiming no API exists.
+- Focused config/chat/CLI/LLM coverage: 358 passed.
+- `live_tests/` is outside default pytest collection and also requires
+  `--run-live-api`; every prompt is fixed synthetic text and no thread, memory,
+  persona, source, or runtime prompt is loaded.
+- Opt-out verification skips all four live tests without the flag; default
+  pytest collects and passes exactly 2346 ordinary tests.
+- Real OpenCode Go verification passed all four layers with the
+  OpenAI-compatible provider: direct model transport, LangChain typed
+  `structured_response`, NuSelf chat response, and tool calling combined with
+  a structured final response.
+- Locked Pyright reports 0 errors and 0 warnings. The stale hidden daemon was
+  terminated; its cleanup removed the active socket, so the active owner was
+  cleanly replaced by one ready daemon at PID 31449.
 - `nuself dev migrate` now writes a unique sibling database, holds the file
   authority lock while one SQLite transaction copies and read-validates every
   record, then checkpoints, closes, fsyncs, and atomically publishes it.
