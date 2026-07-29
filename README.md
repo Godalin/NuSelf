@@ -52,6 +52,9 @@ Memory candidate acceptance applies the same distinction across its target and
 review records: a visibly accepted, matching pair is preserved and reported as
 an ambiguous commit when crash durability cannot be proven, while a pending
 candidate still triggers target compensation.
+File-backed transaction batches now use a stable cross-process advisory lock,
+and notification outbox admission performs idempotency lookup plus insertion
+inside that backend transaction.
 
 Daemon instance-lock acquire and release likewise preserve simultaneous lock
 operation and handle-close failures, so ownership errors are not hidden by

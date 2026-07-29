@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Notification outbox admission now serializes idempotency lookup and insertion
+  across processes and storage connections, preventing duplicate intents from
+  concurrent producers.
 - Memory candidate acceptance now distinguishes an already-visible logical
   commit with uncertain crash durability from a failed commit, preserving the
   accepted candidate and target for explicit reconciliation instead of

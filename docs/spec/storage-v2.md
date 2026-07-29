@@ -342,8 +342,10 @@ dynamic-column `put()` 必须先编码完整 replacement，之后才能 `ALTER T
   duplicate-column 失败只有在重新读取实际 schema 并确认目标列已经由竞争连接
   创建后才可视为成功；其他 `OperationalError` 必须原样传播。每次 DDL 尝试后
   都要使连接本地 column cache 失效。
-- 文件后端无法提供跨文件数据库事务；它至少序列化批次，并继续依赖单文件
-  atomic replace。调用方不得把它描述为跨文件原子提交。
+- 文件后端无法提供跨文件数据库事务；它通过 `private/` 根目录下稳定、不会在
+  正常操作中删除的 advisory lock 跨线程、backend instance 和进程序列化批次，
+  并继续依赖单文件 atomic replace。同一线程嵌套 transaction 复用最外层锁，
+  不得再次获取文件锁而自死锁。调用方不得把它描述为跨文件原子提交。
 
 Reason 的 step + thread 更新必须使用 backend transaction，避免只写入 step
 但没有推进 thread 的半完成状态。

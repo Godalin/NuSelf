@@ -120,6 +120,7 @@ class NotificationOutbox:
             if backend is not None
             else get_default_backend(project_root)
         )
+        self._backend = be
         self._col = be.collection("notification_outbox")
         self._project_root = runtime_paths(project_root).project_root
 
@@ -146,13 +147,12 @@ class NotificationOutbox:
         return OutboxEntry.from_wire(wire)
 
     def add(self, entry: OutboxEntry) -> OutboxEntry:
-        # Single scan for the idempotency key (the exists-check and the lookup
-        # were previously two separate full-collection scans per insert).
-        existing = self._find_by_idempotency_key(entry.idempotency_key)
-        if existing is not None:
-            return existing
-        self._col.put(entry.id, entry.to_wire())
-        return entry
+        with self._backend.transaction():
+            existing = self._find_by_idempotency_key(entry.idempotency_key)
+            if existing is not None:
+                return existing
+            self._col.put(entry.id, entry.to_wire())
+            return entry
 
     def _write_entry(self, entry: OutboxEntry) -> None:
         self._col.put(entry.id, entry.to_wire())

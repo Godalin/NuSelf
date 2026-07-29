@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager, contextmanager
 from collections.abc import Generator
+import fcntl
 import os
 from pathlib import Path
 import threading
@@ -19,6 +20,7 @@ from nuself.logs import LogComponent
 from nuself.private_fs import (
     create_private_file,
     ensure_private_directory,
+    ensure_private_file,
 )
 from nuself.runtime.observability import (
     report_corrupt_record,
@@ -406,6 +408,8 @@ class FileStorageBackend:
             else root.parent if root.name == "private" else root
         )
         self._transaction_lock = threading.RLock()
+        self._transaction_state = threading.local()
+        self._transaction_lock_path = self._root / ".storage-transaction.lock"
 
     def collection(self, name: str) -> _FileCollection:
         relative = self._map.get(name)
@@ -426,7 +430,28 @@ class FileStorageBackend:
         a multi-file batch crash-atomic.
         """
         with self._transaction_lock:
-            yield
+            depth = getattr(self._transaction_state, "depth", 0)
+            if depth > 0:
+                self._transaction_state.depth = depth + 1
+                try:
+                    yield
+                finally:
+                    self._transaction_state.depth -= 1
+                return
+
+            ensure_private_file(self._transaction_lock_path)
+            handle = self._transaction_lock_path.open("ab")
+            locked = False
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                locked = True
+                self._transaction_state.depth = 1
+                yield
+            finally:
+                self._transaction_state.depth = 0
+                if locked:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                handle.close()
 
 
 def validate_storage_key(key: str) -> None:

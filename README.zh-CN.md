@@ -43,6 +43,9 @@ durability 未知，系统会用独立 typed error 报告，而不是当作普�
 Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已
 显示 accepted 且 target 匹配预期，crash durability 无法确认时会保留这对记录并
 报告 ambiguous commit；候选仍为 pending 时则继续补偿 target mutation。
+文件后端 transaction batch 现在使用稳定的跨进程 advisory lock；notification
+outbox admission 会在同一 backend transaction 中完成 idempotency lookup 和
+insert。
 
 Daemon instance lock 的获取和释放也会同时保留锁操作与句柄关闭错误，避免清理
 故障掩盖真实所有权状态。

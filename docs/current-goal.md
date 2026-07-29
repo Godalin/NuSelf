@@ -71,6 +71,12 @@ trustworthy 0.3.0 release candidate.
   targets raise a typed ambiguous-commit error without destructive rollback.
 - Focused candidate, curator, and optimizer tests: 86 passed; pyright reported
   0 errors and 0 warnings.
+- File backend transactions now use one stable cross-process advisory lock with
+  safe same-thread nesting. Notification outbox idempotency lookup and insert
+  run in one backend transaction; a spawned-process contention test proves one
+  durable entry wins for one shared idempotency key.
+- Focused notification, file-storage, and candidate tests: 94 passed; pyright
+  reported 0 errors and 0 warnings.
 - Remaining external findings require fault-injection or contract-level
   verification before implementation.
 

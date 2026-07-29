@@ -42,6 +42,10 @@ any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
   `private/notifications/outbox/{id}.json`; other configured storage backends
   preserve the same record contract.
 - Writes use the shared atomic storage boundary.
+- `add()` performs idempotency-key lookup and insertion inside one backend
+  transaction. Competing threads, backend instances, and processes using the
+  same file or SQLite store therefore return one existing record rather than
+  creating multiple records for one idempotency key.
 - `get()` raises `OutboxEntryNotFound` if file missing.
 - `created_at` and present `sent_at` values are non-empty, timezone-aware
   ISO-8601 strings. Naive timestamps are invalid because retention decisions

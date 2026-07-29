@@ -176,6 +176,24 @@ def test_file_collection_lists_isolate_corrupt_json_but_get_surfaces_it(
         collection.get("corrupt")
 
 
+def test_file_backend_transaction_is_reentrant_in_one_thread(
+    tmp_path: Path,
+) -> None:
+    backend = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    )
+    collection = backend.collection("memory_entries")
+
+    with backend.transaction():
+        collection.put("outer", {"id": "outer"})
+        with backend.transaction():
+            collection.put("inner", {"id": "inner"})
+
+    assert collection.get("outer") == {"id": "outer"}
+    assert collection.get("inner") == {"id": "inner"}
+
+
 def test_write_text_atomic_replaces_complete_destination(
     tmp_path: Path,
 ) -> None:
