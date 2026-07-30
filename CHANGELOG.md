@@ -8,6 +8,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## v0.3.0 - 2026-07-30
 
+- The English and Chinese READMEs are now concise project front pages with a
+  five-minute quick start. Detailed configuration, CLI, memory, testing, and
+  contributor guidance lives in focused documents instead of duplicating
+  implementation contracts and release history on the project homepage.
 - The tag-triggered release metadata gate now runs inside the locked
   uv-synchronized environment, so src-layout package imports are available
   before release build and publication side effects begin.
