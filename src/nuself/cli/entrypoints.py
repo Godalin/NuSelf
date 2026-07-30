@@ -83,7 +83,7 @@ class EntrypointController:
     def handle_default(self, args: argparse.Namespace) -> int:
         result = self._status_or_report(args.project_root)
         if result is None:
-            return 1
+            return 4
         if result.running:
             if args.message is not None:
                 print(f"Using current daemon: {format_status(result)}")
@@ -112,7 +112,7 @@ class EntrypointController:
     def handle_chat(self, args: argparse.Namespace) -> int:
         daemon_status = self._status_or_report(args.project_root)
         if daemon_status is None:
-            return 1
+            return 4
         if daemon_status.running:
             if args.message is not None:
                 return self._callbacks.send_daemon_chat(
@@ -125,7 +125,11 @@ class EntrypointController:
                 f"NuSelf daemon is not ready: {daemon_status.phase}.",
                 file=sys.stderr,
             )
-            return 1
+            return (
+                3
+                if daemon_status.phase == "stopped"
+                else 4
+            )
         if args.message is not None:
             return self._callbacks.send_one_shot_chat(
                 args.message,
@@ -136,13 +140,17 @@ class EntrypointController:
     def handle_attach(self, args: argparse.Namespace) -> int:
         daemon_status = self._status_or_report(args.project_root)
         if daemon_status is None:
-            return 1
+            return 4
         if not daemon_status.running:
             print(
                 f"NuSelf daemon is not ready: {daemon_status.phase}.",
                 file=sys.stderr,
             )
-            return 1
+            return (
+                3
+                if daemon_status.phase == "stopped"
+                else 4
+            )
         if args.message is not None:
             return self._callbacks.send_daemon_chat(
                 args.message,
@@ -158,7 +166,7 @@ class EntrypointController:
 
         daemon_status = self._status_or_report(args.project_root)
         if daemon_status is None:
-            return 1
+            return 4
         if daemon_status.running:
             if target.message is not None:
                 result = self._callbacks.send_daemon_chat(
@@ -177,7 +185,7 @@ class EntrypointController:
                 f"NuSelf daemon is not ready: {daemon_status.phase}.",
                 file=sys.stderr,
             )
-            return 1
+            return 4
         if target.message is not None:
             result = self._callbacks.send_one_shot_chat(
                 target.message,

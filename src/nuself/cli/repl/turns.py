@@ -51,7 +51,11 @@ def send_interactive_chat_turn(
     result = InteractiveChatResult(code=1)
     printed_logs = False
     presented_notice_codes: set[str] = set()
-    turn_id = f"turn-{uuid4().hex}"
+    turn_id = session.prepare_turn(
+        message=message,
+        thread_id=thread_id,
+        new_turn_id=f"turn-{uuid4().hex}",
+    )
 
     def present_events(
         events: list[LogEvent],
@@ -136,8 +140,10 @@ def send_interactive_chat_turn(
             print()
             print_reply(result.reply)
         if result.code == 0:
+            session.clear_retry()
             return 0
         if not result.retryable:
+            session.clear_retry()
             if result.error is not None and not _events_include_error(
                 events,
                 result.error,
@@ -145,7 +151,22 @@ def send_interactive_chat_turn(
                 print(result.error, file=sys.stderr)
             break
     if result.retryable:
-        print("Message failed after retry; REPL remains open.", file=sys.stderr)
+        session.offer_retry(
+            message=message,
+            thread_id=thread_id,
+            turn_id=turn_id,
+            request_may_have_completed=result.request_may_have_completed,
+        )
+        completion_note = (
+            " The previous request may already have completed."
+            if result.request_may_have_completed
+            else ""
+        )
+        print(
+            "Message failed after retry; the REPL remains open."
+            f"{completion_note} Use :retry to retry the same turn safely.",
+            file=sys.stderr,
+        )
     return result.code
 
 

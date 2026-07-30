@@ -42,6 +42,8 @@ filterwarnings = [
 ]
 markers = [
     "live_api: opt-in tests that send fixed synthetic prompts to a configured real LLM endpoint",
+    "uninitialized_authority: command test intentionally starts without an initialized authority",
+    "unconfigured_authority: command test intentionally starts without a model configuration",
 ]
 
 [tool.uv]

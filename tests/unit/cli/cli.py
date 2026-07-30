@@ -78,6 +78,46 @@ class MonkeyPatchFixture(Protocol):
     def delenv(self, name: str, raising: bool = True) -> None: ...
 
 
+class MarkerNode(Protocol):
+    def get_closest_marker(self, name: str) -> object | None: ...
+
+
+class FixtureRequest(Protocol):
+    node: MarkerNode
+
+
+@pytest.fixture(autouse=True)
+def _initialize_cli_test_authority(  # pyright: ignore[reportUnusedFunction]
+    tmp_path: Path,
+    request: FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if request.node.get_closest_marker(
+        "uninitialized_authority"
+    ) is not None:
+        return
+    get_default_backend(_authority(tmp_path))
+    if request.node.get_closest_marker(
+        "unconfigured_authority"
+    ) is None:
+        (_authority(tmp_path) / "config.yaml").write_text(
+            "llm:\n"
+            "  - base_url: https://example.invalid/v1\n"
+            "    api_key: test-key\n"
+            "    model: test-model\n",
+            encoding="utf-8",
+        )
+        def no_configured_endpoints(
+            _project_root: Path | None = None,
+        ) -> tuple[()]:
+            return ()
+
+        monkeypatch.setattr(
+            "nuself.llm._configured_llm_endpoints",
+            no_configured_endpoints,
+        )
+
+
 def test_cli_import_preserves_process_warning_api() -> None:
     completed = subprocess.run(
         [
@@ -1455,7 +1495,7 @@ def test_daemon_chat_uses_configured_request_timeout(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     private_dir = _authority(tmp_path)
-    private_dir.mkdir(parents=True)
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         "chat:\n  request_timeout_seconds: 600\n",
         encoding="utf-8",
@@ -1577,7 +1617,7 @@ def test_daemon_chat_connection_error_is_reported(
     result = main(["--workspace", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()
 
-    assert result == 1
+    assert result == 4
     assert "daemon request failed: timed out" in captured.err
 
 
@@ -1738,7 +1778,7 @@ def test_interactive_activity_cursor_does_not_replay_seen_events(
 
 def test_read_log_events_tolerates_legacy_daemon_lines(tmp_path: Path) -> None:
     log_path = _authority(tmp_path) / "logs" / "daemon.log"
-    log_path.parent.mkdir(parents=True)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text("plain daemon output\n", encoding="utf-8")
 
     events = read_log_events(project_root=_authority(tmp_path), component="daemon")
@@ -1756,7 +1796,7 @@ def test_daemon_attach_requires_running_daemon(
     )
     captured = capsys.readouterr()
 
-    assert result == 1
+    assert result == 3
     assert "NuSelf daemon is not ready: stopped." in captured.err
 
 
@@ -3291,7 +3331,7 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     from nuself.notification import NotificationOutbox, OutboxEntry
 
     private = _authority(tmp_path)
-    private.mkdir()
+    private.mkdir(exist_ok=True)
     (private / "config.yaml").write_text(
         "macos_notification:\n  enabled: false\n",
         encoding="utf-8",
@@ -4605,6 +4645,7 @@ def test_notify_clear_selects_failed_including_uncertain_plan(
     }
 
 
+@pytest.mark.uninitialized_authority
 def test_health_command_reports_missing_private_root(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
@@ -4615,12 +4656,13 @@ def test_health_command_reports_missing_private_root(
     assert "authority root missing" in captured.out
 
 
+@pytest.mark.unconfigured_authority
 def test_health_accepts_missing_config_when_private_root_and_daemon_are_ready(
     tmp_path: Path,
     capsys: CaptureFixture,
     monkeypatch: MonkeyPatchFixture,
 ) -> None:
-    (_authority(tmp_path)).mkdir()
+    (_authority(tmp_path)).mkdir(exist_ok=True)
 
     def ready_status(_project_root: Path | None) -> DaemonStatus:
         return _mock_status(tmp_path)
@@ -4684,7 +4726,7 @@ def test_config_command_never_prints_endpoint_secrets(
 ) -> None:
     secret = "provider-secret-must-not-render"
     private = _authority(tmp_path)
-    private.mkdir()
+    private.mkdir(exist_ok=True)
     (private / "config.yaml").write_text(
         (
             "llm:\n"
@@ -4710,7 +4752,7 @@ def test_config_command_never_prints_smtp_password(
 ) -> None:
     secret = "smtp-secret-must-not-render"
     private = _authority(tmp_path)
-    private.mkdir()
+    private.mkdir(exist_ok=True)
     (private / "config.yaml").write_text(
         (
             "email:\n"

@@ -14,6 +14,14 @@ from nuself.cli.repl.transcript import (
 )
 
 
+@dataclass(frozen=True)
+class InteractiveRetryOffer:
+    message: str
+    thread_id: str
+    turn_id: str
+    request_may_have_completed: bool
+
+
 def empty_thread_start_indexes() -> dict[str, int]:
     return {}
 
@@ -43,6 +51,48 @@ class InteractiveSession:
         default_factory=empty_captured_log_events_by_message
     )
     exported_next_indexes: dict[str, int] = field(default_factory=empty_thread_start_indexes)
+    retry_offer: InteractiveRetryOffer | None = None
+    retry_requested: bool = False
+
+    def prepare_turn(
+        self,
+        *,
+        message: str,
+        thread_id: str,
+        new_turn_id: str,
+    ) -> str:
+        offer = self.retry_offer
+        if (
+            self.retry_requested
+            and offer is not None
+            and offer.message == message
+            and offer.thread_id == thread_id
+        ):
+            self.retry_requested = False
+            return offer.turn_id
+        self.retry_requested = False
+        self.retry_offer = None
+        return new_turn_id
+
+    def offer_retry(
+        self,
+        *,
+        message: str,
+        thread_id: str,
+        turn_id: str,
+        request_may_have_completed: bool,
+    ) -> None:
+        self.retry_offer = InteractiveRetryOffer(
+            message=message,
+            thread_id=thread_id,
+            turn_id=turn_id,
+            request_may_have_completed=request_may_have_completed,
+        )
+
+    def clear_retry(self) -> None:
+        self.retry_offer = None
+        self.retry_requested = False
+
     def start_index_for(self, project_root: Path | None, thread_id: str) -> int:
         if thread_id not in self.thread_start_indexes:
             next_index = ThreadStore(project_root).load(thread_id).next_message_index

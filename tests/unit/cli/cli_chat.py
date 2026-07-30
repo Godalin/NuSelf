@@ -51,7 +51,7 @@ def test_daemon_connection_failure_is_retryable(
             source="outer",
         )
 
-    assert result.code == 1
+    assert result.code == 4
     assert result.retryable is True
     assert result.error == "daemon request failed: timed out"
     assert result.reply is None

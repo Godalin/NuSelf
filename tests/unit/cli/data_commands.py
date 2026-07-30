@@ -131,6 +131,8 @@ def test_data_internal_collections_are_hidden_by_default(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _set_home(tmp_path, monkeypatch)
+    assert main(["init"]) == 0
+    capsys.readouterr()
 
     assert main(["data", "list", "scheduler_state"]) == 1
     assert "requires --internal" in capsys.readouterr().err

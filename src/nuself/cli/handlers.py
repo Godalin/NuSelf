@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Callable
 from typing import cast
 
 from nuself.runtime.handlers import HandlerRegistry
+from nuself.cli.readiness import (
+    CommandRequirements,
+    INITIALIZED_AUTHORITY,
+    NO_READINESS,
+    inspect_command_readiness,
+)
+from nuself.scope import NuSelfScope
 
 CliHandler = Callable[[argparse.Namespace], int]
 CliHandlerRegistry = HandlerRegistry[
@@ -27,12 +35,18 @@ class CliHandlerBindings:
         self,
         parser: argparse.ArgumentParser,
         handler: CliHandler,
+        *,
+        requirements: CommandRequirements = INITIALIZED_AUTHORITY,
     ) -> None:
         """Register one stable parser key and bind only that key."""
 
         key = parser.prog
         self._registry.register(key, handler)
-        parser.set_defaults(handler_key=key, help_parser=None)
+        parser.set_defaults(
+            handler_key=key,
+            help_parser=None,
+            command_requirements=requirements,
+        )
 
     def bind_help(self, parser: argparse.ArgumentParser) -> None:
         """Mark a command group as help-only until a child is selected."""
@@ -64,6 +78,21 @@ def dispatch_cli(
     if not isinstance(raw_registry, HandlerRegistry):
         raise TypeError("CLI handler registry is missing")
     registry = cast(CliHandlerRegistry, raw_registry)
+    requirements = getattr(args, "command_requirements", None)
+    if not isinstance(requirements, CommandRequirements):
+        raise TypeError("CLI command readiness requirements are missing")
+    if requirements != NO_READINESS:
+        scope = getattr(args, "scope", None)
+        if not isinstance(scope, NuSelfScope):
+            raise TypeError("CLI scope was not resolved before readiness")
+        readiness_failure = inspect_command_readiness(
+            scope,
+            requirements,
+            message=getattr(args, "message", None),
+        )
+        if readiness_failure is not None:
+            print(readiness_failure.render(), file=sys.stderr)
+            return readiness_failure.exit_code
     result = cast(object, registry.dispatch(handler_key, args))
     if isinstance(result, bool) or not isinstance(result, int):
         raise TypeError("CLI handler must return an integer exit status")

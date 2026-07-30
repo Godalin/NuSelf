@@ -80,7 +80,7 @@ def send_daemon_chat_interactive(
             )
             print(error, file=sys.stderr)
             return InteractiveChatResult(
-                code=1,
+                code=4 if exc.retryable else 1,
                 retryable=exc.retryable,
                 error=error,
                 failure_phase=exc.phase,

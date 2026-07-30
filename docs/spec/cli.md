@@ -124,15 +124,36 @@ SQL, raw table mutation, and validation bypass flags are not supported.
 
 ## REPL Conventions
 
+### Command Readiness
+
+Every executable parser handler declares one sealed readiness requirement.
+Requirements independently describe initialized authority, usable model, and
+daemon state. Parser construction fails if a bound executable handler lacks a
+requirement.
+
+Readiness inspection is read-only: it must not create or chmod directories,
+initialize SQLite, start a daemon, repair configuration, or write operational
+state. `--help`, `--version`, `init`, layout migration, path/config/health/log
+diagnostics, daemon status/list/stop, and external pack inspection remain
+available without an initialized database. Domain data commands require an
+initialized authority. Only operations whose primary result needs an agent
+require a usable model.
+
+The default entrypoint performs readiness inspection before daemon status
+transition or REPL construction. A blocking issue renders its selected
+authority, one concrete next command, and the stable failure exit status, then
+returns immediately.
+
 ### Interactive Attention Notices
 
 Interactive chat projects important hidden runtime conditions into concise
 notices. This projection is distinct from both the external notification
 outbox and the chronological activity log:
 
-- startup reports an unusable model configuration for the selected authority,
-  an explicit user/workspace authority mismatch, recent persisted-record
-  decode failures, and recent daemon reply-delivery failures;
+- public CLI startup rejects an unusable model configuration before entering
+  the REPL. Embedded interactive loops may still project that condition;
+  startup also reports an explicit user/workspace authority mismatch, recent
+  persisted-record decode failures, and recent daemon reply-delivery failures;
 - turn activity groups persisted-record decode failures into one notice per
   component instead of printing one warning per record;
 - notices contain only safe metadata, state the user-visible consequence, and
@@ -200,6 +221,12 @@ interactive input state.
 ### Command Prefix
 
 All interactive commands start with `:`.
+
+`:retry` is available only after a retryable chat failure. It resends the
+previous message with the same thread and `turn_id`; it never manufactures a
+second logical user turn. A successful turn, a non-retryable failure, a thread
+change, or a new user message clears the retry offer. The prompt states when
+the previous request may already have completed.
 
 Top-level REPL command names, aliases, one-line descriptions, and detailed help
 lines have one authoritative registry in `nuself.cli.repl.registry`. Command

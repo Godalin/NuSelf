@@ -34,6 +34,41 @@ must not use a formatting failure as a new application failure.
 | Background | curator, reflection, notification loop failure | No immediate chat retry | Log error and keep the owning loop/process alive when possible |
 | Fatal process | daemon cannot bind socket, corrupted runtime path permissions | No | Exit current command with non-zero status |
 
+## User-Facing Failure Disposition
+
+Exception inheritance does not decide terminal behavior. CLI boundaries map
+known conditions to one typed disposition with orthogonal kind, retry policy,
+session policy, action, and exit status.
+
+Kinds are `setup_required`, `invalid_input`, `temporary_unavailable`,
+`operation_failed`, `corrupt_state`, and `internal_error`. Retry policy is
+`never`, `user`, `automatic_once`, or `scheduled`. Session policy is
+`exit_before_start`, `end_session`, `return_to_prompt`, or
+`continue_degraded`.
+
+Stable CLI exit statuses are:
+
+| Status | Meaning |
+|---|---|
+| `0` | success |
+| `1` | ordinary operation failure or internal error |
+| `2` | command syntax or user input error |
+| `3` | initialization/configuration prerequisite missing |
+| `4` | temporary unavailability; a later retry is appropriate |
+| `5` | corrupt or unsafe authority state |
+
+One-shot commands always terminate after rendering their disposition.
+Interactive transport failures keep the REPL alive. A retryable result states
+whether the request may already have completed and retains the original
+logical turn identity for an explicit safe retry. Missing initialization,
+invalid configuration, and missing required model capability are startup
+preconditions: an entrypoint must report the concrete action and exit before
+starting a daemon or entering the REPL.
+
+Disposition messages are safe projections, not raw exception strings. They may
+include a selected managed path and a literal recovery command, but never
+credentials, record payloads, or daemon process-log content.
+
 ## Exception Chain Contract
 
 - Internal code may wrap exceptions with subsystem context, for example `conversation graph node 'initial_response' failed while handling thread 'default'`.

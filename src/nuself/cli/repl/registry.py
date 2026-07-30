@@ -51,6 +51,10 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ),
     ReplCommand("help", help_lines=("  :help      show this help",)),
     ReplCommand(
+        "retry",
+        help_lines=("  :retry     safely retry the last retryable chat turn",),
+    ),
+    ReplCommand(
         "dev",
         help_lines=(
             "  :dev status                   show daemon and thread status",

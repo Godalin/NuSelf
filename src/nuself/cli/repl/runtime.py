@@ -132,6 +132,7 @@ def run_interactive_loop(
             if message == "":
                 continue
             if message.startswith(":"):
+                previous_thread_id = current_thread_id
                 result, current_thread_id = callbacks.handle_command(
                     message,
                     project_root,
@@ -141,8 +142,32 @@ def run_interactive_loop(
                 session.start_index_for(
                     project_root, current_thread_id
                 )
+                if current_thread_id != previous_thread_id:
+                    session.clear_retry()
                 if result == "exit":
                     return 0
+                if result == "retry":
+                    offer = session.retry_offer
+                    if offer is None:
+                        raise RuntimeError(
+                            "interactive retry was requested without an offer"
+                        )
+                    try:
+                        callbacks.send_turn(
+                            send_message,
+                            project_root,
+                            offer.thread_id,
+                            offer.message,
+                            session,
+                        )
+                    except KeyboardInterrupt:
+                        session.retry_requested = False
+                        print("\nInterrupted.")
+                    callbacks.show_session_header(
+                        project_root,
+                        current_thread_id,
+                    )
+                    continue
                 if result == "redraw_header":
                     callbacks.show_session_header(
                         project_root,

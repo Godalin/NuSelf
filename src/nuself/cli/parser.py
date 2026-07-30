@@ -98,6 +98,12 @@ from nuself.cli.commands.trace import (
     handle_trace_show,
 )
 from nuself.cli.handlers import CliHandler, CliHandlerBindings
+from nuself.cli.readiness import (
+    INITIALIZED_AUTHORITY,
+    INTERACTIVE_MODEL_READY,
+    MODEL_READY,
+    NO_READINESS,
+)
 from nuself.cli.repl.commands import handle_reason_watch
 from nuself.logs import LOG_COMPONENTS
 from nuself.trace.domain import TRACE_KINDS
@@ -120,7 +126,7 @@ def _add_log_arguments(
     parser.add_argument("--follow", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--no-color", action="store_true")
-    bindings.bind(parser, handle_logs)
+    bindings.bind(parser, handle_logs, requirements=NO_READINESS)
 
 
 def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
@@ -143,7 +149,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         help="Use PATH/.nuself as an isolated workspace authority.",
     )
     parser.add_argument("--message", "-m", default=None)
-    bind_handler(parser, handlers.default_entrypoint)
+    bind_handler(
+        parser,
+        handlers.default_entrypoint,
+        requirements=INTERACTIVE_MODEL_READY,
+    )
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
 
     bind_handler(
@@ -152,6 +162,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
             help="Initialize the selected NuSelf authority.",
         ),
         handle_init,
+        requirements=NO_READINESS,
     )
     migrate_layout_parser = subparsers.add_parser(
         "migrate-layout",
@@ -184,7 +195,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         metavar="PATH",
         help="Migrate to PATH/.nuself.",
     )
-    bind_handler(migrate_layout_parser, handle_migrate_layout)
+    bind_handler(
+        migrate_layout_parser,
+        handle_migrate_layout,
+        requirements=NO_READINESS,
+    )
 
     data_parser = subparsers.add_parser(
         "data",
@@ -251,18 +266,22 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     bind_handler(
         daemon_subparsers.add_parser("start", help="Start the background daemon."),
         handle_daemon_start,
+        requirements=MODEL_READY,
     )
     bind_handler(
         daemon_subparsers.add_parser("stop", help="Stop the background daemon."),
         handle_daemon_stop,
+        requirements=NO_READINESS,
     )
     bind_handler(
         daemon_subparsers.add_parser("restart", help="Restart the background daemon."),
         handle_daemon_restart,
+        requirements=MODEL_READY,
     )
     bind_handler(
         daemon_subparsers.add_parser("status", help="Show daemon status."),
         handle_daemon_status,
+        requirements=NO_READINESS,
     )
     bind_handler(
         daemon_subparsers.add_parser("health", help="Show background worker health."),
@@ -271,6 +290,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     bind_handler(
         daemon_subparsers.add_parser("list", help="List daemon status in table form."),
         handle_daemon_list,
+        requirements=NO_READINESS,
     )
     daemon_logs_parser = daemon_subparsers.add_parser("logs", help="Show daemon logs.")
     _add_log_arguments(daemon_logs_parser, bindings)
@@ -278,7 +298,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         "attach", help="Attach chat to the running daemon."
     )
     daemon_attach_parser.add_argument("--message", "-m", default=None)
-    bind_handler(daemon_attach_parser, handlers.attach)
+    bind_handler(
+        daemon_attach_parser,
+        handlers.attach,
+        requirements=INTERACTIVE_MODEL_READY,
+    )
 
     chat_parser = subparsers.add_parser(
         "chat",
@@ -287,7 +311,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     )
     chat_parser.add_argument("--message", "-m", default=None)
     chat_parser.add_argument("--require-daemon", action="store_true")
-    bind_handler(chat_parser, handlers.chat)
+    bind_handler(
+        chat_parser,
+        handlers.chat,
+        requirements=INTERACTIVE_MODEL_READY,
+    )
 
     attach_parser = subparsers.add_parser(
         "attach",
@@ -295,7 +323,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         description="Attach to a running daemon chat session.",
     )
     attach_parser.add_argument("--message", "-m", default=None)
-    bind_handler(attach_parser, handlers.attach)
+    bind_handler(
+        attach_parser,
+        handlers.attach,
+        requirements=INTERACTIVE_MODEL_READY,
+    )
 
     add_memory_parser(subparsers, bindings)
 
@@ -329,7 +361,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     thread_open_parser.add_argument("--message", "-m", default=None)
     thread_open_parser.add_argument("--create", action="store_true")
     thread_open_parser.add_argument("--deep-link", default=None)
-    bind_handler(thread_open_parser, handlers.open_thread)
+    bind_handler(
+        thread_open_parser,
+        handlers.open_thread,
+        requirements=INTERACTIVE_MODEL_READY,
+    )
     thread_rename_parser = thread_subparsers.add_parser(
         "rename", help="Rename a conversation thread."
     )
@@ -530,7 +566,15 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         )
         p.add_argument("thread_id")
         p.set_defaults(action=action_name)
-        bind_handler(p, handle_reason_thread_action)
+        bind_handler(
+            p,
+            handle_reason_thread_action,
+            requirements=(
+                MODEL_READY
+                if action_name == "advance"
+                else INITIALIZED_AUTHORITY
+            ),
+        )
     reason_delete_parser = reason_subparsers.add_parser(
         "delete", help="Delete one reasoning thread."
     )
@@ -675,10 +719,12 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     bind_handler(
         dev_subparsers.add_parser("health", help="Run local health checks."),
         handle_health,
+        requirements=NO_READINESS,
     )
     bind_handler(
         dev_subparsers.add_parser("config", help="Show effective configuration."),
         handle_dev_config,
+        requirements=NO_READINESS,
     )
     bind_handler(
         dev_subparsers.add_parser(
@@ -686,6 +732,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
             help="Show selected scope and resolved runtime paths.",
         ),
         handle_dev_paths,
+        requirements=NO_READINESS,
     )
     dev_logs_parser = dev_subparsers.add_parser("logs", help="Show structured logs.")
     _add_log_arguments(dev_logs_parser, bindings)
@@ -694,7 +741,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     dev_eval_parser.add_argument(
         "--component", choices=["conversations", "notifications", "all"], default="all"
     )
-    bind_handler(dev_eval_parser, handle_eval)
+    bind_handler(
+        dev_eval_parser,
+        handle_eval,
+        requirements=NO_READINESS,
+    )
 
     bind_handler(
         dev_subparsers.add_parser("db-schema", help="Show SQLite database schema."),
@@ -730,12 +781,17 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     pack_import_parser.add_argument(
         "path", type=Path, help="Path to .sqlite file to import"
     )
-    bind_handler(pack_import_parser, handle_pack_import)
+    bind_handler(
+        pack_import_parser,
+        handle_pack_import,
+        requirements=NO_READINESS,
+    )
     bind_handler(
         pack_subparsers.add_parser(
             "list", help="List imported and exported thought packs."
         ),
         handle_pack_list,
+        requirements=NO_READINESS,
     )
     pack_inspect_parser = pack_subparsers.add_parser(
         "inspect", help="Show summary of a thought pack."
@@ -747,7 +803,11 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         default=None,
         help="Pack name (resolves to imports/, then exports/, then literal path; default: main database)",
     )
-    bind_handler(pack_inspect_parser, handle_pack_inspect)
+    bind_handler(
+        pack_inspect_parser,
+        handle_pack_inspect,
+        requirements=NO_READINESS,
+    )
 
     bindings.seal(parser)
     return parser

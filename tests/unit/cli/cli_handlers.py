@@ -10,13 +10,18 @@ from nuself.cli.handlers import (
     CliHandlerBindings,
     dispatch_cli,
 )
+from nuself.cli.readiness import NO_READINESS
 from nuself.runtime.handlers import DuplicateHandlerError
 
 
 def test_bind_handler_dispatches_typed_exit_status() -> None:
     parser = argparse.ArgumentParser(prog="test")
     bindings = CliHandlerBindings()
-    bindings.bind(parser, lambda _args: 7)
+    bindings.bind(
+        parser,
+        lambda _args: 7,
+        requirements=NO_READINESS,
+    )
     bindings.seal(parser)
 
     assert dispatch_cli(parser.parse_args([]), parser) == 7
@@ -52,7 +57,11 @@ def test_dispatch_rejects_non_integer_exit_status() -> None:
 
     invalid_handler = cast(CliHandler, return_boolean)
     bindings = CliHandlerBindings()
-    bindings.bind(parser, invalid_handler)
+    bindings.bind(
+        parser,
+        invalid_handler,
+        requirements=NO_READINESS,
+    )
     bindings.seal(parser)
 
     with pytest.raises(TypeError, match="integer exit status"):

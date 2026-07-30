@@ -59,6 +59,21 @@ def test_dispatcher_registry_is_complete_and_sealed() -> None:
     assert set(dispatcher.registered_commands) == set(command_names())
 
 
+def test_retry_requires_an_available_retryable_turn(
+    tmp_path: Path,
+    capsys: CaptureFixture[str],
+) -> None:
+    action = ReplCommandDispatcher().handle(
+        ":retry",
+        tmp_path,
+        "default",
+        _session(),
+    )
+
+    assert action == ("", "default")
+    assert "No retryable chat turn" in capsys.readouterr().out
+
+
 def test_dispatcher_uses_shared_catalog_coverage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -107,6 +107,7 @@ def _build_repl_command_registry() -> ReplCommandRegistry:
         ("whoami", _handle_whoami),
         ("inbox", _handle_inbox),
         ("help", _handle_help),
+        ("retry", _handle_retry),
         ("dev", _handle_dev),
         ("export", _handle_export),
         ("mem", _handle_memory),
@@ -156,6 +157,21 @@ def _handle_quit(
         context.session,
     )
     return ("exit", context.current_thread_id)
+
+
+def _handle_retry(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    rejected = _reject_nonempty_body(body, context)
+    if rejected is not None:
+        return rejected
+    if context.session.retry_offer is None:
+        print()
+        print("No retryable chat turn is available.")
+        return ("", context.current_thread_id)
+    context.session.retry_requested = True
+    return ("retry", context.current_thread_id)
 
 
 def _handle_history(

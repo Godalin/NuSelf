@@ -21,16 +21,20 @@ None.
 
 ## Completion Evidence
 
-The interactive-attention goal is complete:
+The v0.3.1 readiness and failure-disposition goal is complete:
 
-- the governing CLI specification defines startup and per-turn notice
-  selection, grouping, safety, and non-interference;
-- focused notice, activity, and lifecycle tests pass;
+- every executable CLI parser declares a typed readiness requirement;
+- missing initialization and model configuration fail before storage, daemon,
+  or REPL side effects with actionable scoped commands and exit status `3`;
+- temporary daemon/transport failures use exit status `4`, while interactive
+  retry retains the original message, thread, and `turn_id`;
 - `uv run --locked pyright` completed with 0 errors and 0 warnings;
-- `uv run --locked pytest -q` completed with 2394 passing tests;
+- `uv run --locked pytest -q` completed with 2402 passing tests;
 - `uv build` produced the v0.3.1 sdist and wheel;
-- the wheel installed into a clean Python 3.14 environment, imported
-  `nuself.cli` and `nuself.cli.repl.notices`, and reported `nuself 0.3.1`.
+- the wheel installed into a clean Python 3.14 environment, imported the new
+  readiness module, reported `nuself 0.3.1`, and passed real missing-init and
+  missing-model startup smoke tests without creating state or starting daemon
+  runtime files.
 
 The final pushed commit remains subject to the normal six-platform GitHub CI
 gate; a failure reopens the goal.

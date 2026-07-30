@@ -208,7 +208,7 @@ def test_chat_require_daemon_rejects_local_fallback(
         )
     )
 
-    assert result == 1
+    assert result == 3
     assert callbacks.calls == []
     assert "NuSelf daemon is not ready: stopped." in capsys.readouterr().err
 
@@ -239,7 +239,7 @@ def test_chat_owned_unready_never_falls_back_to_one_shot(
         )
     )
 
-    assert result == 1
+    assert result == 4
     assert callbacks.calls == []
     assert "not ready: owned_unready" in capsys.readouterr().err
 

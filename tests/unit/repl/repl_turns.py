@@ -165,3 +165,58 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     assert result == 0
     assert attempts == 2
     assert read_log_events(project_root=tmp_path, component="chat") == []
+
+
+def test_failed_retry_offer_reuses_original_turn_id(
+    tmp_path: Path,
+) -> None:
+    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    turn_ids: list[str | None] = []
+
+    def fail(
+        _message: str,
+        _thread_id: str,
+        turn_id: str | None,
+    ) -> InteractiveChatResult:
+        turn_ids.append(turn_id)
+        return InteractiveChatResult(
+            code=1,
+            retryable=True,
+            error="temporary transport failure",
+            request_may_have_completed=True,
+        )
+
+    first = send_interactive_chat_turn(
+        fail,
+        tmp_path,
+        "default",
+        "hello",
+        session,
+        daemon_activity=False,
+        max_attempts=1,
+        poll_interval_seconds=0,
+        read_activity_events=_read_no_activity,
+        print_activity_events=_print_no_activity,
+        print_reply=lambda _reply: None,
+    )
+    assert first == 1
+    assert session.retry_offer is not None
+    session.retry_requested = True
+
+    second = send_interactive_chat_turn(
+        fail,
+        tmp_path,
+        "default",
+        "hello",
+        session,
+        daemon_activity=False,
+        max_attempts=1,
+        poll_interval_seconds=0,
+        read_activity_events=_read_no_activity,
+        print_activity_events=_print_no_activity,
+        print_reply=lambda _reply: None,
+    )
+
+    assert second == 1
+    assert turn_ids[0] == turn_ids[1]

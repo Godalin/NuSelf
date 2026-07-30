@@ -6,6 +6,15 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- CLI startup now performs side-effect-free readiness checks before opening
+  domain storage, starting a daemon, or entering interactive chat. Commands
+  that need an initialized authority exit with status `3` and an exact scoped
+  `nuself init` command; interactive entrypoints also reject missing model
+  configuration before they can appear to hang. Temporary daemon and transport
+  failures use status `4`.
+- Interactive chat now retains a failed retryable message with its original
+  logical `turn_id` and exposes `:retry`, allowing a safe explicit retry even
+  when the previous request may already have completed.
 - Interactive chat now surfaces a grouped `Attention:` block for an unusable
   model configuration, an explicitly unselected workspace authority, unreadable
   persisted records, and daemon reply-delivery failures. Turn-time record

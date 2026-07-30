@@ -52,6 +52,11 @@ uv run nuself --version
 uv run nuself --help
 ```
 
+需要个人状态的命令必须先显式执行 `nuself init`。如果所选 authority
+或模型配置尚未就绪，NuSelf 会打印明确的下一步命令并退出，不会启动 daemon
+或停留在不可用的交互提示符中。临时聊天传输失败不会关闭已有 REPL；可以用
+`:retry` 安全重试同一个逻辑 turn。
+
 ### 2. 配置模型
 
 初始化默认用户 authority，并复制示例配置：

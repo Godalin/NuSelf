@@ -15,11 +15,17 @@ The selected scope determines the database:
 - local workspace: `./.nuself/nuself.sqlite`;
 - explicit workspace: `<workspace>/.nuself/nuself.sqlite`.
 
-`nuself init` creates an empty, valid database. Normal startup opens a valid
-database or atomically initializes a missing database at the canonical path.
+`nuself init` creates an empty, valid database. CLI business entrypoints only
+open an existing valid database; readiness rejects a missing database before
+repository construction.
 An existing empty file, an unrelated SQLite database, an unknown schema, or a
 symlinked managed path fails closed. Runtime never falls back to legacy JSON
 directories.
+
+Canonical database creation and schema publication are explicit CLI authority
+lifecycle operations owned by `nuself init` and approved migration/import
+publication paths. A missing database is a typed CLI setup prerequisite, not
+an invitation for a business command to create storage.
 
 `nuself migrate-layout` is the only legacy layout migration command. Its source
 must contain a valid `nuself.sqlite`; it does not import file-backed

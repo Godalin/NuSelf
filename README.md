@@ -60,6 +60,12 @@ uv run nuself --version
 uv run nuself --help
 ```
 
+Commands that need personal state require an explicit `nuself init`. If the
+selected authority or model configuration is not ready, NuSelf prints the
+exact next command and exits instead of starting a daemon or waiting at an
+unusable prompt. Temporary chat transport failures keep an existing REPL open;
+use `:retry` to retry the same logical turn safely.
+
 ### 2. Configure a model
 
 Initialize the default user authority and copy the example configuration:
