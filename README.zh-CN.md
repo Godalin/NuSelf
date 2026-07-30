@@ -571,7 +571,8 @@ uv run nuself inbox notify show -i <index>
 uv run nuself inbox notify send <entry-id>
 uv run nuself inbox notify dismiss <entry-id>
 uv run nuself inbox notify dismiss -i <index>
-uv run nuself inbox notify clear
+uv run nuself inbox notify clear                         # 清理全部 terminal entry
+uv run nuself inbox notify clear --status failed         # failed/uncertain plan
 uv run nuself inbox notify watch          # 轮询新条目
 ```
 

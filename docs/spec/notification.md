@@ -47,7 +47,7 @@ add() ──► pending
 pending ──► sent      [finalize_delivery] triggered by: DeliveryLoop, CLI notify send
 pending ──► failed    [finalize_delivery] triggered by: DeliveryLoop, CLI notify send
 any     ──► dismissed [dismiss]        triggered by: CLI notify dismiss
-any     ──► deleted   [clear(status)]  triggered by: CLI notify clear
+terminal ─► deleted   [clear(selection)] triggered by: CLI notify clear
 ```
 
 There is no legacy whole-entry `mark_sent` or `mark_failed` transition.
@@ -239,9 +239,16 @@ Thread IDs are encoded as a single path segment. Query values use standard URL e
 | `notify send <id>` | `0` on success, `1` on failure | Uses the canonical configured adapter plan |
 | `notify dismiss <id>` | `0` if found, `1` if missing | `Dismissed: {id}` |
 | `notify watch [--interval]` | `0` (Ctrl+C) | Polls every N seconds (default `5`, min `1`) |
-| `notify clear` | `0` | Removes all `dismissed` entries |
+| `notify clear [--status sent\|failed\|dismissed\|all-terminal]` | `0` | Removes the selected terminal entries; default is `all-terminal` |
 | `notify stats` | `0` | Count table: Total, Pending, Sent, Failed, Dismissed |
 
 Plain-text `notify list` and `notify show` output follows the shared CLI record renderer: one header line with `key=value` metadata, then body text on subsequent indented lines. `notify show` must not use a separate colon-aligned field table.
 
 REPL `:notify` lists **only pending** entries. `:notify list` lists **all** entries.
+
+Notification cleanup never deletes `pending` entries. Global `failed` includes
+entries whose adapter plan ended in `failed` or `uncertain`, so
+`--status failed` is the explicit cleanup path for both known failures and
+crash-after-send ambiguity. `all-terminal` removes `sent`, `failed`, and
+`dismissed` entries under the same per-entry serialization used by delivery
+and dismissal.

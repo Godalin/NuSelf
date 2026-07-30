@@ -31,6 +31,13 @@ from nuself.storage import (
 )
 
 OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
+TerminalOutboxStatus = Literal["sent", "failed", "dismissed"]
+NotificationClearStatus = Literal[
+    "sent",
+    "failed",
+    "dismissed",
+    "all-terminal",
+]
 AdapterDeliveryStatus = Literal[
     "pending",
     "delivering",
@@ -394,17 +401,23 @@ class NotificationOutbox:
                 self._write_entry(updated)
                 return updated
 
-    def clear(self, status: OutboxStatus) -> int:
+    def clear(self, selection: NotificationClearStatus) -> int:
+        statuses: tuple[TerminalOutboxStatus, ...] = (
+            ("sent", "failed", "dismissed")
+            if selection == "all-terminal"
+            else (selection,)
+        )
         removed = 0
-        for entry in self.list(status=status):
-            with self.lock_entry(entry.id):
-                try:
-                    current = self.get(entry.id)
-                except OutboxEntryNotFound:
-                    continue
-                if current.status == status:
-                    self._col.delete(entry.id)
-                    removed += 1
+        for status in statuses:
+            for entry in self.list(status=status):
+                with self.lock_entry(entry.id):
+                    try:
+                        current = self.get(entry.id)
+                    except OutboxEntryNotFound:
+                        continue
+                    if current.status == status:
+                        self._col.delete(entry.id)
+                        removed += 1
         return removed
 
     def clear_dismissed_older_than(self, days: int) -> int:

@@ -2051,7 +2051,7 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
             "send",
             "Send one pending notification now.",
             "clear",
-            "Clear sent, failed, and dismissed notifications.",
+            "Clear terminal notifications.",
         ],
         ("reason",): [
             "start",
@@ -4502,24 +4502,108 @@ def test_interactive_sources_lists_documents(
     assert "Notes" in captured.out
 
 
-def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+def test_notify_clear_defaults_to_all_terminal(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    from nuself.notification import (
+        NotificationOutbox,
+        OutboxEntry,
+        OutboxStatus,
+    )
+
+    outbox = NotificationOutbox(tmp_path)
+    statuses: tuple[tuple[str, OutboxStatus], ...] = (
+        ("pending", "pending"),
+        ("sent", "sent"),
+        ("failed", "failed"),
+        ("dismissed", "dismissed"),
+    )
+    for entry_id, status in statuses:
+        outbox.add(
+            OutboxEntry(
+                id=entry_id,
+                title=entry_id,
+                body=entry_id,
+                status=status,
+                idempotency_key=entry_id,
+            )
+        )
+
+    result = main(["--project-root", str(tmp_path), "inbox", "notify", "clear"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Cleared 3 all-terminal" in captured.out
+    remaining = NotificationOutbox(tmp_path).list()
+    assert [entry.id for entry in remaining] == ["pending"]
+
+
+def test_notify_clear_selects_failed_including_uncertain_plan(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    from nuself.notification import (
+        AdapterDelivery,
+        NotificationOutbox,
+        OutboxEntry,
+        OutboxStatus,
+    )
 
     outbox = NotificationOutbox(tmp_path)
     outbox.add(
         OutboxEntry(
-            id="c-001", title="A", body="a", status="pending", idempotency_key="k1"
+            id="uncertain",
+            title="Uncertain",
+            body="External effect is ambiguous.",
+            status="failed",
+            idempotency_key="uncertain",
+            required_adapters=("email",),
+            deliveries={
+                "email": AdapterDelivery(
+                    status="uncertain",
+                    attempts=1,
+                )
+            },
         )
     )
-    outbox.dismiss("c-001")
+    statuses: tuple[tuple[str, OutboxStatus], ...] = (
+        ("sent", "sent"),
+        ("dismissed", "dismissed"),
+        ("pending", "pending"),
+    )
+    for entry_id, status in statuses:
+        outbox.add(
+            OutboxEntry(
+                id=entry_id,
+                title=entry_id,
+                body=entry_id,
+                status=status,
+                idempotency_key=entry_id,
+            )
+        )
 
-    result = main(["--project-root", str(tmp_path), "inbox", "notify", "clear"])
+    result = main(
+        [
+            "--project-root",
+            str(tmp_path),
+            "inbox",
+            "notify",
+            "clear",
+            "--status",
+            "failed",
+        ]
+    )
     captured = capsys.readouterr()
+
     assert result == 0
-    assert "Cleared 1 dismissed" in captured.out
-    assert len(
-        NotificationOutbox(tmp_path).list(status="dismissed")
-    ) == 0
+    assert "Cleared 1 failed" in captured.out
+    remaining = NotificationOutbox(tmp_path).list()
+    assert {entry.id for entry in remaining} == {
+        "sent",
+        "dismissed",
+        "pending",
+    }
 
 
 def test_health_command_reports_missing_private_root(

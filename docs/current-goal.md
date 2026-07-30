@@ -64,5 +64,9 @@ migration, validation, and notification-cleanup findings.
   paired SMTP credentials, whitespace, and header controls. Broad
   config/notification/daemon/CLI verification: 810 passed; locked Pyright
   reported 0 errors and 0 warnings.
-- Pending: notification cleanup requires implementation and direct regression
-  evidence, followed by the complete release gate.
+- Notification cleanup now accepts `sent`, `failed`, `dismissed`, or
+  `all-terminal`, defaults to all terminal entries, and never deletes pending
+  work. A failed-selection regression covers a persisted `uncertain` adapter
+  plan. Focused notification/CLI verification: 393 passed; locked Pyright
+  reported 0 errors and 0 warnings.
+- Pending: the complete release gate must prove the combined changes.

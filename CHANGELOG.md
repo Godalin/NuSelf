@@ -21,6 +21,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   matrix proves behavior-level parity with the published JSON Schema,
   including email defaults, paired credentials, non-blank enabled fields, and
   header-control rejection.
+- `inbox notify clear` now defaults to all terminal notifications and accepts
+  `--status sent|failed|dismissed|all-terminal`; pending entries are never
+  cleared, while failed selection includes uncertain adapter plans.
 - Shared SQLite backends now isolate reads from uncommitted writes, immediately
   observe dynamic columns added by other processes, and reject mismatched
   record IDs instead of silently rewriting them.

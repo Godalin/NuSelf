@@ -351,12 +351,17 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         "--interval", type=int, default=5, help="Poll interval in seconds"
     )
     bind_handler(notify_watch_parser, handle_notify_watch)
-    bind_handler(
-        notify_subparsers.add_parser(
-            "clear", help="Clear sent, failed, and dismissed notifications."
-        ),
-        handle_notify_clear,
+    notify_clear_parser = notify_subparsers.add_parser(
+        "clear",
+        help="Clear terminal notifications.",
     )
+    notify_clear_parser.add_argument(
+        "--status",
+        choices=["sent", "failed", "dismissed", "all-terminal"],
+        default="all-terminal",
+        help="Terminal status to clear (default: all-terminal)",
+    )
+    bind_handler(notify_clear_parser, handle_notify_clear)
 
     reason_parser = subparsers.add_parser(
         "reason",

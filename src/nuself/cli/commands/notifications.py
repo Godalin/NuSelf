@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from typing import cast
 
 from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.notification import (
     NotificationOutbox,
+    NotificationClearStatus,
     OutboxEntryNotFound,
     deliver_entry_once,
 )
@@ -124,6 +126,7 @@ def handle_notify_dismiss(args: argparse.Namespace) -> int:
 
 
 def handle_notify_clear(args: argparse.Namespace) -> int:
-    count = NotificationOutbox(args.project_root).clear("dismissed")
-    print(f"Cleared {count} dismissed notification(s).")
+    selection = cast(NotificationClearStatus, args.status)
+    count = NotificationOutbox(args.project_root).clear(selection)
+    print(f"Cleared {count} {selection} notification(s).")
     return 0
