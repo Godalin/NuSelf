@@ -25,7 +25,9 @@ def _durable_repo(tmp_path: Path) -> PersonaPromptRepository:
 
 
 def _workspace_repo(tmp_path: Path) -> PersonaPromptRepository:
-    store = SqliteStore(tmp_path / "workspace.sqlite")
+    database = tmp_path / "workspace.sqlite"
+    _create_sqlite_backend(db_path=database).close()
+    store = SqliteStore(database)
     workspace = ScopedWorkspace(store, ("reason-1",))
     return PersonaPromptRepository(
         WorkspaceCollection(workspace, namespace="persona_prompts"),
@@ -92,7 +94,9 @@ def test_workspace_collection_round_trips_thread_personas(
 def test_workspace_persona_collection_is_isolated_from_other_scratch(
     tmp_path: Path,
 ) -> None:
-    store = SqliteStore(tmp_path / "workspace.sqlite")
+    database = tmp_path / "workspace.sqlite"
+    _create_sqlite_backend(db_path=database).close()
+    store = SqliteStore(database)
     workspace = ScopedWorkspace(store, ("reason-1",))
     workspace.put("note-1", {"text": "private note"}, sub="notes")
     repo = PersonaPromptRepository(

@@ -238,21 +238,22 @@ def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
     assert (tmp_path / "logs" / "reasoning.log").is_file()
 
 
-def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
+def test_start_thread_uses_main_authority_without_workspace_directory(
+    tmp_path: Path,
+) -> None:
     service = _reason_service(project_root=tmp_path)
 
     thread = service.start_thread("Where should scratch state live?")
 
     workspace = service.workspace_paths(thread.id)
     db_path = tmp_path / "nuself.sqlite"
-    assert workspace.root == tmp_path / "workspaces" / "reason" / thread.id
+    assert workspace.root == tmp_path / "exports" / "reason" / thread.id
     assert workspace.database == db_path
-    assert workspace.artifacts.is_dir()
-    assert workspace.notes.is_dir()
-    # nuself.sqlite is created lazily by SqliteStore on first workspace access
+    assert not workspace.root.exists()
     ws = service.workspace(thread.id)
     ws.put("meta", {"key": "value"})
     assert db_path.is_file()
+    assert not (tmp_path / "workspaces").exists()
     conn = sqlite3.connect(str(db_path))
     try:
         tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]

@@ -270,10 +270,10 @@ human-readable CLI output renders them in the current system timezone.
 
 ### Per-Thread Workspace
 
-Each reasoning thread owns an isolated generic private workspace:
+Each reasoning thread owns an isolated namespace in the main authority:
 
 ```
-<authority-root>/workspaces/reason/{thread_id}/
+workspace/reason/{thread_id}
 ```
 
 The workspace is task-local storage for the reasoning process. It follows `workspace.md`. It is not global memory, not trace, and not a shared cross-thread database.
@@ -286,13 +286,16 @@ Rules:
 - Workspace storage must not be used to bypass Memory, Trace, or Source promotion rules.
 - Deleting or archiving a thread must not silently delete its workspace in the first implementation; cleanup should be explicit.
 
-The first workspace storage mechanism is the generic per-owner SQLite database:
+Structured scratch state is stored in the main authority's
+`workspace_entries` table. User-facing output files are separate:
 
 ```
-workspace.sqlite
+<authority-root>/exports/reason/{thread_id}/
 ```
 
-The SQLite database may store arbitrary task-local structured state, including branch records, temporary hypotheses, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
+The namespace may store arbitrary task-local structured state, including
+branch records, temporary hypotheses, local evidence indexes, tool results,
+scratch rankings, intermediate plans, and failed-path records.
 
 Stable data leaves the workspace only through explicit promotion:
 

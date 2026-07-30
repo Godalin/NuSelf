@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 from pathlib import Path
 
 from nuself.agent.tools.memory import build_memory_tools
@@ -76,8 +78,12 @@ def test_subsystem_tool_builders_own_their_registries(
 def test_workspace_tool_builder_owns_workspace_registry(
     tmp_path: Path,
 ) -> None:
+    from nuself.storage import _create_sqlite_backend
+
+    database = tmp_path / "workspace.sqlite"
+    _create_sqlite_backend(db_path=database).close()
     workspace = ScopedWorkspace(
-        SqliteStore(tmp_path / "workspace.sqlite"),
+        SqliteStore(database),
         ("thread",),
     )
 

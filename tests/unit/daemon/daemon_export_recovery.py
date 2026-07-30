@@ -105,7 +105,6 @@ def _job_paths(
 ) -> tuple[Path, Path]:
     job_root = (
         PrivateWorkspaceStore(root, scope="reason").paths(thread_id).artifacts
-        / "export"
         / "jobs"
         / job_id
     )

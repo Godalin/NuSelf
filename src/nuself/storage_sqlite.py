@@ -33,7 +33,6 @@ from nuself.runtime import (
 )
 from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
-    safe_exception_message,
 )
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import (
@@ -42,7 +41,7 @@ from nuself.storage import (
 )
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
-SQLITE_SCHEMA_VERSION = 3
+SQLITE_SCHEMA_VERSION = 4
 _V2_COLLECTION_NAMES = (
     "memory_entries",
     "memory_candidates",
@@ -60,7 +59,11 @@ _V2_COLLECTION_NAMES = (
 
 
 def _json(v: object) -> str:
-    return encode_json_value(v, ensure_ascii=True)
+    return encode_json_value(
+        v,
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
 
 
 def _from_json(value: str) -> object:
@@ -213,16 +216,11 @@ class _Lock(Protocol):
 
 
 class SqliteCollection:
-    """One collection backed by a SQLite table.
-
-    Columns are added dynamically on first ``put()`` for each new key,
-    so the schema adapts to whatever data is stored.
-    """
+    """One logical collection in the shared compact records table."""
 
     def __init__(
         self,
         conn: sqlite3.Connection,
-        table: str,
         lock: _Lock,
         transaction_state: _TransactionState,
         *,
@@ -231,97 +229,49 @@ class SqliteCollection:
         project_root: Path,
     ) -> None:
         self._conn = conn
-        self._table = table
         self._lock = lock
         self._transaction_state = transaction_state
         self._collection_name = collection_name
         self._component: LogComponent = component
         self._project_root = project_root
 
-    def _ensure_columns(self, keys: set[str]) -> None:
-        existing = set(self._columns())
-        new = [k for k in keys if k not in existing and k != "id"]
-        if not new:
-            return
-        for k in new:
-            try:
-                self._conn.execute(
-                    f"ALTER TABLE {_identifier(self._table)} "
-                    f"ADD COLUMN {_identifier(k)} TEXT"
-                )
-            except sqlite3.OperationalError as exc:
-                if (
-                    "duplicate column name"
-                    not in safe_exception_message(exc).lower()
-                    or k not in self._columns()
-                ):
-                    raise
+    @staticmethod
+    def _decode(record_id: object, payload_text: object) -> dict[str, object]:
+        if not isinstance(record_id, str) or not record_id:
+            raise ValueError("stored SQLite row id is invalid")
+        if not isinstance(payload_text, str):
+            raise ValueError("stored SQLite payload is not JSON text")
+        payload = _from_json(payload_text)
+        if not isinstance(payload, dict) or "id" in payload:
+            raise ValueError("stored SQLite payload is invalid")
+        return {"id": record_id, **cast(dict[str, object], payload)}
 
-    def _columns(self) -> tuple[str, ...]:
-        rows = self._conn.execute(
-            f"PRAGMA table_info({_identifier(self._table)})"
-        ).fetchall()
-        return tuple(row[1] for row in rows)
-
-    def _row_to_dict(self, cols: tuple[str, ...], row: tuple[object, ...]) -> dict[str, object]:
-        result: dict[str, object] = {}
-        for i, col in enumerate(cols):
-            val = row[i]
-            if val is None:
-                continue
-            if col == "id":
-                if not isinstance(val, str) or not val:
-                    raise ValueError("stored SQLite row id is invalid")
-                result[col] = val
-            else:
-                if not isinstance(val, str):
-                    raise ValueError(
-                        "stored SQLite dynamic column is not JSON text"
-                    )
-                try:
-                    parsed = _from_json(val)
-                except (ValueError, TypeError) as exc:
-                    raise ValueError(
-                        "stored SQLite dynamic column is invalid JSON"
-                    ) from exc
-                result[col] = parsed
-        return result
-
-    def _decode_list_rows(
-        self,
-        cols: tuple[str, ...],
-        rows: list[tuple[object, ...]],
+    def _decode_rows(
+        self, rows: list[tuple[object, ...]]
     ) -> tuple[dict[str, object], ...]:
         items: list[dict[str, object]] = []
         for row in rows:
             try:
-                item = self._row_to_dict(cols, row)
+                items.append(self._decode(row[0], row[1]))
             except (ValueError, TypeError) as exc:
                 report_corrupt_record(
                     exc,
                     component=self._component,
                     collection=self._collection_name,
-                    record_id=_row_record_id(cols, row),
+                    record_id=row[0] if row and isinstance(row[0], str) else "<unknown>",
                     project_root=self._project_root,
                 )
-                continue
-            if item:
-                items.append(item)
         return tuple(items)
 
     def get(self, key: str) -> dict[str, object] | None:
         self._lock.acquire()
         try:
-            cols = self._columns()
-            col_list = ", ".join(_identifier(c) for c in cols)
             row = self._conn.execute(
-                f"SELECT {col_list} FROM {_identifier(self._table)} "
-                "WHERE id = ?",
-                (key,),
+                "SELECT id, payload FROM records "
+                "WHERE collection = ? AND id = ?",
+                (self._collection_name, key),
             ).fetchone()
-            if row is None:
-                return None
-            return self._row_to_dict(cols, row)
+            return None if row is None else self._decode(row[0], row[1])
         finally:
             self._lock.release()
 
@@ -330,45 +280,22 @@ class SqliteCollection:
         if value_id is not None and (
             not isinstance(value_id, str) or value_id != key
         ):
-            raise ValueError(
-                "storage record id must be a string matching its key"
-            )
+            raise ValueError("storage record id must be a string matching its key")
         validated = cast(
-            dict[str, object],
-            thaw_json_value(freeze_json_value(value)),
+            dict[str, object], thaw_json_value(freeze_json_value(value))
         )
-        encoded = {
-            field: _json(field_value)
+        payload = {
+            field: field_value
             for field, field_value in validated.items()
             if field != "id"
         }
         self._lock.acquire()
         try:
-            self._ensure_columns(set(validated))
-            cols = self._columns()
-            # put() replaces the complete wire object. Include every known
-            # column so fields omitted by the replacement become SQL NULL.
-            write_cols = ["id"] + [c for c in cols if c != "id"]
-            placeholders = ", ".join("?" for _ in write_cols)
-            cols_sql = ", ".join(_identifier(c) for c in write_cols)
-            vals = [key] + [
-                encoded[c] if c in encoded else None
-                for c in write_cols
-                if c != "id"
-            ]
-            update_cols = [c for c in write_cols if c != "id"]
-            if update_cols:
-                updates = ", ".join(
-                    f"{_identifier(c)} = excluded.{_identifier(c)}"
-                    for c in update_cols
-                )
-                conflict = f" DO UPDATE SET {updates}"
-            else:
-                conflict = " DO NOTHING"
             self._conn.execute(
-                f"INSERT INTO {_identifier(self._table)} ({cols_sql}) "
-                f"VALUES ({placeholders}) ON CONFLICT(id){conflict}",
-                vals,
+                "INSERT INTO records(collection, id, payload) VALUES (?, ?, ?) "
+                "ON CONFLICT(collection, id) DO UPDATE "
+                "SET payload = excluded.payload",
+                (self._collection_name, key, _json(payload)),
             )
             self._commit_if_standalone()
         finally:
@@ -378,7 +305,8 @@ class SqliteCollection:
         self._lock.acquire()
         try:
             self._conn.execute(
-                f"DELETE FROM {_identifier(self._table)} WHERE id = ?", (key,)
+                "DELETE FROM records WHERE collection = ? AND id = ?",
+                (self._collection_name, key),
             )
             self._commit_if_standalone()
         finally:
@@ -396,48 +324,20 @@ class SqliteCollection:
             self._lock.release()
 
     def _list_locked(self) -> tuple[dict[str, object], ...]:
-        cols = self._columns()
-        col_list = ", ".join(_identifier(c) for c in cols)
         rows = self._conn.execute(
-            f"SELECT {col_list} FROM {_identifier(self._table)}"
+            "SELECT id, payload FROM records WHERE collection = ?",
+            (self._collection_name,),
         ).fetchall()
-        return self._decode_list_rows(cols, rows)
+        return self._decode_rows(rows)
 
     def find(self, **filters: object) -> tuple[dict[str, object], ...]:
         self._lock.acquire()
         try:
-            if not filters:
-                return self._list_locked()
-            cols = self._columns()
-            if len(cols) <= 1:
-                return ()
-            colset = set(cols)
-            # None retains the original Python comparison semantics.
-            if any(expected is None for expected in filters.values()):
-                return tuple(
-                    item
-                    for item in self._list_locked()
-                    if all(
-                        item.get(key) == expected
-                        for key, expected in filters.items()
-                    )
-                )
-            where_parts: list[str] = []
-            params: list[object] = []
-            for key, expected in filters.items():
-                if key not in colset:
-                    return ()
-                where_parts.append(f"{_identifier(key)} = ?")
-                params.append(
-                    expected if key == "id" else _json(expected)
-                )
-            col_list = ", ".join(_identifier(c) for c in cols)
-            sql = (
-                f"SELECT {col_list} FROM {_identifier(self._table)} WHERE "
-                + " AND ".join(where_parts)
+            return tuple(
+                item
+                for item in self._list_locked()
+                if all(item.get(key) == expected for key, expected in filters.items())
             )
-            rows = self._conn.execute(sql, params).fetchall()
-            return self._decode_list_rows(cols, rows)
         finally:
             self._lock.release()
 
@@ -622,12 +522,24 @@ class SqliteStorageBackend:
             )
 
     def _apply_current_schema(self) -> None:
-        for name in COLLECTION_NAMES:
-            table = _collection_table(name)
-            self._conn.execute(
-                f"CREATE TABLE IF NOT EXISTS {_identifier(table)} "
-                "(id TEXT PRIMARY KEY)"
-            )
+        self._conn.execute(
+            "CREATE TABLE records (collection TEXT NOT NULL, id TEXT NOT NULL, "
+            "payload TEXT NOT NULL CHECK(json_valid(payload) AND "
+            "json_type(payload) = 'object'), "
+            "PRIMARY KEY (collection, id)) WITHOUT ROWID"
+        )
+        self._conn.execute(
+            "CREATE INDEX idx_records_collection ON records(collection)"
+        )
+        self._conn.execute(
+            "CREATE TABLE workspace_entries (namespace TEXT NOT NULL, "
+            "key TEXT NOT NULL, value TEXT NOT NULL CHECK(json_valid(value) "
+            "AND json_type(value) = 'object'), created_at TEXT NOT NULL, "
+            "updated_at TEXT NOT NULL, PRIMARY KEY (namespace, key)) WITHOUT ROWID"
+        )
+        self._conn.execute(
+            "CREATE INDEX idx_workspace_entries_ns ON workspace_entries(namespace)"
+        )
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
@@ -684,11 +596,10 @@ class SqliteStorageBackend:
 
     def collection(self, name: str) -> SqliteCollection:
         with self._lock:
-            table = _collection_table(name)
-            _verify_table(self._conn, table, name)
+            if name not in COLLECTION_NAMES:
+                raise ValueError(f"unknown collection: {name!r}")
             return SqliteCollection(
                 self._conn,
-                table,
                 self._lock,
                 self._transaction_state,
                 collection_name=name,
@@ -697,22 +608,13 @@ class SqliteStorageBackend:
             )
 
     def collection_names(self) -> tuple[str, ...]:
-        with self._lock:
-            result: list[str] = []
-            for name in COLLECTION_NAMES:
-                table = _collection_table(name)
-                row = self._conn.execute(
-                    "SELECT 1 FROM sqlite_master "
-                    "WHERE type='table' AND name=?",
-                    (table,),
-                ).fetchone()
-                if row is not None:
-                    result.append(name)
-            return tuple(result)
+        return COLLECTION_NAMES
 
     def table_info(self, name: str) -> list[tuple[str, str, bool, str | None, bool]]:
         with self._lock:
-            table = _collection_table(name)
+            if name not in COLLECTION_NAMES:
+                raise ValueError(f"unknown collection: {name!r}")
+            table = "records"
             rows = self._conn.execute(
                 f"PRAGMA table_info({_identifier(table)})"
             ).fetchall()
@@ -720,27 +622,6 @@ class SqliteStorageBackend:
                 (row[1], row[2], bool(row[3]), row[4], bool(row[5]))
                 for row in rows
             ]
-
-
-def _verify_table(conn: sqlite3.Connection, table: str, name: str) -> None:
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
-        (table,),
-    ).fetchone()
-    if row is None:
-        raise ValueError(f"unknown collection: {name!r}")
-
-
-def _row_record_id(
-    cols: tuple[str, ...],
-    row: tuple[object, ...],
-) -> str:
-    try:
-        index = cols.index("id")
-        value = row[index]
-    except (ValueError, IndexError):
-        return "<unknown>"
-    return value if isinstance(value, str) and value else "<unknown>"
 
 
 def import_sqlite_thought_pack(
@@ -883,14 +764,23 @@ def _thought_pack_collection_count(
     connection: sqlite3.Connection,
     collection_name: str,
 ) -> int:
-    table = _collection_table(collection_name)
-    row = connection.execute(
-        f"SELECT COUNT(*) FROM {_identifier(table)}"
+    has_records = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='records'"
     ).fetchone()
+    if has_records is not None:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM records WHERE collection = ?",
+            (collection_name,),
+        ).fetchone()
+    else:
+        table = _collection_table(collection_name)
+        row = connection.execute(
+            f"SELECT COUNT(*) FROM {_identifier(table)}"
+        ).fetchone()
     count = row[0] if row is not None and len(row) == 1 else None
     if type(count) is not int or count < 0:
         raise ThoughtPackValidationError(
-            f"thought pack collection {table} has an invalid count"
+            f"thought pack collection {collection_name} has an invalid count"
         )
     return count
 
@@ -963,6 +853,16 @@ def _validate_nuself_schema_connection(
                 f"thought pack schema version {version} is newer than "
                 f"supported version {SQLITE_SCHEMA_VERSION}"
             )
+        if version == 4:
+            if "records" not in tables or "workspace_entries" not in tables:
+                raise ThoughtPackValidationError(
+                    "thought pack is missing schema v4 storage tables"
+                )
+            if authority and version < SQLITE_SCHEMA_VERSION:
+                raise SqliteStorageUnsupportedVersionError(
+                    f"SQLite schema version {version} requires explicit migration"
+                )
+            return version
         required_collections = (
             COLLECTION_NAMES
             if version >= 3

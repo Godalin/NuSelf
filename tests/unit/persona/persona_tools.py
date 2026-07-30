@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Callable, cast
@@ -14,6 +16,7 @@ from nuself.persona.tools import (
     build_reason_persona_tools,
 )
 from nuself.store import ScopedWorkspace, SqliteStore
+from nuself.storage import _create_sqlite_backend
 
 
 class _TextAgent:
@@ -120,8 +123,11 @@ def test_persona_think_propagates_untyped_agent_errors(
             raise expected
 
     if reason_scoped:
+        database = tmp_path / "private" / "workspace.sqlite"
+        database.parent.mkdir(parents=True)
+        _create_sqlite_backend(db_path=database).close()
         workspace = ScopedWorkspace(
-            SqliteStore(tmp_path / "private" / "workspace.sqlite"),
+            SqliteStore(database),
             ("reason", "thread-1"),
         )
         tools = build_reason_persona_tools(
@@ -162,8 +168,11 @@ def test_persona_think_propagates_untyped_agent_errors(
 def test_reason_persona_think_uses_same_injected_text_agent(
     tmp_path: Path,
 ) -> None:
+    database = tmp_path / "private" / "workspace.sqlite"
+    database.parent.mkdir(parents=True)
+    _create_sqlite_backend(db_path=database).close()
     workspace = ScopedWorkspace(
-        SqliteStore(tmp_path / "private" / "workspace.sqlite"),
+        SqliteStore(database),
         ("reason", "thread-1"),
     )
     agent = _TextAgent("thread persona conclusion")

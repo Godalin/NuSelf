@@ -25,7 +25,7 @@ from langgraph.store.base import (
 )
 
 from nuself.config import runtime_paths
-from nuself.private_fs import ensure_private_file
+from nuself.private_fs import require_private_file
 from nuself.runtime import decode_json_value, encode_json_value
 
 __all__ = [
@@ -98,24 +98,6 @@ def _run_transaction(
     return result
 
 
-def _create_workspace_entries_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS workspace_entries (
-            namespace TEXT NOT NULL,
-            key TEXT NOT NULL,
-            value TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (namespace, key)
-        )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_workspace_entries_ns ON workspace_entries(namespace)"
-    )
-
-
 class SqliteStore(BaseStore):
     """Sync SQLite-backed ``BaseStore`` for persistent JSON document storage.
 
@@ -130,8 +112,19 @@ class SqliteStore(BaseStore):
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
-        ensure_private_file(db_path)
-        _run_transaction(db_path, _create_workspace_entries_table)
+        require_private_file(db_path)
+        connection = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            row = connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='workspace_entries'"
+            ).fetchone()
+            if row is None:
+                raise ValueError(
+                    "workspace_entries requires explicit schema migration"
+                )
+        finally:
+            connection.close()
 
     @classmethod
     def for_project(
@@ -195,7 +188,11 @@ class SqliteStore(BaseStore):
             return
         now = datetime.now(UTC).isoformat()
         nskey = self._ns_key(op.namespace)
-        encoded_value = encode_json_value(op.value, ensure_ascii=True)
+        encoded_value = encode_json_value(
+            op.value,
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
         existing = conn.execute(
             "SELECT created_at FROM workspace_entries WHERE namespace = ? AND key = ?",
             (nskey, op.key),

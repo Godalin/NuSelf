@@ -51,6 +51,13 @@ Values are strict JSON objects. A record's `id`, when present, must equal its
 storage key. Collection writes replace the complete object. Repository/domain
 decoders remain responsible for semantic validation.
 
+Schema v4 stores every domain collection in one `records` table keyed by
+`(collection, id)`. Its strict JSON `payload` omits the redundant `id`; reads
+restore it from the primary key. Adding a record field or collection does not
+mutate the SQL schema. Namespaced scratch state uses `workspace_entries` in the
+same authority database. Runtime code writes rows but never creates or alters
+these schema tables.
+
 All related multi-record changes use `backend.transaction()`. SQLite provides
 the commit/rollback boundary; repositories must not retain file-era
 compensation logic for operations inside that boundary.

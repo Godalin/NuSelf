@@ -306,6 +306,15 @@ def _set_raw_sqlite_column(
 ) -> None:
     conn = sqlite3.connect(db_path)
     try:
+        if table.startswith("col_"):
+            conn.execute("PRAGMA ignore_check_constraints=ON")
+            conn.execute(
+                "UPDATE records SET payload = ? "
+                "WHERE collection = ? AND id = ?",
+                (value, table.removeprefix("col_"), record_id),
+            )
+            conn.commit()
+            return
         conn.execute(
             f'UPDATE "{table}" SET "{column}" = ? WHERE id = ?',
             (value, record_id),
@@ -929,7 +938,7 @@ def test_readonly_inspection_closes_source_connection(
 
     inspection = inspect_sqlite_thought_pack(database)
 
-    assert inspection.schema_version == 3
+    assert inspection.schema_version == 4
     assert inspection.total_items == 0
     assert len(connections) == 1
     assert connections[0].close_calls == 1
@@ -1305,7 +1314,7 @@ def test_list_isolates_corrupt_sqlite_json_row(
     assert "private corrupt text" not in str(event.to_record())
     with pytest.raises(
         ValueError,
-        match="dynamic column is invalid JSON",
+        match="Expecting value",
     ):
         col.get("corrupt")
 
@@ -1362,7 +1371,7 @@ def test_direct_get_rejects_non_text_dynamic_column(
 
     with pytest.raises(
         ValueError,
-        match="dynamic column is not JSON text",
+        match="payload is not JSON text",
     ):
         col.get("corrupt")
 
@@ -1420,7 +1429,7 @@ def test_get_rejects_non_standard_numeric_constants(
         value="NaN",
     )
 
-    with pytest.raises(ValueError, match="invalid JSON"):
+    with pytest.raises(ValueError, match="invalid"):
         col.get("mem_001")
 
 
@@ -1849,7 +1858,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "3",
+            "4",
             "--dry-run",
         ],
         check=True,
@@ -1859,6 +1868,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
     assert dry_run.stdout.splitlines() == [
         "upgrade v001_to_v002",
         "upgrade v002_to_v003",
+        "upgrade v003_to_v004",
     ]
     subprocess.run(
         [
@@ -1867,7 +1877,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "3",
+            "4",
         ],
         check=True,
         capture_output=True,
@@ -1876,10 +1886,8 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
     backend = SqliteStorageBackend(db_path)
 
     assert backend.collection("memory_entries").get("mem_legacy") == wire
-    assert (tmp_path / "nuself.sqlite.pre-v1-to-v3.bak").exists()
-    assert "payload" not in {
-        column[0] for column in backend.table_info("memory_entries")
-    }
+    assert (tmp_path / "nuself.sqlite.pre-v1-to-v4.bak").exists()
+    assert backend.collection("memory_entries").get("mem_legacy") == wire
     backend.close()
 
 
@@ -2098,6 +2106,41 @@ def test_registry_rejects_post_v3_migration_without_downgrade() -> None:
 
     assert result.returncode != 0
     assert "post-v3 migrations must define downgrade" in result.stderr
+
+
+def test_v4_migration_round_trip_preserves_records(tmp_path: Path) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    record_id = "mem_round_trip"
+    record: dict[str, object] = {
+        "id": record_id,
+        "title": "Round trip",
+        "type": "belief",
+        "body": "Preserve this record.",
+    }
+    backend.collection("memory_entries").put(record_id, record)
+    backend.close()
+
+    for target in ("3", "4"):
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.migrate_database",
+                str(db_path),
+                "--to",
+                target,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    reopened = SqliteStorageBackend(db_path)
+    try:
+        assert reopened.collection("memory_entries").get(record_id) == record
+    finally:
+        reopened.close()
 
 
 def test_explicit_script_rejects_duplicate_version_history_before_mutation(

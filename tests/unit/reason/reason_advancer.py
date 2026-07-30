@@ -32,6 +32,7 @@ from nuself.reason.advancer import (
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.storage import _create_sqlite_backend
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -549,6 +550,7 @@ def test_advance_failure_releases_invocation_owner(
 def test_workspace_tools_route_by_shared_reason_thread_context(
     tmp_path: Path,
 ) -> None:
+    _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     advancer = ReasonAdvancer(
         project_root=tmp_path,
         workspace_store=PrivateWorkspaceStore(tmp_path, scope="reason"),

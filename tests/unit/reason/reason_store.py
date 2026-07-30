@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 import sqlite3
 from pathlib import Path
 from typing import Any, Callable, cast
@@ -14,6 +16,7 @@ from nuself.store import (
     SqliteStore,
     SqliteStoreLifecycleError,
 )
+from nuself.storage import _create_sqlite_backend
 from nuself.workspace import PrivateWorkspacePaths
 
 
@@ -28,7 +31,11 @@ def _paths(tmp_path: Path) -> PrivateWorkspacePaths:
 
 
 def _db(tmp_path: Path) -> Path:
-    return _paths(tmp_path).database
+    path = _paths(tmp_path).database
+    if not path.exists():
+        path.parent.mkdir(parents=True)
+        _create_sqlite_backend(db_path=path).close()
+    return path
 
 
 class LifecycleConnectionProxy:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -10,6 +12,7 @@ from pydantic import ValidationError
 from nuself.domain.profile import ProfileItem
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import _create_sqlite_backend
 
 
 class FakeIntakeAgent:
@@ -42,7 +45,16 @@ def _output(
     )
 
 
-def test_memory_intake_infers_goal_from_typed_agent() -> None:
+def _intake(tmp_path: Path, agent: object) -> MemoryIntakeAgent:
+    _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
+    return MemoryIntakeAgent(
+        tmp_path,
+        agent=agent,  # type: ignore[arg-type]
+        profile_repository=ProfileItemRepository(tmp_path),
+    )
+
+
+def test_memory_intake_infers_goal_from_typed_agent(tmp_path: Path) -> None:
     structured_agent = FakeIntakeAgent(
         _output(
             memory_type="goal",
@@ -52,14 +64,14 @@ def test_memory_intake_infers_goal_from_typed_agent() -> None:
         )
     )
 
-    result = MemoryIntakeAgent(agent=structured_agent).infer(
+    result = _intake(tmp_path, structured_agent).infer(
         body="My goal is to finish the memory system planning."
     )
 
     assert result.type == "goal"
 
 
-def test_memory_intake_infers_concept_from_typed_agent() -> None:
+def test_memory_intake_infers_concept_from_typed_agent(tmp_path: Path) -> None:
     structured_agent = FakeIntakeAgent(
         _output(
             memory_type="concept",
@@ -67,16 +79,16 @@ def test_memory_intake_infers_concept_from_typed_agent() -> None:
         )
     )
 
-    result = MemoryIntakeAgent(agent=structured_agent).infer(
+    result = _intake(tmp_path, structured_agent).infer(
         body="Temporal memory means preserving when a thought changed."
     )
 
     assert result.type == "concept"
 
 
-def test_memory_intake_empty_body_raises_before_agent_call() -> None:
+def test_memory_intake_empty_body_raises_before_agent_call(tmp_path: Path) -> None:
     structured_agent = FakeIntakeAgent(_output())
-    agent = MemoryIntakeAgent(agent=structured_agent)
+    agent = _intake(tmp_path, structured_agent)
 
     with pytest.raises(ValueError, match="must not be empty"):
         agent.infer(body="")
@@ -84,7 +96,7 @@ def test_memory_intake_empty_body_raises_before_agent_call() -> None:
     assert structured_agent.calls == []
 
 
-def test_memory_intake_wraps_structured_agent_failure() -> None:
+def test_memory_intake_wraps_structured_agent_failure(tmp_path: Path) -> None:
     class BrokenAgent:
         def invoke(
             self,
@@ -92,7 +104,7 @@ def test_memory_intake_wraps_structured_agent_failure() -> None:
         ) -> IntakeResultOutput:
             raise RuntimeError("agent unavailable")
 
-    agent = MemoryIntakeAgent(agent=BrokenAgent())
+    agent = _intake(tmp_path, BrokenAgent())
 
     with pytest.raises(
         ValueError,
@@ -168,9 +180,10 @@ def test_intake_schema_rejects_incomplete_or_coercive_values(
         IntakeResultOutput.model_validate(payload)
 
 
-def test_memory_intake_rejects_empty_normalized_tags() -> None:
-    agent = MemoryIntakeAgent(
-        agent=FakeIntakeAgent(_output(tags=[" ", " "])),
+def test_memory_intake_rejects_empty_normalized_tags(tmp_path: Path) -> None:
+    agent = _intake(
+        tmp_path,
+        FakeIntakeAgent(_output(tags=[" ", " "])),
     )
 
     with pytest.raises(

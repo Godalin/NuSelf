@@ -51,6 +51,7 @@ SCHEMA_COLLECTIONS: dict[int, tuple[str, ...]] = {
         "memory_curator_plans",
         "scheduler_state",
     ),
+    4: (),
 }
 
 
@@ -86,6 +87,10 @@ def validate_schema(connection: sqlite3.Connection) -> int:
     collections = SCHEMA_COLLECTIONS.get(version)
     if collections is None:
         raise ValueError(f"unsupported current version: {version}")
+    if version == 4:
+        if "records" not in tables or "workspace_entries" not in tables:
+            raise ValueError("database is missing schema v4 storage tables")
+        return version
     for collection in collections:
         table = f"col_{collection}"
         if table not in tables:

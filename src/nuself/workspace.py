@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.config import runtime_paths
-from nuself.private_fs import ensure_private_directory
-
 @dataclass(frozen=True)
 class PrivateWorkspacePaths:
     root: Path
@@ -24,7 +22,7 @@ class PrivateWorkspaceStore:
         paths = runtime_paths(project_root)
         self._project_root = project_root
         self._scope = scope
-        self._root = paths.authority_root / "workspaces" / scope
+        self._root = paths.exports_dir / scope
         self._db_path = paths.authority_root / "nuself.sqlite"
 
     @property
@@ -41,7 +39,7 @@ class PrivateWorkspaceStore:
         return PrivateWorkspacePaths(
             root=root,
             database=self._db_path,
-            artifacts=root / "artifacts",
+            artifacts=root,
             notes=root / "notes",
         )
 
@@ -54,10 +52,7 @@ class PrivateWorkspaceStore:
         )
 
     def ensure(self, owner_id: str) -> PrivateWorkspacePaths:
-        workspace = self.paths(owner_id)
-        ensure_private_directory(workspace.artifacts)
-        ensure_private_directory(workspace.notes)
-        return workspace
+        return self.paths(owner_id)
 
 
 def _validate_segment(value: str, label: str) -> None:

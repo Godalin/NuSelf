@@ -398,7 +398,6 @@ class ReasonExportWorker:
         store, service = self._dependencies()
         manifest_path = (
             store.paths(thread_id).artifacts
-            / "export"
             / "jobs"
             / job_id
             / "manifest.json"
@@ -572,7 +571,7 @@ class ReasonExportWorker:
     def _reconcile(self, store: PrivateWorkspaceStore) -> None:
         reconciled = 0
         for owner_id in store.list_owners():
-            jobs_dir = store.paths(owner_id).artifacts / "export" / "jobs"
+            jobs_dir = store.paths(owner_id).artifacts / "jobs"
             if not jobs_dir.exists():
                 continue
             for job_dir in sorted(jobs_dir.iterdir()):

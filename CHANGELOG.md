@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Schema v4 replaces per-collection dynamic-column tables with one compact
+  strict-JSON `records` table and makes namespaced workspace state part of the
+  main authority. Its v3↔v4 migration is reversible. Reason exports now live
+  under `exports/reason/` instead of creating structured workspace directories.
 - Database schema migration is now an explicit operator action rather than a
   side effect of opening storage. Versioned scripts under
   `scripts/database_migrations/` provide dry-run planning, exact targets,

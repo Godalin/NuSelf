@@ -8,20 +8,17 @@ They are meant for internal working state that is useful while a subsystem is op
 
 ## Storage Contract
 
-Generic workspace path:
+Structured workspace identity:
 
 ```text
-<authority-root>/workspaces/{scope}/{owner_id}/
-  workspace.sqlite
-  artifacts/
-  notes/
+<authority-root>/nuself.sqlite
+  workspace_entries namespace: workspace/{scope}/{owner_id}
 ```
 
 - `scope`: service namespace, e.g. `reason`.
 - `owner_id`: service-owned object id, e.g. a reason thread id.
-- `workspace.sqlite`: service-local structured scratch database.
-- `artifacts/`: files produced during work.
-- `notes/`: optional human-readable scratch notes.
+- Generated user-facing files live under
+  `<authority-root>/exports/{scope}/{owner_id}/`.
 
 ## Isolation Rules
 
@@ -39,24 +36,14 @@ Non-string keys, arbitrary objects, and non-finite floats are rejected.
 `SqliteStore.batch()` owns one transaction: if any operation cannot encode,
 all earlier writes from that batch are rolled back and pre-existing entries
 remain unchanged. Reads reject non-standard non-finite JSON constants.
-Initialization and each batch own exactly one short-lived SQLite connection
-and close it exactly once. Initialization commits schema creation before
-closing. A successful batch commits before closing; a failed batch rolls back
+Each batch owns exactly one short-lived SQLite connection and closes it exactly
+once. Schema creation belongs only to authority initialization or an explicit
+database migration. A successful batch commits before closing; a failed batch rolls back
 before closing. If rollback or close also fails, the store must retain every
 failure without replacing the original operation error as the explicit cause.
 Close failure after a successful commit is still surfaced, without replaying
 the committed batch.
 
-`workspace.sqlite` must include a `workspace_meta` table:
-
-| Key | Meaning |
-|---|---|
-| `schema` | Workspace schema version |
-| `scope` | Owning service scope |
-| `owner_id` | Owning object id |
-| `created_at` | First initialization time |
-
-Services may create additional tables inside their own workspace database.
 Repository-shaped scratch state uses a `ScopedWorkspace` collection adapter
 over `SqliteStore`; it must not introduce a second raw-file repository
 protocol or derived name-index files.
@@ -66,15 +53,25 @@ protocol or derived name-index files.
 Reason uses:
 
 ```text
-<authority-root>/workspaces/reason/{thread_id}/workspace.sqlite
+<authority-root>/nuself.sqlite
+namespace workspace/reason/{thread_id}
 ```
 
 The reason workspace can hold branch tables, temporary tracked items, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
 Reason-thread persona prompts are stored under the thread workspace's
 `persona_prompts` namespace in SQLite. They are task-local scratch state, not
-durable global persona records. Pre-SQLite thread persona JSON is not migrated.
+durable global persona records. The explicit v4 layout migration imports
+legacy per-thread SQLite workspace entries before retiring the old tree.
 All reason workspace consumers use the canonical
 `("workspace", "reason", thread_id)` namespace prefix.
+
+The source-checkout `scripts/migrate_workspace_layout.py` command is the only
+supported bridge from `<authority-root>/workspaces/reason/*/workspace.sqlite`.
+It defaults to dry-run, validates each workspace identity and JSON row, copies
+all rows in one main-authority transaction, and verifies export-file
+destinations before copying. `--apply --delete-source` moves the verified old
+tree to `backups/legacy-workspaces-v3`; it never silently deletes it. Runtime
+startup never scans, imports, or deletes the old tree.
 
 Stable data leaves the workspace only through explicit promotion:
 
