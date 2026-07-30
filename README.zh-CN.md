@@ -160,14 +160,19 @@ uv run nuself dev logs --component chat --tail 20
 
 ```bash
 uv run nuself data collections
+uv run nuself data check memory
+uv run nuself data repair memory
 uv run nuself data list memory
 uv run nuself data show memory <memory-id>
 uv run nuself data edit memory <memory-id>
 uv run nuself data export threads --format json
 ```
 
-通用编辑会校验完整记录、显示 diff、要求确认，并拒绝覆盖并发修改。
-内部运行状态默认隐藏，只有显式使用 `--internal` 才能查看。
+`data check` 会无修改地找出无效记录，并为每条记录给出准确的 `edit`
+或需确认的 `delete` 命令。`data repair memory` 会预览受支持的无损旧格式
+迁移，增加 `--apply` 后在单个事务中提交。通用编辑会校验完整记录、显示 diff、要求确认，
+并拒绝覆盖并发修改。内部运行状态默认隐藏，只有显式使用 `--internal`
+才能查看。
 
 [CLI 指南](docs/cli.md)按工作流整理了命令；CLI 自身的 `--help` 是最新命令参考。
 
@@ -177,8 +182,9 @@ uv run nuself data export threads --format json
 
 交互聊天会用简洁的 `Attention:` 区块提示关键状态：当前 authority
 没有可用模型、本地工作区 authority 尚未被选择、持久化记录无法解码，
-或 daemon 最近未能交付回复。提示会聚合并给出处理方式；完整细节仍可通过
-`nuself dev logs` 查看。
+或 daemon 最近未能交付回复。可修复记录会指向 `data check`；已经持久化
+但未交付的聊天回复可通过 `:history` 恢复，反复出现交付失败时会建议重启
+daemon。
 
 local-first 不等于模型离线：配置远程模型后，一次调用所需的上下文会发送给你选择的端点。请根据自己的隐私要求选择提供方及其数据保留政策。
 

@@ -21,17 +21,16 @@ None.
 
 ## Completion Evidence
 
-The terminal interruption lifecycle goal is complete:
+The Attention remediation loop is complete:
 
-- in-flight daemon requests cooperatively close their owned socket, preserve
-  partial response framing across cancellation polling, and join the owned
-  send before the REPL continues;
-- repeated Ctrl-C during reaping cannot replace the original interrupt or
-  abandon the worker;
-- Ctrl-D and Ctrl-C at confirmation/watch boundaries use typed safe outcomes,
-  while true session exit still runs transcript, curator, and storage cleanup
-  exactly once;
-- local Pyright completed with 0 errors and 0 warnings, the full suite passed
-  2415 tests, and both distributions built successfully;
-- GitHub Actions run `30556773660` passed Ubuntu/macOS on Python
-  3.12/3.13/3.14, including clean-wheel installation and smoke tests.
+- `data check` reports current unique invalid records and exact manual repair
+  commands without exposing payloads or mutating authority;
+- `data repair memory` previews and transactionally applies the lossless
+  removal of empty obsolete relation fields, leaving unknown/non-empty shapes
+  untouched;
+- the repository-local authority preview found 87 safely repairable records
+  and 1 unresolved record; no private data was changed;
+- completed-but-undelivered chat replies now point to persisted `:history`,
+  while recurring delivery failure points to daemon restart;
+- focused tests passed 14 cases, Pyright completed with 0 errors and 0
+  warnings, and the full suite passed 2422 tests.

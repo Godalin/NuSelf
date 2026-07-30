@@ -10,6 +10,11 @@ from pathlib import Path
 from nuself.config import ConfigSystem
 from nuself.logs import LogEvent, read_log_events
 
+_REPAIRABLE_COLLECTION_ALIASES = {
+    "chat_threads": "threads",
+    "memory_entries": "memory",
+}
+
 
 @dataclass(frozen=True)
 class InteractiveNotice:
@@ -90,16 +95,15 @@ def turn_interactive_notices(
 ) -> tuple[InteractiveNotice, ...]:
     """Aggregate hidden record failures emitted during one chat turn."""
 
-    counts = Counter(
-        event.component
-        for event in events
-        if event.event == "record_decode_failed"
-    )
+    failed = [
+        event for event in events if event.event == "record_decode_failed"
+    ]
+    counts = Counter(event.component for event in failed)
     return tuple(
         InteractiveNotice(
             f"{component}-records-unreadable",
             f"{count} {component} record(s) could not be read; this reply may "
-            f"lack context. Inspect with `nuself dev logs --component {component}`.",
+            f"lack context. {_record_recovery_instruction(failed, component)}",
         )
         for component, count in sorted(counts.items())
     )
@@ -112,16 +116,17 @@ def _recent_failure_notices(
     recent_events = [
         event for event in events if _event_at_or_after(event, cutoff)
     ]
-    record_counts = Counter(
-        event.component
+    failed = [
+        event
         for event in recent_events
         if event.event == "record_decode_failed"
-    )
+    ]
+    record_counts = Counter(event.component for event in failed)
     notices = [
         InteractiveNotice(
             f"recent-{component}-records-unreadable",
-            f"Recent logs contain {count} unreadable {component} record(s); "
-            f"inspect with `nuself dev logs --component {component}`.",
+            f"Recent logs contain {count} {component} record decode failure(s); "
+            f"{_record_recovery_instruction(failed, component)}",
         )
         for component, count in sorted(record_counts.items())
     ]
@@ -134,11 +139,31 @@ def _recent_failure_notices(
             InteractiveNotice(
                 "recent-response-delivery-failed",
                 f"The daemon recently failed to deliver {delivery_count} "
-                "completed response(s), usually because a client disconnected; "
-                "inspect with `nuself dev logs --component daemon`.",
+                "completed response(s), usually because a client disconnected. "
+                "Chat replies remain in `:history`; if this recurs, run "
+                "`nuself daemon restart`.",
             )
         )
     return tuple(notices)
+
+
+def _record_recovery_instruction(
+    events: list[LogEvent],
+    component: str,
+) -> str:
+    collections: set[str] = set()
+    for event in events:
+        if event.component != component or event.metadata is None:
+            continue
+        collection = event.metadata.get("collection")
+        if isinstance(collection, str):
+            collections.add(collection)
+    if len(collections) == 1:
+        collection = next(iter(collections))
+        alias = _REPAIRABLE_COLLECTION_ALIASES.get(collection)
+        if alias is not None:
+            return f"Check and repair with `nuself data check {alias}`."
+    return f"Inspect with `nuself dev logs --component {component}`."
 
 
 def _event_at_or_after(event: LogEvent, cutoff: datetime) -> bool:

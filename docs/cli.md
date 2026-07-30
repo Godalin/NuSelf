@@ -103,6 +103,8 @@ See [`memory.md`](memory.md) for the ingestion, review, and curation workflow.
 
 ```bash
 uv run nuself data collections
+uv run nuself data check memory
+uv run nuself data repair memory
 uv run nuself data list memory
 uv run nuself data show threads default
 uv run nuself data export memory --format json --output memory.json
@@ -110,11 +112,18 @@ uv run nuself data edit memory <memory-id>
 uv run nuself data delete threads <thread-id>
 ```
 
-List, show, and export cover all public structured collections. Generic edit
-and delete are limited to domain-validated memory and chat-thread records;
-other domains use their dedicated commands. Mutation shows a diff or
-destructive prompt unless `--yes` is explicit. Add `--internal` only when
-diagnosing hidden curator or scheduler state.
+List, show, and export cover all public structured collections. `data check`
+uses the domain validator without mutation, returns failure when invalid
+records exist, and prints an `edit` and confirmed `delete` command for every
+invalid stable ID. Generic edit and delete are limited to domain-validated
+memory and chat-thread records; other domains use their dedicated commands.
+Mutation shows a diff or destructive prompt unless `--yes` is explicit. Add
+`--internal` only when diagnosing hidden curator or scheduler state.
+
+`data repair memory` previews supported lossless migrations and `--apply`
+commits them atomically. It currently removes obsolete legacy relation fields
+only when they are empty and the complete resulting memory is valid; non-empty
+legacy data is left untouched for explicit editing.
 
 ## Reflections And Notifications
 

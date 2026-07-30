@@ -6,6 +6,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Added `nuself data check` to report the current unique invalid memory or chat
+  records and print validated edit/confirmed delete commands without exposing
+  payloads or mutating data. `nuself data repair memory` previews and
+  transactionally applies the lossless removal of empty obsolete relation
+  fields while leaving every non-empty or unknown shape untouched. Interactive
+  Attention notices now point directly to that repair workflow; undelivered
+  completed chat replies point to `:history`, with daemon restart reserved for
+  recurring transport failures.
 - Ctrl-C during an in-flight interactive turn now cooperatively closes its
   daemon request socket and joins the owned send before returning to the
   prompt. Ctrl-D and all true session exits continue through transcript,

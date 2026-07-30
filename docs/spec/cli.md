@@ -158,6 +158,16 @@ outbox and the chronological activity log:
   component instead of printing one warning per record;
 - notices contain only safe metadata, state the user-visible consequence, and
   include a concrete recovery or inspection command;
+- persisted-record notices direct users to `nuself data check <collection>`
+  when the failed collection has a generic repair contract, and otherwise
+  retain their component-log inspection command. The check validates raw
+  records without mutation, reports unique invalid stable IDs, and prints the
+  exact validated edit and confirmed delete commands available for each
+  record. It never guesses replacement fields;
+- a completed chat reply that could not be written to a disconnected daemon
+  client remains committed to its thread. The interactive notice directs the
+  user to `:history` for recovery and to `nuself daemon restart` only when
+  delivery failures recur;
 - repeated records are counted and grouped. Raw exception text, record
   payloads, API keys, and one line per failure are never rendered;
 - a notice does not switch authority, repair data, change the chat result, or
@@ -168,6 +178,29 @@ outbox and the chronological activity log:
 
 The startup notice heading is `Attention:`. It appears after the session
 header and only when at least one notice exists.
+
+### Data Validation and Repair
+
+`nuself data check <collection>` applies the same typed validator used by
+`nuself data edit` to every raw record in an editable public collection. Healthy
+and invalid totals are based on the current authority snapshot, not historical
+log-event counts. Invalid records are reported once by stable ID without
+printing payloads. A clean collection exits successfully; any invalid record
+produces a failure exit so scripts can use the command as a gate.
+
+The command is deliberately non-mutating. Each invalid record is repairable
+with `nuself data edit <collection> <record-id>`, which validates the complete
+edited record before committing, or removable with the existing confirmed
+`nuself data delete` command. Collections without a declared generic validator
+remain read-only and cannot claim a meaningful generic repair contract.
+
+`nuself data repair memory` previews the closed set of lossless legacy-memory
+migrations supported by the current release. `--apply` rechecks every original
+inside one storage transaction and aborts on concurrent change. The current
+migration removes only obsolete `related_memory_ids` and `supersedes` fields
+when both are empty and the resulting record passes the complete current
+validator. Non-empty legacy relations and every other malformed shape remain
+unresolved for explicit user editing; automatic repair never discards data.
 
 ### Session State Ownership
 

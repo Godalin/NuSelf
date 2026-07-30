@@ -158,6 +158,149 @@ def handle_data_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_data_check(args: argparse.Namespace) -> int:
+    """Validate raw records and point to explicit repair operations."""
+
+    try:
+        name = _collection_name(args.collection, internal=args.internal)
+        validator = _VALIDATORS.get(name)
+        if validator is None:
+            raise ValueError(
+                "collection has no generic validation contract: "
+                f"{args.collection}"
+            )
+    except ValueError as exc:
+        print(
+            f"Data check failed: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
+        return CliExitCode.FAILURE
+
+    records = get_default_backend(args.project_root).collection(name).list()
+    invalid_ids: list[str] = []
+    for record in records:
+        try:
+            validator(record)
+        except (KeyError, TypeError, ValueError):
+            invalid_ids.append(_record_id(record))
+
+    healthy_count = len(records) - len(invalid_ids)
+    print(
+        f"Checked {len(records)} {args.collection} record(s): "
+        f"{healthy_count} valid, {len(invalid_ids)} invalid."
+    )
+    for record_id in invalid_ids:
+        print(f"Invalid: {record_id}")
+        if record_id != "<invalid-id>":
+            edit = shlex.join(
+                ["nuself", "data", "edit", args.collection, record_id]
+            )
+            delete = shlex.join(
+                ["nuself", "data", "delete", args.collection, record_id]
+            )
+            print(f"  repair: {edit}")
+            print(f"  remove: {delete}")
+    return (
+        CliExitCode.FAILURE
+        if invalid_ids
+        else CliExitCode.SUCCESS
+    )
+
+
+def _repair_legacy_memory_record(
+    record: dict[str, object],
+) -> dict[str, object] | None:
+    repaired = dict(record)
+    changed = False
+    for field in ("related_memory_ids", "supersedes"):
+        if field not in repaired:
+            continue
+        if repaired[field] != []:
+            return None
+        del repaired[field]
+        changed = True
+    if not changed:
+        return None
+    MemoryEntry.from_wire(repaired)
+    return repaired
+
+
+def handle_data_repair(args: argparse.Namespace) -> int:
+    """Preview or apply only explicitly supported lossless migrations."""
+
+    try:
+        name = _collection_name(args.collection, internal=False)
+        if name != "memory_entries":
+            raise ValueError(
+                f"collection has no automatic repair migration: "
+                f"{args.collection}"
+            )
+        backend = get_default_backend(args.project_root)
+        collection = backend.collection(name)
+        originals: dict[str, dict[str, object]] = {}
+        repaired_records: dict[str, dict[str, object]] = {}
+        unresolved: list[str] = []
+        for record in collection.list():
+            try:
+                MemoryEntry.from_wire(record)
+                continue
+            except (KeyError, TypeError, ValueError):
+                pass
+            record_id = _record_id(record)
+            repaired = _repair_legacy_memory_record(record)
+            if repaired is None or record_id == "<invalid-id>":
+                unresolved.append(record_id)
+                continue
+            originals[record_id] = record
+            repaired_records[record_id] = repaired
+
+        print(
+            f"Repair scan: {len(repaired_records)} repairable, "
+            f"{len(unresolved)} unresolved."
+        )
+        if not args.apply:
+            if repaired_records:
+                print(
+                    "No changes applied. Run "
+                    f"`nuself data repair {args.collection} --apply`."
+                )
+            return (
+                CliExitCode.FAILURE
+                if unresolved
+                else CliExitCode.SUCCESS
+            )
+
+        with backend.transaction():
+            for record_id, original in originals.items():
+                if collection.get(record_id) != original:
+                    raise ValueError(
+                        f"record changed concurrently: {record_id}"
+                    )
+            for record_id, repaired in repaired_records.items():
+                collection.put(record_id, repaired)
+        for record_id in repaired_records:
+            _write_change_audit(
+                action="updated",
+                collection=name,
+                record_id=record_id,
+                project_root=args.project_root,
+            )
+        print(f"Repaired {len(repaired_records)} record(s).")
+        if unresolved:
+            print(
+                "Unresolved records still require `nuself data check memory`.",
+                file=sys.stderr,
+            )
+            return CliExitCode.FAILURE
+        return CliExitCode.SUCCESS
+    except (OSError, TypeError, ValueError) as exc:
+        print(
+            f"Data repair failed: {diagnostic_exception_message(exc)}",
+            file=sys.stderr,
+        )
+        return CliExitCode.FAILURE
+
+
 def _load_edited_record(args: argparse.Namespace, current: str) -> str:
     if args.file is not None:
         return args.file.read_text(encoding="utf-8")

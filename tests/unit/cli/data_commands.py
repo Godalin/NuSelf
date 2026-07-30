@@ -10,7 +10,7 @@ from nuself.cli.exit_codes import CliExitCode
 from nuself.domain.memory import MemoryEntry
 from nuself.logs import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.storage import reset_default_backend
+from nuself.storage import get_default_backend, reset_default_backend
 
 
 def _set_home(
@@ -91,6 +91,118 @@ def test_data_edit_validates_and_audits_memory(
         "collection": "memory_entries",
         "record_id": entry.id,
     }
+
+
+def test_data_check_reports_unique_invalid_records_and_repair_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    authority = _set_home(tmp_path, monkeypatch)
+    backend = MemoryEntryRepository(authority)
+    healthy = backend.save(
+        MemoryEntry(type="belief", title="Healthy", body="Keep this.")
+    )
+    reset_default_backend(authority)
+    get_default_backend(authority).collection("memory_entries").put(
+        "mem broken",
+        {"id": "mem broken", "body": "private invalid contents"},
+    )
+    reset_default_backend(authority)
+
+    assert main(["data", "check", "memory"]) == CliExitCode.FAILURE
+    output = capsys.readouterr().out
+    assert "Checked 2 memory record(s): 1 valid, 1 invalid." in output
+    assert "Invalid: mem broken" in output
+    assert "nuself data edit memory 'mem broken'" in output
+    assert "nuself data delete memory 'mem broken'" in output
+    assert "private invalid contents" not in output
+    assert healthy.id not in output
+
+
+def test_data_check_succeeds_for_valid_collection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    authority = _set_home(tmp_path, monkeypatch)
+    MemoryEntryRepository(authority).save(
+        MemoryEntry(type="belief", title="Healthy", body="All good.")
+    )
+    reset_default_backend(authority)
+
+    assert main(["data", "check", "memory"]) == CliExitCode.SUCCESS
+    assert "1 valid, 0 invalid" in capsys.readouterr().out
+
+
+def test_data_repair_previews_and_applies_lossless_legacy_memory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    authority = _set_home(tmp_path, monkeypatch)
+    entry = MemoryEntry(type="belief", title="Legacy", body="Preserve me.")
+    legacy = entry.to_wire()
+    legacy["related_memory_ids"] = []
+    legacy["supersedes"] = []
+    get_default_backend(authority).collection("memory_entries").put(
+        entry.id,
+        legacy,
+    )
+    reset_default_backend(authority)
+
+    assert main(["data", "repair", "memory"]) == CliExitCode.SUCCESS
+    assert "1 repairable, 0 unresolved" in capsys.readouterr().out
+    assert (
+        get_default_backend(authority)
+        .collection("memory_entries")
+        .get(entry.id)
+        == legacy
+    )
+    reset_default_backend(authority)
+
+    assert (
+        main(["data", "repair", "memory", "--apply"])
+        == CliExitCode.SUCCESS
+    )
+    assert "Repaired 1 record(s)." in capsys.readouterr().out
+    repaired = (
+        get_default_backend(authority)
+        .collection("memory_entries")
+        .get(entry.id)
+    )
+    assert repaired is not None
+    assert "related_memory_ids" not in repaired
+    assert "supersedes" not in repaired
+    assert MemoryEntry.from_wire(repaired).body == "Preserve me."
+
+
+def test_data_repair_refuses_nonempty_legacy_relations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    authority = _set_home(tmp_path, monkeypatch)
+    entry = MemoryEntry(type="belief", title="Legacy", body="Do not discard.")
+    legacy = entry.to_wire()
+    legacy["related_memory_ids"] = ["mem_other"]
+    get_default_backend(authority).collection("memory_entries").put(
+        entry.id,
+        legacy,
+    )
+    reset_default_backend(authority)
+
+    assert (
+        main(["data", "repair", "memory", "--apply"])
+        == CliExitCode.FAILURE
+    )
+    assert "0 repairable, 1 unresolved" in capsys.readouterr().out
+    assert (
+        get_default_backend(authority)
+        .collection("memory_entries")
+        .get(entry.id)
+        == legacy
+    )
 
 
 def test_data_edit_rejects_identity_change(

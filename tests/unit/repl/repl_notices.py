@@ -19,6 +19,11 @@ def _event(component: str, event: str) -> LogEvent:
         component=component,  # type: ignore[arg-type]
         event=event,
         message="safe diagnostic",
+        metadata=(
+            {"collection": "memory_entries", "record_id": "mem_bad"}
+            if component == "memory" and event == "record_decode_failed"
+            else None
+        ),
     )
 
 
@@ -54,6 +59,7 @@ def test_turn_groups_record_failures_without_payloads() -> None:
     assert len(notices) == 1
     assert notices[0].code == "memory-records-unreadable"
     assert "2 memory record(s)" in notices[0].message
+    assert "`nuself data check memory`" in notices[0].message
     assert "safe diagnostic" not in notices[0].message
 
 
@@ -66,6 +72,10 @@ def test_startup_groups_recent_hidden_failures(tmp_path: Path) -> None:
         "payload must stay hidden",
         project_root=authority,
         level="warning",
+        metadata={
+            "collection": "memory_entries",
+            "record_id": "mem_bad",
+        },
     )
     write_log_event(
         "daemon",
@@ -80,7 +90,8 @@ def test_startup_groups_recent_hidden_failures(tmp_path: Path) -> None:
     notices = startup_interactive_notices(authority, cwd=tmp_path)
 
     messages = "\n".join(notice.message for notice in notices)
-    assert "Recent logs contain 1 unreadable memory record(s)" in messages
+    assert "Recent logs contain 1 memory record decode failure(s)" in messages
+    assert "`nuself data check memory`" in messages
     assert "failed to deliver 1 completed response(s)" in messages
     assert "payload must stay hidden" not in messages
     assert "socket details must stay hidden" not in messages

@@ -16,11 +16,13 @@ from nuself.cli.commands.daemon import (
     handle_daemon_stop,
 )
 from nuself.cli.commands.data import (
+    handle_data_check,
     handle_data_collections,
     handle_data_delete,
     handle_data_edit,
     handle_data_export,
     handle_data_list,
+    handle_data_repair,
     handle_data_show,
 )
 from nuself.cli.commands.dev import (
@@ -227,6 +229,20 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     data_show.add_argument("--json", action="store_true")
     data_show.add_argument("--internal", action="store_true")
     bind_handler(data_show, handle_data_show)
+    data_check = data_subparsers.add_parser(
+        "check",
+        help="Validate records and show repair commands.",
+    )
+    data_check.add_argument("collection")
+    data_check.add_argument("--internal", action="store_true")
+    bind_handler(data_check, handle_data_check)
+    data_repair = data_subparsers.add_parser(
+        "repair",
+        help="Preview or apply supported lossless record repairs.",
+    )
+    data_repair.add_argument("collection")
+    data_repair.add_argument("--apply", action="store_true")
+    bind_handler(data_repair, handle_data_repair)
     data_edit = data_subparsers.add_parser("edit", help="Edit one validated record.")
     data_edit.add_argument("collection")
     data_edit.add_argument("record_id")

@@ -172,15 +172,20 @@ uv run nuself dev logs --component chat --tail 20
 
 ```bash
 uv run nuself data collections
+uv run nuself data check memory
+uv run nuself data repair memory
 uv run nuself data list memory
 uv run nuself data show memory <memory-id>
 uv run nuself data edit memory <memory-id>
 uv run nuself data export threads --format json
 ```
 
-Generic editing validates the complete record, shows a diff, confirms the
-change, and rejects concurrent overwrites. Operational collections are hidden
-unless `--internal` is explicit.
+`data check` finds invalid records without changing them and prints the exact
+`edit` or confirmed `delete` command for each one. `data repair memory`
+previews supported lossless legacy migrations; add `--apply` to commit them in
+one transaction. Generic editing validates
+the complete record, shows a diff, confirms the change, and rejects concurrent
+overwrites. Operational collections are hidden unless `--internal` is explicit.
 
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 `--help` output is the current command reference.
@@ -195,8 +200,9 @@ runtime state are never merged.
 Interactive chat shows a concise `Attention:` block when the selected
 authority has no usable model, a local workspace authority was not selected,
 persisted records cannot be decoded, or the daemon recently failed to deliver
-a reply. Notices are grouped and actionable; full detail remains available
-through `nuself dev logs`.
+a reply. Notices point to `data check` for repairable records and `:history`
+for already-persisted chat replies; recurring delivery failures suggest a
+daemon restart.
 
 NuSelf is local-first, not model-offline: when you configure a remote model,
 the context required for that call is sent to the endpoint you selected.
