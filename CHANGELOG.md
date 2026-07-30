@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- `dev db-schema` now inspects only an already-active SQLite backend and cannot
+  create an empty canonical database that hides file-backed data. SQLite
+  opening requires an existing database; only atomic migration may create its
+  unpublished temporary database.
 - File authority selection is now atomic with migration publication: a process
   paused before shared-lease acquisition cannot resume on obsolete files,
   closed file backends and their existing collections reject all access, and

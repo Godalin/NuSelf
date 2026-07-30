@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import closing
+import sys
 
 from nuself.storage import (
-    create_sqlite_backend,
     get_default_backend,
     migrate_file_backend_atomically,
 )
@@ -31,33 +30,37 @@ def handle_dev_migrate(args: argparse.Namespace) -> int:
 
 
 def handle_dev_db_schema(args: argparse.Namespace) -> int:
-    with closing(
-        create_sqlite_backend(args.project_root)
-    ) as backend:
-        tables = backend.collection_names()
-        if not tables:
-            print("(no tables)")
-            return 0
-        for table in sorted(tables):
-            print(f"{table}:")
-            for (
-                column_name,
-                column_type,
-                not_null,
-                default_value,
-                primary_key,
-            ) in backend.table_info(table):
-                nullable = "" if not_null else " NULL"
-                pk_flag = " PK" if primary_key else ""
-                default = (
-                    f" DEFAULT {default_value}"
-                    if default_value is not None
-                    else ""
-                )
-                print(
-                    f"  {column_name}  {column_type}"
-                    f"{nullable}{pk_flag}{default}"
-                )
+    backend = get_default_backend(args.project_root)
+    if not isinstance(backend, SqliteStorageBackend):
+        print(
+            "No active SQLite database. Run 'nuself dev migrate' first.",
+            file=sys.stderr,
+        )
+        return 1
+    tables = backend.collection_names()
+    if not tables:
+        print("(no tables)")
+        return 0
+    for table in sorted(tables):
+        print(f"{table}:")
+        for (
+            column_name,
+            column_type,
+            not_null,
+            default_value,
+            primary_key,
+        ) in backend.table_info(table):
+            nullable = "" if not_null else " NULL"
+            pk_flag = " PK" if primary_key else ""
+            default = (
+                f" DEFAULT {default_value}"
+                if default_value is not None
+                else ""
+            )
+            print(
+                f"  {column_name}  {column_type}"
+                f"{nullable}{pk_flag}{default}"
+            )
     return 0
 
 

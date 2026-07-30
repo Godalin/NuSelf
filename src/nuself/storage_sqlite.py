@@ -19,6 +19,7 @@ from nuself.logs import LogComponent
 from nuself.private_fs import (
     ensure_private_directory,
     ensure_private_file,
+    harden_private_file,
 )
 from nuself.runtime import (
     decode_json_value,
@@ -440,7 +441,7 @@ class SqliteStorageBackend:
                 else db_path.parent
             )
         )
-        ensure_private_file(db_path)
+        harden_private_file(db_path)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._lock = threading.RLock()
         self._transaction_state = _TransactionState()

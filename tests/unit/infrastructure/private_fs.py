@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 from collections.abc import Callable
 from pathlib import Path
 import stat
@@ -7,7 +9,19 @@ import stat
 import pytest
 
 from nuself.private_fs import ensure_private_directory
-from nuself.storage import create_file_backend, create_sqlite_backend
+from nuself.storage import (
+    _create_sqlite_backend,
+    create_file_backend,
+)
+
+
+def _create_sqlite_at_project(root: Path | None) -> object:
+    if root is None:
+        raise ValueError("test project root is required")
+    return _create_sqlite_backend(
+        root,
+        db_path=root / "private" / "nuself.sqlite",
+    )
 
 
 @pytest.mark.parametrize("relative", [Path(), Path("runtime"), Path("logs/jobs")])
@@ -34,7 +48,10 @@ def test_managed_private_tree_rejects_symlink_without_external_changes(
     assert list(external.iterdir()) == [sentinel]
 
 
-@pytest.mark.parametrize("factory", [create_file_backend, create_sqlite_backend])
+@pytest.mark.parametrize(
+    "factory",
+    [create_file_backend, _create_sqlite_at_project],
+)
 def test_storage_rejects_redirected_private_root_before_writes(
     tmp_path: Path,
     factory: Callable[[Path | None], object],

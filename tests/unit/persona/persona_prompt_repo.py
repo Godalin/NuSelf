@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
 from nuself.persona.prompt_repo import PersonaPromptRepository, create_persona_prompt
-from nuself.storage_sqlite import SqliteStorageBackend
+from nuself.storage import (
+    _create_sqlite_backend,
+    open_sqlite_backend,
+)
 from nuself.store import ScopedWorkspace, SqliteStore, WorkspaceCollection
 
 
 def _durable_repo(tmp_path: Path) -> PersonaPromptRepository:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = open_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     return PersonaPromptRepository(
         backend.collection("persona_prompts"),
         project_root=tmp_path,
@@ -29,6 +34,9 @@ def _workspace_repo(tmp_path: Path) -> PersonaPromptRepository:
 
 
 def test_concurrent_saves_preserve_all_prompts(tmp_path: Path) -> None:
+    _create_sqlite_backend(
+        db_path=tmp_path / "nuself.sqlite",
+    ).close()
     prompts = tuple(
         create_persona_prompt(f"persona-{i}", f"prompt {i}") for i in range(16)
     )
@@ -48,6 +56,9 @@ def test_concurrent_saves_preserve_all_prompts(tmp_path: Path) -> None:
 def test_name_resolution_is_derived_from_collection_records(
     tmp_path: Path,
 ) -> None:
+    _create_sqlite_backend(
+        db_path=tmp_path / "nuself.sqlite",
+    ).close()
     repo = _durable_repo(tmp_path)
     original = create_persona_prompt("reviewer", "Review carefully.")
     repo.save(original)

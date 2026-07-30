@@ -59,6 +59,9 @@ database, then atomically publishes it only after checkpoint, close, and fsync;
 corrupt or ID-mismatched file records abort without exposing a partial
 database. It publishes only to the authoritative `private/nuself.sqlite`;
 custom migration destinations are not authority switches.
+`nuself dev db-schema` is read-only with respect to storage authority: it
+requires an already-active SQLite database and otherwise directs the user to
+run migration without creating `private/nuself.sqlite`.
 Successful file-backed record deletion now includes parent-directory
 synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.

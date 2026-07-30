@@ -578,13 +578,23 @@ def create_file_backend(
     )
 
 
-def create_sqlite_backend(
+def open_sqlite_backend(
     project_root: Path | None = None, *, db_path: Path | None = None
 ) -> SqliteStorageBackend:
-    """Create a ``SqliteStorageBackend`` at ``private/nuself.sqlite`` (or *db_path*)."""
+    """Open an existing SQLite backend without creating its database."""
     from nuself.storage_sqlite import SqliteStorageBackend
     path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"
     return SqliteStorageBackend(path, project_root=project_root)
+
+
+def _create_sqlite_backend(
+    project_root: Path | None = None,
+    *,
+    db_path: Path,
+) -> SqliteStorageBackend:
+    """Create one unpublished SQLite database for atomic migration."""
+    create_private_file(db_path)
+    return open_sqlite_backend(project_root, db_path=db_path)
 
 
 def auto_backend(project_root: Path | None = None) -> StorageBackend:
@@ -592,11 +602,11 @@ def auto_backend(project_root: Path | None = None) -> StorageBackend:
     paths = runtime_paths(project_root)
     db_path = paths.private_root / "nuself.sqlite"
     if db_path.exists() or db_path.is_symlink():
-        return create_sqlite_backend(project_root=project_root)
+        return open_sqlite_backend(project_root=project_root)
     try:
         return create_file_backend(project_root=project_root)
     except SqliteStorageAuthorityError:
-        return create_sqlite_backend(project_root=project_root)
+        return open_sqlite_backend(project_root=project_root)
 
 
 _default_backends: dict[Path, StorageBackend] = {}
@@ -825,7 +835,7 @@ def _migrate_file_backend_with_authority(
     destination: SqliteStorageBackend | None = None
     published = False
     try:
-        destination = create_sqlite_backend(
+        destination = _create_sqlite_backend(
             project_root,
             db_path=temporary,
         )

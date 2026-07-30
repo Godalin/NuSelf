@@ -15,10 +15,12 @@ import pytest
 
 import nuself.storage as storage
 from nuself.agent.chat import ThreadStore
+from nuself.config import ConfigSystem
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.notification import NotificationOutbox
 from nuself.reason.repository import ReasonRepository
 from nuself.storage import (
+    _create_sqlite_backend as create_sqlite_backend,
     AtomicWriteDurabilityError,
     COLLECTION_NAMES,
     FileStorageAuthorityError,
@@ -28,11 +30,11 @@ from nuself.storage import (
     StorageBackend,
     auto_backend,
     create_file_backend,
-    create_sqlite_backend,
     migrate_file_backend_atomically,
     migrate_all,
     migrate_collection,
 )
+from nuself.storage_sqlite import SqliteStorageBackend
 
 
 def _spawn_context() -> SpawnContext:
@@ -180,7 +182,7 @@ def test_atomic_file_migration_publishes_only_validated_database(
     assert database == tmp_path / "private" / "nuself.sqlite"
     assert database.is_file()
     assert not list(database.parent.glob("nuself.sqlite.migrating-*"))
-    destination = create_sqlite_backend(db_path=database)
+    destination = storage.open_sqlite_backend(db_path=database)
     try:
         assert destination.collection("memory_entries").get(
             "mem_atomic"
@@ -274,7 +276,10 @@ def test_auto_backend_ignores_unpublished_migration_database(
 def test_file_backend_rejects_published_sqlite_authority(
     tmp_path: Path,
 ) -> None:
-    database = create_sqlite_backend(tmp_path)
+    database = storage._create_sqlite_backend(
+        tmp_path,
+        db_path=tmp_path / "private" / "nuself.sqlite",
+    )
     database.close()
 
     with pytest.raises(
@@ -523,12 +528,16 @@ def test_real_v025_private_fixture_migrates_and_reads_in_current_runtime(
     )
     private_root = tmp_path / "private"
     shutil.copytree(fixture, private_root)
-    source = create_file_backend(root=private_root)
-    destination = create_sqlite_backend(
-        db_path=private_root / "nuself.sqlite"
-    )
+    with pytest.warns(
+        RuntimeWarning,
+        match="deprecated_v025_langmem_adapter",
+    ):
+        config = ConfigSystem.load(project_root=tmp_path)
+    assert config.experimental.vector_index is False
 
-    result = migrate_all(source, destination, clear_dst=True)
+    result, database = migrate_file_backend_atomically(tmp_path)
+    assert database == private_root / "nuself.sqlite"
+    destination = auto_backend(tmp_path)
 
     assert result == {
         "memory_entries": 1,
@@ -563,3 +572,10 @@ def test_real_v025_private_fixture_migrates_and_reads_in_current_runtime(
         "user",
         "assistant",
     ]
+    assert isinstance(destination, SqliteStorageBackend)
+    destination.close()
+    with pytest.raises(
+        SqliteStorageAuthorityError,
+        match="SQLite authority",
+    ):
+        create_file_backend(tmp_path)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -23,11 +25,12 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
 from nuself.storage import (
+    _create_sqlite_backend as create_sqlite_backend,
     DefaultBackendResetError,
     FileStorageBackend,
     StorageBackend,
-    create_sqlite_backend,
     get_default_backend,
+    open_sqlite_backend,
     reset_default_backend,
     set_default_backend,
 )
@@ -202,11 +205,33 @@ def _set_raw_sqlite_column(
         conn.close()
 
 
-def test_create_sqlite_backend_creates_db(tmp_path: Path) -> None:
+def test_internal_sqlite_backend_creator_creates_db(tmp_path: Path) -> None:
     db_path = tmp_path / "nuself.sqlite"
     backend = create_sqlite_backend(db_path=db_path)
     assert isinstance(backend, SqliteStorageBackend)
     assert db_path.exists()
+
+
+def test_open_sqlite_backend_requires_existing_database(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "missing.sqlite"
+
+    with pytest.raises(FileNotFoundError):
+        open_sqlite_backend(db_path=db_path)
+
+    assert not db_path.exists()
+
+
+def test_direct_sqlite_backend_requires_existing_database(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "missing.sqlite"
+
+    with pytest.raises(FileNotFoundError):
+        SqliteStorageBackend(db_path)
+
+    assert not db_path.exists()
 
 
 def test_shared_connection_read_waits_for_transaction_commit(
@@ -293,7 +318,7 @@ def test_running_backend_reads_columns_added_by_another_backend(
 ) -> None:
     database = tmp_path / "shared-schema.sqlite"
     first = create_sqlite_backend(db_path=database)
-    second = create_sqlite_backend(db_path=database)
+    second = open_sqlite_backend(db_path=database)
     first_collection = first.collection("notification_outbox")
     second_collection = second.collection("notification_outbox")
     try:
@@ -406,9 +431,9 @@ def test_repositories_share_the_project_default_backend(
 def test_reset_closes_backend_used_by_default_repository(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(
-        tmp_path / "private" / "nuself.sqlite",
-        project_root=tmp_path,
+    backend = create_sqlite_backend(
+        tmp_path,
+        db_path=tmp_path / "private" / "nuself.sqlite",
     )
     set_default_backend(backend, tmp_path)
     repository = MemoryEntryRepository(tmp_path)
@@ -478,7 +503,7 @@ def test_reset_default_backend_attempts_every_owned_close(
 def test_close_is_idempotent_after_connection_closes(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     original = cast(sqlite3.Connection, getattr(backend, "_conn"))
     proxy = LifecycleConnectionProxy(original)
     setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
@@ -494,7 +519,7 @@ def test_online_backup_includes_wal_data_and_closes_destination(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source = SqliteStorageBackend(tmp_path / "source.sqlite")
+    source = create_sqlite_backend(db_path=tmp_path / "source.sqlite")
     source_connection = cast(
         sqlite3.Connection,
         getattr(source, "_conn"),
@@ -557,7 +582,7 @@ def test_backup_and_destination_close_failure_retain_both_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "source.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "source.sqlite")
     original_source = cast(
         sqlite3.Connection,
         getattr(backend, "_conn"),
@@ -626,7 +651,7 @@ def test_readonly_inspection_closes_source_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     database = tmp_path / "inspect.sqlite"
-    SqliteStorageBackend(database).close()
+    create_sqlite_backend(db_path=database).close()
     original_connect = sqlite3.connect
     connections: list[TrackingConnection] = []
 
@@ -660,7 +685,7 @@ def test_readonly_inspection_closes_source_connection(
 def test_checkpoint_failure_is_raised_after_connection_closes(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     original = cast(sqlite3.Connection, getattr(backend, "_conn"))
     proxy = LifecycleConnectionProxy(original, fail_checkpoint=True)
     setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
@@ -681,7 +706,7 @@ def test_checkpoint_failure_is_raised_after_connection_closes(
 def test_busy_checkpoint_status_is_raised_after_connection_closes(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     original = cast(sqlite3.Connection, getattr(backend, "_conn"))
     proxy = LifecycleConnectionProxy(
         original,
@@ -700,7 +725,7 @@ def test_busy_checkpoint_status_is_raised_after_connection_closes(
 
 
 def test_close_failure_is_visible_and_retryable(tmp_path: Path) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     original = cast(sqlite3.Connection, getattr(backend, "_conn"))
     proxy = LifecycleConnectionProxy(original, fail_close=True)
     setattr(backend, "_conn", cast(sqlite3.Connection, proxy))
@@ -721,7 +746,7 @@ def test_close_failure_is_visible_and_retryable(tmp_path: Path) -> None:
 def test_close_failure_retains_checkpoint_diagnostic(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     original = cast(sqlite3.Connection, getattr(backend, "_conn"))
     proxy = LifecycleConnectionProxy(
         original,
@@ -764,7 +789,7 @@ def test_initialization_cleanup_preserves_both_failures(
         SqliteStorageInitializationCleanupError,
         match="initialization failed",
     ) as captured:
-        SqliteStorageBackend(tmp_path / "nuself.sqlite")
+        create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
 
     assert isinstance(captured.value.__cause__, sqlite3.OperationalError)
     assert str(captured.value.__cause__) == "schema init unavailable"
@@ -781,6 +806,7 @@ def test_concurrent_backend_initialization_waits_for_wal_setup(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "nuself.sqlite"
+    create_sqlite_backend(db_path=db_path).close()
 
     def open_backend(_: int) -> SqliteStorageBackend:
         return SqliteStorageBackend(db_path)
@@ -955,7 +981,7 @@ def test_put_overwrites(tmp_path: Path) -> None:
 def test_invalid_put_preserves_row_and_does_not_add_columns(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
     col.put("mem_001", {"id": "mem_001", "value": "old"})
 
@@ -978,7 +1004,7 @@ def test_get_rejects_non_standard_numeric_constants(
     tmp_path: Path,
 ) -> None:
     db_path = tmp_path / "nuself.sqlite"
-    backend = SqliteStorageBackend(db_path)
+    backend = create_sqlite_backend(db_path=db_path)
     col = backend.collection("memory_entries")
     col.put("mem_001", {"id": "mem_001", "value": "old"})
     _set_raw_sqlite_column(
@@ -1069,7 +1095,7 @@ def test_reuses_same_db(tmp_path: Path) -> None:
     backend1 = create_sqlite_backend(db_path=db_path)
     backend1.collection("memory_entries").put("mem_001", {"id": "mem_001", "data": "hello"})
 
-    backend2 = create_sqlite_backend(db_path=db_path)
+    backend2 = open_sqlite_backend(db_path=db_path)
     result = backend2.collection("memory_entries").get("mem_001")
     assert result is not None
     assert result["data"] == "hello"
@@ -1098,6 +1124,7 @@ def test_concurrent_backends_expand_same_dynamic_schema_once(
     from threading import Barrier
 
     db_path = tmp_path / "nuself.sqlite"
+    create_sqlite_backend(db_path=db_path).close()
     backends = tuple(SqliteStorageBackend(db_path) for _ in range(8))
     barrier = Barrier(len(backends))
 
@@ -1123,7 +1150,7 @@ def test_concurrent_backends_expand_same_dynamic_schema_once(
 
 
 def test_transaction_rolls_back_all_collection_writes(tmp_path: Path) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     entries = backend.collection("memory_entries")
     candidates = backend.collection("memory_candidates")
 
@@ -1138,7 +1165,7 @@ def test_transaction_rolls_back_all_collection_writes(tmp_path: Path) -> None:
 
 
 def test_nested_transaction_commits_once(tmp_path: Path) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
     with backend.transaction():
         col.put("a", {"id": "a", "value": 1})
@@ -1150,7 +1177,7 @@ def test_nested_transaction_commits_once(tmp_path: Path) -> None:
 def test_caught_nested_failure_makes_outer_transaction_rollback_only(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
 
     with pytest.raises(
@@ -1177,7 +1204,7 @@ def test_caught_nested_failure_makes_outer_transaction_rollback_only(
 def test_keyboard_interrupt_rolls_back_and_restores_transaction_state(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
 
     with pytest.raises(KeyboardInterrupt):
@@ -1194,7 +1221,7 @@ def test_keyboard_interrupt_rolls_back_and_restores_transaction_state(
 def test_commit_failure_rolls_back_and_preserves_primary_error(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
     original = cast(
         sqlite3.Connection,
@@ -1222,7 +1249,7 @@ def test_commit_failure_rolls_back_and_preserves_primary_error(
 def test_rollback_failure_retains_primary_commit_cause(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
     original = cast(
         sqlite3.Connection,
@@ -1283,7 +1310,7 @@ def test_rollback_failure_retains_transaction_body_base_exception(
     tmp_path: Path,
     primary_error: BaseException,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
     original = cast(
         sqlite3.Connection,
@@ -1317,7 +1344,7 @@ def test_rollback_failure_retains_transaction_body_base_exception(
 def test_rollback_failure_retains_rollback_only_error_and_resets_state(
     tmp_path: Path,
 ) -> None:
-    backend = SqliteStorageBackend(tmp_path / "nuself.sqlite")
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     col = backend.collection("memory_entries")
     original = cast(
         sqlite3.Connection,

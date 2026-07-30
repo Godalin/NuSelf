@@ -50,6 +50,9 @@ v0.3 loader 可以读取完整的官方 v0.2.5 配置：它只移除已经退役
 checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file record 会
 中止迁移，不会暴露部分数据库。迁移只发布到权威路径
 `private/nuself.sqlite`；自定义目标不属于 authority switch。
+`nuself dev db-schema` 对 storage authority 是只读的：它要求当前已有活动的
+SQLite database，否则只会提示先执行 migration，不会创建
+`private/nuself.sqlite`。
 文件后端 record 删除成功还要求同步 parent directory；若删除已可见但 crash
 durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
 Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已

@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 import argparse
 from pathlib import Path
 
 import pytest
 
-from nuself.cli import build_parser
+from nuself.cli import build_parser, main
 from nuself.cli.commands.dev import (
     handle_dev_db_schema,
     handle_dev_migrate,
     handle_dev_storage,
 )
-from nuself.storage import FileStorageBackend
+from nuself.storage import (
+    FileStorageBackend,
+    auto_backend,
+    create_file_backend,
+)
 from nuself.storage_sqlite import SqliteStorageBackend
 
 
@@ -79,33 +85,61 @@ def test_dev_migrate_rejects_non_authoritative_db_destination() -> None:
     assert captured.value.code == 2
 
 
-def test_dev_db_schema_closes_backend_on_early_return(
+def test_dev_db_schema_reuses_default_backend_without_closing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    backend = SqliteStorageBackend(
-        tmp_path / "schema.sqlite",
-        project_root=tmp_path,
+    from nuself.storage import _create_sqlite_backend
+
+    backend = _create_sqlite_backend(
+        tmp_path,
+        db_path=tmp_path / "schema.sqlite",
     )
     monkeypatch.setattr(backend, "collection_names", lambda: ())
 
-    def create_backend(
-        project_root: Path | None,
-        *,
-        db_path: Path | None = None,
+    def default_backend(
+        _project_root: Path | None,
     ) -> SqliteStorageBackend:
-        del project_root, db_path
         return backend
 
     monkeypatch.setattr(
-        "nuself.cli.commands.dev.create_sqlite_backend",
-        create_backend,
+        "nuself.cli.commands.dev.get_default_backend",
+        default_backend,
     )
 
     assert handle_dev_db_schema(
         argparse.Namespace(project_root=tmp_path)
     ) == 0
-    assert getattr(backend, "_closed") is True
+    assert getattr(backend, "_closed") is False
+    backend.close()
+
+
+def test_dev_db_schema_cannot_publish_sqlite_authority(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = create_file_backend(tmp_path)
+    source.collection("memory_entries").put(
+        "legacy",
+        {"id": "legacy", "title": "Still authoritative"},
+    )
+    source.close()
+
+    assert main(
+        ["--project-root", str(tmp_path), "dev", "db-schema"]
+    ) == 1
+
+    assert "Run 'nuself dev migrate' first" in capsys.readouterr().err
+    assert not (tmp_path / "private" / "nuself.sqlite").exists()
+    reopened = auto_backend(tmp_path)
+    assert isinstance(reopened, FileStorageBackend)
+    try:
+        assert reopened.collection("memory_entries").get("legacy") == {
+            "id": "legacy",
+            "title": "Still authoritative",
+        }
+    finally:
+        reopened.close()
 
 
 def test_dev_storage_reuses_default_backend(

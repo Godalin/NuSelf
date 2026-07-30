@@ -176,6 +176,14 @@ files. A closed file backend is permanently unusable: `collection()`,
 `transaction()`, and every operation on collections created before closure
 must fail.
 
+Opening and creating SQLite storage are separate operations.
+`open_sqlite_backend()` and direct `SqliteStorageBackend` construction require
+an existing regular database file and never create one. Creation is an
+internal migration operation used only for the unpublished
+`nuself.sqlite.migrating-<uuid>` database while the exclusive file-authority
+lease is held. Ordinary runtime, developer inspection, and repository
+composition cannot publish the canonical database as a side effect.
+
 ### Repository 模式变更（示例）
 
 ```python
@@ -268,10 +276,11 @@ once after dispatch finishes or raises. For interactive mode, this outer reset
 runs only after transcript and curator cleanup. Daemon server cleanup may have
 already reset the same backend; reset is idempotent when no backend remains.
 
-Developer storage inspection reads the project default backend and leaves
-closure to the outer CLI lifecycle. Developer migration and schema inspection
-create temporary SQLite backends for their operation and must close those
-owned connections before returning, including early-return paths.
+Developer storage and schema inspection read the project default backend and
+leave closure to the outer CLI lifecycle. Schema inspection succeeds only
+when the active backend is SQLite. On file authority it returns a diagnostic
+directing the user to `nuself dev migrate` and leaves the canonical path and
+file-backed records untouched.
 
 `nuself dev migrate` is the authority-switch command and therefore has exactly
 one destination: canonical `private/nuself.sqlite`. It does not expose a
