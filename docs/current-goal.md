@@ -23,9 +23,9 @@ durable user-owned state by default while explicit workspaces remain isolated.
 4. [complete] Add explicit CLI scope selection, initialization, path inspection, and
    legacy `private/` migration.
 5. [complete] Isolate daemon lifecycle and transport resources by authority identity.
-6. [in progress] Migrate all composition roots and domain callers, then update public
+6. [complete] Migrate all composition roots and domain callers, then update public
    documentation and v0.3.1 release metadata.
-7. Run the complete local and six-platform release gates, integrate coherent
+7. [in progress] Run the complete local and six-platform release gates, integrate coherent
    commits, publish, and verify the final release.
 
 ## Out Of Scope
@@ -51,4 +51,7 @@ durable user-owned state by default while explicit workspaces remain isolated.
   SQLite WAL preservation.
 - Complete local unit suite: 2471 passed on Python 3.14.
 - Full-source Pyright: 0 errors and 0 warnings.
-- Pending: lock/build/clean-wheel smoke and six-platform release CI.
+- Lockfile, sdist/wheel build, clean Python 3.14 wheel import, and
+  `nuself --version` smoke passed for 0.3.1.
+- Release contract suite: 12 passed.
+- Pending: six-platform release CI and final integration/publishing.

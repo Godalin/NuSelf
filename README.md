@@ -12,8 +12,8 @@ agent's data rather than hide it behind a hosted account.
 
 ## Status
 
-The current stable release is **v0.3.0**. v0.3.1 development adds installed,
-user-scoped storage and explicit isolated workspaces.
+The current stable release is **v0.3.1**, with installed user-scoped storage
+and explicit isolated workspaces.
 
 NuSelf is in active development. The v0.3 line establishes the runtime,
 storage, agent, and background-task foundations; interfaces may still change
