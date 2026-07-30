@@ -45,5 +45,10 @@ managed/external ownership to every backup path.
 - Focused storage, private-filesystem, and CLI verification reported 150
   passed. Locked Pyright reported 0 errors and 0 warnings; `git diff --check`
   passed.
-- Complete local release gates, distribution verification, push, and final
-  six-platform CI are pending.
+- Complete local verification reported 2437 passed. Locked Pyright analyzed
+  327 files with 0 errors and 0 warnings; `uv lock --check`,
+  `git diff --check`, and `nuself 0.3.0rc1` passed.
+- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14.3
+  environment installed only the wheel plus its declared dependencies,
+  imported `nuself.cli` and `nuself.llm`, and reported `nuself 0.3.0rc1`.
+- Push and final six-platform CI are pending.
