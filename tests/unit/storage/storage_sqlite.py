@@ -6,14 +6,20 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
+from multiprocessing.context import SpawnContext
+from multiprocessing.synchronize import Event
+import os
 from pathlib import Path
 import sqlite3
 import stat
 import threading
+import time
 from typing import Callable, cast
 
 import pytest
 
+import nuself.storage_sqlite as sqlite_storage
 from nuself.logs import read_log_events
 from nuself.memory.repository import (
     MemoryCandidateRepository,
@@ -53,7 +59,7 @@ from nuself.storage_sqlite import (
 
 def _sqlite_table_names(database: Path) -> tuple[str, ...]:
     connection = sqlite3.connect(
-        f"{database.resolve().as_uri()}?mode=ro&immutable=1",
+        f"{database.resolve().as_uri()}?mode=ro",
         uri=True,
     )
     try:
@@ -78,6 +84,52 @@ def _open_explicitly(project: Path, database: Path) -> object:
     return open_sqlite_backend(project, db_path=database)
 
 
+def _spawn_context() -> SpawnContext:
+    return multiprocessing.get_context("spawn")
+
+
+def _write_and_checkpoint_live_authority(
+    project_root: str,
+    ready: Event,
+    start: Event,
+) -> None:
+    backend = auto_backend(Path(project_root))
+    assert isinstance(backend, SqliteStorageBackend)
+    ready.set()
+    if not start.wait(timeout=30):
+        raise RuntimeError("parent did not start SQLite stress run")
+    try:
+        collection = backend.collection("memory_entries")
+        for index in range(200):
+            collection.put(
+                f"writer-{index}",
+                {"id": f"writer-{index}", "sequence": index},
+            )
+            if index % 5 == 0:
+                backend._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            time.sleep(0.001)
+    finally:
+        backend.close()
+
+
+def _commit_live_authority_then_crash(
+    project_root: str,
+    committed: Event,
+) -> None:
+    backend = auto_backend(Path(project_root))
+    assert isinstance(backend, SqliteStorageBackend)
+    backend._conn.execute("PRAGMA wal_autocheckpoint=0")
+    backend.collection("memory_entries").put(
+        "crash-wal",
+        {"id": "crash-wal", "state": "committed"},
+    )
+    assert backend.db_path.with_name(
+        f"{backend.db_path.name}-wal"
+    ).exists()
+    committed.set()
+    os._exit(0)
+
+
 def test_sqlite_backend_hardens_database_directory_and_sidecars(
     tmp_path: Path,
 ) -> None:
@@ -92,7 +144,7 @@ def test_sqlite_backend_hardens_database_directory_and_sidecars(
     private.chmod(0o755)
     database.chmod(0o644)
 
-    backend = SqliteStorageBackend(database, project_root=tmp_path)
+    backend = open_sqlite_backend(tmp_path, db_path=database)
     try:
         backend.collection("memory_entries").put(
             "private",
@@ -248,23 +300,31 @@ def test_internal_sqlite_backend_creator_creates_db(tmp_path: Path) -> None:
 def test_open_sqlite_backend_requires_existing_database(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "missing.sqlite"
+    external = tmp_path / "external"
+    external.mkdir(mode=0o755)
+    external.chmod(0o755)
+    db_path = external / "missing.sqlite"
 
     with pytest.raises(FileNotFoundError):
         open_sqlite_backend(db_path=db_path)
 
     assert not db_path.exists()
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
 
 
 def test_direct_sqlite_backend_requires_existing_database(
     tmp_path: Path,
 ) -> None:
-    db_path = tmp_path / "missing.sqlite"
+    external = tmp_path / "external"
+    external.mkdir(mode=0o755)
+    external.chmod(0o755)
+    db_path = external / "missing.sqlite"
 
     with pytest.raises(FileNotFoundError):
         SqliteStorageBackend(db_path)
 
     assert not db_path.exists()
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
 
 
 @pytest.mark.parametrize(
@@ -288,6 +348,9 @@ def test_sqlite_open_rejects_redirected_private_before_side_effects(
     database.chmod(0o644)
     before_bytes = database.read_bytes()
     before_tables = _sqlite_table_names(database)
+    before_entries = tuple(
+        sorted(path.name for path in external.iterdir())
+    )
     (project / "private").symlink_to(
         external,
         target_is_directory=True,
@@ -300,9 +363,9 @@ def test_sqlite_open_rejects_redirected_private_before_side_effects(
     assert stat.S_IMODE(database.stat().st_mode) == 0o644
     assert stat.S_IMODE(external.stat().st_mode) == 0o755
     assert _sqlite_table_names(database) == before_tables
-    assert tuple(path.name for path in external.iterdir()) == (
-        "nuself.sqlite",
-    )
+    assert tuple(
+        sorted(path.name for path in external.iterdir())
+    ) == before_entries
 
 
 @pytest.mark.parametrize(
@@ -944,6 +1007,127 @@ def test_concurrent_backend_initialization_waits_for_wal_setup(
 
     assert all(backend.collection("memory_entries").list() == () for backend in backends)
     for backend in backends:
+        backend.close()
+
+
+def test_authority_open_does_not_run_thought_pack_integrity_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "private" / "nuself.sqlite"
+    create_sqlite_backend(tmp_path, db_path=database).close()
+
+    def unexpected_integrity_scan(
+        connection: sqlite3.Connection,
+    ) -> int:
+        del connection
+        raise AssertionError("ordinary authority open ran quick_check")
+
+    monkeypatch.setattr(
+        sqlite_storage,
+        "_validate_thought_pack_connection",
+        unexpected_integrity_scan,
+    )
+
+    open_sqlite_backend(tmp_path).close()
+
+
+def test_external_sqlite_open_preserves_parent_and_file_modes(
+    tmp_path: Path,
+) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o755)
+    database = shared / "pack.sqlite"
+    create_sqlite_backend(db_path=database).close()
+    shared.chmod(0o755)
+    database.chmod(0o644)
+
+    backend = open_sqlite_backend(db_path=database)
+    try:
+        assert stat.S_IMODE(shared.stat().st_mode) == 0o755
+        assert stat.S_IMODE(database.stat().st_mode) == 0o644
+    finally:
+        backend.close()
+
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755
+    assert stat.S_IMODE(database.stat().st_mode) == 0o644
+
+
+def test_cross_process_live_writer_checkpoint_and_repeated_open(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "private" / "nuself.sqlite"
+    create_sqlite_backend(tmp_path, db_path=database).close()
+    context = _spawn_context()
+    ready = context.Event()
+    start = context.Event()
+    writer = context.Process(
+        target=_write_and_checkpoint_live_authority,
+        args=(str(tmp_path), ready, start),
+    )
+    writer.start()
+    assert ready.wait(timeout=30)
+    start.set()
+
+    open_count = 0
+    deadline = time.monotonic() + 20
+    while (
+        writer.is_alive() or open_count < 20
+    ) and time.monotonic() < deadline:
+        backend = cast(
+            SqliteStorageBackend,
+            auto_backend(tmp_path),
+        )
+        try:
+            assert isinstance(backend, SqliteStorageBackend)
+            backend.collection("memory_entries").list()
+        finally:
+            backend.close()
+        open_count += 1
+
+    writer.join(timeout=30)
+    assert writer.exitcode == 0
+    assert open_count >= 20
+
+    final = cast(
+        SqliteStorageBackend,
+        auto_backend(tmp_path),
+    )
+    try:
+        assert len(final.collection("memory_entries").list()) == 200
+    finally:
+        final.close()
+
+
+def test_open_recovers_committed_uncheckpointed_wal_after_crash(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "private" / "nuself.sqlite"
+    create_sqlite_backend(tmp_path, db_path=database).close()
+    context = _spawn_context()
+    committed = context.Event()
+    writer = context.Process(
+        target=_commit_live_authority_then_crash,
+        args=(str(tmp_path), committed),
+    )
+    writer.start()
+    assert committed.wait(timeout=30)
+    writer.join(timeout=30)
+    assert writer.exitcode == 0
+    assert database.with_name(f"{database.name}-wal").exists()
+
+    backend = cast(
+        SqliteStorageBackend,
+        auto_backend(tmp_path),
+    )
+    try:
+        assert backend.collection("memory_entries").get(
+            "crash-wal"
+        ) == {
+            "id": "crash-wal",
+            "state": "committed",
+        }
+    finally:
         backend.close()
 
 

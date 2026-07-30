@@ -436,6 +436,8 @@ class SqliteStorageBackend:
         *,
         project_root: Path | None = None,
         _initialize: bool = False,
+        _managed: bool = False,
+        _truncate_on_close: bool = False,
     ) -> None:
         self._db_path = db_path
         self._project_root = (
@@ -447,23 +449,26 @@ class SqliteStorageBackend:
                 else db_path.parent
             )
         )
-        ensure_private_directory(db_path.parent)
+        if _managed:
+            ensure_private_directory(db_path.parent)
         require_private_file(db_path)
         if not _initialize:
             _validate_existing_nuself_database(db_path)
-        harden_private_file(db_path)
+        if _managed:
+            harden_private_file(db_path)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._lock = threading.RLock()
         self._transaction_state = _TransactionState()
         self._closed = False
+        self._truncate_on_close = _truncate_on_close
         try:
             self._conn.execute("PRAGMA busy_timeout=5000")
             with _SQLITE_INITIALIZATION_LOCK:
                 self._conn.execute("PRAGMA journal_mode=WAL")
                 self._conn.execute("PRAGMA synchronous=NORMAL")
                 self._init_schema()
-                self._checkpoint_schema_identity()
-                _harden_sqlite_sidecars(db_path)
+                if _managed:
+                    _harden_sqlite_sidecars(db_path)
         except BaseException as init_error:
             try:
                 self._conn.close()
@@ -487,8 +492,13 @@ class SqliteStorageBackend:
                 return
             checkpoint_error: Exception | None = None
             try:
+                checkpoint_mode = (
+                    "TRUNCATE"
+                    if self._truncate_on_close
+                    else "PASSIVE"
+                )
                 checkpoint = self._conn.execute(
-                    "PRAGMA wal_checkpoint(TRUNCATE)"
+                    f"PRAGMA wal_checkpoint({checkpoint_mode})"
                 ).fetchone()
                 if (
                     checkpoint is None
@@ -499,7 +509,7 @@ class SqliteStorageBackend:
                         "SQLite WAL checkpoint returned an invalid status"
                     )
                 busy, _, _ = checkpoint
-                if busy:
+                if busy and self._truncate_on_close:
                     raise _SqliteWalCheckpointBusyError(
                         "SQLite WAL checkpoint remained busy"
                     )
@@ -563,22 +573,6 @@ class SqliteStorageBackend:
                 "(id TEXT PRIMARY KEY)"
             )
         self._conn.commit()
-
-    def _checkpoint_schema_identity(self) -> None:
-        """Keep authority metadata visible without consulting live WAL."""
-
-        status = self._conn.execute(
-            "PRAGMA wal_checkpoint(PASSIVE)"
-        ).fetchone()
-        if (
-            status is None
-            or len(status) != 3
-            or any(type(value) is not int for value in status)
-            or status[0] != 0
-        ):
-            raise RuntimeError(
-                "SQLite schema identity checkpoint failed"
-            )
 
     def _apply_v2(self) -> None:
         """Expand a legacy v1 payload object into v2 dynamic columns."""
@@ -862,8 +856,6 @@ def _thought_pack_collection_count(
 
 def _validate_thought_pack_connection(
     connection: sqlite3.Connection,
-    *,
-    authority: bool = False,
 ) -> int:
     try:
         check_rows = connection.execute("PRAGMA quick_check").fetchall()
@@ -874,6 +866,23 @@ def _validate_thought_pack_connection(
             raise ThoughtPackValidationError(
                 "thought pack failed SQLite quick_check"
             )
+        return _validate_nuself_schema_connection(connection)
+    except ThoughtPackValidationError:
+        raise
+    except sqlite3.DatabaseError as exc:
+        raise ThoughtPackValidationError(
+            "thought pack is not a valid SQLite database"
+        ) from exc
+
+
+def _validate_nuself_schema_connection(
+    connection: sqlite3.Connection,
+    *,
+    authority: bool = False,
+) -> int:
+    """Validate NuSelf identity metadata without scanning stored content."""
+
+    try:
         tables = {
             row[0]
             for row in connection.execute(
@@ -932,11 +941,11 @@ def _validate_thought_pack_connection(
 
 
 def _validate_existing_nuself_database(source: Path) -> int:
-    """Validate authority identity through a read-only connection."""
+    """Validate live authority identity through a lock-aware connection."""
 
     try:
         with _readonly_authority_identity(source) as connection:
-            return _validate_thought_pack_connection(
+            return _validate_nuself_schema_connection(
                 connection,
                 authority=True,
             )
@@ -952,9 +961,9 @@ def _validate_existing_nuself_database(source: Path) -> int:
 def _readonly_authority_identity(
     source: Path,
 ) -> Generator[sqlite3.Connection, None, None]:
-    """Inspect checkpointed authority metadata without creating sidecars."""
+    """Inspect live authority metadata with normal locking and WAL handling."""
 
-    source_uri = f"{source.resolve().as_uri()}?mode=ro&immutable=1"
+    source_uri = f"{source.resolve().as_uri()}?mode=ro"
     try:
         connection = sqlite3.connect(source_uri, uri=True)
     except sqlite3.DatabaseError as exc:

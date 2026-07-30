@@ -583,8 +583,15 @@ def open_sqlite_backend(
 ) -> SqliteStorageBackend:
     """Open an existing SQLite backend without creating its database."""
     from nuself.storage_sqlite import SqliteStorageBackend
-    path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"
-    return SqliteStorageBackend(path, project_root=project_root)
+    paths = runtime_paths(project_root)
+    canonical = paths.private_root / "nuself.sqlite"
+    path = db_path if db_path is not None else canonical
+    managed = path.absolute() == canonical.absolute()
+    return SqliteStorageBackend(
+        path,
+        project_root=paths.project_root,
+        _managed=managed,
+    )
 
 
 def _create_sqlite_backend(
@@ -600,6 +607,8 @@ def _create_sqlite_backend(
         db_path,
         project_root=project_root,
         _initialize=True,
+        _managed=True,
+        _truncate_on_close=True,
     )
 
 

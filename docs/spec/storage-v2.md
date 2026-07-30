@@ -178,15 +178,28 @@ must fail.
 
 Opening and creating SQLite storage are separate operations.
 `open_sqlite_backend()` and direct `SqliteStorageBackend` construction require
-an existing regular database file and never create one. Before inspecting or
-hardening that file they validate its managed parent without following
-symlinks. Before any chmod, writable SQLite connection, PRAGMA, schema change,
-or sidecar creation, opening uses a read-only connection to require a valid
-NuSelf `_schema_version`, every known collection table, and each collection's
-`id` primary key. Empty files, unrelated SQLite databases, incomplete NuSelf
-schemas, corrupt databases, and future schema versions fail closed without
-being adopted as authority or mutated. Recognized supported versions may then
-perform their documented controlled upgrade.
+an existing regular database file and never create one. Project-managed paths
+validate their parent without following symlinks before inspecting or
+hardening the file. Explicit external paths validate the existing regular file
+but never chmod its parent or the file.
+
+Before any writable SQLite connection, schema change, or business write,
+opening uses a `mode=ro` connection with normal SQLite locking, change
+detection, and WAL coordination to require a valid NuSelf `_schema_version`,
+every known collection table, and each collection's `id` primary key.
+Canonical authority is live mutable state and must never be opened with
+`immutable=1`. The lock-aware read-only connection may access or create
+SQLite's WAL/SHM coordination artifacts. Empty files, unrelated SQLite
+databases, incomplete NuSelf schemas, corruption encountered while reading
+identity metadata, and future schema versions fail closed without schema
+initialization or business mutation.
+Recognized supported versions may then perform their documented controlled
+upgrade.
+
+Ordinary authority identity validation is metadata-only and must not run
+`PRAGMA quick_check`. Full integrity checking remains part of thought-pack
+import and inspection, where the database is an explicit external artifact
+rather than every CLI startup path.
 
 Creation is an
 internal migration operation used only for the unpublished
@@ -256,9 +269,11 @@ NuSelf-owned database directories use mode `0700`; the main database,
 workspace databases, WAL/SHM sidecars, and internal import/export snapshots use
 mode `0600`. Existing active files are hardened before use. SQLite must not
 create a broader-permission database and narrow it only after private content
-has been written. Paths explicitly selected by the user for external exports
-are not owned by this invariant and retain normal
-destination-directory/`umask` semantics.
+has been written. Explicit external SQLite paths, including paths passed to
+`open_sqlite_backend(db_path=...)` outside the canonical managed location, are
+not owned by this invariant: their parent and existing database mode remain
+unchanged, while SQLite coordination artifacts retain normal
+directory/`umask` semantics.
 
 The managed `private/` root and its managed directory descendants are opened
 component-by-component with no-follow directory handles. A symlink or
@@ -321,11 +336,17 @@ incomplete/conflicting destination and block migration. Conversely,
 replacement they are never evidence that SQLite owns runtime authority.
 
 `close()` is lock-protected and idempotent after the underlying connection has
-closed successfully. It first requests a truncating WAL checkpoint and always
-attempts to close the connection even if that checkpoint fails. A checkpoint
-exception, invalid status, or non-zero SQLite `busy` result is surfaced after
-a successful connection close because data remains recoverable in the WAL but
-the requested lifecycle operation was degraded. A
+closed successfully. Ordinary live backends first request a passive WAL
+checkpoint so shutdown cooperates with concurrent readers and writers. The
+unpublished migration backend, which is protected by the exclusive authority
+lease, instead requires a truncating checkpoint before publication. Close
+always attempts to close the connection even if its checkpoint fails. A
+checkpoint exception or invalid status is surfaced after a successful
+connection close. A non-zero `busy` result is normal for a passive checkpoint
+when another process is checkpointing and does not fail ordinary close; it is
+an error for the migration backend's required truncating checkpoint because
+publication must not discard a live WAL. In either failure case data remains
+recoverable in the WAL but the requested lifecycle operation was degraded. A
 connection-close failure is authoritative: the backend remains open and the
 failure is retryable. If both operations fail, the close error exposes the
 checkpoint error as secondary diagnostic context without replacing the close

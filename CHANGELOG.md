@@ -6,10 +6,13 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
-- Existing SQLite authority is now validated without side effects before it is
-  hardened or opened for writes. Redirected managed parents, empty files,
-  unrelated databases, incomplete schemas, corrupt databases, and unsupported
-  future schemas fail closed; only migration may initialize a new database.
+- Existing SQLite authority now uses lock-aware read-only validation with
+  normal WAL coordination, never `immutable=1`. Ordinary startup checks only
+  NuSelf schema identity rather than running a full-database `quick_check`;
+  live concurrent writers, checkpoints, repeated opens, and crash-left WAL
+  recovery are covered across processes. Redirected managed parents and
+  invalid authority still fail before schema or business mutation, while
+  explicit external SQLite paths retain their directory and file modes.
 - `dev db-schema` now inspects only an already-active SQLite backend and cannot
   create an empty canonical database that hides file-backed data. SQLite
   opening requires an existing database; only atomic migration may create its
