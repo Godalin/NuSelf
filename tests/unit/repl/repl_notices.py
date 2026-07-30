@@ -97,6 +97,92 @@ def test_startup_groups_recent_hidden_failures(tmp_path: Path) -> None:
     assert "socket details must stay hidden" not in messages
 
 
+def test_startup_suppresses_failure_resolved_by_later_record_update(
+    tmp_path: Path,
+) -> None:
+    authority = tmp_path / "authority"
+    authority.mkdir()
+    write_log_event(
+        "memory",
+        "record_decode_failed",
+        "old decode failure",
+        project_root=authority,
+        level="warning",
+        metadata={
+            "collection": "memory_entries",
+            "record_id": "mem_repaired",
+        },
+    )
+    write_log_event(
+        "daemon",
+        "data_record_updated",
+        "Authoritative data record updated",
+        project_root=authority,
+        status="completed",
+        metadata={
+            "collection": "memory_entries",
+            "record_id": "mem_repaired",
+        },
+    )
+
+    notices = startup_interactive_notices(authority, cwd=tmp_path)
+
+    assert all(
+        notice.code != "recent-memory-records-unreadable"
+        for notice in notices
+    )
+
+
+def test_startup_keeps_unrepaired_and_post_repair_failures(
+    tmp_path: Path,
+) -> None:
+    authority = tmp_path / "authority"
+    authority.mkdir()
+    for record_id in ("mem_repaired", "mem_unresolved"):
+        write_log_event(
+            "memory",
+            "record_decode_failed",
+            "decode failure",
+            project_root=authority,
+            level="warning",
+            metadata={
+                "collection": "memory_entries",
+                "record_id": record_id,
+            },
+        )
+    write_log_event(
+        "daemon",
+        "data_record_updated",
+        "Authoritative data record updated",
+        project_root=authority,
+        status="completed",
+        metadata={
+            "collection": "memory_entries",
+            "record_id": "mem_repaired",
+        },
+    )
+    write_log_event(
+        "memory",
+        "record_decode_failed",
+        "failure after repair",
+        project_root=authority,
+        level="warning",
+        metadata={
+            "collection": "memory_entries",
+            "record_id": "mem_repaired",
+        },
+    )
+
+    notices = startup_interactive_notices(authority, cwd=tmp_path)
+
+    [notice] = [
+        item
+        for item in notices
+        if item.code == "recent-memory-records-unreadable"
+    ]
+    assert "2 memory record decode failure(s)" in notice.message
+
+
 def test_notice_renderer_uses_one_grouped_heading(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

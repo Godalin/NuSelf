@@ -184,7 +184,7 @@ uv run nuself data export threads --format json
 没有可用模型、本地工作区 authority 尚未被选择、持久化记录无法解码，
 或 daemon 最近未能交付回复。可修复记录会指向 `data check`；已经持久化
 但未交付的聊天回复可通过 `:history` 恢复，反复出现交付失败时会建议重启
-daemon。
+daemon。成功修复记录后，对应的旧解码告警不再被当作当前问题显示。
 
 local-first 不等于模型离线：配置远程模型后，一次调用所需的上下文会发送给你选择的端点。请根据自己的隐私要求选择提供方及其数据保留政策。
 

@@ -116,11 +116,14 @@ def _recent_failure_notices(
     recent_events = [
         event for event in events if _event_at_or_after(event, cutoff)
     ]
-    failed = [
-        event
-        for event in recent_events
-        if event.event == "record_decode_failed"
-    ]
+    failed = _unresolved_record_failures(
+        [
+            event
+            for event in recent_events
+            if event.event == "record_decode_failed"
+        ],
+        recent_events,
+    )
     record_counts = Counter(event.component for event in failed)
     notices = [
         InteractiveNotice(
@@ -147,6 +150,52 @@ def _recent_failure_notices(
     return tuple(notices)
 
 
+def _unresolved_record_failures(
+    failures: list[LogEvent],
+    events: list[LogEvent],
+) -> list[LogEvent]:
+    repaired_at: dict[tuple[str, str], datetime] = {}
+    for event in events:
+        if (
+            event.event != "data_record_updated"
+            or event.metadata is None
+        ):
+            continue
+        collection = event.metadata.get("collection")
+        record_id = event.metadata.get("record_id")
+        instant = _event_instant(event)
+        if (
+            not isinstance(collection, str)
+            or not isinstance(record_id, str)
+            or instant is None
+        ):
+            continue
+        identity = (collection, record_id)
+        previous = repaired_at.get(identity)
+        if previous is None or instant > previous:
+            repaired_at[identity] = instant
+
+    unresolved: list[LogEvent] = []
+    for failure in failures:
+        if failure.metadata is None:
+            unresolved.append(failure)
+            continue
+        collection = failure.metadata.get("collection")
+        record_id = failure.metadata.get("record_id")
+        failed_at = _event_instant(failure)
+        if (
+            not isinstance(collection, str)
+            or not isinstance(record_id, str)
+            or failed_at is None
+        ):
+            unresolved.append(failure)
+            continue
+        repaired = repaired_at.get((collection, record_id))
+        if repaired is None or repaired <= failed_at:
+            unresolved.append(failure)
+    return unresolved
+
+
 def _record_recovery_instruction(
     events: list[LogEvent],
     component: str,
@@ -167,13 +216,18 @@ def _record_recovery_instruction(
 
 
 def _event_at_or_after(event: LogEvent, cutoff: datetime) -> bool:
+    instant = _event_instant(event)
+    return instant is not None and instant >= cutoff
+
+
+def _event_instant(event: LogEvent) -> datetime | None:
     try:
         instant = datetime.fromisoformat(event.time)
     except ValueError:
-        return False
+        return None
     if instant.tzinfo is None:
-        return False
-    return instant.astimezone(UTC) >= cutoff
+        return None
+    return instant.astimezone(UTC)
 
 
 def print_interactive_notices(

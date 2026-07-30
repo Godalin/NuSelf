@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Interactive startup no longer repeats historical record-decode Attention
+  notices after a successful validated update of the same collection and
+  record. Later, unidentified, and still-unrepaired failures remain visible.
 - Transient model-availability failures now retry the same endpoint once before
   ordered failover. Readonly tool outcomes remain replayable while any
   write-capable outcome still suppresses replay. An empty chat memory search

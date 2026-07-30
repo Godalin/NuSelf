@@ -202,8 +202,8 @@ Interactive chat shows a concise `Attention:` block when the selected
 authority has no usable model, a local workspace authority was not selected,
 persisted records cannot be decoded, or the daemon recently failed to deliver
 a reply. Notices point to `data check` for repairable records and `:history`
-for already-persisted chat replies; recurring delivery failures suggest a
-daemon restart.
+for already-persisted chat replies; a successful record repair resolves its
+older decode notices, and recurring delivery failures suggest a daemon restart.
 
 NuSelf is local-first, not model-offline: when you configure a remote model,
 the context required for that call is sent to the endpoint you selected.

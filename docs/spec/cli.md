@@ -170,6 +170,11 @@ outbox and the chronological activity log:
   delivery failures recur;
 - repeated records are counted and grouped. Raw exception text, record
   payloads, API keys, and one line per failure are never rendered;
+- startup treats a metadata-only `data_record_updated` audit as resolution only
+  for an earlier decode failure with the exact same collection and record ID.
+  Failures after that update, failures for another record, and failures without
+  complete identity remain visible. Historical logs are preserved; repair
+  changes the active projection rather than deleting evidence;
 - a notice does not switch authority, repair data, change the chat result, or
   enter the external notification outbox;
 - failure to inspect optional notice sources must not prevent the REPL from
