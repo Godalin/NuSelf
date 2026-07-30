@@ -5,9 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close the final v0.3.0 SQLite authority blockers: reject redirected managed
-parents before any database side effect, and refuse to adopt an empty,
-unrelated, or malformed canonical SQLite file.
+Idle. The final v0.3.0 SQLite authority blockers are closed.
 
 ## Active Branch
 
@@ -15,15 +13,8 @@ unrelated, or malformed canonical SQLite file.
 
 ## Ordered Work
 
-1. Validate the managed database parent and final file type before any chmod,
-   SQLite connection, schema mutation, or sidecar creation.
-2. Require every opened database to prove NuSelf schema identity through a
-   read-only connection before reopening it for controlled v1/v2 operation;
-   keep new database initialization migration-private.
-3. Add side-effect-free symlink-parent regressions for both automatic and
-   explicit open paths plus empty, unrelated, malformed, and v1 upgrade cases.
-4. Run complete release gates, push the functional commits, and require the
-   final six-platform CI matrix before returning this board to idle.
+1. Discuss and specify stable `v0.3.0` promotion before changing release
+   metadata or `main`.
 
 ## Out Of Scope
 
@@ -52,4 +43,6 @@ unrelated, or malformed canonical SQLite file.
 - `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
   environment installed only the wheel plus its declared dependencies,
   imported `nuself.cli` and `nuself.llm`, and reported `nuself 0.3.0rc1`.
-- Push and final six-platform CI are pending.
+- GitHub Actions run `30515274003` passed on Ubuntu and macOS with Python
+  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
+  suite, distribution build, and clean-wheel smoke test for commit `5b76a02`.
