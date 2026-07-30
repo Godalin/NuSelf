@@ -12,6 +12,7 @@ from nuself.agent.chat.audit import (
     write_chat_audit,
 )
 from nuself.cli.commands.output import print_ansi
+from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem
 from nuself.daemon import client
@@ -80,7 +81,11 @@ def send_daemon_chat_interactive(
             )
             print(error, file=sys.stderr)
             return InteractiveChatResult(
-                code=4 if exc.retryable else 1,
+                code=(
+                    CliExitCode.TEMPORARY_FAILURE
+                    if exc.retryable
+                    else CliExitCode.FAILURE
+                ),
                 retryable=exc.retryable,
                 error=error,
                 failure_phase=exc.phase,
@@ -96,14 +101,17 @@ def send_daemon_chat_interactive(
                 event="daemon_chat_failed",
                 project_root=project_root,
             )
-            return InteractiveChatResult(code=1, error=error)
+            return InteractiveChatResult(
+                code=CliExitCode.FAILURE,
+                error=error,
+            )
         with runtime_context(thread_id=response.thread_id):
             write_chat_audit(
                 "daemon_chat_completed",
                 project_root=project_root,
             )
         return InteractiveChatResult(
-            code=0,
+            code=CliExitCode.SUCCESS,
             reply=response.reply,
             memory_update=response.memory_update or None,
         )
@@ -162,7 +170,10 @@ def send_one_shot_chat_interactive(
                 project_root=project_root,
             )
             run_memory_curator(project_root)
-            return InteractiveChatResult(code=0, reply=reply)
+            return InteractiveChatResult(
+                code=CliExitCode.SUCCESS,
+                reply=reply,
+            )
         except RuntimeError as exc:
             error = diagnostic_exception_message(exc)
             report_chat_failure(
@@ -171,7 +182,7 @@ def send_one_shot_chat_interactive(
                 project_root=project_root,
             )
             print(error, file=sys.stderr)
-            return InteractiveChatResult(code=1)
+            return InteractiveChatResult(code=CliExitCode.FAILURE)
 
 
 def run_memory_curator(project_root: Path | None) -> None:

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nuself.cli.repl.input import InteractiveInput
+from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.agent.chat.audit import report_chat_failure
@@ -124,7 +125,7 @@ def run_interactive_loop(
                 line = interactive_input.read()
             except EOFError:
                 print()
-                return 0
+                return CliExitCode.SUCCESS
             except KeyboardInterrupt:
                 print()
                 continue
@@ -145,7 +146,7 @@ def run_interactive_loop(
                 if current_thread_id != previous_thread_id:
                     session.clear_retry()
                 if result == "exit":
-                    return 0
+                    return CliExitCode.SUCCESS
                 if result == "retry":
                     offer = session.retry_offer
                     if offer is None:
@@ -189,11 +190,11 @@ def run_interactive_loop(
                 project_root,
                 current_thread_id,
             )
-            if result != 0:
+            if result != CliExitCode.SUCCESS:
                 continue
 
     primary_error: BaseException | None = None
-    result = 0
+    result: int = CliExitCode.SUCCESS
     try:
         result = run_loop()
     except BaseException as exc:

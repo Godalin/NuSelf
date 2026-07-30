@@ -13,6 +13,7 @@ from nuself.cli.repl.activity import (
     run_live_activity_send,
     visible_interactive_activity_events,
 )
+from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.notices import (
     print_interactive_notices,
     turn_interactive_notices,
@@ -48,7 +49,7 @@ def send_interactive_chat_turn(
     """Run one stable-id turn and associate its output with the session."""
 
     log_cursor = InteractiveLogCursor.from_project(project_root)
-    result = InteractiveChatResult(code=1)
+    result = InteractiveChatResult(code=CliExitCode.FAILURE)
     printed_logs = False
     presented_notice_codes: set[str] = set()
     turn_id = session.prepare_turn(
@@ -141,7 +142,7 @@ def send_interactive_chat_turn(
             print_reply(result.reply)
         if result.code == 0:
             session.clear_retry()
-            return 0
+            return CliExitCode.SUCCESS
         if not result.retryable:
             session.clear_retry()
             if result.error is not None and not _events_include_error(

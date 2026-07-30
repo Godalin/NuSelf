@@ -45,6 +45,7 @@ with warnings.catch_warnings():
 from nuself.cli.commands.reflections import (
     handle_reflection_archive as handle_reflection_archive,
 )
+from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.commands.reflections import (
     handle_reflection_dismiss as handle_reflection_dismiss,
 )
@@ -145,7 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.project_root = scope.root
     project_root = scope.root
     primary_error: BaseException | None = None
-    result = 0
+    result: int = CliExitCode.SUCCESS
     try:
         result = dispatch_cli(args, parser)
     except BaseException as exc:

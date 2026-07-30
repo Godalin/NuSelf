@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable
 from typing import cast
 
+from nuself.cli.exit_codes import CliExitCode
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.cli.readiness import (
     CommandRequirements,
@@ -71,7 +72,7 @@ def dispatch_cli(
         if not isinstance(help_parser, argparse.ArgumentParser):
             raise TypeError("CLI help parser is invalid")
         help_parser.print_help()
-        return 0
+        return CliExitCode.SUCCESS
     if not isinstance(handler_key, str) or not handler_key:
         raise TypeError("CLI handler key is invalid")
     raw_registry = getattr(root_parser, _REGISTRY_ATTRIBUTE, None)

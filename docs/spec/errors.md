@@ -57,6 +57,12 @@ Stable CLI exit statuses are:
 | `4` | temporary unavailability; a later retry is appropriate |
 | `5` | corrupt or unsafe authority state |
 
+NuSelf represents this table internally with the `CliExitCode` `IntEnum`.
+Command, readiness, and interactive transport infrastructure use named enum
+members rather than numeric literals. Conversion to a plain integer is only a
+process-boundary concern; the numeric interface above remains stable for
+shells and other callers.
+
 One-shot commands always terminate after rendering their disposition.
 Interactive transport failures keep the REPL alive. A retryable result states
 whether the request may already have completed and retains the original

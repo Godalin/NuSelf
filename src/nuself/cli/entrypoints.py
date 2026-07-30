@@ -15,6 +15,7 @@ from nuself.cli.daemon_lifecycle import (
     start_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status, observe_daemon_status
+from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import lifecycle
 from nuself.notification.deep_link import DeepLink
@@ -83,7 +84,7 @@ class EntrypointController:
     def handle_default(self, args: argparse.Namespace) -> int:
         result = self._status_or_report(args.project_root)
         if result is None:
-            return 4
+            return CliExitCode.TEMPORARY_FAILURE
         if result.running:
             if args.message is not None:
                 print(f"Using current daemon: {format_status(result)}")
@@ -99,7 +100,7 @@ class EntrypointController:
                     f"Failed to start daemon: {format_start_failure(exc)}",
                     file=sys.stderr,
                 )
-                return 1
+                return CliExitCode.FAILURE
             result = transition.status
             print(f"Daemon started: {format_status(result)}")
         if args.message is not None:
@@ -112,7 +113,7 @@ class EntrypointController:
     def handle_chat(self, args: argparse.Namespace) -> int:
         daemon_status = self._status_or_report(args.project_root)
         if daemon_status is None:
-            return 4
+            return CliExitCode.TEMPORARY_FAILURE
         if daemon_status.running:
             if args.message is not None:
                 return self._callbacks.send_daemon_chat(
@@ -126,9 +127,9 @@ class EntrypointController:
                 file=sys.stderr,
             )
             return (
-                3
+                CliExitCode.SETUP_REQUIRED
                 if daemon_status.phase == "stopped"
-                else 4
+                else CliExitCode.TEMPORARY_FAILURE
             )
         if args.message is not None:
             return self._callbacks.send_one_shot_chat(
@@ -140,16 +141,16 @@ class EntrypointController:
     def handle_attach(self, args: argparse.Namespace) -> int:
         daemon_status = self._status_or_report(args.project_root)
         if daemon_status is None:
-            return 4
+            return CliExitCode.TEMPORARY_FAILURE
         if not daemon_status.running:
             print(
                 f"NuSelf daemon is not ready: {daemon_status.phase}.",
                 file=sys.stderr,
             )
             return (
-                3
+                CliExitCode.SETUP_REQUIRED
                 if daemon_status.phase == "stopped"
-                else 4
+                else CliExitCode.TEMPORARY_FAILURE
             )
         if args.message is not None:
             return self._callbacks.send_daemon_chat(
@@ -162,11 +163,11 @@ class EntrypointController:
         store = ThreadStore(args.project_root)
         target = self._prepare_open_thread(args, store)
         if target is None:
-            return 1
+            return CliExitCode.FAILURE
 
         daemon_status = self._status_or_report(args.project_root)
         if daemon_status is None:
-            return 4
+            return CliExitCode.TEMPORARY_FAILURE
         if daemon_status.running:
             if target.message is not None:
                 result = self._callbacks.send_daemon_chat(
@@ -174,7 +175,7 @@ class EntrypointController:
                     args.project_root,
                     target.thread_id,
                 )
-                if result != 0:
+                if result != CliExitCode.SUCCESS:
                     return result
             return self._run_daemon_interactive(
                 args.project_root,
@@ -185,14 +186,14 @@ class EntrypointController:
                 f"NuSelf daemon is not ready: {daemon_status.phase}.",
                 file=sys.stderr,
             )
-            return 4
+            return CliExitCode.TEMPORARY_FAILURE
         if target.message is not None:
             result = self._callbacks.send_one_shot_chat(
                 target.message,
                 args.project_root,
                 target.thread_id,
             )
-            if result != 0:
+            if result != CliExitCode.SUCCESS:
                 return result
         return self._run_one_shot_interactive(
             args.project_root,

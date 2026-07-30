@@ -9,6 +9,7 @@ from typing import cast
 
 import yaml
 
+from nuself.cli.exit_codes import CliExitCode
 from nuself.scope import NuSelfScope, resolve_runtime_paths
 
 
@@ -45,7 +46,7 @@ class ReadinessFailure:
     code: str
     message: str
     action: str
-    exit_code: int = 3
+    exit_code: CliExitCode = CliExitCode.SETUP_REQUIRED
 
     def render(self) -> str:
         return f"{self.message}\n\nRun:\n  {self.action}"

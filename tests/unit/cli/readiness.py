@@ -9,6 +9,7 @@ import pytest
 import argparse
 
 from nuself.cli import build_parser, main
+from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.readiness import (
     CommandRequirements,
     INITIALIZED_AUTHORITY,
@@ -32,11 +33,20 @@ def test_missing_authority_reports_init_without_creating_state(
         ["--workspace", str(workspace), "data", "collections"]
     )
 
-    assert result == 3
+    assert result is CliExitCode.SETUP_REQUIRED
     assert not (workspace / ".nuself").exists()
     error = capsys.readouterr().err
     assert "not initialized" in error
     assert f"nuself --workspace {workspace} init" in error
+
+
+def test_cli_exit_codes_are_typed_and_shell_stable() -> None:
+    assert int(CliExitCode.SUCCESS) == 0
+    assert int(CliExitCode.FAILURE) == 1
+    assert int(CliExitCode.USAGE) == 2
+    assert int(CliExitCode.SETUP_REQUIRED) == 3
+    assert int(CliExitCode.TEMPORARY_FAILURE) == 4
+    assert int(CliExitCode.CORRUPT_STATE) == 5
 
 
 def test_model_readiness_requires_init_first(tmp_path: Path) -> None:
