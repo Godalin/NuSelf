@@ -58,7 +58,7 @@ uv run nuself --help
 
 ```bash
 uv run nuself init
-cp examples/private/config.yaml ~/.nuself/config.yaml
+cp examples/.nuself/config.yaml ~/.nuself/config.yaml
 ```
 
 OpenAI-compatible 端点可在 `~/.nuself/config.yaml` 中这样配置：

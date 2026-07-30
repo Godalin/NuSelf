@@ -1,4 +1,6 @@
-# Private runtime data and local secrets.
+# Authority runtime data and local secrets.
+/.nuself/
+/.nuself.migration.lock
 /private/
 /.env
 

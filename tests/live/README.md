@@ -1,7 +1,7 @@
 # Live LLM API Tests
 
 These tests send fixed synthetic prompts to the LLM endpoints configured in
-`private/config.yaml`. They never load NuSelf threads, memory, personas,
+the selected authority's `config.yaml`. They never load NuSelf threads, memory, personas,
 sources, or runtime prompts.
 
 They are outside the default pytest collection root and also require an

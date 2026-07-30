@@ -166,7 +166,7 @@ def _sync_directory(path: Path) -> None:
 
 @contextmanager
 def _target_migration_lease(target: Path) -> Generator[None]:
-    lock_path = target.with_name(f".{target.name}.migration.lock")
+    lock_path = target.with_name(f"{target.name}.migration.lock")
     flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
     descriptor = os.open(lock_path, flags, PRIVATE_FILE_MODE)
     try:

@@ -105,7 +105,7 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
   aliases, parallel protocols, legacy base classes, or dual write/read paths
   unless an external persisted-data or wire migration is explicitly specified.
 - Interface changes must update all callers, tests, examples, and docs in the same commit.
-- Configuration shape changes must update `docs/spec/config.md`, `docs/nuself-config.schema.json`, `examples/private/config.yaml`, and relevant config tests in the same change.
+- Configuration shape changes must update `docs/spec/config.md`, `docs/nuself-config.schema.json`, `examples/.nuself/config.yaml`, and relevant config tests in the same change.
 - Do not preserve obsolete CLI commands, protocols, schemas, or APIs unless a document explicitly requires them.
 - Refactors are welcome when they clarify architecture; always pair them with doc and test updates.
 - Keep `docs/current-goal.md` concise: one active objective, ordered next steps,
@@ -547,6 +547,9 @@ boundary and re-exports caller-facing names.
 
 ## Private Memory
 
-- Real personal memory lives in the root `private/` directory.
-- `private/` is ignored by Git and must not be committed.
-- Code loads from `private/` by default; tests and demos use `examples/private/`.
+- Real personal memory lives in the explicitly selected user or workspace
+  authority.
+- The repository-root `.nuself/` authority is ignored by Git and must not be
+  committed.
+- Code uses `~/.nuself/` by default or an explicitly selected workspace;
+  documentation and demos use `examples/.nuself/`.

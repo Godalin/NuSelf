@@ -66,7 +66,7 @@ Initialize the default user authority and copy the example configuration:
 
 ```bash
 uv run nuself init
-cp examples/private/config.yaml ~/.nuself/config.yaml
+cp examples/.nuself/config.yaml ~/.nuself/config.yaml
 ```
 
 For an OpenAI-compatible endpoint, edit `~/.nuself/config.yaml`:

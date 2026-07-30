@@ -19,12 +19,12 @@ Start from the annotated example:
 
 ```bash
 nuself init
-cp examples/private/config.yaml ~/.nuself/config.yaml
+cp examples/.nuself/config.yaml ~/.nuself/config.yaml
 ```
 
 Set `NUSELF_HOME` to an absolute path to replace the default user authority
 root. Use `--local` or `--workspace PATH` to select workspace state explicitly.
-Never put real secrets in `examples/private/`.
+Never put real secrets in `examples/.nuself/`.
 
 ## Minimal Model Configuration
 
@@ -170,7 +170,7 @@ uv run nuself dev logs --component daemon --tail 20
 
 For editor validation, use
 [`nuself-config.schema.json`](nuself-config.schema.json). The complete
-annotated example is [`examples/private/config.yaml`](../examples/private/config.yaml).
+annotated example is [`examples/.nuself/config.yaml`](../examples/.nuself/config.yaml).
 The authoritative defaults and validation rules live in
 [`spec/config.md`](spec/config.md); model protocol and failover behavior live
 in [`spec/llm.md`](spec/llm.md).

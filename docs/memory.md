@@ -4,8 +4,10 @@ NuSelf separates conversation history, durable memory, profile facts, imported
 sources, and derived indexes. This keeps raw chat from automatically becoming
 long-term memory.
 
-All personal data lives under the ignored project-local `private/` tree.
-Current projects normally use `private/nuself.sqlite` as storage authority.
+All personal data lives under the selected authority. The default user
+authority is `~/.nuself/`; an explicit workspace uses
+`<workspace>/.nuself/`. SQLite state lives at
+`<authority-root>/nuself.sqlite`.
 
 ## Inspect Memory
 
@@ -68,12 +70,13 @@ Use `--help` for index selection and batch operations.
 
 ## Import Source Documents
 
-Place Markdown or plain-text material under `private/sources/`, then ingest a
+Place Markdown or plain-text material under the selected authority's
+`sources/`, then ingest a
 file or directory:
 
 ```bash
-uv run nuself memory source ingest private/sources/notes.md --tag notes
-uv run nuself memory source ingest private/sources/archive --tag archive
+uv run nuself memory source ingest .nuself/sources/notes.md --tag notes
+uv run nuself memory source ingest .nuself/sources/archive --tag archive
 ```
 
 Inspect imported sources and chunks:
@@ -140,15 +143,15 @@ Whole-system thought packs:
 
 ```bash
 uv run nuself pack export backup
-uv run nuself pack inspect private/exports/backup.sqlite
+uv run nuself pack inspect .nuself/exports/backup.sqlite
 ```
 
-Keep independent backups of `private/`. Export formats are useful portability
+Keep independent backups of the selected authority. Export formats are useful portability
 tools, not automatic backup scheduling.
 
 ## Privacy Boundary
 
-- Default tests and CI never read `private/`.
+- Default tests and CI never read real user or workspace authorities.
 - Opt-in live API tests use fixed synthetic prompts and do not load personal
   memory, threads, sources, personas, or runtime prompts.
 - Effective configuration and diagnostics redact credentials.

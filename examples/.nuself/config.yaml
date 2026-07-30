@@ -1,5 +1,5 @@
 # NuSelf Unified Configuration
-# Copy this to private/config.yaml to customize your NuSelf instance.
+# Copy this to ~/.nuself/config.yaml to customize your user authority.
 # All values are optional; missing fields use safe defaults.
 
 # LLM Configuration

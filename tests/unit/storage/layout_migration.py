@@ -64,6 +64,8 @@ def test_file_layout_is_atomically_published_and_source_is_preserved(
         migrated.close()
     assert stat.S_IMODE(target.stat().st_mode) == 0o700
     assert stat.S_IMODE((target / "config.yaml").stat().st_mode) == 0o600
+    assert (workspace / ".nuself.migration.lock").is_file()
+    assert not (workspace / "..nuself.migration.lock").exists()
 
 
 def test_transient_runtime_and_lock_files_are_not_migrated(

@@ -38,7 +38,7 @@ Rules:
 
 - It must describe the same YAML shape as this spec and `ConfigSystem`.
 - It is not the runtime parser; runtime behavior is still owned by `ConfigSystem`.
-- Any configuration shape change must update the JSON Schema, `examples/private/config.yaml`, and config tests in the same change.
+- Any configuration shape change must update the JSON Schema, `examples/.nuself/config.yaml`, and config tests in the same change.
 - Schema tests must cover at least the changed top-level shape so stale schema files are caught by CI.
 - Schema tests must select the validator from the schema's declared dialect,
   check the schema itself, and compare runtime and published-schema acceptance
@@ -196,17 +196,17 @@ other unknown field is ignored. The frozen official v0.2.5 example config must
 load successfully through this boundary, and the compatibility shim may be
 removed only with the future configuration-system redesign.
 
-Before reading a present `private/config.yaml`, NuSelf hardens `private/` to
-`0700`, rejects non-regular files and symlinks, and hardens the config file to
-`0600`. Managed private-directory creation and hardening use no-follow
-directory handles: `private/` and every managed descendant must be an actual
-directory, never a symlink or another file type. Rejection occurs before
-changing the redirected target's permissions or contents. Secret values are
-never read from a permissive or redirected file.
+Before reading a present `<authority-root>/config.yaml`, NuSelf hardens the
+managed authority root to `0700`, rejects non-regular files and symlinks, and
+hardens the config file to `0600`. Managed directory creation and hardening use
+no-follow directory handles: the authority root and every managed descendant
+must be an actual directory, never a symlink or another file type. Rejection
+occurs before changing the redirected target's permissions or contents.
+Secret values are never read from a permissive or redirected file.
 
 ## Email Delivery
 
-Email has one configuration source: `private/config.yaml`. The obsolete
+Email uses the selected authority's `config.yaml`. The obsolete
 `private/email.toml` path is not read. If an enabled configuration has no
 non-blank `email.to_address`, loading raises a typed configuration-migration
 error before Pydantic validation. The diagnostic explicitly explains that

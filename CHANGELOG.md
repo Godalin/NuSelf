@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The committed public authority example now lives at `examples/.nuself/`,
+  matching the v0.3.1 workspace layout and documentation. Repository-local
+  `.nuself/` state and its migration lease are ignored.
+- Legacy layout migration now uses the readable sibling lease name
+  `.nuself.migration.lock` instead of leaving a double-dot filename.
+
 ## v0.3.1 - 2026-07-30
 
 - Introduces explicit user and workspace authorities:
