@@ -5,7 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Cross-process SQLite schema upgrade and backup ownership are complete.
+Promote the frozen `0.3.0rc1` codebase to stable `v0.3.0` through a
+metadata-only release change, validate the exact release commit, and merge it
+to `main` without reopening implementation review.
 
 ## Active Branch
 
@@ -13,37 +15,41 @@ Idle. Cross-process SQLite schema upgrade and backup ownership are complete.
 
 ## Ordered Work
 
-1. Discuss and specify stable `v0.3.0` promotion before changing release
-   metadata or `main`.
+1. Confirm the frozen branch state, release metadata contract, branch
+   topology, and remote tag side effects.
+2. Promote package, runtime fallback, README, and changelog metadata to
+   `0.3.0`.
+3. Run the locked type, test, build, clean-wheel, and release-metadata gates
+   against the release candidate commit.
+4. Fast-forward `main`, create an annotated local `v0.3.0` tag, and verify the
+   exact tagged commit and release topology.
+5. Push non-publication branch updates and verify their final CI. Keep the
+   remote tag and its automatic GitHub Release behind separate publication
+   authorization.
 
 ## Out Of Scope
 
-- Stable `v0.3.0` promotion, release metadata, merging to `main`, tagging, and
-  package publication remain separate explicitly authorized release actions.
+- Further audit or implementation changes in storage, filesystem, config, or
+  notification code unless a release gate or core CLI smoke test fails.
+- Pushing `v0.3.0`, which automatically invokes the GitHub Release workflow,
+  and any package-manager or other distribution-channel publication until
+  separately authorized.
 - Global plus directory-local configuration and package-manager publication
   remain deferred in [`TODOs.md`](TODOs.md).
 - Existing documented semi-durable ThreadStore follow-ups remain deferred.
 
 ## Completion Evidence
 
-- Existing v1 authority acquires a stable sibling schema lease before its
-  writable connection setup, re-reads the version under the lease, and lets
-  only the remaining v1 holder create the backup and upgrade.
-- Six simultaneous first-open processes all succeed; the main database has
-  exactly versions 1 and 2, while the single `.v1.bak` remains v1 with its
-  payload column and source record.
-- Direct canonical construction infers managed protection. External v1
-  upgrade and public backup destinations preserve directory and file modes;
-  managed thought-pack export/import retains owner-only modes.
-- Focused storage, private-filesystem, and CLI verification reported 150
-  passed. Locked Pyright reported 0 errors and 0 warnings; `git diff --check`
-  passed.
-- Complete local verification reported 2437 passed. Locked Pyright analyzed
-  327 files with 0 errors and 0 warnings; `uv lock --check`,
-  `git diff --check`, and `nuself 0.3.0rc1` passed.
-- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14.3
-  environment installed only the wheel plus its declared dependencies,
-  imported `nuself.cli` and `nuself.llm`, and reported `nuself 0.3.0rc1`.
-- GitHub Actions run `30518768205` passed on Ubuntu and macOS with Python
-  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
-  suite, distribution build, and clean-wheel smoke test for commit `a2febf9`.
+- Release metadata, runtime fallback, lockfile, both READMEs, and the dated
+  changelog section agree on `0.3.0`; `Unreleased` is empty.
+- `uv lock --check`, `git diff --check`, the metadata-only release gate, and
+  `nuself 0.3.0` passed.
+- Complete local verification reported 2437 passed. Locked Pyright reported
+  0 errors and 0 warnings.
+- `uv build` produced `nuself-0.3.0.tar.gz` and
+  `nuself-0.3.0-py3-none-any.whl`.
+- A clean Python 3.14.3 environment installed only the built wheel plus its
+  declared dependencies, imported `nuself.cli` and `nuself.llm`, and reported
+  `nuself 0.3.0`.
+- Pending: exact tagged-commit topology validation, `main` promotion, and final
+  branch CI. Remote tag publication remains separately authorized.

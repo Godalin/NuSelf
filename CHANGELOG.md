@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+## v0.3.0 - 2026-07-30
+
 - Existing v1 SQLite databases now acquire a stable cross-process schema lease
   before writable setup, then re-read the version under that lease so exactly
   one opener creates the genuine pre-v2 backup and performs the upgrade.
@@ -96,7 +98,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   private-data fixture through the current repositories.
 - CI and release automation now pins third-party actions to immutable commits;
   release artifacts also receive GitHub build-provenance attestations.
-- The development package is now `0.3.0rc1`; release metadata gates enforce
+- The stable package is now `0.3.0`; release metadata gates enforce
   tag/package/runtime/changelog agreement, unified `uv build`, clean-wheel
   smoke tests, checksums, and Linux/macOS CI coverage.
 - Thought-pack export names now reject Windows device names and trailing dots,

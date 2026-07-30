@@ -179,7 +179,7 @@ Daemon 与 REPL lifecycle cleanup 共用一个有序 runner，保留具名
 - Linux 或 macOS 上的 Python 3.12 或更新版本；当前不支持 Windows。
 - `uv`。
 
-当前开发包版本为 `0.3.0rc1`。
+当前稳定包版本为 `0.3.0`。
 
 ## 安装和运行
 

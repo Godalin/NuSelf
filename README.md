@@ -214,7 +214,7 @@ Project progress is tracked in [`docs/TODOs.md`](docs/TODOs.md). Short-term impl
 - Python 3.12 or newer on Linux or macOS. Windows is not currently supported.
 - `uv`.
 
-The active development package is `0.3.0rc1`.
+The current stable package is `0.3.0`.
 
 ## Install And Run
 
