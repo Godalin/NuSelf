@@ -51,7 +51,7 @@ def handle_pack_export(args: argparse.Namespace) -> int:
         raise RuntimeError(
             "nuself.sqlite exists but the active backend is not SQLite"
         )
-    backend.backup_to(destination)
+    backend.backup_to(destination, managed=True)
     print(f"Exported to {destination}")
     return 0
 
@@ -86,7 +86,11 @@ def handle_pack_import(args: argparse.Namespace) -> int:
         )
         return 1
     try:
-        import_sqlite_thought_pack(source, destination)
+        import_sqlite_thought_pack(
+            source,
+            destination,
+            managed=True,
+        )
     except ThoughtPackValidationError as exc:
         print(
             "Invalid thought pack: "

@@ -73,6 +73,14 @@ before schema initialization or business writes. SQLite may access its WAL/SHM
 coordination files during that read-only validation. Only migration may
 initialize a database. Explicit external SQLite paths retain their parent and
 file permissions.
+Concurrent first opens of a v1 database serialize writable setup, backup, and
+v2 migration through a stable sibling schema lease, then re-read the version
+under that lease. Exactly one process upgrades, and its `.v1.bak` remains the
+genuine payload-based v1 database. Direct construction of the canonical path
+infers the same managed protection as the factory. External v1 safety backups
+and public external `backup_to()` destinations retain existing directory and
+file permissions; internal thought-pack exports and imports remain managed
+owner-only artifacts.
 Successful file-backed record deletion now includes parent-directory
 synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.

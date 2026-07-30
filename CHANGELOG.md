@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Existing v1 SQLite databases now acquire a stable cross-process schema lease
+  before writable setup, then re-read the version under that lease so exactly
+  one opener creates the genuine pre-v2 backup and performs the upgrade.
+  Canonical ownership is inferred even for direct backend construction, while
+  external v1 backups and public external backup destinations preserve parent
+  and file permissions; managed thought-pack paths remain owner-only.
 - Existing SQLite authority now uses lock-aware read-only validation with
   normal WAL coordination, never `immutable=1`. Ordinary startup checks only
   NuSelf schema identity rather than running a full-database `quick_check`;

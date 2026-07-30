@@ -6,10 +6,12 @@ Complex values (list, dict) are stored as strict JSON text.
 
 from __future__ import annotations
 
+import fcntl
+import os
 import sqlite3
 import threading
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
@@ -17,6 +19,7 @@ from uuid import uuid4
 
 from nuself.logs import LogComponent
 from nuself.private_fs import (
+    PRIVATE_FILE_MODE,
     ensure_private_directory,
     ensure_private_file,
     harden_private_file,
@@ -436,50 +439,76 @@ class SqliteStorageBackend:
         *,
         project_root: Path | None = None,
         _initialize: bool = False,
-        _managed: bool = False,
+        _managed: bool | None = None,
         _truncate_on_close: bool = False,
     ) -> None:
         self._db_path = db_path
         self._project_root = (
-            project_root
+            project_root.absolute()
             if project_root is not None
             else (
-                db_path.parent.parent
+                db_path.parent.parent.absolute()
                 if db_path.parent.name == "private"
-                else db_path.parent
+                else db_path.parent.absolute()
             )
         )
-        if _managed:
+        canonical = self._project_root / "private" / "nuself.sqlite"
+        self._managed = (
+            db_path.absolute() == canonical.absolute()
+            if _managed is None
+            else _managed
+        )
+        if self._managed:
             ensure_private_directory(db_path.parent)
         require_private_file(db_path)
+        observed_version: int | None = None
         if not _initialize:
-            _validate_existing_nuself_database(db_path)
-        if _managed:
+            observed_version = _validate_existing_nuself_database(db_path)
+        if self._managed:
             harden_private_file(db_path)
-        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
-        self._lock = threading.RLock()
-        self._transaction_state = _TransactionState()
-        self._closed = False
-        self._truncate_on_close = _truncate_on_close
-        try:
-            self._conn.execute("PRAGMA busy_timeout=5000")
-            with _SQLITE_INITIALIZATION_LOCK:
-                self._conn.execute("PRAGMA journal_mode=WAL")
-                self._conn.execute("PRAGMA synchronous=NORMAL")
-                self._init_schema()
-                if _managed:
-                    _harden_sqlite_sidecars(db_path)
-        except BaseException as init_error:
+        upgrade_lease_held = (
+            observed_version is not None
+            and observed_version < SQLITE_SCHEMA_VERSION
+        )
+        lease = (
+            _schema_upgrade_lease(
+                db_path,
+                managed=self._managed,
+            )
+            if upgrade_lease_held
+            else nullcontext()
+        )
+        with lease:
+            self._conn = sqlite3.connect(
+                str(db_path),
+                check_same_thread=False,
+            )
+            self._lock = threading.RLock()
+            self._transaction_state = _TransactionState()
+            self._closed = False
+            self._truncate_on_close = _truncate_on_close
             try:
-                self._conn.close()
-            except Exception as cleanup_error:
-                raise SqliteStorageInitializationCleanupError(
-                    "SQLite initialization failed and its connection "
-                    "could not be closed",
-                    cleanup_error=cleanup_error,
-                ) from init_error
-            self._closed = True
-            raise
+                self._conn.execute("PRAGMA busy_timeout=5000")
+                with _SQLITE_INITIALIZATION_LOCK:
+                    self._conn.execute("PRAGMA journal_mode=WAL")
+                    self._conn.execute("PRAGMA synchronous=NORMAL")
+                    self._init_schema(
+                        initialize=_initialize,
+                        upgrade_lease_held=upgrade_lease_held,
+                    )
+                    if self._managed:
+                        _harden_sqlite_sidecars(db_path)
+            except BaseException as init_error:
+                try:
+                    self._conn.close()
+                except Exception as cleanup_error:
+                    raise SqliteStorageInitializationCleanupError(
+                        "SQLite initialization failed and its connection "
+                        "could not be closed",
+                        cleanup_error=cleanup_error,
+                    ) from init_error
+                self._closed = True
+                raise
 
     @property
     def db_path(self) -> Path:
@@ -528,42 +557,98 @@ class SqliteStorageBackend:
                     "SQLite connection closed after WAL checkpoint failed"
                 ) from checkpoint_error
 
-    def backup_to(self, destination: Path) -> None:
+    def backup_to(
+        self,
+        destination: Path,
+        *,
+        managed: bool = False,
+    ) -> None:
         """Write one consistent online backup and close its connection."""
         if destination.resolve() == self._db_path.resolve():
             raise ValueError("SQLite backup destination must differ from source")
         with self._lock:
-            _backup_connection_to_path(self._conn, destination)
+            _backup_connection_to_path(
+                self._conn,
+                destination,
+                managed=managed,
+            )
 
-    def _init_schema(self) -> None:
-        self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS _schema_version (version INTEGER NOT NULL)"
-        )
-        (current_version,) = self._conn.execute(
+    def _init_schema(
+        self,
+        *,
+        initialize: bool,
+        upgrade_lease_held: bool,
+    ) -> None:
+        if initialize:
+            self._conn.execute(
+                "CREATE TABLE _schema_version "
+                "(version INTEGER NOT NULL)"
+            )
+        current_version = self._read_schema_version()
+        self._require_supported_schema_version(current_version)
+        if current_version < 1:
+            if not initialize:
+                raise SqliteStorageIdentityError(
+                    "existing SQLite database has no applied schema"
+                )
+            self._apply_v1()
+            self._conn.execute(
+                "INSERT INTO _schema_version (version) VALUES (1)"
+            )
+            self._conn.commit()
+            current_version = 1
+        if current_version >= SQLITE_SCHEMA_VERSION:
+            return
+        if initialize:
+            self._upgrade_v1_to_v2()
+            return
+        if upgrade_lease_held:
+            refreshed_version = self._read_schema_version()
+            self._require_supported_schema_version(refreshed_version)
+            if refreshed_version < SQLITE_SCHEMA_VERSION:
+                self._upgrade_v1_to_v2()
+            return
+        with _schema_upgrade_lease(
+            self._db_path,
+            managed=self._managed,
+        ):
+            refreshed_version = self._read_schema_version()
+            self._require_supported_schema_version(refreshed_version)
+            if refreshed_version < SQLITE_SCHEMA_VERSION:
+                self._upgrade_v1_to_v2()
+
+    def _read_schema_version(self) -> int:
+        row = self._conn.execute(
             "SELECT COALESCE(MAX(version), 0) FROM _schema_version"
         ).fetchone()
+        current_version = (
+            row[0] if row is not None and len(row) == 1 else None
+        )
         if type(current_version) is not int or current_version < 0:
             raise SqliteStorageUnsupportedVersionError(
                 "SQLite schema version is invalid"
             )
+        return current_version
+
+    @staticmethod
+    def _require_supported_schema_version(
+        current_version: int,
+    ) -> None:
         if current_version > SQLITE_SCHEMA_VERSION:
             raise SqliteStorageUnsupportedVersionError(
                 "SQLite schema version "
                 f"{current_version} is newer than supported version "
                 f"{SQLITE_SCHEMA_VERSION}"
             )
-        if current_version < 1:
-            self._apply_v1()
-            self._conn.execute("INSERT INTO _schema_version (version) VALUES (1)")
-            self._conn.commit()
-        if current_version < 2:
-            self._backup_before_v2_if_needed()
-            with self.transaction():
-                self._apply_v2()
-                self._conn.execute(
-                    "INSERT INTO _schema_version (version) VALUES (?)",
-                    (SQLITE_SCHEMA_VERSION,),
-                )
+
+    def _upgrade_v1_to_v2(self) -> None:
+        self._backup_before_v2_if_needed()
+        with self.transaction():
+            self._apply_v2()
+            self._conn.execute(
+                "INSERT INTO _schema_version (version) VALUES (?)",
+                (SQLITE_SCHEMA_VERSION,),
+            )
 
     def _apply_v1(self) -> None:
         for name in COLLECTION_NAMES:
@@ -640,7 +725,11 @@ class SqliteStorageBackend:
         if not has_payload:
             return
         backup_path = self._db_path.with_name(f"{self._db_path.name}.v1.bak")
-        _backup_connection_to_path(self._conn, backup_path)
+        _backup_connection_to_path(
+            self._conn,
+            backup_path,
+            managed=self._managed,
+        )
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
@@ -759,6 +848,8 @@ def _row_record_id(
 def import_sqlite_thought_pack(
     source: Path,
     destination: Path,
+    *,
+    managed: bool = False,
 ) -> int:
     """Validate and atomically import one external thought-pack snapshot."""
     temporary = destination.with_name(
@@ -767,7 +858,11 @@ def import_sqlite_thought_pack(
     with _readonly_thought_pack(source) as source_connection:
         try:
             version = _validate_thought_pack_connection(source_connection)
-            _backup_connection_to_path(source_connection, temporary)
+            _backup_connection_to_path(
+                source_connection,
+                temporary,
+                managed=managed,
+            )
             temporary.replace(destination)
             return version
         finally:
@@ -814,8 +909,10 @@ def _readonly_thought_pack(
 def _backup_connection_to_path(
     source: sqlite3.Connection,
     destination: Path,
+    *,
+    managed: bool,
 ) -> None:
-    ensure_private_file(destination)
+    _prepare_backup_destination(destination, managed=managed)
     backup = sqlite3.connect(str(destination))
     try:
         source.backup(backup)
@@ -829,6 +926,52 @@ def _backup_connection_to_path(
             ) from backup_error
         raise
     backup.close()
+
+
+def _prepare_backup_destination(
+    destination: Path,
+    *,
+    managed: bool,
+) -> None:
+    if managed:
+        ensure_private_file(destination)
+        return
+    if destination.exists() or destination.is_symlink():
+        require_private_file(destination)
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(
+        destination,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o666,
+    )
+    os.close(descriptor)
+
+
+@contextmanager
+def _schema_upgrade_lease(
+    database: Path,
+    *,
+    managed: bool,
+) -> Generator[None, None, None]:
+    """Serialize an existing database's schema upgrade across processes."""
+
+    lock_path = database.with_name(f"{database.name}.schema.lock")
+    descriptor = os.open(
+        lock_path,
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+        PRIVATE_FILE_MODE if managed else 0o666,
+    )
+    try:
+        if managed:
+            os.fchmod(descriptor, PRIVATE_FILE_MODE)
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
 
 
 def _harden_sqlite_sidecars(database: Path) -> None:

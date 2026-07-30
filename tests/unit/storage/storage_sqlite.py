@@ -84,6 +84,10 @@ def _open_explicitly(project: Path, database: Path) -> object:
     return open_sqlite_backend(project, db_path=database)
 
 
+def _open_directly(project: Path, database: Path) -> object:
+    return SqliteStorageBackend(database, project_root=project)
+
+
 def _spawn_context() -> SpawnContext:
     return multiprocessing.get_context("spawn")
 
@@ -130,6 +134,22 @@ def _commit_live_authority_then_crash(
     os._exit(0)
 
 
+def _open_v1_authority_after_signal(
+    project_root: str,
+    database: str,
+    ready: Event,
+    start: Event,
+) -> None:
+    ready.set()
+    if not start.wait(timeout=30):
+        raise RuntimeError("parent did not start v1 upgrade")
+    backend = open_sqlite_backend(
+        Path(project_root),
+        db_path=Path(database),
+    )
+    backend.close()
+
+
 def test_sqlite_backend_hardens_database_directory_and_sidecars(
     tmp_path: Path,
 ) -> None:
@@ -144,7 +164,10 @@ def test_sqlite_backend_hardens_database_directory_and_sidecars(
     private.chmod(0o755)
     database.chmod(0o644)
 
-    backend = open_sqlite_backend(tmp_path, db_path=database)
+    backend = SqliteStorageBackend(
+        database,
+        project_root=tmp_path,
+    )
     try:
         backend.collection("memory_entries").put(
             "private",
@@ -332,6 +355,7 @@ def test_direct_sqlite_backend_requires_existing_database(
     [
         pytest.param(_open_automatically, id="auto-backend"),
         pytest.param(_open_explicitly, id="explicit-open"),
+        pytest.param(_open_directly, id="direct-constructor"),
     ],
 )
 def test_sqlite_open_rejects_redirected_private_before_side_effects(
@@ -377,6 +401,7 @@ def test_sqlite_open_rejects_redirected_private_before_side_effects(
     [
         pytest.param(_open_automatically, id="auto-backend"),
         pytest.param(_open_explicitly, id="explicit-open"),
+        pytest.param(_open_directly, id="direct-constructor"),
     ],
 )
 def test_open_rejects_unrecognized_database_without_mutation(
@@ -762,6 +787,42 @@ def test_online_backup_includes_wal_data_and_closes_destination(
         ) == {
             "id": "wal-entry",
             "title": "Updated WAL data",
+        }
+    finally:
+        snapshot.close()
+
+
+def test_backup_to_external_preserves_parent_and_file_modes(
+    tmp_path: Path,
+) -> None:
+    source = create_sqlite_backend(
+        db_path=tmp_path / "source.sqlite",
+    )
+    source.collection("memory_entries").put(
+        "entry",
+        {"id": "entry", "title": "Backup"},
+    )
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o755)
+    shared.chmod(0o755)
+    destination = shared / "snapshot.sqlite"
+    destination.touch(mode=0o644)
+    destination.chmod(0o644)
+
+    try:
+        source.backup_to(destination)
+    finally:
+        source.close()
+
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o644
+    snapshot = SqliteStorageBackend(destination)
+    try:
+        assert snapshot.collection("memory_entries").get(
+            "entry"
+        ) == {
+            "id": "entry",
+            "title": "Backup",
         }
     finally:
         snapshot.close()
@@ -1714,6 +1775,124 @@ def _create_v1_database(
         conn.commit()
     finally:
         conn.close()
+
+
+def test_cross_process_first_open_upgrades_v1_once(
+    tmp_path: Path,
+) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    database = private / "nuself.sqlite"
+    _create_v1_database(
+        database,
+        payload={
+            "id": "mem_legacy",
+            "title": "Pre-v2",
+        },
+    )
+    context = _spawn_context()
+    start = context.Event()
+    ready_events = tuple(context.Event() for _ in range(6))
+    processes = tuple(
+        context.Process(
+            target=_open_v1_authority_after_signal,
+            args=(
+                str(tmp_path),
+                str(database),
+                ready,
+                start,
+            ),
+        )
+        for ready in ready_events
+    )
+    with sqlite_storage._schema_upgrade_lease(
+        database,
+        managed=True,
+    ):
+        for process in processes:
+            process.start()
+        assert all(ready.wait(timeout=30) for ready in ready_events)
+        start.set()
+        time.sleep(0.5)
+
+    for process in processes:
+        process.join(timeout=30)
+        assert process.exitcode == 0
+
+    connection = sqlite3.connect(database)
+    try:
+        versions = tuple(
+            row[0]
+            for row in connection.execute(
+                "SELECT version FROM _schema_version ORDER BY version"
+            ).fetchall()
+        )
+    finally:
+        connection.close()
+    assert versions == (1, 2)
+
+    backup = database.with_name(f"{database.name}.v1.bak")
+    schema_lock = database.with_name(f"{database.name}.schema.lock")
+    assert backup.exists()
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
+    assert stat.S_IMODE(schema_lock.stat().st_mode) == 0o600
+    backup_connection = sqlite3.connect(
+        f"{backup.resolve().as_uri()}?mode=ro",
+        uri=True,
+    )
+    try:
+        backup_versions = tuple(
+            row[0]
+            for row in backup_connection.execute(
+                "SELECT version FROM _schema_version ORDER BY version"
+            ).fetchall()
+        )
+        columns = {
+            row[1]
+            for row in backup_connection.execute(
+                "PRAGMA table_info(col_memory_entries)"
+            ).fetchall()
+        }
+        payload = backup_connection.execute(
+            "SELECT payload FROM col_memory_entries "
+            "WHERE id = 'mem_legacy'"
+        ).fetchone()
+    finally:
+        backup_connection.close()
+    assert backup_versions == (1,)
+    assert "payload" in columns
+    assert payload is not None
+    assert json.loads(payload[0]) == {
+        "id": "mem_legacy",
+        "title": "Pre-v2",
+    }
+
+
+def test_external_v1_upgrade_preserves_external_permissions(
+    tmp_path: Path,
+) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o755)
+    shared.chmod(0o755)
+    database = shared / "pack.sqlite"
+    _create_v1_database(
+        database,
+        payload={"id": "mem_legacy", "title": "External"},
+    )
+    database.chmod(0o644)
+    previous_umask = os.umask(0o022)
+    try:
+        backend = SqliteStorageBackend(database)
+        backend.close()
+    finally:
+        os.umask(previous_umask)
+
+    backup = database.with_name(f"{database.name}.v1.bak")
+    schema_lock = database.with_name(f"{database.name}.schema.lock")
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755
+    assert stat.S_IMODE(database.stat().st_mode) == 0o644
+    assert stat.S_IMODE(backup.stat().st_mode) == 0o644
+    assert stat.S_IMODE(schema_lock.stat().st_mode) == 0o644
 
 
 def test_v1_payload_migration_preserves_complete_wire_data(tmp_path: Path) -> None:

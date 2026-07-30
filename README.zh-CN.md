@@ -61,6 +61,12 @@ schema identity，不执行全库 `quick_check`；被重定向的父目录会在
 损坏，以及不受支持的未来 schema，都会在 schema 初始化或业务写入前 fail
 closed。只读验证期间 SQLite 可以访问 WAL/SHM 协调文件；只有 migration 可以
 初始化数据库。显式外部 SQLite 路径会保留其父目录和文件权限。
+多个进程首次打开 v1 数据库时，会通过稳定的 sibling schema lease 串行化可写
+setup、备份和 v2 migration，并在 lease 内重新读取版本；只有一个进程执行升级，
+其 `.v1.bak` 保持为真正含 `payload` 的 v1 数据库。直接构造 canonical 路径也会
+推断出与 factory 相同的 managed 防护。外部 v1 安全备份和公共 external
+`backup_to()` destination 保留现有目录与文件权限；内部 thought-pack
+export/import 仍是 owner-only managed artifact。
 文件后端 record 删除成功还要求同步 parent directory；若删除已可见但 crash
 durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
 Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已

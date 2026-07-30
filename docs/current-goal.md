@@ -5,7 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. Lock-aware live SQLite authority validation is complete.
+Make v1-to-v2 SQLite upgrade single-writer across processes and apply explicit
+managed/external ownership to every backup path.
 
 ## Active Branch
 
@@ -13,8 +14,14 @@ Idle. Lock-aware live SQLite authority validation is complete.
 
 ## Ordered Work
 
-1. Discuss and specify stable `v0.3.0` promotion before changing release
-   metadata or `main`.
+1. Add a stable database-path schema-upgrade lease; after acquiring it,
+   re-read the version and let only the remaining v1 owner back up and upgrade.
+2. Carry managed ownership through v1 backup and public `backup_to()`, keeping
+   external parent and database permissions unchanged.
+3. Make direct canonical construction infer managed protection and add
+   concurrent-first-open, backup-content, permission, and symlink regressions.
+4. Run complete release gates, push the functional commits, and require the
+   final six-platform CI matrix before returning this board to idle.
 
 ## Out Of Scope
 
@@ -26,24 +33,17 @@ Idle. Lock-aware live SQLite authority validation is complete.
 
 ## Completion Evidence
 
-- Canonical authority identity now uses lock-aware `mode=ro` access and a
-  metadata-only validator; thought-pack import and inspection retain the
-  separate full `quick_check` integrity boundary.
-- Ordinary live close uses a cooperative passive checkpoint, while only the
-  exclusive unpublished migration backend requires a truncating checkpoint.
-  Explicit external SQLite opens preserve parent and database modes.
-- Cross-process regressions continuously commit and checkpoint while another
-  process repeatedly opens, reads, and closes authority, and recover a
-  committed uncheckpointed WAL after abrupt writer exit.
-- Focused storage, private-filesystem, and CLI verification reported 143
+- Existing v1 authority acquires a stable sibling schema lease before its
+  writable connection setup, re-reads the version under the lease, and lets
+  only the remaining v1 holder create the backup and upgrade.
+- Six simultaneous first-open processes all succeed; the main database has
+  exactly versions 1 and 2, while the single `.v1.bak` remains v1 with its
+  payload column and source record.
+- Direct canonical construction infers managed protection. External v1
+  upgrade and public backup destinations preserve directory and file modes;
+  managed thought-pack export/import retains owner-only modes.
+- Focused storage, private-filesystem, and CLI verification reported 150
   passed. Locked Pyright reported 0 errors and 0 warnings; `git diff --check`
   passed.
-- Complete local verification reported 2430 passed. Locked Pyright analyzed
-  327 files with 0 errors and 0 warnings; `uv lock --check`,
-  `git diff --check`, and `nuself 0.3.0rc1` passed.
-- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14.3
-  environment installed only the wheel plus its declared dependencies,
-  imported `nuself.cli` and `nuself.llm`, and reported `nuself 0.3.0rc1`.
-- GitHub Actions run `30517226479` passed on Ubuntu and macOS with Python
-  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
-  suite, distribution build, and clean-wheel smoke test for commit `53605cd`.
+- Complete local release gates, distribution verification, push, and final
+  six-platform CI are pending.

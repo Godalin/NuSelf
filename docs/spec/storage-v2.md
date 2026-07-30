@@ -196,6 +196,16 @@ initialization or business mutation.
 Recognized supported versions may then perform their documented controlled
 upgrade.
 
+An existing v1 database is upgraded under a stable sibling schema lease shared
+by every process opening that database path. A process that first observes v1
+must acquire the exclusive lease and then re-read and revalidate the schema
+version. Only a lease holder that still observes v1 may create the pre-v2
+backup and run the v2 transaction. Later holders observe v2 and do neither.
+The backup must therefore remain a genuine v1 database with its `payload`
+columns, and `_schema_version` contains only one row for each applied version.
+The unpublished migration creator does not need this lease because its
+database is unreachable until the separate authority publication completes.
+
 Ordinary authority identity validation is metadata-only and must not run
 `PRAGMA quick_check`. Full integrity checking remains part of thought-pack
 import and inspection, where the database is an explicit external artifact
@@ -274,6 +284,20 @@ has been written. Explicit external SQLite paths, including paths passed to
 not owned by this invariant: their parent and existing database mode remain
 unchanged, while SQLite coordination artifacts retain normal
 directory/`umask` semantics.
+
+Canonical ownership is determined by the database path and project root, not
+only by which factory called the backend. Direct construction of
+`<project>/private/nuself.sqlite` receives the same no-follow validation and
+hardening as `open_sqlite_backend(project_root)`. An explicit external path is
+unmanaged unless a private internal creator marks it as an unpublished managed
+migration database.
+
+Every SQLite backup operation carries destination ownership explicitly.
+Managed v1 safety backups and managed internal snapshots use no-follow private
+directory handling and owner-only modes. A v1 backup beside an external
+database and the default public `backup_to(destination)` path preserve the
+existing parent mode and create a new regular file according to the caller's
+normal `umask`; they never route through private-directory hardening.
 
 The managed `private/` root and its managed directory descendants are opened
 component-by-component with no-follow directory handles. A symlink or
@@ -555,7 +579,9 @@ def _init_schema(self):
 - `PRAGMA journal_mode=WAL`
 - `PRAGMA synchronous=NORMAL`
 - `PRAGMA busy_timeout=5000`
-- 同一进程内的 WAL 与 schema 初始化通过共享 lock 串行化
+- 当前 schema 的同一进程初始化通过共享 lock 串行化；已有旧 schema 的首次
+  可写打开、WAL setup、备份和升级还通过稳定 sibling lease 跨进程串行化，并在
+  lease 内重新读取版本
 - 写操作通过 `threading.Lock` 串行化（当前每个 repo 已有 RLock）
 - WAL 模式读写互不阻塞
 
