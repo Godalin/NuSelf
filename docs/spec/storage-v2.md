@@ -88,7 +88,9 @@ Internal collections:
 | `scheduler_state` | background scheduler cursors |
 
 Schema migrations may add collections or columns. `_schema_version` records each
-completed version exactly once.
+completed version exactly once. All schema changes follow
+[`database-migrations.md`](database-migrations.md); schema v3 is the historical
+baseline and schema v4 is the first strictly reversible migration.
 
 ## Initialization and upgrades
 
@@ -101,10 +103,13 @@ Opening an existing database first performs a lock-aware `mode=ro` identity
 check. It checks application/schema metadata and required tables but does not
 run `quick_check` on every process start.
 
-Schema upgrade uses a stable sibling lock opened with `O_NOFOLLOW` and an
-exclusive cross-process `flock`. After acquiring the lease, the process rereads
-the version; only the process that still sees the old version creates the
-pre-upgrade backup and migrates. The backup must retain the old schema.
+The runtime never migrates a database while opening it. A non-current version
+fails closed with the explicit `scripts/migrate_database.py` invocation.
+That operator-run script uses a stable sibling lock opened with `O_NOFOLLOW`
+and an exclusive cross-process `flock`. After acquiring the lease, it rereads
+the version, plans a registered adjacent path, creates a pre-migration backup,
+and applies the complete path transactionally. The backup retains the old
+schema.
 
 External SQLite paths are never treated as managed merely because they are
 opened through the library. Their directory and file permissions retain normal

@@ -129,7 +129,6 @@ uv run nuself thread branch default alternative
 uv run nuself memory search "decision"
 uv run nuself memory preview
 uv run nuself memory update
-uv run nuself memory review list
 ```
 
 ### 导入个人笔记
@@ -137,7 +136,6 @@ uv run nuself memory review list
 ```bash
 uv run nuself memory source ingest ~/notes.md --tag notes
 uv run nuself memory source list
-uv run nuself memory source extract <source-id>
 ```
 
 ### 延续长期问题
@@ -172,6 +170,9 @@ uv run nuself data export threads --format json
 运行时。通用编辑会校验完整记录、显示 diff、要求确认，
 并拒绝覆盖并发修改。内部运行状态默认隐藏，只有显式使用 `--internal`
 才能查看。
+
+数据库 schema 升级通过显式脚本完成，打开旧数据库绝不会修改它。dry-run、
+升级、降级和备份规则见[迁移规范](docs/spec/database-migrations.md)。
 
 [CLI 指南](docs/cli.md)按工作流整理了命令；CLI 自身的 `--help` 是最新命令参考。
 

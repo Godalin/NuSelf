@@ -21,13 +21,14 @@ None.
 
 ## Completion Evidence
 
-The repair-aware Attention projection is complete:
+The explicit schema-migration foundation is complete:
 
-- startup suppresses only a decode failure followed by a successful validated
-  update for the exact same collection and record ID;
-- failures after repair, failures for another record, and unidentified
-  failures remain visible while historical logs remain intact;
-- the real local authority starts without the obsolete 386-failure Attention
-  block and still validates all 88 memory records;
-- focused tests passed 6 cases, Pyright completed with 0 errors and 0 warnings,
-  and the full suite passed 2431 tests.
+- the runtime accepts only schema v3 and performs no automatic migration;
+- versioned v1→v2 and v2→v3 scripts live outside the runtime package;
+- the operator script supports dry-run planning, exact targets, a consistent
+  pre-migration backup, a cross-process lease, and one transaction per path;
+- historical forward-only downgrade requests fail before mutation, while the
+  contract requires both directions for every post-v3 migration;
+- Pyright completed with 0 errors and 0 warnings, focused storage tests passed
+  95 cases, the full suite passed 2432 tests, distributions built, and the
+  wheel imported and reported its version from a clean uv environment.

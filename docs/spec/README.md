@@ -25,6 +25,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`config.md`](config.md) | Config hierarchy, defaults, and runtime paths |
 | [`scope.md`](scope.md) | User/workspace scope selection, authority identity, daemon isolation, and legacy layout migration |
 | [`storage-v2.md`](storage-v2.md) | SQLite storage, migrations, and thought-pack contracts |
+| [`database-migrations.md`](database-migrations.md) | Versioned SQLite migration artifacts, planning, reversal, and safety |
 | [`hardcode.md`](hardcode.md) | Policy for constants, defaults, prompts, and configurable values |
 | [`versioning.md`](versioning.md) | Package versioning, changelog, and release checklist |
 

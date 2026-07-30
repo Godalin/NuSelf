@@ -141,7 +141,6 @@ uv run nuself thread branch default alternative
 uv run nuself memory search "decision"
 uv run nuself memory preview
 uv run nuself memory update
-uv run nuself memory review list
 ```
 
 ### Import personal notes
@@ -149,7 +148,6 @@ uv run nuself memory review list
 ```bash
 uv run nuself memory source ingest ~/notes.md --tag notes
 uv run nuself memory source list
-uv run nuself memory source extract <source-id>
 ```
 
 ### Continue a long-running question
@@ -183,6 +181,10 @@ uv run nuself data export threads --format json
 `edit` or confirmed `delete` command for each one. One-time legacy migrations
 live under `scripts/`, outside the installed runtime. Generic editing validates
 full records and rejects concurrent overwrites.
+
+Database schema upgrades are explicit scripts; opening an old database never
+mutates it. See the [migration specification](docs/spec/database-migrations.md)
+for dry-run, upgrade, downgrade, and backup behavior.
 
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 `--help` output is the current command reference.

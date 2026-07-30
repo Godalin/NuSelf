@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import subprocess
+import sys
 import threading
 import time
 from typing import Callable, cast
@@ -149,22 +151,6 @@ def _commit_live_authority_then_crash(
     ).exists()
     committed.set()
     os._exit(0)
-
-
-def _open_v1_authority_after_signal(
-    project_root: str,
-    database: str,
-    ready: Event,
-    start: Event,
-) -> None:
-    ready.set()
-    if not start.wait(timeout=30):
-        raise RuntimeError("parent did not start v1 upgrade")
-    backend = open_sqlite_backend(
-        Path(project_root),
-        db_path=Path(database),
-    )
-    backend.close()
 
 
 def test_sqlite_backend_hardens_database_directory_and_sidecars(
@@ -1824,125 +1810,27 @@ def _create_v1_database(
         conn.close()
 
 
-def test_cross_process_first_open_upgrades_v1_once(
-    tmp_path: Path,
-) -> None:
-    private = tmp_path
-    private.chmod(0o700)
-    database = private / "nuself.sqlite"
+def test_runtime_requires_explicit_v1_migration(tmp_path: Path) -> None:
+    db_path = tmp_path / "nuself.sqlite"
     _create_v1_database(
-        database,
-        payload={
-            "id": "mem_legacy",
-            "title": "Pre-v2",
-        },
+        db_path,
+        payload={"id": "mem_legacy", "title": "Legacy"},
     )
-    context = _spawn_context()
-    start = context.Event()
-    ready_events = tuple(context.Event() for _ in range(6))
-    processes = tuple(
-        context.Process(
-            target=_open_v1_authority_after_signal,
-            args=(
-                str(tmp_path),
-                str(database),
-                ready,
-                start,
-            ),
-        )
-        for ready in ready_events
-    )
-    with sqlite_storage.sqlite_schema_lease(
-        database,
-        managed=True,
+    before = db_path.read_bytes()
+
+    with pytest.raises(
+        SqliteStorageUnsupportedVersionError,
+        match="requires explicit migration",
     ):
-        for process in processes:
-            process.start()
-        assert all(ready.wait(timeout=30) for ready in ready_events)
-        start.set()
-        time.sleep(0.5)
+        SqliteStorageBackend(db_path)
 
-    for process in processes:
-        process.join(timeout=30)
-        assert process.exitcode == 0
-
-    connection = sqlite3.connect(database)
-    try:
-        versions = tuple(
-            row[0]
-            for row in connection.execute(
-                "SELECT version FROM _schema_version ORDER BY version"
-            ).fetchall()
-        )
-    finally:
-        connection.close()
-    assert versions == (1, 2, 3)
-
-    backup = database.with_name(f"{database.name}.v1.bak")
-    schema_lock = database.with_name(f"{database.name}.schema.lock")
-    assert backup.exists()
-    assert stat.S_IMODE(backup.stat().st_mode) == 0o600
-    assert stat.S_IMODE(schema_lock.stat().st_mode) == 0o600
-    backup_connection = sqlite3.connect(
-        f"{backup.resolve().as_uri()}?mode=ro",
-        uri=True,
-    )
-    try:
-        backup_versions = tuple(
-            row[0]
-            for row in backup_connection.execute(
-                "SELECT version FROM _schema_version ORDER BY version"
-            ).fetchall()
-        )
-        columns = {
-            row[1]
-            for row in backup_connection.execute(
-                "PRAGMA table_info(col_memory_entries)"
-            ).fetchall()
-        }
-        payload = backup_connection.execute(
-            "SELECT payload FROM col_memory_entries "
-            "WHERE id = 'mem_legacy'"
-        ).fetchone()
-    finally:
-        backup_connection.close()
-    assert backup_versions == (1,)
-    assert "payload" in columns
-    assert payload is not None
-    assert json.loads(payload[0]) == {
-        "id": "mem_legacy",
-        "title": "Pre-v2",
-    }
+    assert db_path.read_bytes() == before
+    assert not db_path.with_name("nuself.sqlite.pre-v1-to-v3.bak").exists()
 
 
-def test_external_v1_upgrade_preserves_external_permissions(
+def test_explicit_script_migrates_v1_and_preserves_wire_data(
     tmp_path: Path,
 ) -> None:
-    shared = tmp_path / "shared"
-    shared.mkdir(mode=0o755)
-    shared.chmod(0o755)
-    database = shared / "pack.sqlite"
-    _create_v1_database(
-        database,
-        payload={"id": "mem_legacy", "title": "External"},
-    )
-    database.chmod(0o644)
-    previous_umask = os.umask(0o022)
-    try:
-        backend = SqliteStorageBackend(database)
-        backend.close()
-    finally:
-        os.umask(previous_umask)
-
-    backup = database.with_name(f"{database.name}.v1.bak")
-    schema_lock = database.with_name(f"{database.name}.schema.lock")
-    assert stat.S_IMODE(shared.stat().st_mode) == 0o755
-    assert stat.S_IMODE(database.stat().st_mode) == 0o644
-    assert stat.S_IMODE(backup.stat().st_mode) == 0o644
-    assert stat.S_IMODE(schema_lock.stat().st_mode) == 0o644
-
-
-def test_v1_payload_migration_preserves_complete_wire_data(tmp_path: Path) -> None:
     db_path = tmp_path / "nuself.sqlite"
     wire: dict[str, object] = {
         "id": "mem_legacy",
@@ -1953,21 +1841,255 @@ def test_v1_payload_migration_preserves_complete_wire_data(tmp_path: Path) -> No
     }
     _create_v1_database(db_path, payload=wire)
 
+    dry_run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+            "--dry-run",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert dry_run.stdout.splitlines() == [
+        "upgrade v001_to_v002",
+        "upgrade v002_to_v003",
+    ]
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     backend = SqliteStorageBackend(db_path)
 
     assert backend.collection("memory_entries").get("mem_legacy") == wire
-    assert (tmp_path / "nuself.sqlite.v1.bak").exists()
+    assert (tmp_path / "nuself.sqlite.pre-v1-to-v3.bak").exists()
     assert "payload" not in {
         column[0] for column in backend.table_info("memory_entries")
     }
+    backend.close()
 
 
-def test_invalid_v1_payload_rolls_back_schema_upgrade(tmp_path: Path) -> None:
+def test_explicit_script_serializes_concurrent_migration(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    _create_v1_database(
+        db_path,
+        payload={"id": "mem_legacy", "title": "Concurrent"},
+    )
+    command = [
+        sys.executable,
+        "-m",
+        "scripts.migrate_database",
+        str(db_path),
+        "--to",
+        "3",
+    ]
+
+    def run_migration(_: int) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        results = tuple(executor.map(run_migration, range(6)))
+
+    assert all(result.returncode == 0 for result in results)
+    connection = sqlite3.connect(db_path)
+    try:
+        versions = tuple(
+            row[0]
+            for row in connection.execute(
+                "SELECT version FROM _schema_version ORDER BY version"
+            ).fetchall()
+        )
+    finally:
+        connection.close()
+    assert versions == (1, 2, 3)
+    assert db_path.with_name("nuself.sqlite.pre-v1-to-v3.bak").is_file()
+
+
+def test_explicit_script_rejects_incomplete_authority_before_mutation(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "not-nuself.sqlite"
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
+        )
+        connection.execute("INSERT INTO _schema_version VALUES (2)")
+        connection.commit()
+    finally:
+        connection.close()
+    before = db_path.read_bytes()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing collection table" in result.stderr
+    assert db_path.read_bytes() == before
+    assert not db_path.with_name(
+        "not-nuself.sqlite.pre-v2-to-v3.bak"
+    ).exists()
+
+
+def test_explicit_script_preserves_external_permissions(
+    tmp_path: Path,
+) -> None:
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o755)
+    shared.chmod(0o755)
+    db_path = shared / "pack.sqlite"
+    _create_v1_database(
+        db_path,
+        payload={"id": "mem_legacy", "title": "External"},
+    )
+    db_path.chmod(0o644)
+    previous_umask = os.umask(0o022)
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.migrate_database",
+                str(db_path),
+                "--to",
+                "3",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        os.umask(previous_umask)
+
+    assert result.returncode == 0, result.stderr
+    assert stat.S_IMODE(shared.stat().st_mode) == 0o755
+    assert stat.S_IMODE(db_path.stat().st_mode) == 0o644
+    assert stat.S_IMODE(
+        db_path.with_name("pack.sqlite.schema.lock").stat().st_mode
+    ) == 0o644
+    assert stat.S_IMODE(
+        db_path.with_name(
+            "pack.sqlite.pre-v1-to-v3.bak"
+        ).stat().st_mode
+    ) == 0o644
+
+
+def test_explicit_script_hardens_managed_artifacts(
+    tmp_path: Path,
+) -> None:
+    authority = tmp_path / ".nuself"
+    authority.mkdir(mode=0o755)
+    db_path = authority / "nuself.sqlite"
+    _create_v1_database(
+        db_path,
+        payload={"id": "mem_legacy", "title": "Managed"},
+    )
+    db_path.chmod(0o644)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert stat.S_IMODE(authority.stat().st_mode) == 0o700
+    assert stat.S_IMODE(db_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(
+        db_path.with_name("nuself.sqlite.schema.lock").stat().st_mode
+    ) == 0o600
+    assert stat.S_IMODE(
+        db_path.with_name(
+            "nuself.sqlite.pre-v1-to-v3.bak"
+        ).stat().st_mode
+    ) == 0o600
+
+
+def test_historical_downgrade_fails_before_mutation(tmp_path: Path) -> None:
+    backend = create_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
+    backend.close()
+    db_path = tmp_path / "nuself.sqlite"
+    before = db_path.read_bytes()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "2",
+            "--dry-run",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "historical forward-only migration" in result.stderr
+    assert db_path.read_bytes() == before
+    assert not db_path.with_name("nuself.sqlite.pre-v3-to-v2.bak").exists()
+
+
+def test_explicit_script_rolls_back_invalid_v1_payload(tmp_path: Path) -> None:
     db_path = tmp_path / "nuself.sqlite"
     _create_v1_database(db_path, payload="not-json")
 
-    with pytest.raises(json.JSONDecodeError):
-        SqliteStorageBackend(db_path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "JSONDecodeError" in result.stderr
 
     conn = sqlite3.connect(db_path)
     try:

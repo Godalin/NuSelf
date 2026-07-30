@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Database schema migration is now an explicit operator action rather than a
+  side effect of opening storage. Versioned scripts under
+  `scripts/database_migrations/` provide dry-run planning, exact targets,
+  consistent pre-migration backups, cross-process serialization, and
+  transactional paths. The runtime accepts only the current schema; every new
+  post-v3 migration must also define its downgrade.
 - Interactive startup no longer repeats historical record-decode Attention
   notices after a successful validated update of the same collection and
   record. Later, unidentified, and still-unrepaired failures remain visible.

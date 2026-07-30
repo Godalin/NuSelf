@@ -11,7 +11,7 @@ import os
 import sqlite3
 import threading
 from collections.abc import Generator
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
@@ -456,54 +456,37 @@ class SqliteStorageBackend:
         if self._managed:
             ensure_private_directory(db_path.parent)
         require_private_file(db_path)
-        observed_version: int | None = None
         if not _initialize:
-            observed_version = _validate_existing_nuself_database(db_path)
+            _validate_existing_nuself_database(db_path)
         if self._managed:
             harden_private_file(db_path)
-        upgrade_lease_held = (
-            observed_version is not None
-            and observed_version < SQLITE_SCHEMA_VERSION
+        self._conn = sqlite3.connect(
+            str(db_path),
+            check_same_thread=False,
         )
-        lease = (
-            sqlite_schema_lease(
-                db_path,
-                managed=self._managed,
-            )
-            if upgrade_lease_held
-            else nullcontext()
-        )
-        with lease:
-            self._conn = sqlite3.connect(
-                str(db_path),
-                check_same_thread=False,
-            )
-            self._lock = threading.RLock()
-            self._transaction_state = _TransactionState()
-            self._closed = False
-            self._truncate_on_close = _truncate_on_close
+        self._lock = threading.RLock()
+        self._transaction_state = _TransactionState()
+        self._closed = False
+        self._truncate_on_close = _truncate_on_close
+        try:
+            self._conn.execute("PRAGMA busy_timeout=5000")
+            with _SQLITE_INITIALIZATION_LOCK:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                self._conn.execute("PRAGMA synchronous=NORMAL")
+                self._init_schema(initialize=_initialize)
+                if self._managed:
+                    _harden_sqlite_sidecars(db_path)
+        except BaseException as init_error:
             try:
-                self._conn.execute("PRAGMA busy_timeout=5000")
-                with _SQLITE_INITIALIZATION_LOCK:
-                    self._conn.execute("PRAGMA journal_mode=WAL")
-                    self._conn.execute("PRAGMA synchronous=NORMAL")
-                    self._init_schema(
-                        initialize=_initialize,
-                        upgrade_lease_held=upgrade_lease_held,
-                    )
-                    if self._managed:
-                        _harden_sqlite_sidecars(db_path)
-            except BaseException as init_error:
-                try:
-                    self._conn.close()
-                except Exception as cleanup_error:
-                    raise SqliteStorageInitializationCleanupError(
-                        "SQLite initialization failed and its connection "
-                        "could not be closed",
-                        cleanup_error=cleanup_error,
-                    ) from init_error
-                self._closed = True
-                raise
+                self._conn.close()
+            except Exception as cleanup_error:
+                raise SqliteStorageInitializationCleanupError(
+                    "SQLite initialization failed and its connection "
+                    "could not be closed",
+                    cleanup_error=cleanup_error,
+                ) from init_error
+            self._closed = True
+            raise
 
     @property
     def db_path(self) -> Path:
@@ -572,7 +555,6 @@ class SqliteStorageBackend:
         self,
         *,
         initialize: bool,
-        upgrade_lease_held: bool,
     ) -> None:
         if initialize:
             self._conn.execute(
@@ -586,33 +568,21 @@ class SqliteStorageBackend:
                 raise SqliteStorageIdentityError(
                     "existing SQLite database has no applied schema"
                 )
-            self._apply_v1()
-            self._conn.execute(
-                "INSERT INTO _schema_version (version) VALUES (1)"
+            self._apply_current_schema()
+            self._conn.executemany(
+                "INSERT INTO _schema_version (version) VALUES (?)",
+                ((version,) for version in range(1, SQLITE_SCHEMA_VERSION + 1)),
             )
             self._conn.commit()
-            current_version = 1
-        if current_version >= SQLITE_SCHEMA_VERSION:
-            return
-        if upgrade_lease_held:
-            refreshed_version = self._read_schema_version()
-            self._require_supported_schema_version(refreshed_version)
-            self._upgrade_schema(refreshed_version)
-            return
-        with sqlite_schema_lease(
-            self._db_path,
-            managed=self._managed,
-        ):
-            refreshed_version = self._read_schema_version()
-            self._require_supported_schema_version(refreshed_version)
-            self._upgrade_schema(refreshed_version)
-
-    def _upgrade_schema(self, current_version: int) -> None:
-        if current_version < 2:
-            self._upgrade_v1_to_v2()
-            current_version = 2
-        if current_version < 3:
-            self._upgrade_v2_to_v3()
+            current_version = SQLITE_SCHEMA_VERSION
+        if current_version != SQLITE_SCHEMA_VERSION:
+            raise SqliteStorageUnsupportedVersionError(
+                "SQLite schema version "
+                f"{current_version} requires explicit migration to version "
+                f"{SQLITE_SCHEMA_VERSION}; run "
+                "'uv run python -m scripts.migrate_database "
+                f"{self._db_path} --to {SQLITE_SCHEMA_VERSION}'"
+            )
 
     def _read_schema_version(self) -> int:
         row = self._conn.execute(
@@ -638,107 +608,13 @@ class SqliteStorageBackend:
                 f"{SQLITE_SCHEMA_VERSION}"
             )
 
-    def _upgrade_v1_to_v2(self) -> None:
-        self._backup_before_v2_if_needed()
-        with self.transaction():
-            self._apply_v2()
-            self._conn.execute(
-                "INSERT INTO _schema_version (version) VALUES (?)",
-                (2,),
-            )
-
-    def _upgrade_v2_to_v3(self) -> None:
-        with self.transaction():
-            for name in COLLECTION_NAMES:
-                table = _collection_table(name)
-                self._conn.execute(
-                    f"CREATE TABLE IF NOT EXISTS {_identifier(table)} "
-                    "(id TEXT PRIMARY KEY)"
-                )
-            self._conn.execute(
-                "INSERT INTO _schema_version (version) VALUES (3)"
-            )
-
-    def _apply_v1(self) -> None:
-        for name in _V2_COLLECTION_NAMES:
+    def _apply_current_schema(self) -> None:
+        for name in COLLECTION_NAMES:
             table = _collection_table(name)
             self._conn.execute(
                 f"CREATE TABLE IF NOT EXISTS {_identifier(table)} "
                 "(id TEXT PRIMARY KEY)"
             )
-        self._conn.commit()
-
-    def _apply_v2(self) -> None:
-        """Expand a legacy v1 payload object into v2 dynamic columns."""
-        for name in _V2_COLLECTION_NAMES:
-            table = _collection_table(name)
-            info = self._conn.execute(
-                f"PRAGMA table_info({_identifier(table)})"
-            ).fetchall()
-            col_names = [r[1] for r in info]
-            if "payload" in col_names:
-                rows = self._conn.execute(
-                    f"SELECT id, payload FROM {_identifier(table)}"
-                ).fetchall()
-                payloads: list[tuple[str, dict[str, object]]] = []
-                keys: set[str] = set()
-                for row_id, payload_text in rows:
-                    if not isinstance(row_id, str) or not isinstance(payload_text, str):
-                        raise ValueError(f"invalid v1 row in collection {name!r}")
-                    parsed = decode_json_value(payload_text)
-                    if not isinstance(parsed, dict):
-                        raise ValueError(
-                            f"invalid v1 payload in collection {name!r}: expected object"
-                        )
-                    parsed_dict = cast(dict[object, object], parsed)
-                    payload: dict[str, object] = {
-                        str(key): value for key, value in parsed_dict.items()
-                    }
-                    payload_id = payload.get("id")
-                    if payload_id is not None and payload_id != row_id:
-                        raise ValueError(
-                            f"v1 payload id mismatch in collection {name!r}: {row_id!r}"
-                        )
-                    payload["id"] = row_id
-                    payloads.append((row_id, payload))
-                    keys.update(key for key in payload if key != "id")
-                for key in sorted(keys):
-                    if key not in col_names:
-                        self._conn.execute(
-                            f"ALTER TABLE {_identifier(table)} "
-                            f"ADD COLUMN {_identifier(key)} TEXT"
-                        )
-                for row_id, payload in payloads:
-                    for key, value in payload.items():
-                        if key == "id":
-                            continue
-                        self._conn.execute(
-                            f"UPDATE {_identifier(table)} "
-                            f"SET {_identifier(key)} = ? WHERE id = ?",
-                            (_json(value), row_id),
-                        )
-                self._conn.execute(
-                    f"ALTER TABLE {_identifier(table)} DROP COLUMN payload"
-                )
-
-    def _backup_before_v2_if_needed(self) -> None:
-        has_payload = False
-        for name in _V2_COLLECTION_NAMES:
-            table = _collection_table(name)
-            info = self._conn.execute(
-                f"PRAGMA table_info({_identifier(table)})"
-            ).fetchall()
-            if any(row[1] == "payload" for row in info):
-                has_payload = True
-                break
-        if not has_payload:
-            return
-        backup_path = self._db_path.with_name(f"{self._db_path.name}.v1.bak")
-        _backup_connection_to_path(
-            self._conn,
-            backup_path,
-            managed=self._managed,
-        )
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
@@ -1046,14 +922,23 @@ def _validate_nuself_schema_connection(
             raise ThoughtPackValidationError(
                 "thought pack is missing NuSelf schema metadata"
             )
-        row = connection.execute(
-            "SELECT MAX(version) FROM _schema_version"
-        ).fetchone()
-        version = row[0] if row is not None and len(row) == 1 else None
-        if type(version) is not int or version < 1:
+        version_rows = connection.execute(
+            "SELECT version FROM _schema_version ORDER BY version"
+        ).fetchall()
+        versions = tuple(
+            row[0]
+            for row in version_rows
+            if len(row) == 1 and type(row[0]) is int
+        )
+        if (
+            len(versions) != len(version_rows)
+            or not versions
+            or versions != tuple(range(1, versions[-1] + 1))
+        ):
             raise ThoughtPackValidationError(
-                "thought pack has an invalid schema version"
+                "thought pack has an invalid schema version history"
             )
+        version = versions[-1]
         if version > SQLITE_SCHEMA_VERSION:
             if authority:
                 raise SqliteStorageUnsupportedVersionError(
@@ -1088,6 +973,12 @@ def _validate_nuself_schema_connection(
                 raise ThoughtPackValidationError(
                     f"thought pack collection {table} has no id primary key"
                 )
+        if authority and version < SQLITE_SCHEMA_VERSION:
+            raise SqliteStorageUnsupportedVersionError(
+                "SQLite schema version "
+                f"{version} requires explicit migration to supported version "
+                f"{SQLITE_SCHEMA_VERSION}"
+            )
         return version
     except ThoughtPackValidationError:
         raise
