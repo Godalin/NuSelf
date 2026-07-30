@@ -2,13 +2,13 @@
 
 [English README](README.md)
 
-NuSelf 是一个面向深度个人讨论的 local-first AI 镜像。它把可恢复的对话、私人记忆、长期推理、主动反思和受控通知放在同一个项目本地工作区中。
+NuSelf 是一个面向深度个人讨论的 local-first AI 镜像。它把可恢复的对话、私人记忆、长期推理、主动反思和受控通知放在用户自有 authority 或显式选择的隔离工作区中。
 
 NuSelf 以 CLI 为主要入口，适合希望检查并掌控 Agent 数据，而不是把数据隐藏在托管账号背后的用户。
 
 ## 当前状态
 
-当前稳定版本是 **v0.3.0**。
+当前稳定版本是 **v0.3.0**。v0.3.1 开发版正在加入适合安装使用的用户级存储和显式隔离工作区。
 
 NuSelf 仍在激进开发中。v0.3 系列建立了运行时、存储、Agent 和后台任务的基础；后续开发版本仍可能主动调整接口。
 
@@ -54,14 +54,14 @@ uv run nuself --help
 
 ### 2. 配置模型
 
-创建私人配置：
+初始化默认用户 authority，并复制示例配置：
 
 ```bash
-mkdir -p private
-cp examples/private/config.yaml private/config.yaml
+uv run nuself init
+cp examples/private/config.yaml ~/.nuself/config.yaml
 ```
 
-OpenAI-compatible 端点可在 `private/config.yaml` 中这样配置：
+OpenAI-compatible 端点可在 `~/.nuself/config.yaml` 中这样配置：
 
 ```yaml
 llm:
@@ -125,7 +125,7 @@ uv run nuself memory review list
 ### 导入个人笔记
 
 ```bash
-uv run nuself memory source ingest private/sources/notes.md --tag notes
+uv run nuself memory source ingest ~/notes.md --tag notes
 uv run nuself memory source list
 uv run nuself memory source extract <source-id>
 ```
@@ -150,17 +150,17 @@ uv run nuself dev logs --component chat --tail 20
 
 ## 隐私与存储
 
-个人状态全部位于项目本地、被 Git 忽略的 `private/` 目录，包括配置、凭据、聊天线程、记忆、来源文档、推理状态、日志和活动 SQLite 数据库。
+个人状态默认位于 `~/.nuself`。`--local` 使用 `./.nuself`，`--workspace PATH` 使用 `PATH/.nuself`；每次选择都是隔离的状态 authority。工作区配置继承用户默认值，但数据库和运行状态绝不合并。
 
 local-first 不等于模型离线：配置远程模型后，一次调用所需的上下文会发送给你选择的端点。请根据自己的隐私要求选择提供方及其数据保留政策。
 
 重要边界：
 
-- 仓库不会提交 `private/`。
+- 源码仓库不再是隐式数据根目录。
 - 默认测试和 CI 不读取项目私人数据。
 - 可选的真实 API 测试只发送固定合成提示。
 - 配置诊断会隐藏凭据。
-- thought pack 和 JSON export 是显式迁移工具；仍应独立备份 `private/`。
+- thought pack 和 JSON export 是显式迁移工具；仍应独立备份所选 authority。
 
 更多说明见[记忆指南](docs/memory.md)和[存储规范](docs/spec/storage-v2.md)。
 
@@ -171,7 +171,7 @@ local-first 不等于模型离线：配置远程模型后，一次调用所需�
 - 后台记忆整理、反思和通知投递需要 daemon。
 - macOS 通知仅适用于对应平台；邮件需要显式 SMTP 配置。
 - 当前不支持 Windows。
-- 配置目前属于项目本地；全局和目录级覆盖仍是后续工作。
+- 工作区必须显式选择；NuSelf 不会自动向父目录发现工作区。
 
 ## 文档
 

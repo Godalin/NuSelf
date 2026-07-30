@@ -4,14 +4,16 @@
 
 NuSelf is a local-first AI mirror for deep personal discussion. It combines
 resumable chat, private memory, long-running reasoning, proactive reflection,
-and controlled notifications in one project-local workspace.
+and controlled notifications in a user-owned authority or an explicitly
+selected workspace.
 
 NuSelf is CLI-first and designed for people who want to inspect and own their
 agent's data rather than hide it behind a hosted account.
 
 ## Status
 
-The current stable release is **v0.3.0**.
+The current stable release is **v0.3.0**. v0.3.1 development adds installed,
+user-scoped storage and explicit isolated workspaces.
 
 NuSelf is in active development. The v0.3 line establishes the runtime,
 storage, agent, and background-task foundations; interfaces may still change
@@ -60,14 +62,14 @@ uv run nuself --help
 
 ### 2. Configure a model
 
-Create the private configuration:
+Initialize the default user authority and copy the example configuration:
 
 ```bash
-mkdir -p private
-cp examples/private/config.yaml private/config.yaml
+uv run nuself init
+cp examples/private/config.yaml ~/.nuself/config.yaml
 ```
 
-For an OpenAI-compatible endpoint, edit `private/config.yaml`:
+For an OpenAI-compatible endpoint, edit `~/.nuself/config.yaml`:
 
 ```yaml
 llm:
@@ -134,7 +136,7 @@ uv run nuself memory review list
 ### Import personal notes
 
 ```bash
-uv run nuself memory source ingest private/sources/notes.md --tag notes
+uv run nuself memory source ingest ~/notes.md --tag notes
 uv run nuself memory source list
 uv run nuself memory source extract <source-id>
 ```
@@ -160,9 +162,10 @@ The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 
 ## Privacy And Storage
 
-Personal state lives under the ignored project-local `private/` directory.
-This includes configuration, credentials, chat threads, memory, sources,
-reasoning state, logs, and the active SQLite database.
+Personal state defaults to `~/.nuself`. Use `--local` for `./.nuself` or
+`--workspace PATH` for `PATH/.nuself`; each selection is an isolated state
+authority. Workspace configuration inherits user defaults, but databases and
+runtime state are never merged.
 
 NuSelf is local-first, not model-offline: when you configure a remote model,
 the context required for that call is sent to the endpoint you selected.
@@ -170,12 +173,12 @@ Choose providers and retention policies accordingly.
 
 Important boundaries:
 
-- `private/` is never committed by the repository.
+- The source checkout is not an implicit data root.
 - Default tests and CI do not read private project data.
 - Opt-in live API tests use fixed synthetic prompts.
 - Diagnostic configuration output redacts credentials.
 - Thought packs and JSON exports are explicit portability tools; keep separate
-  backups of `private/`.
+  backups of the selected authority.
 
 See the [memory guide](docs/memory.md) and
 [storage specification](docs/spec/storage-v2.md) for details.
@@ -188,8 +191,8 @@ See the [memory guide](docs/memory.md) and
 - macOS notifications are platform-specific; email requires explicit SMTP
   configuration.
 - Windows is unsupported.
-- Configuration is project-local; global and directory-local overlays remain
-  future work.
+- Workspace scope must be selected explicitly; NuSelf does not automatically
+  discover parent workspaces.
 
 ## Documentation
 

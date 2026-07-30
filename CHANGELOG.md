@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- v0.3.1 development introduces explicit user and workspace authorities:
+  normal commands use `~/.nuself` (or `NUSELF_HOME`), while `--local` and
+  `--workspace PATH` select isolated `.nuself` state. Workspace configuration
+  inherits user defaults without merging databases or runtime state, and
+  `init`, `dev paths`, and layered `dev config` expose the selected scope.
+
 ## v0.3.0 - 2026-07-30
 
 - The English and Chinese READMEs are now concise project front pages with a

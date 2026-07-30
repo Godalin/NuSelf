@@ -1,13 +1,16 @@
 # CLI Guide
 
-NuSelf is CLI-first. Run commands from the project root:
+NuSelf is CLI-first. Installed commands may run from any directory:
 
 ```bash
 uv run nuself --help
 uv run nuself <command> --help
 ```
 
-Use `--project-root PATH` before the command to target another NuSelf project.
+The default authority is `~/.nuself`. Use `--local` for `./.nuself` or
+`--workspace PATH` for `PATH/.nuself`; both flags precede the command and are
+mutually exclusive. NuSelf never switches scope merely because the current
+directory contains `.nuself`.
 The examples below omit the `uv run` prefix only in explanatory text; commands
 show the complete source-checkout invocation.
 

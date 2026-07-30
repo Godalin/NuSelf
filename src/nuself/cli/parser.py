@@ -53,6 +53,11 @@ from nuself.cli.commands.reason import (
     handle_reason_start,
     handle_reason_thread_action,
 )
+from nuself.cli.commands.scope import (
+    handle_dev_config,
+    handle_dev_paths,
+    handle_init,
+)
 from nuself.cli.commands.reflections import (
     handle_reflection_archive,
     handle_reflection_dismiss,
@@ -62,7 +67,6 @@ from nuself.cli.commands.reflections import (
     handle_reflection_show,
 )
 from nuself.cli.commands.system import (
-    handle_config,
     handle_health,
     handle_logs,
     handle_status,
@@ -117,10 +121,30 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     bind_help = bindings.bind_help
     parser = argparse.ArgumentParser(prog="nuself")
     parser.add_argument("--version", action="version", version=f"nuself {__version__}")
-    parser.add_argument("--project-root", type=Path, default=None)
+    scope_group = parser.add_mutually_exclusive_group()
+    scope_group.add_argument(
+        "--local",
+        action="store_true",
+        help="Use ./.nuself as an isolated workspace authority.",
+    )
+    scope_group.add_argument(
+        "--workspace",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Use PATH/.nuself as an isolated workspace authority.",
+    )
     parser.add_argument("--message", "-m", default=None)
     bind_handler(parser, handlers.default_entrypoint)
     subparsers = parser.add_subparsers(dest="command", metavar="<command>")
+
+    bind_handler(
+        subparsers.add_parser(
+            "init",
+            help="Initialize the selected NuSelf authority.",
+        ),
+        handle_init,
+    )
 
     daemon_parser = subparsers.add_parser(
         "daemon",
@@ -561,7 +585,14 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     )
     bind_handler(
         dev_subparsers.add_parser("config", help="Show effective configuration."),
-        handle_config,
+        handle_dev_config,
+    )
+    bind_handler(
+        dev_subparsers.add_parser(
+            "paths",
+            help="Show selected scope and resolved runtime paths.",
+        ),
+        handle_dev_paths,
     )
     dev_logs_parser = dev_subparsers.add_parser("logs", help="Show structured logs.")
     _add_log_arguments(dev_logs_parser, bindings)

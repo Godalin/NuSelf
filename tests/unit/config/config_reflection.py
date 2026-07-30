@@ -19,8 +19,8 @@ def test_reflection_settings_default_loaded_from_system(tmp_path: Path) -> None:
 
 
 def test_reflection_settings_from_yaml(tmp_path: Path) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         """
 reflection:
@@ -44,8 +44,8 @@ def test_language_preference_default_is_en(tmp_path: Path) -> None:
 
 
 def test_language_preference_from_yaml(tmp_path: Path) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         "chat:\n  language_preference: zh-CN\n",
         encoding="utf-8",
@@ -56,8 +56,8 @@ def test_language_preference_from_yaml(tmp_path: Path) -> None:
 
 
 def test_llm_endpoint_list_from_yaml(tmp_path: Path) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         """
 llm:
@@ -82,8 +82,8 @@ llm:
 
 
 def test_llm_endpoint_timeout_and_chat_request_timeout_from_yaml(tmp_path: Path) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         """
 llm:
@@ -105,8 +105,8 @@ chat:
 
 
 def test_llm_nested_openai_object_is_rejected(tmp_path: Path) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         """
 llm:

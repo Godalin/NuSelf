@@ -16,11 +16,11 @@ durable user-owned state by default while explicit workspaces remain isolated.
 
 1. [complete] Define user/workspace scope, configuration layering, daemon
    identity, and legacy-layout migration in the governing specifications.
-2. [in progress] Introduce one scope resolver and immutable runtime-path model; remove
+2. [complete] Introduce one scope resolver and immutable runtime-path model; remove
    implicit repository-root path selection.
-3. Layer user and workspace configuration while selecting exactly one state
+3. [complete] Layer user and workspace configuration while selecting exactly one state
    authority per invocation.
-4. Add explicit CLI scope selection, initialization, path inspection, and
+4. [in progress] Add explicit CLI scope selection, initialization, path inspection, and
    legacy `private/` migration.
 5. Isolate daemon lifecycle and transport resources by authority identity.
 6. Migrate all composition roots and domain callers, then update public
@@ -41,6 +41,9 @@ durable user-owned state by default while explicit workspaces remain isolated.
 
 - Approved scope/authority contracts are recorded in `docs/spec/scope.md`.
 - Scope/path and layered-config tests: 41 passed; focused Pyright reported
+  0 errors and 0 warnings.
+- User/workspace CLI selection, `init`, `dev paths`, layered `dev config`, and
+  authority-root chat/config tests: 245 passed. Full-source Pyright remains at
   0 errors and 0 warnings.
 - Pending: CLI/migration and daemon-isolation regression suites.
 - Pending: complete pytest, Pyright, build, clean-wheel smoke, and release CI.

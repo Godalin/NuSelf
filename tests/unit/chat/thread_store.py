@@ -174,7 +174,7 @@ def test_list_returns_thread_ids(tmp_path: Path) -> None:
 def test_list_ignores_lock_files(tmp_path: Path) -> None:
     store = ThreadStore(tmp_path)
     store.save(ThreadState.empty("only"))
-    lock_path = tmp_path / "private" / "threads" / "only.lock"
+    lock_path = tmp_path / "threads" / "only.lock"
     lock_path.write_text("lock")
     assert store.list() == ["only"]
 
@@ -252,10 +252,10 @@ def test_rename_waits_for_update_and_moves_latest_snapshot(
     assert renamer.exitcode == 0
     assert store.load("target").messages[-1].content == "latest"
     assert (
-        tmp_path / "private" / "threads" / "source.lock"
+        tmp_path / "threads" / "source.lock"
     ).exists()
     assert (
-        tmp_path / "private" / "threads" / "target.lock"
+        tmp_path / "threads" / "target.lock"
     ).exists()
 
 
@@ -402,7 +402,6 @@ def test_lifecycle_operations_wait_for_cross_process_thread_locks(
     assert lifecycle.exitcode == 0
     assert (
         tmp_path
-        / "private"
         / "threads"
         / f"{held_thread_id}.lock"
     ).exists()
@@ -448,7 +447,7 @@ def test_archive_moves_thread_to_subdir(tmp_path: Path) -> None:
     store.save(ThreadState.empty("old"))
     store.archive("old")
     assert store.list() == []
-    archived_path = tmp_path / "private" / "threads" / "archived" / "old.json"
+    archived_path = tmp_path / "threads" / "archived" / "old.json"
     assert archived_path.exists()
 
 

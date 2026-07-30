@@ -1,24 +1,30 @@
 # Configuration
 
-NuSelf reads one optional project-local YAML file:
+NuSelf reads an optional user configuration:
 
 ```text
-private/config.yaml
+~/.nuself/config.yaml
 ```
 
-All fields are optional. When the file is absent, NuSelf uses safe defaults
+Explicit workspace scope additionally reads `<workspace>/.nuself/config.yaml`.
+Mappings recursively override the user configuration; sequences and scalars
+replace lower-layer values. Runtime state still belongs to exactly one
+authority and is never merged.
+
+All fields are optional. When both files are absent, NuSelf uses safe defaults
 and model-backed chat remains disabled until at least one endpoint has a
 non-empty API key.
 
 Start from the annotated example:
 
 ```bash
-mkdir -p private
-cp examples/private/config.yaml private/config.yaml
+nuself init
+cp examples/private/config.yaml ~/.nuself/config.yaml
 ```
 
-`private/` is ignored by Git and is the correct place for credentials and
-personal data. Never put real secrets in `examples/private/`.
+Set `NUSELF_HOME` to an absolute path to replace the default user authority
+root. Use `--local` or `--workspace PATH` to select workspace state explicitly.
+Never put real secrets in `examples/private/`.
 
 ## Minimal Model Configuration
 

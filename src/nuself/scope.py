@@ -67,6 +67,18 @@ class RuntimePaths:
     daemon_process_log_path: Path
     outbox_log_path: Path
 
+    @property
+    def project_root(self) -> Path:
+        """Temporary internal bridge while composition callers migrate."""
+
+        return self.authority_root
+
+    @property
+    def private_root(self) -> Path:
+        """Temporary internal bridge while storage callers migrate."""
+
+        return self.authority_root
+
 
 def resolve_scope(
     *,
@@ -131,6 +143,18 @@ def resolve_runtime_paths(scope: NuSelfScope) -> RuntimePaths:
         daemon_log_path=logs_dir / "daemon.log",
         daemon_process_log_path=logs_dir / "daemon-process.log",
         outbox_log_path=logs_dir / "outbox.log",
+    )
+
+
+def scope_from_authority_root(root: Path) -> NuSelfScope:
+    """Construct a scope for an already-resolved internal authority root."""
+
+    authority_root = _canonical(root)
+    return NuSelfScope(
+        kind="user",
+        root=authority_root,
+        user_root=authority_root,
+        authority_id=_authority_id("user", authority_root),
     )
 
 
