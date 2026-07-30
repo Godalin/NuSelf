@@ -32,8 +32,8 @@ The compact schema-v5 authority is complete:
   regressions pass;
 - the repository-local authority reports versions 1–5, 3654 domain records,
   93 workspace rows, no explicit secondary indexes, and `quick_check=ok`;
-- its retained pre-v4 backup remains at schema v3 and passes `quick_check`;
-  all 89 memory records remain valid;
-- focused tests passed 159 cases, the full suite passed 2448 tests, Pyright
+- its retained pre-v4 and pre-v5 backups remain at schema v3 and v4
+  respectively and pass `quick_check`; all 89 memory records remain valid;
+- focused tests passed 112 cases, the full suite passed 2449 tests, Pyright
   reported 0 errors and 0 warnings, and the sdist/wheel plus clean Python 3.14
   wheel smoke test passed.
