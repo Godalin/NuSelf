@@ -109,12 +109,12 @@ def _format_size(size: int) -> str:
 
 
 def handle_pack_list(args: argparse.Namespace) -> int:
-    private_root = runtime_paths(args.project_root).authority_root
+    authority_root = runtime_paths(args.project_root).authority_root
     for subdirectory, label in (
         ("imports", "Imports"),
         ("exports", "Exports"),
     ):
-        directory = private_root / subdirectory
+        directory = authority_root / subdirectory
         if not directory.exists():
             continue
         files = sorted(directory.glob("*.sqlite"))
@@ -132,17 +132,17 @@ def handle_pack_list(args: argparse.Namespace) -> int:
 def _resolve_pack_path(
     name: str | None, project_root: Path | None
 ) -> Path | None:
-    private_root = runtime_paths(project_root).authority_root
+    authority_root = runtime_paths(project_root).authority_root
     if name is None:
-        database = private_root / "nuself.sqlite"
+        database = authority_root / "nuself.sqlite"
         if not database.exists():
             print("No nuself.sqlite found.", file=sys.stderr)
             return None
         return database
     candidates = (
         Path(name).resolve(),
-        private_root / "imports" / f"{name}.sqlite",
-        private_root / "exports" / f"{name}.sqlite",
+        authority_root / "imports" / f"{name}.sqlite",
+        authority_root / "exports" / f"{name}.sqlite",
     )
     for candidate in candidates:
         if candidate.exists() and candidate.suffix == ".sqlite":

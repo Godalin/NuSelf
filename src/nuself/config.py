@@ -1,6 +1,6 @@
-"""Project-level configuration helpers and unified configuration system.
+"""Authority-scoped configuration helpers and unified configuration system.
 
-All system configuration lives in private/config.yaml.
+Configuration lives in the selected authority's ``config.yaml``.
 Uses Pydantic for type coercion, validation, and nested model loading.
 """
 

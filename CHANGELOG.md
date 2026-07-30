@@ -11,6 +11,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   `.nuself/` state and its migration lease are ignored.
 - Legacy layout migration now uses the readable sibling lease name
   `.nuself.migration.lock` instead of leaving a double-dot filename.
+- Current diagnostics and help now consistently say `authority root` and
+  resolve exports relative to the selected authority. The obsolete
+  `nuself.private` helper has been replaced by `nuself.authority`.
 
 ## v0.3.1 - 2026-07-30
 

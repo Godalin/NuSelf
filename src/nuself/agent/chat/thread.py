@@ -145,7 +145,7 @@ class ThreadState:
 
 
 class ThreadStore:
-    """File-backed chat thread store under private/threads."""
+    """File-backed chat thread store under the selected authority."""
 
     def __init__(self, project_root: Path | None = None) -> None:
         paths = runtime_paths(project_root)

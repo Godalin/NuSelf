@@ -207,7 +207,7 @@ class LogOnlyNotificationAdapter:
 
 
 class NotificationOutbox:
-    """File-backed notification outbox under private/outbox/."""
+    """File-backed notification outbox in the selected authority."""
 
     def __init__(
         self,

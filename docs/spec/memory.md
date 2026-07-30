@@ -80,7 +80,7 @@ repository while composing that snapshot.
 1. Accept single `.md`/`.txt` files or recurse into directories.
 2. Parse YAML front matter (`title`, `tags`, `date`, `origin`, `privacy`).
 3. Chunk by paragraphs targeting ~1200 chars per chunk.
-4. Write one `SourceDocument` and per-chunk `SourceChunk` files under `private/sources/`.
+4. Write one `SourceDocument` and per-chunk `SourceChunk` files under `<authority-root>/sources/`.
 5. No candidates created automatically.
 
 ### Source Extraction (`source extract`)
@@ -115,7 +115,7 @@ errors are not degraded and continue to the daemon request backstop.
 
 ### Per-Thread Cursor
 
-- Load cursor from `private/memory/cursors/{thread_id}.json`.
+- Load cursor from `<authority-root>/memory/cursors/{thread_id}.json`.
 - A missing cursor means the thread has not been processed and starts at zero.
 - A present cursor is an authoritative typed record containing the same
   `thread_id` as its filename/request and a non-negative integer
@@ -126,7 +126,7 @@ errors are not degraded and continue to the daemon request backstop.
   reinterpret corruption as cursor zero and replay old messages.
 - Cursor updates use atomic same-directory replacement.
 - Before applying a ready model decision, persist one typed curator plan at
-  `private/memory/plans/{thread_id}.json`. The plan owns the exact source
+  `<authority-root>/memory/plans/{thread_id}.json`. The plan owns the exact source
   range and structured actions. A plan write failure occurs before any
   candidate mutation and aborts the run.
 - Candidate IDs produced from a curator plan are deterministic over the plan's
@@ -157,7 +157,7 @@ errors are not degraded and continue to the daemon request backstop.
   new model decision. Missing and corrupt plans remain explicitly
   diagnosable; there is no automatic discard.
 - Curator plan/candidate/cursor mutation for one thread is guarded by a stable
-  advisory lock at `private/memory/locks/{thread_id}.lock`. The lock is
+  advisory lock at `<authority-root>/memory/locks/{thread_id}.lock`. The lock is
   per-thread, so unrelated threads remain concurrent; it is separate from the
   chat ThreadStore lock so model curation never blocks message persistence.
 - Lock acquisition is exclusive and non-blocking. A curator run that finds the
@@ -523,7 +523,7 @@ Entries with `score <= 0` excluded.
 ### Derived Graph Contract
 
 - Graph is **derived and rebuildable**, not authoritative.
-- `reindex()` writes `private/derived/symbolic_graph.json` and `private/derived/relation_index.json`.
+- `reindex()` writes `<authority-root>/derived/symbolic_graph.json` and `<authority-root>/derived/relation_index.json`.
 - Nodes are memory entries; edges generated from `entry.relations`.
 - Edge IDs are deterministic: `{source_id}:{relation}:{target_id}`.
 

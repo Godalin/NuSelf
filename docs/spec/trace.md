@@ -30,7 +30,7 @@ Trace is not hidden raw model chain-of-thought. It stores inspectable system-lev
 Trace storage lives under:
 
 ```text
-private/traces/
+<authority-root>/traces/
   traces/{trace_id}.json
   links/{link_id}.json
   index.json
@@ -376,7 +376,7 @@ Rules:
 - Default visibility is `private`.
 - `internal` traces are excluded from default list/search/export.
 - `shareable` traces must avoid raw private context beyond intentionally summarized provenance.
-- Trace records may contain sensitive summaries; they stay under `private/` and are not committed.
+- Trace records may contain sensitive summaries; they stay under `<authority-root>/` and are not committed.
 - Trace content is intentional provenance and is not diagnostic text:
   persistence preserves it exactly. File-backed trace records inherit the
   shared private atomic-write contract (`0700` directory, `0600` files).

@@ -569,7 +569,7 @@ def create_file_backend(
     root: Path | None = None,
     _acquire_authority: bool = True,
 ) -> FileStorageBackend:
-    """Create a ``FileStorageBackend`` rooted at ``private/``."""
+    """Create a ``FileStorageBackend`` rooted at one authority."""
     base = root if root is not None else runtime_paths(project_root).authority_root
     return FileStorageBackend(
         base,
@@ -894,9 +894,9 @@ def _migrate_file_backend_with_authority(
 
 @contextmanager
 def _exclusive_file_authority(
-    private_root: Path,
+    authority_root: Path,
 ) -> Generator[None, None, None]:
-    handle = _open_file_authority(private_root, exclusive=True)
+    handle = _open_file_authority(authority_root, exclusive=True)
     try:
         yield
     finally:
@@ -907,12 +907,12 @@ def _exclusive_file_authority(
 
 
 def _open_file_authority(
-    private_root: Path,
+    authority_root: Path,
     *,
     exclusive: bool,
 ) -> BinaryIO:
-    ensure_private_directory(private_root)
-    lock_path = private_root / ".storage-authority.lock"
+    ensure_private_directory(authority_root)
+    lock_path = authority_root / ".storage-authority.lock"
     ensure_private_file(lock_path)
     handle = lock_path.open("ab")
     operation = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
@@ -925,7 +925,7 @@ def _open_file_authority(
             f"cannot start {role} while file storage authority is active"
         ) from exc
     if not exclusive:
-        canonical_database = private_root / "nuself.sqlite"
+        canonical_database = authority_root / "nuself.sqlite"
         if canonical_database.exists() or canonical_database.is_symlink():
             try:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)

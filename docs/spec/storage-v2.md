@@ -63,11 +63,11 @@ WAL 模式读写不阻塞，性能足够。
 ### 核心变更
 
 1. 定义 `StorageBackend` 协议 + `StorageCollection` 协议
-2. 实现 `FileStorageBackend` 适配器，映射到现有 `private/` 下的目录
+2. 实现 `FileStorageBackend` 适配器，映射到现有 `<authority-root>/` 下的目录
 3. 所有 Repository 构造函数改为接受 `StorageBackend`，不再接受 `project_root`
 4. Repository 内部读写从 `write_json_atomic` / `read_json` 换成 `col.put(id, obj.to_wire())`
 5. 统一长期对象 ID 格式（各子系统 ID 前缀规范化）
-6. 正式定义 `private/` 目录结构（本文件）
+6. 正式定义 `<authority-root>/` 目录结构（本文件）
 
 ### StorageBackend 接口
 
@@ -93,19 +93,19 @@ Collection → 目录 映射表（静态配置）：
 
 | Collection name | Current path |
 |---|---|
-| `memory_entries` | `private/memory/entries/` |
-| `memory_candidates` | `private/memory/candidates/` |
-| `memory_relations` | `private/memory/relations/` |
-| `reason_threads` | `private/reason/threads/` |
-| `reason_steps` | `private/reason/steps/` |
-| `trace_nodes` | `private/traces/` |
-| `trace_edges` | `private/trace_edges/` |
-| `persona_prompts` | `private/persona/` |
-| `profile_items` | `private/profile/` |
-| `source_documents` | `private/sources/documents/` |
-| `source_chunks` | `private/sources/chunks/` |
-| `notification_outbox` | `private/notifications/outbox/` |
-| `reflection_entries` | `private/reflection/entries/` |
+| `memory_entries` | `<authority-root>/memory/entries/` |
+| `memory_candidates` | `<authority-root>/memory/candidates/` |
+| `memory_relations` | `<authority-root>/memory/relations/` |
+| `reason_threads` | `<authority-root>/reason/threads/` |
+| `reason_steps` | `<authority-root>/reason/steps/` |
+| `trace_nodes` | `<authority-root>/traces/` |
+| `trace_edges` | `<authority-root>/trace_edges/` |
+| `persona_prompts` | `<authority-root>/persona/` |
+| `profile_items` | `<authority-root>/profile/` |
+| `source_documents` | `<authority-root>/sources/documents/` |
+| `source_chunks` | `<authority-root>/sources/chunks/` |
+| `notification_outbox` | `<authority-root>/notifications/outbox/` |
+| `reflection_entries` | `<authority-root>/reflection/entries/` |
 
 ```python
 class FileStorageBackend:
@@ -417,7 +417,7 @@ failed backend registered as if it were safe to reuse.
 
 ### 目标
 
-将核心持久状态迁移到 `private/nuself.sqlite`，引入 migration system + schema version
+将核心持久状态迁移到 `<authority-root>/nuself.sqlite`，引入 migration system + schema version
 管理。
 
 ### 核心变更
@@ -474,7 +474,7 @@ dynamic-column `put()` 必须先编码完整 replacement，之后才能 `ALTER T
   duplicate-column 失败只有在重新读取实际 schema 并确认目标列已经由竞争连接
   创建后才可视为成功；其他 `OperationalError` 必须原样传播。每次 DDL 尝试后
   都要使连接本地 column cache 失效。
-- 文件后端无法提供跨文件数据库事务；它通过 `private/` 根目录下稳定、不会在
+- 文件后端无法提供跨文件数据库事务；它通过 `<authority-root>/` 根目录下稳定、不会在
   正常操作中删除的 advisory lock 跨线程、backend instance 和进程序列化批次，
   并继续依赖单文件 atomic replace。同一线程嵌套 transaction 复用最外层锁，
   不得再次获取文件锁而自死锁。调用方不得把它描述为跨文件原子提交。
@@ -712,4 +712,4 @@ for entry in repo.list():
 nuself pack import friend-thoughts.tar.gz
 ```
 
-无需 unpack 整个 `private/`，一个文件 / 一个包就是一份完整的思想快照。
+无需 unpack 整个 `<authority-root>/`，一个文件 / 一个包就是一份完整的思想快照。

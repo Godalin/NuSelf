@@ -25,7 +25,7 @@ class TraceNotFound(ValueError):
 
 
 class TraceRepository:
-    """Store thought traces under private/traces/."""
+    """Store thought traces in the selected authority."""
 
     def __init__(
         self,

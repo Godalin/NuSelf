@@ -266,8 +266,8 @@ Archived threads are hidden from default list output but remain addressable by i
 ### File Layout
 
 ```
-private/reasoning/threads/{thread_id}.json
-private/reasoning/steps/{thread_id}/{step_id}.json
+<authority-root>/reasoning/threads/{thread_id}.json
+<authority-root>/reasoning/steps/{thread_id}/{step_id}.json
 ```
 
 Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli.md`.
@@ -279,7 +279,7 @@ Repository writes must be atomic: write to a temporary sibling file, then replac
 Each reasoning thread owns an isolated generic private workspace:
 
 ```
-private/workspaces/reason/{thread_id}/
+<authority-root>/workspaces/reason/{thread_id}/
 ```
 
 The workspace is task-local storage for the reasoning process. It follows `workspace.md`. It is not global memory, not trace, and not a shared cross-thread database.

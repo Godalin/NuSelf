@@ -50,7 +50,7 @@ class ProfileItemNotFound(KeyError):
 
 
 class ProfileItemRepository:
-    """Stores one JSON file per derived profile item under private/profile/items."""
+    """Stores derived profile items in the selected authority."""
 
     def __init__(
         self,

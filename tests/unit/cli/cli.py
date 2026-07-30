@@ -4623,7 +4623,7 @@ def test_health_command_reports_missing_private_root(
     captured = capsys.readouterr()
     assert result == 1
     assert "Health issues:" in captured.out
-    assert "private root missing" in captured.out
+    assert "authority root missing" in captured.out
 
 
 def test_health_accepts_missing_config_when_private_root_and_daemon_are_ready(

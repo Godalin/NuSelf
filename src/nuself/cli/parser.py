@@ -637,7 +637,8 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     bind_handler(dev_eval_parser, handle_eval)
 
     dev_migrate_parser = dev_subparsers.add_parser(
-        "migrate", help="Migrate file-based data to private/nuself.sqlite."
+        "migrate",
+        help="Migrate file-based data to the selected authority database.",
     )
     bind_handler(dev_migrate_parser, handle_dev_migrate)
 
@@ -662,7 +663,8 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         dest="pack_command", metavar="<command>"
     )
     pack_export_parser = pack_subparsers.add_parser(
-        "export", help="Export current thought pack to private/exports/."
+        "export",
+        help="Export a thought pack under the selected authority.",
     )
     pack_export_parser.add_argument(
         "name", type=str, help="Pack name (used as filename)"

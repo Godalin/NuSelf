@@ -45,7 +45,7 @@ class SourceChunkMatch:
 
 
 class SourceRepository:
-    """Stores imported source documents and chunks under private/sources."""
+    """Stores imported source documents and chunks in one authority."""
 
     def __init__(
         self,

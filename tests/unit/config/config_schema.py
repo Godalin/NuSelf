@@ -409,5 +409,5 @@ def test_experimental_schema_has_no_removed_langmem_runtime() -> None:
 
     assert set(experimental_properties) == {"vector_index"}
     assert "langmem_adapter" not in (
-        root / "examples" / "private" / "config.yaml"
+        root / "examples" / ".nuself" / "config.yaml"
     ).read_text(encoding="utf-8")

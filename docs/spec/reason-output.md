@@ -109,7 +109,7 @@ It must record:
 
 Export state lives in two places with different persistence semantics:
 
-- **Job data** — per-thread, persistent in the owning reason workspace (`private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/`)
+- **Job data** — per-thread, persistent in the owning reason workspace (`<authority-root>/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/`)
 - **Queue signal** — daemon-global, bounded and identity-deduplicated in memory
 
 The queue is in-memory because the manifest is the real persistent state. A
@@ -120,7 +120,7 @@ single process-global event loop that reads from a bounded
 ### Job data layout (per-thread)
 
 ```text
-private/workspaces/reason/{thread_id}/
+<authority-root>/workspaces/reason/{thread_id}/
   workspace.sqlite
   artifacts/
     export/
@@ -274,7 +274,7 @@ the caller and never discards the manifest. Instead it requests an online
 reconciliation pass after the worker releases capacity. A job with a live retry
 timer is skipped by reconciliation until that timer fires, preserving backoff.
 
-The worker reconstructs the job data path from `thread_id` and `job_id`: `private/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/manifest.json`.
+The worker reconstructs the job data path from `thread_id` and `job_id`: `<authority-root>/workspaces/reason/{thread_id}/artifacts/export/jobs/{job_id}/manifest.json`.
 
 #### Retry model
 
@@ -319,8 +319,8 @@ Lock protocol:
 
 When the daemon export worker starts, it must run a one-time reconciliation step before entering its event loop:
 
-1. **Re-enqueue incomplete jobs**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/manifest.json`. For each manifest with status other than `complete` or `failed`, construct a typed `JobMessage` and push it into the in-memory queue. This recovers any jobs that were in flight when the daemon last exited.
-2. **Clear stale locks**: Scan `private/workspaces/reason/*/artifacts/export/jobs/*/.lock`. Remove any `.lock` file found — these were held by crashed processes and are now stale.
+1. **Re-enqueue incomplete jobs**: Scan `<authority-root>/workspaces/reason/*/artifacts/export/jobs/*/manifest.json`. For each manifest with status other than `complete` or `failed`, construct a typed `JobMessage` and push it into the in-memory queue. This recovers any jobs that were in flight when the daemon last exited.
+2. **Clear stale locks**: Scan `<authority-root>/workspaces/reason/*/artifacts/export/jobs/*/.lock`. Remove any `.lock` file found — these were held by crashed processes and are now stale.
 
 Invalid-manifest diagnostics are best effort. Failure to persist one
 `export_reconciliation_skip` record cannot abort the scan or prevent later

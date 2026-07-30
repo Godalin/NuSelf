@@ -1,4 +1,4 @@
-"""Private memory root discovery and initialization."""
+"""Selected authority initialization helpers."""
 
 from __future__ import annotations
 
@@ -8,16 +8,18 @@ from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.private_fs import ensure_private_directory
 
 
-def get_private_root(project_root: Path | None = None) -> Path:
-    """Return the ignored private memory root."""
+def get_authority_root(authority_root: Path | None = None) -> Path:
+    """Return the selected managed authority root."""
 
-    return runtime_paths(project_root).authority_root
+    return runtime_paths(authority_root).authority_root
 
 
-def ensure_private_root(project_root: Path | None = None) -> RuntimePaths:
-    """Ensure the private root has the directories needed by the runtime."""
+def ensure_authority_root(
+    authority_root: Path | None = None,
+) -> RuntimePaths:
+    """Ensure directories required by the selected authority runtime."""
 
-    paths = runtime_paths(project_root)
+    paths = runtime_paths(authority_root)
     ensure_private_directory(paths.authority_root)
     ensure_private_directory(paths.authority_root / "sources")
     ensure_private_directory(paths.authority_root / "derived")

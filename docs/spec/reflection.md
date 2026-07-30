@@ -4,14 +4,14 @@
 
 The reflection subsystem has two layers:
 
-1. **ReflectionRepository** (`private/reflections/`) — durable store for reflection ideas
+1. **ReflectionRepository** (`<authority-root>/reflections/`) — durable store for reflection ideas
 2. ** reflection.log** — audit trail of scheduler events
 
 Reflection ideas are first-class domain objects. They are **not** notification intents.
 
 ## ReflectionEntry
 
-Stored as one JSON file per entry in `private/reflections/{id}.json`.
+Stored as one JSON file per entry in `<authority-root>/reflections/{id}.json`.
 
 | Field | Type | Description |
 |---|---|---|
@@ -160,7 +160,7 @@ If any schedule gate blocks a cycle, `reflect()` returns `false` before candidat
 ### Schedule State
 
 The latest published-reflection state is stored at
-`private/runtime/last_reflection.json`. It is a versioned authoritative runtime
+`<authority-root>/runtime/last_reflection.json`. It is a versioned authoritative runtime
 record containing:
 
 - `schema_version`: supported record version;

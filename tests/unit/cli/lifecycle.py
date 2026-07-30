@@ -11,7 +11,7 @@ from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
 from nuself.logs import read_log_events
-from nuself.private import ensure_private_root
+from nuself.authority import ensure_authority_root
 from nuself.runtime.definitions import DefinitionRegistrySealedError
 
 
@@ -29,8 +29,8 @@ def _no_sleep(seconds: float) -> None:
     del seconds
 
 
-def test_ensure_private_root_creates_runtime_dirs(tmp_path: Path) -> None:
-    paths = ensure_private_root(tmp_path)
+def test_ensure_authority_root_creates_runtime_dirs(tmp_path: Path) -> None:
+    paths = ensure_authority_root(tmp_path)
 
     assert paths.authority_root.is_dir()
     assert paths.runtime_dir.is_dir()

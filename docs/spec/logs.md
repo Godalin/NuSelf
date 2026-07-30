@@ -398,7 +398,7 @@ is written to disk.
 Component log paths are reserved exclusively for canonical `LogEvent` JSONL.
 Subsystems must not append ad-hoc text, tracebacks, or process stdout/stderr to
 those files. Background daemon stdout/stderr uses the separate owner-only raw
-stream `private/logs/daemon-process.log`; it is crash diagnostic output, is not
+stream `<authority-root>/logs/daemon-process.log`; it is crash diagnostic output, is not
 read by `read_log_events()`, and does not participate in component retention,
 observer delivery, or structured-log durability guarantees. Before each daemon
 spawn, the owner rotates this raw stream when it has reached 5 MiB and retains

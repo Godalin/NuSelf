@@ -291,7 +291,7 @@ When color is enabled, each known self label in a `persona_summary` or `discussi
 - Logs that cannot be associated with a specific chat turn are rendered at the end under `## Internal Process Logs`.
 - Scope: transcript export starts at the current interactive connection time. Re-running export later in the same connection includes the full conversation and captured logs from that same connection start, not only messages/logs since the previous export.
 - Exit commands (`:q`, `:quit`, `:exit`), EOF, and keyboard interrupt automatically save transcripts for every thread in the current interactive connection that has chat messages not already covered by a manual export. This automatic save does not copy to the clipboard.
-- Storage: files are written under `private/transcripts/`.
+- Storage: files are written under `<authority-root>/transcripts/`.
 - Transcript content is intentionally preserved rather than diagnostically
   redacted. Internal transcript files use the shared private atomic-write
   boundary (`0700` directory, `0600` file), so a failed save cannot publish a

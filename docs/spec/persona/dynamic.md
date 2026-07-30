@@ -223,7 +223,7 @@ nuself persona disable <name_or_id>
 
 | Created by | Storage | Available to |
 |---|---|---|
-| Chat tool `persona_craft` | `private/persona_prompts/` | Reason, Chat, selves_consult (via tools) |
+| Chat tool `persona_craft` | `<authority-root>/persona_prompts/` | Reason, Chat, selves_consult (via tools) |
 | Reason internal | Thread workspace | Only that thread |
 
 ## Non-Goals For V1

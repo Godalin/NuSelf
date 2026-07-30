@@ -17,7 +17,7 @@ class PrivateWorkspacePaths:
 
 
 class PrivateWorkspaceStore:
-    """Manage isolated scratch workspaces under private/workspaces."""
+    """Manage isolated scratch workspaces under one authority."""
 
     def __init__(self, project_root: Path | None = None, *, scope: str) -> None:
         _validate_segment(scope, "workspace scope")

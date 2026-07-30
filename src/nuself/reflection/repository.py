@@ -106,7 +106,7 @@ class ReflectionEntryNotFound(ValueError):
 
 
 class ReflectionRepository:
-    """Store reflection ideas in private/reflections/."""
+    """Store reflection ideas in the selected authority."""
 
     def __init__(
         self,

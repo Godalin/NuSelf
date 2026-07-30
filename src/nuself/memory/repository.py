@@ -240,7 +240,7 @@ def _entry_from_wire(data: dict[str, object]) -> MemoryEntry:
 
 
 class MemoryEntryRepository:
-    """Stores one JSON file per memory entry under private/memory/entries."""
+    """Stores memory entries in the selected authority."""
 
     def __init__(
         self,
@@ -498,7 +498,7 @@ class MemoryEntryRepository:
 
 
 class MemoryCandidateRepository:
-    """Stores reviewable memory candidates under private/memory/candidates."""
+    """Stores reviewable memory candidates in the selected authority."""
 
     def __init__(
         self,

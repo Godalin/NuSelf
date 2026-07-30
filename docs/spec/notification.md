@@ -59,7 +59,7 @@ the complete adapter plan and history.
 ### Persistence
 
 - File storage uses one JSON file per entry under
-  `private/notifications/outbox/{id}.json`; other configured storage backends
+  `<authority-root>/notifications/outbox/{id}.json`; other configured storage backends
   preserve the same record contract.
 - Writes use the shared atomic storage boundary.
 - `add()` performs idempotency-key lookup and insertion inside one backend
@@ -68,7 +68,7 @@ the complete adapter plan and history.
   creating multiple records for one idempotency key.
 - `get()` raises `OutboxEntryNotFound` if file missing.
 - Every delivery, dismiss, and deletion operation for one entry holds the same
-  stable cross-process lock under `private/notifications/locks/` from its
+  stable cross-process lock under `<authority-root>/notifications/locks/` from its
   authoritative read through its final persistence mutation. Two processes
   cannot send the same adapter concurrently, and dismiss/clear cannot race a
   completed external effect or be overwritten by delivery finalization.

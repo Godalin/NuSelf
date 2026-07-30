@@ -11,7 +11,7 @@ They are meant for internal working state that is useful while a subsystem is op
 Generic workspace path:
 
 ```text
-private/workspaces/{scope}/{owner_id}/
+<authority-root>/workspaces/{scope}/{owner_id}/
   workspace.sqlite
   artifacts/
   notes/
@@ -66,7 +66,7 @@ protocol or derived name-index files.
 Reason uses:
 
 ```text
-private/workspaces/reason/{thread_id}/workspace.sqlite
+<authority-root>/workspaces/reason/{thread_id}/workspace.sqlite
 ```
 
 The reason workspace can hold branch tables, temporary tracked items, local evidence indexes, tool results, scratch rankings, intermediate plans, and failed-path records.
