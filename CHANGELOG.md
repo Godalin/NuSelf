@@ -10,6 +10,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   create an empty canonical database that hides file-backed data. SQLite
   opening requires an existing database; only atomic migration may create its
   unpublished temporary database.
+- Configuration now rejects non-finite numeric values before timeouts reach
+  daemon or provider clients, and schema acceptance tests use the JSON Schema
+  dialect declared by the published document.
 - File authority selection is now atomic with migration publication: a process
   paused before shared-lease acquisition cannot resume on obsolete files,
   closed file backends and their existing collections reject all access, and

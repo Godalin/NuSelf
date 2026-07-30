@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-from jsonschema import Draft202012Validator
+from jsonschema.validators import validator_for
 from pydantic import BaseModel
 import pytest
 import yaml
@@ -331,14 +331,24 @@ def test_runtime_and_published_schema_acceptance_are_identical(
     else:
         runtime_accepted = True
 
-    schema_validator = cast(
-        _SchemaValidator,
-        Draft202012Validator(_published_schema()),
-    )
+    schema = _published_schema()
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    schema_validator = cast(_SchemaValidator, validator_class(schema))
     schema_accepted = schema_validator.is_valid(data)
 
     assert runtime_accepted is accepted
     assert schema_accepted is accepted
+
+
+def test_published_schema_is_valid_under_its_declared_dialect() -> None:
+    schema = _published_schema()
+    validator_class = validator_for(schema)
+
+    validator_class.check_schema(schema)
+    assert validator_class.META_SCHEMA["$schema"].endswith(
+        "draft-07/schema#",
+    )
 
 
 def test_config_json_schema_uses_direct_llm_endpoint_list() -> None:

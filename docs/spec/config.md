@@ -35,6 +35,14 @@ Rules:
 - It is not the runtime parser; runtime behavior is still owned by `ConfigSystem`.
 - Any configuration shape change must update the JSON Schema, `examples/private/config.yaml`, and config tests in the same change.
 - Schema tests must cover at least the changed top-level shape so stale schema files are caught by CI.
+- Schema tests must select the validator from the schema's declared dialect,
+  check the schema itself, and compare runtime and published-schema acceptance
+  for shared constraints.
+
+All runtime configuration models are strict and reject IEEE non-finite numbers
+(`NaN`, positive infinity, and negative infinity). Timeout values must be
+finite and at least their documented minimum before reaching daemon or
+provider clients.
 
 ## Runtime Paths
 

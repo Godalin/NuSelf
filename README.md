@@ -53,7 +53,8 @@ Enabled legacy email setups without `email.to_address` receive an explicit
 migration error because `private/email.toml` is no longer read.
 Current configuration values are type-strict, and runtime acceptance is tested
 against the published JSON Schema, including email defaults and credential
-pairing.
+pairing. Non-finite values such as YAML `.inf` and `.nan` are rejected before
+timeouts reach daemon or provider clients.
 `nuself dev migrate` now writes and validates a strict temporary SQLite
 database, then atomically publishes it only after checkpoint, close, and fsync;
 corrupt or ID-mismatched file records abort without exposing a partial

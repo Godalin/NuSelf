@@ -45,7 +45,8 @@ v0.3 loader 可以读取完整的官方 v0.2.5 配置：它只移除已经退役
 `email.to_address` 时会得到明确迁移错误，因为系统不再读取
 `private/email.toml`。
 当前配置值使用严格类型，runtime 接受行为会与发布的 JSON Schema 对照测试，
-其中包括 email 默认值和凭据成对约束。
+其中包括 email 默认值和凭据成对约束。YAML `.inf`、`.nan` 等非有限数会在
+timeout 进入 daemon 或 provider client 前被拒绝。
 `nuself dev migrate` 现在会先写入并严格验证临时 SQLite database，完成
 checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file record 会
 中止迁移，不会暴露部分数据库。迁移只发布到权威路径

@@ -155,6 +155,34 @@ def test_invalid_or_unknown_configuration_fails_explicitly(
         ConfigSystem.load(project_root=tmp_path)
 
 
+@pytest.mark.parametrize("non_finite", [".inf", "-.inf", ".nan"])
+@pytest.mark.parametrize(
+    "template",
+    [
+        (
+            "llm:\n"
+            "  - model: test\n"
+            "    timeout_seconds: {value}\n"
+        ),
+        "chat:\n  request_timeout_seconds: {value}\n",
+    ],
+)
+def test_non_finite_timeouts_are_rejected_before_runtime_clients(
+    tmp_path: Path,
+    non_finite: str,
+    template: str,
+) -> None:
+    config_path = tmp_path / "private" / "config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        template.format(value=non_finite),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError):
+        ConfigSystem.load(project_root=tmp_path)
+
+
 def test_complete_official_v025_config_loads_through_narrow_migration(
     tmp_path: Path,
 ) -> None:

@@ -47,5 +47,10 @@ finishing strict finite-number and JSON Schema dialect validation.
   `auto_backend()`, decodes every current repository record, and proves file
   authority cannot be reacquired. Focused release-storage verification:
   135 passed; locked Pyright reported 0 errors and 0 warnings.
-- Finite-number and declared-dialect verification are implemented and await
-  their isolated commit and final combined gate.
+- Every strict configuration model now rejects non-finite numbers, with YAML
+  regressions for positive infinity, negative infinity, and NaN across both
+  provider and chat timeout fields. Published-schema tests select and check
+  the validator from the document's declared Draft 7 dialect before comparing
+  acceptance. Focused configuration verification: 44 passed; locked Pyright
+  reported 0 errors and 0 warnings.
+- The final combined gate, wheel smoke test, push, and six-platform CI remain.

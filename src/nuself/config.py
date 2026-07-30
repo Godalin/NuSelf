@@ -98,6 +98,7 @@ class _ConfigModel(BaseModel):
         extra="forbid",
         hide_input_in_errors=True,
         strict=True,
+        allow_inf_nan=False,
     )
 
 
