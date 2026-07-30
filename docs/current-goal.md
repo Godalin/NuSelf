@@ -5,37 +5,19 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Reduce both `v0.3.0` README files from manual-sized documents to concise
-project front pages, move durable user guidance into focused documents, and
-replace the annotated `v0.3.0` tag after documentation validation.
+Idle. The `v0.3.0` README refresh and release replacement are complete.
 
 ## Active Branch
 
-`main`
+None.
 
 ## Ordered Work
 
-1. Map existing README sections to authoritative specifications and focused
-   user documentation.
-2. Add concise configuration, CLI, memory, and contributor guides where the
-   README currently carries that responsibility.
-3. Rewrite the English and Chinese READMEs to the same compact structure:
-   identity, status, features, quick start, common workflows, privacy,
-   limitations, and documentation.
-4. Validate commands, links, bilingual structure, release metadata, and
-   documentation-related tests.
-5. Commit in coherent documentation boundaries, synchronize `main` and
-   `dev/v0.3.x`, replace the annotated `v0.3.0` tag, and verify final CI and
-   release state.
+No active work.
 
 ## Out Of Scope
 
-- Runtime implementation and behavior changes.
-- Package-manager and distribution channels beyond GitHub Releases remain
-  separately authorized.
-- Global plus directory-local configuration and package-manager publication
-  remain deferred in [`TODOs.md`](TODOs.md).
-- Existing documented semi-durable ThreadStore follow-ups remain deferred.
+No active scope.
 
 ## Completion Evidence
 
@@ -54,5 +36,9 @@ replace the annotated `v0.3.0` tag after documentation validation.
 - `uv build` produced the v0.3.0 sdist and wheel. A clean Python 3.14.3
   environment installed the wheel, reported `nuself 0.3.0`, and confirmed the
   compact README is embedded in package metadata.
-- Pending: branch CI, annotated tag replacement, tagged Release workflow,
-  final artifact checksums, and current-goal closure.
+- Branch CI run `30526417504` passed on Ubuntu and macOS with Python 3.12,
+  3.13, and 3.14.
+- The annotated `v0.3.0` tag now resolves to `d31502f`. Tagged Release run
+  `30526689042` passed its full release gate.
+- The final GitHub Release contains only the wheel, source archive, and
+  `SHA256SUMS`; downloaded artifacts passed their published checksums.
