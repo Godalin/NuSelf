@@ -5,8 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The frozen `0.3.0rc1` codebase has been promoted to the validated stable
-`v0.3.0` release commit.
+Repair the failed `v0.3.0` tagged-commit release gate without changing frozen
+runtime implementation, replace the unpublished tag with a corrected release
+commit, and verify the complete release workflow.
 
 ## Active Branch
 
@@ -14,16 +15,20 @@ Idle. The frozen `0.3.0rc1` codebase has been promoted to the validated stable
 
 ## Ordered Work
 
-1. Await separate authorization before pushing the local `v0.3.0` tag, which
-   automatically starts the GitHub Release publication workflow.
+1. Run the release metadata verifier through the uv-synchronized environment
+   and add a workflow contract regression test.
+2. Run focused and complete local release gates, then create and push the
+   corrective release commit on `main` and `dev/v0.3.x`.
+3. Replace the failed, unpublished `v0.3.0` tag with an annotated tag on the
+   corrected release commit.
+4. Verify the complete tagged Release workflow and final repository state.
 
 ## Out Of Scope
 
 - Further audit or implementation changes in storage, filesystem, config, or
   notification code unless a release gate or core CLI smoke test fails.
-- Pushing `v0.3.0`, which automatically invokes the GitHub Release workflow,
-  and any package-manager or other distribution-channel publication until
-  separately authorized.
+- Package-manager and distribution channels beyond the tag-triggered GitHub
+  Release remain separately authorized.
 - Global plus directory-local configuration and package-manager publication
   remain deferred in [`TODOs.md`](TODOs.md).
 - Existing documented semi-durable ThreadStore follow-ups remain deferred.
@@ -49,3 +54,9 @@ Idle. The frozen `0.3.0rc1` codebase has been promoted to the validated stable
   suite, distribution build, and clean-wheel smoke test.
 - The `v0.3.0` tag remains local. No GitHub Release, provenance attestation, or
   other distribution-channel publication has been started.
+- The first remote tag run `30523364477` failed before Pyright, tests, build,
+  attestation, or release creation because the metadata script ran under the
+  system interpreter instead of the uv-synchronized environment.
+- The corrected workflow contract, `uv lock --check`, `git diff --check`, the
+  release metadata/topology gate, locked Pyright, and the complete 2437-test
+  suite pass locally.

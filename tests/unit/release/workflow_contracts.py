@@ -59,7 +59,10 @@ def test_release_reruns_full_gate_with_complete_git_history() -> None:
     release = _workflow("release.yml")
 
     assert "fetch-depth: 0" in release
-    assert 'python scripts/check_release.py --tag "${GITHUB_REF_NAME}"' in release
+    assert (
+        'uv run --locked python scripts/check_release.py '
+        '--tag "${GITHUB_REF_NAME}"'
+    ) in release
     assert "uv run --locked pyright --outputjson" in release
     assert "uv run --locked pytest -q" in release
     assert release.index("Verify release metadata") < release.index(

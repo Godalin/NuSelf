@@ -26,7 +26,7 @@ jobs:
       - name: Run uv sync
         run: uv sync --locked --group dev
       - name: Verify release metadata
-        run: python scripts/check_release.py --tag "${GITHUB_REF_NAME}"
+        run: uv run --locked python scripts/check_release.py --tag "${GITHUB_REF_NAME}"
       - name: Run locked pyright
         run: uv run --locked pyright --outputjson
       - name: Run full test suite
