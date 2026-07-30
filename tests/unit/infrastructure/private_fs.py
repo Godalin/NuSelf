@@ -20,7 +20,7 @@ def _create_sqlite_at_project(root: Path | None) -> object:
         raise ValueError("test project root is required")
     return _create_sqlite_backend(
         root,
-        db_path=root / "private" / "nuself.sqlite",
+        db_path=root / "nuself.sqlite",
     )
 
 
@@ -61,13 +61,14 @@ def test_storage_rejects_redirected_private_root_before_writes(
     external = tmp_path / "external"
     external.mkdir(mode=0o755)
     external.chmod(0o755)
-    (project / "private").symlink_to(
+    authority = project / ".nuself"
+    authority.symlink_to(
         external,
         target_is_directory=True,
     )
 
     with pytest.raises(OSError, match="actual directory"):
-        factory(project)
+        factory(authority)
 
     assert stat.S_IMODE(external.stat().st_mode) == 0o755
     assert list(external.iterdir()) == []

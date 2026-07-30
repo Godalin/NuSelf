@@ -122,7 +122,7 @@ def test_new_log_events_have_stable_envelope_identity(tmp_path: Path) -> None:
 def test_log_append_hardens_directory_data_backups_and_lock(
     tmp_path: Path,
 ) -> None:
-    logs_dir = tmp_path / "private" / "logs"
+    logs_dir = tmp_path / "logs"
     logs_dir.mkdir(parents=True, mode=0o755)
     logs_dir.chmod(0o755)
     for name in ("chat.log", "chat.log.1", "chat.log.lock"):
@@ -1695,7 +1695,7 @@ def test_rotation_syncs_directory_for_new_active_file(
         retention_policy=LogRetentionPolicy(max_bytes=1, backup_count=1),
     )
 
-    assert synced_directories == [tmp_path / "private" / "logs"]
+    assert synced_directories == [tmp_path / "logs"]
 
 
 def test_directory_sync_identity_cache_is_bounded_and_eviction_is_safe(

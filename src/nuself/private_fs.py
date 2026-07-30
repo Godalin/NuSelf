@@ -33,6 +33,27 @@ def ensure_private_directory(path: Path) -> None:
     _ensure_managed_private_tree(private_root, absolute)
 
 
+def ensure_managed_directory(root: Path, destination: Path) -> None:
+    """Create or harden a directory inside an explicit managed root."""
+
+    managed_root = root.absolute()
+    target = destination.absolute()
+    if not target.is_relative_to(managed_root):
+        raise ValueError("managed destination must be inside its authority root")
+    _ensure_managed_private_tree(managed_root, target)
+
+
+def harden_managed_file(root: Path, path: Path) -> None:
+    """Require and harden a file below an explicit managed authority root."""
+
+    managed_root = root.absolute()
+    target = path.absolute()
+    if not target.is_relative_to(managed_root):
+        raise ValueError("managed file must be inside its authority root")
+    ensure_managed_directory(managed_root, target.parent)
+    harden_private_file(target)
+
+
 def _ensure_managed_private_tree(
     private_root: Path,
     destination: Path,

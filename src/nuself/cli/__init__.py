@@ -97,6 +97,7 @@ from nuself.cli.repl.turns import (
 )
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
+from nuself.scope import resolve_scope
 from nuself.storage import reset_default_backend
 from nuself.storage_audit import report_cli_cleanup_failure
 
@@ -132,7 +133,13 @@ class CliLifecycleError(RuntimeError):
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    project_root: Path | None = args.project_root
+    scope = resolve_scope(
+        local=args.local,
+        workspace=args.workspace,
+    )
+    args.scope = scope
+    args.project_root = scope.root
+    project_root = scope.root
     primary_error: BaseException | None = None
     result = 0
     try:

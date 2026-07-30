@@ -126,7 +126,7 @@ def test_dev_db_schema_cannot_publish_sqlite_authority(
     source.close()
 
     assert main(
-        ["--project-root", str(tmp_path), "dev", "db-schema"]
+        ["--workspace", str(tmp_path), "dev", "db-schema"]
     ) == 1
 
     assert "Run 'nuself dev migrate' first" in capsys.readouterr().err

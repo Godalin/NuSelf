@@ -230,7 +230,7 @@ def test_log_only_adapter_sends(tmp_path: Path) -> None:
     )
     adapter = LogOnlyNotificationAdapter(tmp_path)
     assert adapter.send(entry)
-    log_path = tmp_path / "private" / "logs" / "outbox.log"
+    log_path = tmp_path / "logs" / "outbox.log"
     assert log_path.exists()
     content = log_path.read_text(encoding="utf-8")
     assert '"event": "outbox_delivered"' in content

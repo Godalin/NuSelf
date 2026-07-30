@@ -6,7 +6,6 @@ Uses Pydantic for type coercion, validation, and nested model loading.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -21,10 +20,18 @@ from pydantic import (
 
 from nuself.private_fs import (
     ensure_private_directory,
+    harden_managed_file,
     harden_private_file,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.scope import (
+    NuSelfScope,
+    RuntimePaths,
+    resolve_runtime_paths,
+    resolve_scope,
+    scope_from_authority_root,
+)
 
 
 # ============================================================================
@@ -32,59 +39,27 @@ from nuself.runtime.diagnostics import emit_runtime_warning
 # ============================================================================
 
 
-@dataclass(frozen=True)
-class RuntimePaths:
-    """Filesystem paths used by the local daemon and CLI."""
+def runtime_paths(
+    authority: NuSelfScope | Path | None = None,
+) -> RuntimePaths:
+    """Resolve paths for the selected or explicit authority."""
 
-    project_root: Path
-    private_root: Path
-    runtime_dir: Path
-    logs_dir: Path
-    socket_path: Path
-    pid_path: Path
-    daemon_lock_path: Path
-    daemon_log_path: Path
-    daemon_process_log_path: Path
-    outbox_log_path: Path
-
-
-def find_project_root(start: Path | None = None) -> Path:
-    """Find the nearest project root containing AGENTS.md."""
-
-    current = (start or Path.cwd()).resolve()
-    for candidate in (current, *current.parents):
-        if (candidate / "AGENTS.md").is_file():
-            return candidate
-    return current
-
-
-def runtime_paths(project_root: Path | None = None) -> RuntimePaths:
-    """Return conventional runtime paths under the ignored private root."""
-
-    root = (project_root or find_project_root()).resolve()
-    private_root = root / "private"
-    runtime_dir = private_root / "runtime"
-    logs_dir = private_root / "logs"
-    return RuntimePaths(
-        project_root=root,
-        private_root=private_root,
-        runtime_dir=runtime_dir,
-        logs_dir=logs_dir,
-        socket_path=runtime_dir / "nuself.sock",
-        pid_path=runtime_dir / "nuself.pid",
-        daemon_lock_path=runtime_dir / "nuself.lock",
-        daemon_log_path=logs_dir / "daemon.log",
-        daemon_process_log_path=logs_dir / "daemon-process.log",
-        outbox_log_path=logs_dir / "outbox.log",
-    )
+    if authority is None:
+        scope = resolve_scope()
+    elif isinstance(authority, NuSelfScope):
+        scope = authority
+    else:
+        scope = scope_from_authority_root(authority)
+    return resolve_runtime_paths(scope)
 
 
 def ensure_runtime_dirs(paths: RuntimePaths) -> None:
     """Create local ignored runtime directories."""
 
-    ensure_private_directory(paths.private_root)
+    ensure_private_directory(paths.authority_root)
     ensure_private_directory(paths.runtime_dir)
     ensure_private_directory(paths.logs_dir)
+    ensure_private_directory(paths.socket_runtime_dir)
 
 
 # ============================================================================
@@ -408,15 +383,15 @@ class ConfigSystem:
         The parsed ``SystemConfig`` is frozen, so sharing one instance is safe.
         """
         if config_path is None and project_root is None:
-            project_root = find_project_root()
+            return cls.load_scope(resolve_scope())
         if config_path is None and project_root is not None:
-            config_path = project_root / "private" / "config.yaml"
+            config_path = project_root / "config.yaml"
 
         cache_key: tuple[str, int, int] | None = None
         if config_path and config_path.exists():
             if project_root is not None:
                 ensure_private_directory(
-                    runtime_paths(project_root).private_root
+                    runtime_paths(project_root).authority_root
                 )
             harden_private_file(config_path)
             try:
@@ -440,6 +415,34 @@ class ConfigSystem:
             _CONFIG_CACHE[cache_key] = result
         return result
 
+    @classmethod
+    def load_scope(cls, scope: NuSelfScope) -> SystemConfig:
+        """Load the selected scope's layered configuration."""
+
+        paths = resolve_runtime_paths(scope)
+        layer_paths = [paths.user_config_file]
+        if paths.config_file != paths.user_config_file:
+            layer_paths.append(paths.config_file)
+
+        merged_layers: dict[str, Any] = {}
+        for layer_path in layer_paths:
+            if not layer_path.exists():
+                continue
+            layer_root = (
+                scope.user_root
+                if layer_path == paths.user_config_file
+                else scope.root
+            )
+            harden_managed_file(layer_root, layer_path)
+            layer = cls._read_mapping(layer_path)
+            cls._normalize_mapping(layer, config_path=layer_path)
+            merged_layers = _deep_merge(merged_layers, layer)
+
+        defaults = cls._default_config().model_dump(mode="python")
+        return SystemConfig.model_validate(
+            _deep_merge(defaults, merged_layers)
+        )
+
     @staticmethod
     def clear_cache() -> None:
         """Drop all memoized configs (test helper / explicit reload)."""
@@ -447,33 +450,45 @@ class ConfigSystem:
 
     @classmethod
     def _build(cls, config_path: Path | None) -> SystemConfig:
-        yaml_data: dict[str, Any] = {}
-        if config_path and config_path.exists():
-            try:
-                raw: Any = yaml.safe_load(  # type: ignore[no-untyped-call]
-                    config_path.read_text(encoding="utf-8")
-                )
-                if raw is None:
-                    yaml_data = {}
-                elif not isinstance(raw, dict):
-                    raise ValueError(
-                        "NuSelf configuration root must be an object"
-                    )
-                else:
-                    yaml_data = cast(dict[str, Any], raw)
-            except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
-                # A malformed/unreadable config falls back to defaults but must be
-                # visible, not silently indistinguishable from "no config". Any
-                # other exception is a real bug and is left to propagate.
-                import sys
+        yaml_data = (
+            cls._read_mapping(config_path)
+            if config_path and config_path.exists()
+            else {}
+        )
+        cls._normalize_mapping(yaml_data, config_path=config_path)
+        defaults = cls._default_config().model_dump(mode="python")
+        merged = _deep_merge(defaults, yaml_data)
+        return SystemConfig.model_validate(merged)
 
-                print(
-                    f"nuself: ignoring unreadable config {config_path}: "
-                    f"{diagnostic_exception_message(exc)}",
-                    file=sys.stderr,
-                )
+    @staticmethod
+    def _read_mapping(config_path: Path) -> dict[str, Any]:
+        try:
+            raw: Any = yaml.safe_load(  # type: ignore[no-untyped-call]
+                config_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            import sys
 
-        # Normalize llm: [...] (YAML list) to llm: {endpoints: [...]}
+            print(
+                f"nuself: ignoring unreadable config {config_path}: "
+                f"{diagnostic_exception_message(exc)}",
+                file=sys.stderr,
+            )
+            return {}
+        if raw is None:
+            return {}
+        if not isinstance(raw, dict):
+            raise ValueError("NuSelf configuration root must be an object")
+        return cast(dict[str, Any], raw)
+
+    @staticmethod
+    def _normalize_mapping(
+        yaml_data: dict[str, Any],
+        *,
+        config_path: Path | None,
+    ) -> None:
+        """Normalize one configuration layer before merging."""
+
         llm_raw: object = yaml_data.get("llm")
         if isinstance(llm_raw, list):
             endpoints = cast(list[Any], llm_raw)
@@ -484,9 +499,6 @@ class ConfigSystem:
             )
 
         _migrate_v025_config(yaml_data, config_path=config_path)
-        defaults = cls._default_config().model_dump(mode="python")
-        merged = _deep_merge(defaults, yaml_data)
-        return SystemConfig.model_validate(merged)
 
     def as_flat_dict(self, config: SystemConfig) -> dict[str, Any]:
         """Return configuration as flat key/value pairs for CLI inspection."""

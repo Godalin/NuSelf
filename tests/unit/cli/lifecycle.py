@@ -32,12 +32,12 @@ def _no_sleep(seconds: float) -> None:
 def test_ensure_private_root_creates_runtime_dirs(tmp_path: Path) -> None:
     paths = ensure_private_root(tmp_path)
 
-    assert paths.private_root.is_dir()
+    assert paths.authority_root.is_dir()
     assert paths.runtime_dir.is_dir()
     assert paths.logs_dir.is_dir()
-    assert (tmp_path / "private" / "sources").is_dir()
-    assert (tmp_path / "private" / "derived").is_dir()
-    assert (tmp_path / "private" / "shares").is_dir()
+    assert (tmp_path / "sources").is_dir()
+    assert (tmp_path / "derived").is_dir()
+    assert (tmp_path / "shares").is_dir()
 
 
 def test_status_when_daemon_is_missing(tmp_path: Path) -> None:

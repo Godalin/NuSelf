@@ -988,11 +988,13 @@ that primary failure.
 
 ## Daemon Instance Ownership
 
-Each project root has at most one daemon owner. Before reading, deleting,
+Each authority has at most one daemon owner. Before reading, deleting,
 creating, or binding daemon socket/PID resources, `run_daemon()` must acquire a
-non-blocking exclusive process lock on
-`private/runtime/nuself.lock`. The lock file is a stable coordination inode and
-is not deleted during normal cleanup.
+non-blocking exclusive process lock at
+`<authority-root>/runtime/nuself.lock`. The lock file is a stable coordination
+inode and is not deleted during normal cleanup. The socket uses the short
+owner-private runtime base selected by `RuntimePaths` and is named from the
+authority ID; PID and lock metadata remain under the authority root.
 
 Failed lock acquisition closes its newly opened file handle before returning
 contention or another flock error. Release marks the Python owner inactive,
@@ -1006,7 +1008,7 @@ close operation is retried.
 The owner holds the lock until request serving and all background-worker
 shutdown are complete. Only that owner may:
 
-- reconcile stale `nuself.sock` and `nuself.pid` before initialization;
+- reconcile stale authority socket and `nuself.pid` before initialization;
 - publish `nuself.pid`;
 - remove the socket and PID during cleanup.
 
@@ -1096,8 +1098,9 @@ ordered phases; later start polling remains fresh.
 ### PID Metadata
 
 After socket binding, the lock owner publishes
-`private/runtime/nuself.pid` through atomic text-file replacement. A valid PID
-record is one positive base-10 integer; surrounding whitespace is ignored.
+`<authority-root>/runtime/nuself.pid` through atomic text-file replacement. A
+valid PID record is one positive base-10 integer; surrounding whitespace is
+ignored.
 
 Missing PID state is the normal stopped/starting boundary and returns no PID
 without a diagnostic. Empty, non-integer, zero, or negative content is corrupt

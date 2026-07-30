@@ -11,6 +11,6 @@ from nuself.storage import write_json_atomic
 def write_derived_index(
     paths: RuntimePaths, filename: str, records: list[object]
 ) -> Path:
-    path = paths.private_root / "derived" / filename
+    path = paths.authority_root / "derived" / filename
     write_json_atomic(path, {"version": 1, "records": records})
     return path

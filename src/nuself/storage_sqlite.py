@@ -446,13 +446,9 @@ class SqliteStorageBackend:
         self._project_root = (
             project_root.absolute()
             if project_root is not None
-            else (
-                db_path.parent.parent.absolute()
-                if db_path.parent.name == "private"
-                else db_path.parent.absolute()
-            )
+            else db_path.parent.absolute()
         )
-        canonical = self._project_root / "private" / "nuself.sqlite"
+        canonical = self._project_root / "nuself.sqlite"
         self._managed = (
             db_path.absolute() == canonical.absolute()
             if _managed is None

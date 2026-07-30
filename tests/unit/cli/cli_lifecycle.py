@@ -9,15 +9,15 @@ from nuself.cli import CliLifecycleError, main
 
 
 class _Parser:
-    def __init__(self, project_root: Path) -> None:
-        self._project_root = project_root
+    def __init__(self, workspace: Path) -> None:
+        self._workspace = workspace
 
     def parse_args(
         self,
         argv: object = None,
     ) -> argparse.Namespace:
         del argv
-        return argparse.Namespace(project_root=self._project_root)
+        return argparse.Namespace(local=False, workspace=self._workspace)
 
 
 def test_cli_resets_default_backend_after_success(
@@ -51,8 +51,8 @@ def test_cli_resets_default_backend_after_success(
 
     assert main(["status"]) == 7
     assert events == [
-        ("dispatch", tmp_path, parser),
-        ("reset", tmp_path),
+        ("dispatch", tmp_path / ".nuself", parser),
+        ("reset", tmp_path / ".nuself"),
     ]
 
 
@@ -87,7 +87,7 @@ def test_cli_resets_backend_then_reraises_same_control_exception(
         main(["status"])
 
     assert captured.value is primary
-    assert resets == [tmp_path]
+    assert resets == [tmp_path / ".nuself"]
 
 
 def test_cli_cleanup_failure_retains_primary_as_cause(
@@ -110,7 +110,7 @@ def test_cli_cleanup_failure_retains_primary_as_cause(
         raise primary
 
     def fail_reset(project_root: Path | None) -> None:
-        assert project_root == tmp_path
+        assert project_root == tmp_path / ".nuself"
         raise cleanup_error
 
     def record_failure(

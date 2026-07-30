@@ -27,7 +27,7 @@ _WINDOWS_DEVICE_NAME = re.compile(
 
 def handle_pack_export(args: argparse.Namespace) -> int:
     paths = runtime_paths(args.project_root)
-    source = paths.private_root / "nuself.sqlite"
+    source = paths.authority_root / "nuself.sqlite"
     if not source.exists():
         print(
             "No nuself.sqlite found. Run 'nuself dev migrate' "
@@ -35,7 +35,7 @@ def handle_pack_export(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    exports = paths.private_root / "exports"
+    exports = paths.authority_root / "exports"
     ensure_private_directory(exports)
     name = args.name.removesuffix(".sqlite")
     if not _is_portable_pack_name(name):
@@ -76,7 +76,7 @@ def handle_pack_import(args: argparse.Namespace) -> int:
         return 1
     imports = runtime_paths(
         args.project_root
-    ).private_root / "imports"
+    ).authority_root / "imports"
     ensure_private_directory(imports)
     destination = imports / source.name
     if destination.exists():
@@ -109,7 +109,7 @@ def _format_size(size: int) -> str:
 
 
 def handle_pack_list(args: argparse.Namespace) -> int:
-    private_root = runtime_paths(args.project_root).private_root
+    private_root = runtime_paths(args.project_root).authority_root
     for subdirectory, label in (
         ("imports", "Imports"),
         ("exports", "Exports"),
@@ -132,7 +132,7 @@ def handle_pack_list(args: argparse.Namespace) -> int:
 def _resolve_pack_path(
     name: str | None, project_root: Path | None
 ) -> Path | None:
-    private_root = runtime_paths(project_root).private_root
+    private_root = runtime_paths(project_root).authority_root
     if name is None:
         database = private_root / "nuself.sqlite"
         if not database.exists():

@@ -142,9 +142,12 @@ def test_start_thread_preserves_unexpected_prompt_generator_error(
     assert caught.value is unexpected
 
 
-def test_start_thread_resolves_project_root_for_prompt_generator(tmp_path: Path, monkeypatch: Any) -> None:
+def test_start_thread_uses_default_user_authority_for_prompt_generator(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "AGENTS.md").write_text("# test project\n", encoding="utf-8")
+    monkeypatch.setenv("NUSELF_HOME", str(tmp_path))
     seen_project_roots: list[Path] = []
 
     def prompt_generator(*args: object, **kwargs: object) -> str:
@@ -232,7 +235,7 @@ def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
     assert events[-1].message == "Reason thread started"
     assert events[-1].metadata == {"thread_id": thread.id}
     assert thread.topic not in str(events[-1].to_record())
-    assert (tmp_path / "private" / "logs" / "reasoning.log").is_file()
+    assert (tmp_path / "logs" / "reasoning.log").is_file()
 
 
 def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
@@ -241,8 +244,8 @@ def test_start_thread_initializes_private_workspace(tmp_path: Path) -> None:
     thread = service.start_thread("Where should scratch state live?")
 
     workspace = service.workspace_paths(thread.id)
-    db_path = tmp_path / "private" / "nuself.sqlite"
-    assert workspace.root == tmp_path / "private" / "workspaces" / "reason" / thread.id
+    db_path = tmp_path / "nuself.sqlite"
+    assert workspace.root == tmp_path / "workspaces" / "reason" / thread.id
     assert workspace.database == db_path
     assert workspace.artifacts.is_dir()
     assert workspace.notes.is_dir()
