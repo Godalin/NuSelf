@@ -68,6 +68,16 @@ def validate_registry(
         raise RegistryError("migration IDs must be unique")
     if len(set(edges)) != len(edges):
         raise RegistryError("migration edges must be unique")
+    irreversible = [
+        migration.migration_id
+        for migration in migrations
+        if migration.from_version >= 3 and migration.downgrade is None
+    ]
+    if irreversible:
+        raise RegistryError(
+            "post-v3 migrations must define downgrade: "
+            + ", ".join(irreversible)
+        )
     if sorted(edges) != expected:
         raise RegistryError(
             "registry must contain exactly one contiguous adjacent edge "

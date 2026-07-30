@@ -43,7 +43,20 @@ from nuself.storage import (
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
 SQLITE_SCHEMA_VERSION = 3
-_V2_COLLECTION_NAMES = COLLECTION_NAMES[:-4]
+_V2_COLLECTION_NAMES = (
+    "memory_entries",
+    "memory_candidates",
+    "trace_nodes",
+    "trace_edges",
+    "reason_threads",
+    "reason_steps",
+    "persona_prompts",
+    "profile_items",
+    "source_documents",
+    "source_chunks",
+    "notification_outbox",
+    "reflection_entries",
+)
 
 
 def _json(v: object) -> str:

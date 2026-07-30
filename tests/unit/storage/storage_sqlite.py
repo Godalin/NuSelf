@@ -884,8 +884,9 @@ def test_backend_rejects_future_schema_version(
         connection.execute(
             "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
         )
-        connection.execute(
-            "INSERT INTO _schema_version VALUES (99)"
+        connection.executemany(
+            "INSERT INTO _schema_version VALUES (?)",
+            ((version,) for version in range(1, 100)),
         )
         connection.commit()
     finally:
@@ -1934,7 +1935,10 @@ def test_explicit_script_rejects_incomplete_authority_before_mutation(
         connection.execute(
             "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
         )
-        connection.execute("INSERT INTO _schema_version VALUES (2)")
+        connection.executemany(
+            "INSERT INTO _schema_version VALUES (?)",
+            ((1,), (2,)),
+        )
         connection.commit()
     finally:
         connection.close()
@@ -2069,6 +2073,69 @@ def test_historical_downgrade_fails_before_mutation(tmp_path: Path) -> None:
     assert "historical forward-only migration" in result.stderr
     assert db_path.read_bytes() == before
     assert not db_path.with_name("nuself.sqlite.pre-v3-to-v2.bak").exists()
+
+
+def test_registry_rejects_post_v3_migration_without_downgrade() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from scripts.database_migrations.model import "
+                "Migration, validate_registry; "
+                "noop=lambda connection: None; "
+                "validate_registry(("
+                "Migration('one',1,2,noop,None),"
+                "Migration('two',2,3,noop,None),"
+                "Migration('three',3,4,noop,None)"
+                "),current_version=4)"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "post-v3 migrations must define downgrade" in result.stderr
+
+
+def test_explicit_script_rejects_duplicate_version_history_before_mutation(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "duplicate-history.sqlite"
+    _create_v1_database(
+        db_path,
+        payload={"id": "mem_legacy", "title": "Duplicate"},
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("INSERT INTO _schema_version VALUES (1)")
+        connection.commit()
+    finally:
+        connection.close()
+    before = db_path.read_bytes()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "invalid NuSelf schema version history" in result.stderr
+    assert db_path.read_bytes() == before
+    assert not db_path.with_name(
+        "duplicate-history.sqlite.pre-v1-to-v3.bak"
+    ).exists()
 
 
 def test_explicit_script_rolls_back_invalid_v1_payload(tmp_path: Path) -> None:

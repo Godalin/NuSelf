@@ -21,14 +21,16 @@ None.
 
 ## Completion Evidence
 
-The explicit schema-migration foundation is complete:
+The explicit schema-migration foundation and its follow-up hardening are
+complete:
 
-- the runtime accepts only schema v3 and performs no automatic migration;
-- versioned v1→v2 and v2→v3 scripts live outside the runtime package;
-- the operator script supports dry-run planning, exact targets, a consistent
-  pre-migration backup, a cross-process lease, and one transaction per path;
-- historical forward-only downgrade requests fail before mutation, while the
-  contract requires both directions for every post-v3 migration;
-- Pyright completed with 0 errors and 0 warnings, focused storage tests passed
-  95 cases, the full suite passed 2432 tests, distributions built, and the
-  wheel imported and reported its version from a clean uv environment.
+- runtime open accepts only schema v3 and never migrates;
+- source-checkout scripts own version planning, identity validation, locking,
+  backup creation, and transactional application;
+- historical schema identity is frozen independently from the current runtime
+  collection catalog;
+- registry validation rejects any post-v3 migration without a downgrade;
+- the release compatibility gate now requires explicit script execution and
+  forward/reverse round trips;
+- focused storage tests passed 99 cases, Pyright completed with 0 errors and
+  0 warnings, and the full suite passed 2437 tests.

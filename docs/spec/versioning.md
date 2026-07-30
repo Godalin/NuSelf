@@ -108,9 +108,11 @@ coordination currently requires POSIX advisory locks and Unix-domain sockets.
 
 ## Upgrade Compatibility Gate
 
-Before a release candidate is publishable, the storage suite must open the
-oldest supported SQLite schema, upgrade it through every intermediate version,
-and read its records through current repositories. It must also verify
-concurrent first-open upgrade, preservation of the pre-upgrade backup, and
-exactly one row per completed schema version. File-backed v0.2 authorities are
-outside the v0.3.1 runtime compatibility boundary.
+Before a release candidate is publishable, the storage suite must run the
+explicit migration script against the oldest supported SQLite schema, traverse
+every intermediate version, then read its records through current
+repositories. It must also verify concurrent script execution, preservation of
+the pre-migration backup, exactly one row per completed schema version, and
+forward/reverse round trips for every post-v3 migration. Runtime open must
+reject an old schema without mutation. File-backed v0.2 authorities are outside
+the v0.3.1 runtime compatibility boundary.

@@ -4,7 +4,7 @@ Status: authoritative for schema changes after SQLite schema v3.
 
 NuSelf database schemas use monotonically increasing positive integer versions.
 The application declares one current version and supports only versions for
-which the packaged migration registry contains a complete adjacent path.
+which the source-checkout migration registry contains a complete adjacent path.
 Application code must never perform ad-hoc schema mutation.
 
 ## Migration artifacts
@@ -41,7 +41,7 @@ database's current version and constructs the ordered adjacent path:
 - descending edges use the same artifacts in reverse order and call
   `downgrade`;
 - a missing edge fails before any database mutation;
-- a target below the supported floor or above the packaged current version
+- a target below the supported floor or above the registered current version
   fails closed.
 
 Normal application startup never migrates in either direction. The storage
@@ -64,9 +64,10 @@ schema definition. They do not replay historical migrations.
 
 ## Safety boundary
 
-The migration script's stable sibling schema lease covers version revalidation, backup creation,
-the complete migration plan, and final identity validation. The runner rereads
-the version after acquiring the cross-process exclusive lock.
+The migration script's stable sibling schema lease covers version
+revalidation, backup creation, the complete migration plan, and final identity
+validation. The runner rereads the version after acquiring the cross-process
+exclusive lock.
 
 Before the first mutation, the runner writes one consistent backup of the
 original version. Managed databases and artifacts retain NuSelf private
