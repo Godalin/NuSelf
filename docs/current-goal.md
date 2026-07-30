@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make v1-to-v2 SQLite upgrade single-writer across processes and apply explicit
-managed/external ownership to every backup path.
+Idle. Cross-process SQLite schema upgrade and backup ownership are complete.
 
 ## Active Branch
 
@@ -14,14 +13,8 @@ managed/external ownership to every backup path.
 
 ## Ordered Work
 
-1. Add a stable database-path schema-upgrade lease; after acquiring it,
-   re-read the version and let only the remaining v1 owner back up and upgrade.
-2. Carry managed ownership through v1 backup and public `backup_to()`, keeping
-   external parent and database permissions unchanged.
-3. Make direct canonical construction infer managed protection and add
-   concurrent-first-open, backup-content, permission, and symlink regressions.
-4. Run complete release gates, push the functional commits, and require the
-   final six-platform CI matrix before returning this board to idle.
+1. Discuss and specify stable `v0.3.0` promotion before changing release
+   metadata or `main`.
 
 ## Out Of Scope
 
@@ -51,4 +44,6 @@ managed/external ownership to every backup path.
 - `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14.3
   environment installed only the wheel plus its declared dependencies,
   imported `nuself.cli` and `nuself.llm`, and reported `nuself 0.3.0rc1`.
-- Push and final six-platform CI are pending.
+- GitHub Actions run `30518768205` passed on Ubuntu and macOS with Python
+  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
+  suite, distribution build, and clean-wheel smoke test for commit `a2febf9`.
