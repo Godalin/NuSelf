@@ -13,6 +13,10 @@ from nuself.cli.repl.activity import (
     run_live_activity_send,
     visible_interactive_activity_events,
 )
+from nuself.cli.repl.notices import (
+    print_interactive_notices,
+    turn_interactive_notices,
+)
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.agent.chat.audit import write_chat_audit
@@ -46,6 +50,7 @@ def send_interactive_chat_turn(
     log_cursor = InteractiveLogCursor.from_project(project_root)
     result = InteractiveChatResult(code=1)
     printed_logs = False
+    presented_notice_codes: set[str] = set()
     turn_id = f"turn-{uuid4().hex}"
 
     def present_events(
@@ -107,6 +112,16 @@ def send_interactive_chat_turn(
             thread_id,
             events,
         )
+        notices = tuple(
+            notice
+            for notice in turn_interactive_notices(events)
+            if notice.code not in presented_notice_codes
+        )
+        if notices:
+            print_interactive_notices(notices)
+            presented_notice_codes.update(
+                notice.code for notice in notices
+            )
         if result.memory_update is not None:
             if not printed_logs:
                 print()

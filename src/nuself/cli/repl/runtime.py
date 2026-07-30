@@ -31,6 +31,7 @@ class ReplCallbacks:
     auto_save: Callable[[Path | None, InteractiveSession], None]
     run_curator: Callable[[Path | None], None]
     show_session_header: Callable[[Path | None, str], None]
+    show_startup_notices: Callable[[Path | None], None]
     brand_banner: Callable[[], str]
 
 
@@ -114,6 +115,7 @@ def run_interactive_loop(
         ":q to quit."
     )
     callbacks.show_session_header(project_root, current_thread_id)
+    callbacks.show_startup_notices(project_root)
 
     def run_loop() -> int:
         nonlocal current_thread_id

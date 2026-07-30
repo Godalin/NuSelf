@@ -124,6 +124,30 @@ SQL, raw table mutation, and validation bypass flags are not supported.
 
 ## REPL Conventions
 
+### Interactive Attention Notices
+
+Interactive chat projects important hidden runtime conditions into concise
+notices. This projection is distinct from both the external notification
+outbox and the chronological activity log:
+
+- startup reports an unusable model configuration for the selected authority,
+  an explicit user/workspace authority mismatch, recent persisted-record
+  decode failures, and recent daemon reply-delivery failures;
+- turn activity groups persisted-record decode failures into one notice per
+  component instead of printing one warning per record;
+- notices contain only safe metadata, state the user-visible consequence, and
+  include a concrete recovery or inspection command;
+- repeated records are counted and grouped. Raw exception text, record
+  payloads, API keys, and one line per failure are never rendered;
+- a notice does not switch authority, repair data, change the chat result, or
+  enter the external notification outbox;
+- failure to inspect optional notice sources must not prevent the REPL from
+  starting. Invalid selected configuration is itself rendered as an actionable
+  notice.
+
+The startup notice heading is `Attention:`. It appears after the session
+header and only when at least one notice exists.
+
 ### Session State Ownership
 
 Each `run_interactive_loop()` call owns one `InteractiveSession` and one
@@ -186,7 +210,10 @@ alias string sets.
 
 ### Output Formatting
 
-- Default interactive startup prints only the banner, one concise help line, and the session header. It must not also print daemon preamble or a separate tip line.
+- Default interactive startup prints the banner, one concise help line, and the
+  session header. It may then print a single grouped `Attention:` block when
+  actionable notices exist; it must not print a daemon preamble, separate tip
+  line, or raw log dump.
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
 - Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. The session header follows the reply without extra blank spacer lines.
 - A configured LLM failure that uses deterministic local fallback is still a

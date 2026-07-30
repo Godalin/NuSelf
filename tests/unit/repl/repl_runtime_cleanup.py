@@ -55,6 +55,7 @@ def _callbacks(
         None,
     ],
     run_curator: Callable[[Path | None], None],
+    show_startup_notices: Callable[[Path | None], None] | None = None,
 ) -> ReplCallbacks:
     def default_command(
         command: str,
@@ -84,6 +85,9 @@ def _callbacks(
         auto_save=auto_save,
         run_curator=run_curator,
         show_session_header=lambda project_root, thread_id: None,
+        show_startup_notices=show_startup_notices or (
+            lambda project_root: None
+        ),
         brand_banner=lambda: "NuSelf",
     )
 
@@ -118,6 +122,27 @@ def test_eof_runs_each_cleanup_once_in_order(
 
     assert result == 0
     assert calls == ["save", "curator"]
+
+
+def test_startup_notices_are_presented_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[Path | None] = []
+    _install_input(monkeypatch, FakeInteractiveInput(EOFError()))
+
+    result = run_interactive_loop(
+        _unused_send,
+        tmp_path,
+        _callbacks(
+            auto_save=lambda project_root, session: None,
+            run_curator=lambda project_root: None,
+            show_startup_notices=calls.append,
+        ),
+    )
+
+    assert result == 0
+    assert calls == [tmp_path]
 
 
 def test_cleanup_attempts_both_steps_and_retains_failures(

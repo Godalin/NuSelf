@@ -181,6 +181,12 @@ Personal state defaults to `~/.nuself`. Use `--local` for `./.nuself` or
 authority. Workspace configuration inherits user defaults, but databases and
 runtime state are never merged.
 
+Interactive chat shows a concise `Attention:` block when the selected
+authority has no usable model, a local workspace authority was not selected,
+persisted records cannot be decoded, or the daemon recently failed to deliver
+a reply. Notices are grouped and actionable; full detail remains available
+through `nuself dev logs`.
+
 NuSelf is local-first, not model-offline: when you configure a remote model,
 the context required for that call is sent to the endpoint you selected.
 Choose providers and retention policies accordingly.

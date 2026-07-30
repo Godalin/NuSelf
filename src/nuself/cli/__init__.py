@@ -78,6 +78,10 @@ from nuself.cli.repl.dispatcher import (
 from nuself.cli.repl.input import (
     InteractiveCompleter as _InteractiveCompleter,
 )
+from nuself.cli.repl.notices import (
+    print_interactive_notices,
+    startup_interactive_notices,
+)
 from nuself.cli.repl.presentation import SessionHeaderPresenter
 from nuself.cli.repl.runtime import (
     ReplCallbacks,
@@ -244,6 +248,9 @@ def _interactive_loop(
             auto_save=_auto_save_interactive_transcripts,
             run_curator=_run_memory_curator,
             show_session_header=header_presenter.show,
+            show_startup_notices=lambda root: print_interactive_notices(
+                startup_interactive_notices(root)
+            ),
             brand_banner=_brand_banner,
         ),
         initial_thread_id=initial_thread_id,

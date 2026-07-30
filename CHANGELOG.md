@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Interactive chat now surfaces a grouped `Attention:` block for an unusable
+  model configuration, an explicitly unselected workspace authority, unreadable
+  persisted records, and daemon reply-delivery failures. Turn-time record
+  failures are aggregated into actionable metadata-only notices instead of
+  remaining hidden in developer logs or flooding the terminal one record at a
+  time.
 - Structured state is now SQLite-only in user and workspace authorities.
   Chat threads, curator cursors/plans, and scheduler state have joined the
   domain collections; file-backend fallback and `dev migrate` are removed.

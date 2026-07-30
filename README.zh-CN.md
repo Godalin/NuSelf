@@ -165,6 +165,11 @@ uv run nuself data export threads --format json
 
 个人状态默认位于 `~/.nuself`。`--local` 使用 `./.nuself`，`--workspace PATH` 使用 `PATH/.nuself`；每次选择都是隔离的状态 authority。工作区配置继承用户默认值，但数据库和运行状态绝不合并。
 
+交互聊天会用简洁的 `Attention:` 区块提示关键状态：当前 authority
+没有可用模型、本地工作区 authority 尚未被选择、持久化记录无法解码，
+或 daemon 最近未能交付回复。提示会聚合并给出处理方式；完整细节仍可通过
+`nuself dev logs` 查看。
+
 local-first 不等于模型离线：配置远程模型后，一次调用所需的上下文会发送给你选择的端点。请根据自己的隐私要求选择提供方及其数据保留政策。
 
 重要边界：
