@@ -3297,6 +3297,12 @@ def test_open_with_message_sends_then_enters_repl(
 def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.notification import NotificationOutbox, OutboxEntry
 
+    private = tmp_path / "private"
+    private.mkdir()
+    (private / "config.yaml").write_text(
+        "macos_notification:\n  enabled: false\n",
+        encoding="utf-8",
+    )
     outbox = NotificationOutbox(tmp_path)
     entry = outbox.add(
         OutboxEntry(
@@ -3338,8 +3344,8 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     assert f"Sent: {entry.id}" in send_output
     assert f"Dismissed: {entry.id}" in dismiss_output
     dismissed = NotificationOutbox(tmp_path).get(entry.id)
-    assert dismissed.required_adapters == ("macos",)
-    assert dismissed.deliveries["macos"].status == "sent"
+    assert dismissed.required_adapters == ("log",)
+    assert dismissed.deliveries["log"].status == "sent"
 
 
 def test_notify_send_preserves_existing_adapter_plan_and_history(

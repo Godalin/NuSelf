@@ -53,4 +53,7 @@ finishing strict finite-number and JSON Schema dialect validation.
   the validator from the document's declared Draft 7 dialect before comparing
   acceptance. Focused configuration verification: 44 passed; locked Pyright
   reported 0 errors and 0 warnings.
+- The notification CLI lifecycle regression now explicitly selects the
+  deterministic log adapter instead of invoking the host macOS notification
+  service, so the release gate does not depend on an interactive desktop.
 - The final combined gate, wheel smoke test, push, and six-platform CI remain.
