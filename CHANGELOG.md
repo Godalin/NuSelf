@@ -17,6 +17,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   removes only retired `experimental.langmem_adapter` with a one-time warning,
   and raises a typed migration error for enabled legacy email setups missing
   `email.to_address` instead of exposing a generic validation failure.
+- Runtime configuration validation is now type-strict, and a shared acceptance
+  matrix proves behavior-level parity with the published JSON Schema,
+  including email defaults, paired credentials, non-blank enabled fields, and
+  header-control rejection.
 - Shared SQLite backends now isolate reads from uncommitted writes, immediately
   observe dynamic columns added by other processes, and reject mismatched
   record IDs instead of silently rewriting them.

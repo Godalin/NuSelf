@@ -180,9 +180,11 @@ In-memory endpoint settings also exclude API keys from `repr`. Test failures,
 debuggers, container representations, and incidental object formatting must
 not reveal a credential merely because they render an endpoint object.
 
-All runtime configuration models are frozen, reject unknown fields, and hide
-input values in validation errors. YAML must decode to an object; `llm` must
-use the public endpoint-list shape. Wrong top-level shapes, obsolete nested LLM
+All runtime configuration models are frozen, type-strict, reject unknown
+fields, and hide input values in validation errors. YAML must decode to an
+object; `llm` must use the public endpoint-list shape. Quoted numbers and
+booleans are not coerced, booleans are not accepted as integers, and integers
+are not accepted as booleans. Wrong top-level shapes, obsolete nested LLM
 objects, unknown fields, and invalid values fail explicitly rather than being
 silently discarded.
 
@@ -215,6 +217,15 @@ When `email.enabled` is true, `email.smtp.host`, `email.from_address`, and
 provided together; `port` is from 1 through 65535. Sender and recipient reject
 header control characters. API keys and SMTP passwords are excluded from model
 `repr`, and all validation diagnostics hide the rejected input.
+
+The published JSON Schema describes the user-authored document before runtime
+default merging. Enabled email may omit `smtp` entirely and receive the
+runtime defaults; when supplied, its host must not be blank. The schema
+enforces the same username/password pair, non-blank enabled addresses, and
+header-control rejection as runtime validation. A maintained acceptance matrix
+passes identical YAML objects to the real loader and a standards-compliant
+JSON Schema validator and requires the same accept/reject result, in addition
+to static field/default/range parity.
 
 ## Chat Daemon Request Timeout
 

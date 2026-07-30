@@ -97,6 +97,7 @@ class _ConfigModel(BaseModel):
         frozen=True,
         extra="forbid",
         hide_input_in_errors=True,
+        strict=True,
     )
 
 
@@ -474,7 +475,8 @@ class ConfigSystem:
         # Normalize llm: [...] (YAML list) to llm: {endpoints: [...]}
         llm_raw: object = yaml_data.get("llm")
         if isinstance(llm_raw, list):
-            yaml_data["llm"] = {"endpoints": llm_raw}
+            endpoints = cast(list[Any], llm_raw)
+            yaml_data["llm"] = {"endpoints": tuple(endpoints)}
         elif llm_raw is not None:
             raise ValueError(
                 "NuSelf configuration 'llm' must be an endpoint list"

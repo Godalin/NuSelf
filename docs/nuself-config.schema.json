@@ -320,16 +320,22 @@
           },
           "then": {
             "required": [
-              "smtp",
               "from_address",
               "to_address"
             ],
             "properties": {
+              "smtp": {
+                "properties": {
+                  "host": {
+                    "pattern": ".*\\S.*"
+                  }
+                }
+              },
               "from_address": {
-                "minLength": 1
+                "pattern": ".*\\S.*"
               },
               "to_address": {
-                "minLength": 1
+                "pattern": ".*\\S.*"
               }
             }
           }
@@ -343,6 +349,52 @@
         "smtp": {
           "type": "object",
           "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "username": {
+                    "pattern": ".*\\S.*"
+                  }
+                },
+                "required": [
+                  "username"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "password": {
+                    "pattern": ".*\\S.*"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "password": {
+                    "pattern": ".*\\S.*"
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "username": {
+                    "pattern": ".*\\S.*"
+                  }
+                },
+                "required": [
+                  "username"
+                ]
+              }
+            }
+          ],
           "properties": {
             "host": {
               "type": "string",
@@ -370,11 +422,13 @@
         },
         "from_address": {
           "type": "string",
-          "default": ""
+          "default": "",
+          "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
         },
         "to_address": {
           "type": "string",
-          "default": ""
+          "default": "",
+          "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
         }
       }
     },

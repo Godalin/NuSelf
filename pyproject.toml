@@ -23,6 +23,7 @@ nuself = "nuself.cli:main"
 
 [dependency-groups]
 dev = [
+    "jsonschema>=4.25",
     "pyright==1.1.411",
     "pytest>=8.0",
     "pytest-cov>=7.1.0",

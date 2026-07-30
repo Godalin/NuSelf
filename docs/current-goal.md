@@ -58,6 +58,11 @@ migration, validation, and notification-cleanup findings.
   credential-safe typed migration error naming the current YAML fields.
   Focused config/email verification: 39 passed; locked Pyright reported 0
   errors and 0 warnings.
-- Pending: strict runtime/schema behavioral parity and notification cleanup
-  require implementation and direct regression evidence, followed by the
-  complete release gate.
+- Runtime configuration is now type-strict. A standards-compliant JSON Schema
+  acceptance matrix proves identical decisions for quoted scalar types,
+  bool/integer confusion, defaults, unknown shapes, enabled email fields,
+  paired SMTP credentials, whitespace, and header controls. Broad
+  config/notification/daemon/CLI verification: 810 passed; locked Pyright
+  reported 0 errors and 0 warnings.
+- Pending: notification cleanup requires implementation and direct regression
+  evidence, followed by the complete release gate.

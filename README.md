@@ -51,6 +51,9 @@ The v0.3 loader accepts the complete official v0.2.5 config by removing only
 the retired `experimental.langmem_adapter` key with a one-time warning.
 Enabled legacy email setups without `email.to_address` receive an explicit
 migration error because `private/email.toml` is no longer read.
+Current configuration values are type-strict, and runtime acceptance is tested
+against the published JSON Schema, including email defaults and credential
+pairing.
 `nuself dev migrate` now writes and validates a strict temporary SQLite
 database, then atomically publishes it only after checkpoint, close, and fsync;
 corrupt or ID-mismatched file records abort without exposing a partial

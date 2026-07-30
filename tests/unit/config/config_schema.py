@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
+from jsonschema import Draft202012Validator
 from pydantic import BaseModel
+import pytest
+import yaml
 
 from nuself.config import (
     ChatConfig,
     ChatContextConfig,
+    ConfigSystem,
     DaemonConfig,
     DaemonMemoryCuratorConfig,
     DaemonNotificationDeliveryConfig,
@@ -29,6 +33,10 @@ from nuself.config import (
 
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+class _SchemaValidator(Protocol):
+    def is_valid(self, instance: object) -> bool: ...
 
 
 def _published_schema() -> dict[str, Any]:
@@ -154,6 +162,184 @@ def test_runtime_models_and_published_schema_have_complete_parity() -> None:
     )
     for model, published in pairs:
         _assert_model_object_parity(model, published)
+
+
+@pytest.mark.parametrize(
+    ("data", "accepted"),
+    [
+        pytest.param({}, True, id="defaults"),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": True,
+                    "from_address": "from@example.com",
+                    "to_address": "to@example.com",
+                }
+            },
+            True,
+            id="enabled-email-default-smtp",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": True,
+                    "smtp": {},
+                    "from_address": "from@example.com",
+                    "to_address": "to@example.com",
+                }
+            },
+            True,
+            id="enabled-email-empty-smtp",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": True,
+                    "smtp": {
+                        "username": "owner",
+                        "password": "secret",
+                    },
+                    "from_address": "from@example.com",
+                    "to_address": "to@example.com",
+                }
+            },
+            True,
+            id="paired-smtp-credentials",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": False,
+                    "smtp": {
+                        "host": " ",
+                        "username": "",
+                        "password": "",
+                    },
+                }
+            },
+            True,
+            id="disabled-email-allows-blank-host",
+        ),
+        pytest.param(
+            {"daemon": {"memory_curator": {"interval_seconds": "300"}}},
+            False,
+            id="quoted-integer",
+        ),
+        pytest.param(
+            {"reflection": {"gate": {"relevance_threshold": "0.5"}}},
+            False,
+            id="quoted-float",
+        ),
+        pytest.param(
+            {"email": {"enabled": "false"}},
+            False,
+            id="quoted-boolean",
+        ),
+        pytest.param(
+            {"daemon": {"memory_curator": {"interval_seconds": True}}},
+            False,
+            id="boolean-as-integer",
+        ),
+        pytest.param(
+            {"macos_notification": {"enabled": 1}},
+            False,
+            id="integer-as-boolean",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": True,
+                    "smtp": {"host": " "},
+                    "from_address": "from@example.com",
+                    "to_address": "to@example.com",
+                }
+            },
+            False,
+            id="enabled-email-blank-host",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": True,
+                    "from_address": " ",
+                    "to_address": "to@example.com",
+                }
+            },
+            False,
+            id="enabled-email-blank-address",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "enabled": True,
+                    "from_address": "from@example.com\nBcc: x@example.com",
+                    "to_address": "to@example.com",
+                }
+            },
+            False,
+            id="email-header-control",
+        ),
+        pytest.param(
+            {"email": {"smtp": {"username": "owner"}}},
+            False,
+            id="smtp-username-without-password",
+        ),
+        pytest.param(
+            {"email": {"smtp": {"password": "secret"}}},
+            False,
+            id="smtp-password-without-username",
+        ),
+        pytest.param(
+            {
+                "email": {
+                    "smtp": {
+                        "username": " ",
+                        "password": "secret",
+                    }
+                }
+            },
+            False,
+            id="smtp-whitespace-username",
+        ),
+        pytest.param(
+            {"chat": {"unknown_field": True}},
+            False,
+            id="unknown-field",
+        ),
+        pytest.param(
+            {"llm": {"endpoints": []}},
+            False,
+            id="obsolete-llm-object",
+        ),
+    ],
+)
+def test_runtime_and_published_schema_acceptance_are_identical(
+    tmp_path: Path,
+    data: dict[str, Any],
+    accepted: bool,
+) -> None:
+    config_path = tmp_path / "private" / "config.yaml"
+    config_path.parent.mkdir()
+    config_path.write_text(
+        yaml.safe_dump(data, sort_keys=True),
+        encoding="utf-8",
+    )
+    try:
+        ConfigSystem.load(project_root=tmp_path)
+    except (ValueError, TypeError):
+        runtime_accepted = False
+    else:
+        runtime_accepted = True
+
+    schema_validator = cast(
+        _SchemaValidator,
+        Draft202012Validator(_published_schema()),
+    )
+    schema_accepted = schema_validator.is_valid(data)
+
+    assert runtime_accepted is accepted
+    assert schema_accepted is accepted
+
 
 def test_config_json_schema_uses_direct_llm_endpoint_list() -> None:
     schema_path = (
