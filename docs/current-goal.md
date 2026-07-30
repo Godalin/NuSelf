@@ -5,9 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Promote the frozen `0.3.0rc1` codebase to stable `v0.3.0` through a
-metadata-only release change, validate the exact release commit, and merge it
-to `main` without reopening implementation review.
+Idle. The frozen `0.3.0rc1` codebase has been promoted to the validated stable
+`v0.3.0` release commit.
 
 ## Active Branch
 
@@ -15,17 +14,8 @@ to `main` without reopening implementation review.
 
 ## Ordered Work
 
-1. Confirm the frozen branch state, release metadata contract, branch
-   topology, and remote tag side effects.
-2. Promote package, runtime fallback, README, and changelog metadata to
-   `0.3.0`.
-3. Run the locked type, test, build, clean-wheel, and release-metadata gates
-   against the release candidate commit.
-4. Fast-forward `main`, create an annotated local `v0.3.0` tag, and verify the
-   exact tagged commit and release topology.
-5. Push non-publication branch updates and verify their final CI. Keep the
-   remote tag and its automatic GitHub Release behind separate publication
-   authorization.
+1. Await separate authorization before pushing the local `v0.3.0` tag, which
+   automatically starts the GitHub Release publication workflow.
 
 ## Out Of Scope
 
@@ -51,5 +41,11 @@ to `main` without reopening implementation review.
 - A clean Python 3.14.3 environment installed only the built wheel plus its
   declared dependencies, imported `nuself.cli` and `nuself.llm`, and reported
   `nuself 0.3.0`.
-- Pending: exact tagged-commit topology validation, `main` promotion, and final
-  branch CI. Remote tag publication remains separately authorized.
+- Release commit `28eea69` was fast-forwarded to `main` and
+  `dev/v0.3.x`. The local annotated `v0.3.0` tag peels exactly to that commit,
+  and the full release metadata and remote-main topology gate passed.
+- GitHub Actions run `30522764611` passed on Ubuntu and macOS with Python
+  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
+  suite, distribution build, and clean-wheel smoke test.
+- The `v0.3.0` tag remains local. No GitHub Release, provenance attestation, or
+  other distribution-channel publication has been started.
