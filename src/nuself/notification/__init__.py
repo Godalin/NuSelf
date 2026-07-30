@@ -224,7 +224,7 @@ class NotificationOutbox:
         self._col = be.collection("notification_outbox")
         self._project_root = runtime_paths(project_root).project_root
         self._entry_lock_directory = (
-            runtime_paths(project_root).private_root
+            runtime_paths(project_root).authority_root
             / "notifications"
             / "locks"
         )

@@ -37,9 +37,9 @@ def handle_status(args: argparse.Namespace) -> int:
 def handle_health(args: argparse.Namespace) -> int:
     issues: list[str] = []
     paths = runtime_paths(args.project_root)
-    if not paths.private_root.exists():
+    if not paths.authority_root.exists():
         issues.append(
-            f"private root missing: {paths.private_root}"
+            f"private root missing: {paths.authority_root}"
         )
     status_unavailable = False
     daemon = observe_daemon_status(args.project_root)
@@ -61,9 +61,9 @@ def handle_health(args: argparse.Namespace) -> int:
 
 def handle_config(args: argparse.Namespace) -> int:
     paths = runtime_paths(args.project_root)
-    config_path = paths.private_root / "config.yaml"
+    config_path = paths.authority_root / "config.yaml"
     print(f"project_root: {paths.project_root}")
-    print(f"private_root: {paths.private_root}")
+    print(f"private_root: {paths.authority_root}")
     print(f"socket_path: {paths.socket_path}")
     print(f"config_path: {config_path}")
     state = (

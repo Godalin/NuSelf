@@ -193,9 +193,9 @@ def _sample_reflection_entry(index: int = 0) -> ReflectionEntry:
 @pytest.fixture
 def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionScheduler:
     # Create a minimal project structure
-    (tmp_path / "private" / "runtime").mkdir(parents=True)
-    (tmp_path / "private" / "logs").mkdir(parents=True)
-    (tmp_path / "private" / "outbox").mkdir(parents=True)
+    (tmp_path / "runtime").mkdir(parents=True)
+    (tmp_path / "logs").mkdir(parents=True)
+    (tmp_path / "outbox").mkdir(parents=True)
     monkeypatch.setattr(
         "nuself.reflection.scheduler.default_structured_agent",
         _fake_structured_agent,
@@ -804,8 +804,8 @@ def test_generator_parses_multiple_candidates(tmp_path: Path) -> None:
 
 def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     """Non-English language preference appends a language directive to the system prompt."""
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         "chat:\n  language_preference: zh-CN\n",
         encoding="utf-8",
@@ -1002,7 +1002,7 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
     config = _reflection_settings(cooldown_seconds=600)
     gate = LLMRelevanceGate(tmp_path, config=config)
     # Write a recent last_reflection to trigger cooldown
-    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path = tmp_path / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(UTC)
     last_path.write_text(json.dumps({
@@ -1020,7 +1020,7 @@ def test_relevance_gate_corrupt_state_keeps_cooldown_active(
     from nuself.reflection import LLMRelevanceGate
 
     gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
-    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path = tmp_path / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
 
@@ -1040,7 +1040,7 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
         raise OSError("audit store unavailable")
 
     gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
-    last_path = tmp_path / "private" / "runtime" / "last_reflection.json"
+    last_path = tmp_path / "runtime" / "last_reflection.json"
     last_path.parent.mkdir(parents=True, exist_ok=True)
     last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
     monkeypatch.setattr(

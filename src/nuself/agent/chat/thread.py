@@ -149,7 +149,7 @@ class ThreadStore:
 
     def __init__(self, project_root: Path | None = None) -> None:
         paths = runtime_paths(project_root)
-        self._threads_dir = paths.private_root / "threads"
+        self._threads_dir = paths.authority_root / "threads"
 
     def load(self, thread_id: str) -> ThreadState:
         with self._locked(thread_id):

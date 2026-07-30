@@ -57,6 +57,7 @@ from nuself.cli.commands.scope import (
     handle_dev_config,
     handle_dev_paths,
     handle_init,
+    handle_migrate_layout,
 )
 from nuself.cli.commands.reflections import (
     handle_reflection_archive,
@@ -145,6 +146,38 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         ),
         handle_init,
     )
+    migrate_layout_parser = subparsers.add_parser(
+        "migrate-layout",
+        help="Explicitly migrate a legacy private/ layout.",
+    )
+    migrate_layout_parser.add_argument(
+        "--from",
+        dest="source",
+        type=Path,
+        required=True,
+        metavar="PATH",
+    )
+    migration_target = migrate_layout_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    migration_target.add_argument(
+        "--to",
+        choices=("user",),
+        help="Migrate to the default user authority.",
+    )
+    migration_target.add_argument(
+        "--to-local",
+        action="store_true",
+        help="Migrate to ./.nuself.",
+    )
+    migration_target.add_argument(
+        "--workspace",
+        dest="migration_workspace",
+        type=Path,
+        metavar="PATH",
+        help="Migrate to PATH/.nuself.",
+    )
+    bind_handler(migrate_layout_parser, handle_migrate_layout)
 
     daemon_parser = subparsers.add_parser(
         "daemon",

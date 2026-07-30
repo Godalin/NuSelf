@@ -165,7 +165,7 @@ def test_invalid_endpoint_state_is_observable_and_uses_config_order(
 ) -> None:
     from nuself.llm import _load_llm_state  # pyright: ignore[reportPrivateUsage]
 
-    state_path = tmp_path / "private" / "runtime" / "llm_state.json"
+    state_path = tmp_path / "runtime" / "llm_state.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text(raw, encoding="utf-8")
 
@@ -189,7 +189,7 @@ def test_stale_endpoint_state_is_observable_and_uses_config_order(
 ) -> None:
     from nuself.llm import _load_llm_state  # pyright: ignore[reportPrivateUsage]
 
-    state_path = tmp_path / "private" / "runtime" / "llm_state.json"
+    state_path = tmp_path / "runtime" / "llm_state.json"
     state_path.parent.mkdir(parents=True)
     state_path.write_text(
         '{"schema_version": 1, "active_endpoint_index": 2}',
@@ -214,5 +214,5 @@ def test_invalid_endpoint_state_is_not_written(
     with pytest.raises(ValueError, match="non-negative integer"):
         _save_llm_state(tmp_path, index)
     assert not (
-        tmp_path / "private" / "runtime" / "llm_state.json"
+        tmp_path / "runtime" / "llm_state.json"
     ).exists()

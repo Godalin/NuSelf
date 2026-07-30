@@ -823,13 +823,42 @@ def test_ping_forwards_readiness_timeout(
         return DaemonResponse(
             request_id="ping-request",
             status="ok",
-            payload=MessagePayload(message="pong").to_wire(),
+            payload={
+                "message": "pong",
+                "authority_id": runtime_paths(tmp_path).scope.authority_id,
+            },
         )
 
     monkeypatch.setattr(client, "request", fake_request)
 
     assert client.ping(tmp_path, timeout=0.125) is True
     assert captured_timeout == 0.125
+
+
+def test_ping_rejects_daemon_for_another_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        del request_type, payload, project_root, timeout
+        return DaemonResponse(
+            request_id="ping-request",
+            status="ok",
+            payload={
+                "message": "pong",
+                "authority_id": "v1-wrong-authority",
+            },
+        )
+
+    monkeypatch.setattr(client, "request", fake_request)
+
+    assert client.ping(tmp_path) is False
 
 
 def test_shutdown_forwards_remaining_timeout(

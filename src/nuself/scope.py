@@ -6,6 +6,7 @@ import hashlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
+import tempfile
 from typing import Literal, Mapping
 
 ScopeKind = Literal["user", "workspace"]
@@ -60,6 +61,7 @@ class RuntimePaths:
     exports_dir: Path
     imports_dir: Path
     runtime_dir: Path
+    socket_runtime_dir: Path
     socket_path: Path
     pid_path: Path
     daemon_lock_path: Path
@@ -72,13 +74,6 @@ class RuntimePaths:
         """Temporary internal bridge while composition callers migrate."""
 
         return self.authority_root
-
-    @property
-    def private_root(self) -> Path:
-        """Temporary internal bridge while storage callers migrate."""
-
-        return self.authority_root
-
 
 def resolve_scope(
     *,
@@ -126,6 +121,7 @@ def resolve_runtime_paths(scope: NuSelfScope) -> RuntimePaths:
     root = scope.root
     runtime_dir = root / "runtime"
     logs_dir = root / "logs"
+    socket_runtime_dir = _socket_runtime_dir()
     return RuntimePaths(
         scope=scope,
         authority_root=root,
@@ -137,7 +133,8 @@ def resolve_runtime_paths(scope: NuSelfScope) -> RuntimePaths:
         exports_dir=root / "exports",
         imports_dir=root / "imports",
         runtime_dir=runtime_dir,
-        socket_path=runtime_dir / "nuself.sock",
+        socket_runtime_dir=socket_runtime_dir,
+        socket_path=socket_runtime_dir / f"{scope.authority_id}.sock",
         pid_path=runtime_dir / "nuself.pid",
         daemon_lock_path=runtime_dir / "nuself.lock",
         daemon_log_path=logs_dir / "daemon.log",
@@ -149,7 +146,7 @@ def resolve_runtime_paths(scope: NuSelfScope) -> RuntimePaths:
 def scope_from_authority_root(root: Path) -> NuSelfScope:
     """Construct a scope for an already-resolved internal authority root."""
 
-    authority_root = _canonical(root)
+    authority_root = root.expanduser().absolute()
     return NuSelfScope(
         kind="user",
         root=authority_root,
@@ -175,11 +172,21 @@ def _resolve_user_root(
     return home / _DEFAULT_HOME_NAME
 
 
+def _socket_runtime_dir() -> Path:
+    xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg_runtime:
+        candidate = Path(xdg_runtime).expanduser()
+        if candidate.is_absolute():
+            return candidate / "nuself"
+    return Path(tempfile.gettempdir()) / f"nuself-{os.getuid()}"
+
+
 def _canonical(path: Path) -> Path:
     return path.expanduser().resolve(strict=False)
 
 
 def _authority_id(kind: ScopeKind, root: Path) -> str:
-    identity = f"{_AUTHORITY_ID_VERSION}\0{kind}\0{root}".encode()
+    del kind
+    identity = f"{_AUTHORITY_ID_VERSION}\0{root}".encode()
     digest = hashlib.sha256(identity).hexdigest()[:24]
     return f"{_AUTHORITY_ID_VERSION}-{digest}"

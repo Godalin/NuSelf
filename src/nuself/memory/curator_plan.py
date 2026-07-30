@@ -334,7 +334,7 @@ class MemoryCuratorPlanStore:
 
         validate_curator_thread_id(thread_id)
         return MemoryCuratorPlanLock(
-            self._paths.private_root
+            self._paths.authority_root
             / "memory"
             / "locks"
             / f"{thread_id}.lock"
@@ -343,7 +343,7 @@ class MemoryCuratorPlanStore:
     def _path(self, thread_id: str) -> Path:
         validate_curator_thread_id(thread_id)
         return (
-            self._paths.private_root
+            self._paths.authority_root
             / "memory"
             / "plans"
             / f"{thread_id}.json"

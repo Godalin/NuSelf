@@ -102,8 +102,8 @@ def test_local_and_workspace_are_mutually_exclusive(tmp_path: Path) -> None:
         resolve_scope(local=True, workspace=tmp_path, environ={})
 
 
-def test_authority_id_is_stable_and_scope_sensitive(tmp_path: Path) -> None:
-    root = tmp_path / "same"
+def test_authority_id_is_stable_and_root_sensitive(tmp_path: Path) -> None:
+    root = tmp_path / ".nuself"
     user = resolve_scope(
         user_home=root.parent,
         environ={"NUSELF_HOME": str(root)},
@@ -112,11 +112,13 @@ def test_authority_id_is_stable_and_scope_sensitive(tmp_path: Path) -> None:
         user_home=root.parent,
         environ={"NUSELF_HOME": str(root)},
     )
-    workspace = resolve_scope(workspace=root.parent, environ={})
+    same_root_workspace = resolve_scope(workspace=tmp_path, environ={})
+    other_workspace = resolve_scope(workspace=tmp_path / "other", environ={})
 
     assert user.authority_id == repeated.authority_id
     assert user.authority_id.startswith("v1-")
-    assert user.authority_id != workspace.authority_id
+    assert user.authority_id == same_root_workspace.authority_id
+    assert user.authority_id != other_workspace.authority_id
 
 
 def test_scope_is_frozen(tmp_path: Path) -> None:
@@ -148,7 +150,9 @@ def test_runtime_paths_derive_every_location_from_selected_authority(
     assert paths.exports_dir == workspace_root / ".nuself" / "exports"
     assert paths.imports_dir == workspace_root / ".nuself" / "imports"
     assert paths.runtime_dir == workspace_root / ".nuself" / "runtime"
-    assert paths.socket_path == workspace_root / ".nuself" / "runtime" / "nuself.sock"
+    assert paths.socket_path.parent == paths.socket_runtime_dir
+    assert paths.socket_path.name == f"{scope.authority_id}.sock"
+    assert len(str(paths.socket_path)) < 100
 
 
 def test_scope_rejects_incoherent_manual_construction(tmp_path: Path) -> None:

@@ -783,7 +783,7 @@ class MemoryCurator:
 
     def _cursor_path(self, thread_id: str) -> Path:
         validate_curator_thread_id(thread_id)
-        return self._paths.private_root / "memory" / "cursors" / f"{thread_id}.json"
+        return self._paths.authority_root / "memory" / "cursors" / f"{thread_id}.json"
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"

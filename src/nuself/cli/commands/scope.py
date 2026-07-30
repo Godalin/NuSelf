@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 
 from nuself.config import ConfigSystem
+from nuself.layout_migration import migrate_legacy_layout
 from nuself.private_fs import ensure_managed_directory
-from nuself.scope import NuSelfScope, resolve_runtime_paths
+from nuself.scope import NuSelfScope, resolve_runtime_paths, resolve_scope
 
 
 def handle_init(args: argparse.Namespace) -> int:
@@ -50,6 +51,7 @@ def handle_dev_paths(args: argparse.Namespace) -> int:
     print(f"exports: {paths.exports_dir}")
     print(f"imports: {paths.imports_dir}")
     print(f"runtime: {paths.runtime_dir}")
+    print(f"socket_runtime: {paths.socket_runtime_dir}")
     print(f"socket: {paths.socket_path}")
     return 0
 
@@ -66,6 +68,20 @@ def handle_dev_config(args: argparse.Namespace) -> int:
     ):
         print(f"  {key}: {value}")
     print(f"selected_config: {paths.config_file}")
+    return 0
+
+
+def handle_migrate_layout(args: argparse.Namespace) -> int:
+    target_scope = resolve_scope(
+        local=args.to_local,
+        workspace=args.migration_workspace,
+    )
+    target = migrate_legacy_layout(args.source, target_scope)
+    print(
+        f"Migrated legacy layout to {target_scope.kind} authority: "
+        f"{target}"
+    )
+    print(f"Source preserved: {args.source.expanduser().absolute()}")
     return 0
 
 

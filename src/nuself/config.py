@@ -59,6 +59,7 @@ def ensure_runtime_dirs(paths: RuntimePaths) -> None:
     ensure_private_directory(paths.authority_root)
     ensure_private_directory(paths.runtime_dir)
     ensure_private_directory(paths.logs_dir)
+    ensure_private_directory(paths.socket_runtime_dir)
 
 
 # ============================================================================
@@ -390,7 +391,7 @@ class ConfigSystem:
         if config_path and config_path.exists():
             if project_root is not None:
                 ensure_private_directory(
-                    runtime_paths(project_root).private_root
+                    runtime_paths(project_root).authority_root
                 )
             harden_private_file(config_path)
             try:

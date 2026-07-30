@@ -53,6 +53,44 @@ class MessagePayload:
 
 
 @dataclass(frozen=True)
+class DaemonIdentityPayload:
+    """Readiness response bound to one state authority."""
+
+    message: str
+    authority_id: str
+
+    def to_wire(self) -> dict[str, JsonValue]:
+        return {
+            "message": self.message,
+            "authority_id": self.authority_id,
+        }
+
+    @classmethod
+    def from_wire(
+        cls,
+        payload: dict[str, JsonValue],
+    ) -> DaemonIdentityPayload:
+        _expect_fields(
+            payload,
+            required=frozenset({"message", "authority_id"}),
+        )
+        return cls(
+            message=_required_string(
+                payload,
+                "message",
+                context="daemon identity response",
+                allow_blank=False,
+            ),
+            authority_id=_required_string(
+                payload,
+                "authority_id",
+                context="daemon identity response",
+                allow_blank=False,
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class ChatRequestPayload:
     """Validated inputs for one daemon chat request."""
 

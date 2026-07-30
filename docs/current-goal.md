@@ -20,10 +20,10 @@ durable user-owned state by default while explicit workspaces remain isolated.
    implicit repository-root path selection.
 3. [complete] Layer user and workspace configuration while selecting exactly one state
    authority per invocation.
-4. [in progress] Add explicit CLI scope selection, initialization, path inspection, and
+4. [complete] Add explicit CLI scope selection, initialization, path inspection, and
    legacy `private/` migration.
-5. Isolate daemon lifecycle and transport resources by authority identity.
-6. Migrate all composition roots and domain callers, then update public
+5. [complete] Isolate daemon lifecycle and transport resources by authority identity.
+6. [in progress] Migrate all composition roots and domain callers, then update public
    documentation and v0.3.1 release metadata.
 7. Run the complete local and six-platform release gates, integrate coherent
    commits, publish, and verify the final release.
@@ -45,5 +45,10 @@ durable user-owned state by default while explicit workspaces remain isolated.
 - User/workspace CLI selection, `init`, `dev paths`, layered `dev config`, and
   authority-root chat/config tests: 245 passed. Full-source Pyright remains at
   0 errors and 0 warnings.
-- Pending: CLI/migration and daemon-isolation regression suites.
-- Pending: complete pytest, Pyright, build, clean-wheel smoke, and release CI.
+- CLI scope and command regression suite: 493 passed.
+- Daemon/config isolation regression suite: 274 passed.
+- Legacy migration suite: 8 passed, including concurrent publication and live
+  SQLite WAL preservation.
+- Complete local unit suite: 2471 passed on Python 3.14.
+- Full-source Pyright: 0 errors and 0 warnings.
+- Pending: lock/build/clean-wheel smoke and six-platform release CI.

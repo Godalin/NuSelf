@@ -179,7 +179,7 @@ def test_atomic_file_migration_publishes_only_validated_database(
     result, database = migrate_file_backend_atomically(tmp_path)
 
     assert result == {"memory_entries": 1}
-    assert database == tmp_path / "private" / "nuself.sqlite"
+    assert database == tmp_path / "nuself.sqlite"
     assert database.is_file()
     assert not list(database.parent.glob("nuself.sqlite.migrating-*"))
     destination = storage.open_sqlite_backend(db_path=database)
@@ -225,7 +225,7 @@ def test_atomic_file_migration_failure_never_publishes_partial_database(
     with pytest.raises(OSError, match="injected migration failure"):
         migrate_file_backend_atomically(tmp_path)
 
-    private = tmp_path / "private"
+    private = tmp_path
     assert not (private / "nuself.sqlite").exists()
     assert not list(private.glob("nuself.sqlite.migrating-*"))
 
@@ -233,8 +233,8 @@ def test_atomic_file_migration_failure_never_publishes_partial_database(
 def test_atomic_file_migration_refuses_existing_destination(
     tmp_path: Path,
 ) -> None:
-    destination = tmp_path / "private" / "nuself.sqlite"
-    destination.parent.mkdir(parents=True)
+    destination = tmp_path / "nuself.sqlite"
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(b"existing authoritative bytes")
 
     with pytest.raises(FileExistsError, match="already exists"):
@@ -246,8 +246,8 @@ def test_atomic_file_migration_refuses_existing_destination(
 def test_atomic_file_migration_refuses_orphan_final_sidecar(
     tmp_path: Path,
 ) -> None:
-    sidecar = tmp_path / "private" / "nuself.sqlite-wal"
-    sidecar.parent.mkdir(parents=True)
+    sidecar = tmp_path / "nuself.sqlite-wal"
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
     sidecar.write_bytes(b"orphaned migration state")
 
     with pytest.raises(FileExistsError, match="sidecar"):
@@ -262,10 +262,9 @@ def test_auto_backend_ignores_unpublished_migration_database(
 ) -> None:
     temporary = (
         tmp_path
-        / "private"
         / "nuself.sqlite.migrating-interrupted"
     )
-    temporary.parent.mkdir(parents=True)
+    temporary.parent.mkdir(parents=True, exist_ok=True)
     temporary.write_bytes(b"not published")
 
     backend = auto_backend(tmp_path)
@@ -278,7 +277,7 @@ def test_file_backend_rejects_published_sqlite_authority(
 ) -> None:
     database = storage._create_sqlite_backend(
         tmp_path,
-        db_path=tmp_path / "private" / "nuself.sqlite",
+        db_path=tmp_path / "nuself.sqlite",
     )
     database.close()
 
@@ -354,7 +353,7 @@ def test_atomic_file_migration_rejects_missing_record_id(
     ):
         migrate_file_backend_atomically(tmp_path)
 
-    private = tmp_path / "private"
+    private = tmp_path
     assert not (private / "nuself.sqlite").exists()
     assert not list(private.glob("nuself.sqlite.migrating-*"))
 
@@ -362,16 +361,16 @@ def test_atomic_file_migration_rejects_missing_record_id(
 def test_atomic_file_migration_rejects_corrupt_source_record(
     tmp_path: Path,
 ) -> None:
-    record = tmp_path / "private" / "memory" / "entries" / "corrupt.json"
+    record = tmp_path / "memory" / "entries" / "corrupt.json"
     record.parent.mkdir(parents=True)
     record.write_text("{not-json", encoding="utf-8")
 
     with pytest.raises(ValueError):
         migrate_file_backend_atomically(tmp_path)
 
-    assert not (tmp_path / "private" / "nuself.sqlite").exists()
+    assert not (tmp_path / "nuself.sqlite").exists()
     assert not list(
-        (tmp_path / "private").glob("nuself.sqlite.migrating-*")
+        (tmp_path).glob("nuself.sqlite.migrating-*")
     )
 
 
@@ -380,7 +379,6 @@ def test_atomic_file_migration_rejects_nested_source_path(
 ) -> None:
     nested = (
         tmp_path
-        / "private"
         / "memory"
         / "entries"
         / "unexpected-directory"
@@ -390,7 +388,7 @@ def test_atomic_file_migration_rejects_nested_source_path(
     with pytest.raises(ValueError, match="regular file"):
         migrate_file_backend_atomically(tmp_path)
 
-    assert not (tmp_path / "private" / "nuself.sqlite").exists()
+    assert not (tmp_path / "nuself.sqlite").exists()
 
 
 def test_atomic_file_migration_reports_visible_uncertain_publication(
@@ -403,7 +401,7 @@ def test_atomic_file_migration_reports_visible_uncertain_publication(
         {"id": "mem_atomic"},
     )
     source.close()
-    destination = tmp_path / "private" / "nuself.sqlite"
+    destination = tmp_path / "nuself.sqlite"
 
     def fail_directory_sync(path: Path) -> None:
         assert path == destination.parent
@@ -446,7 +444,7 @@ def test_atomic_file_migration_rejects_active_file_runtime(
         ):
             migrate_file_backend_atomically(tmp_path)
 
-        assert not (tmp_path / "private" / "nuself.sqlite").exists()
+        assert not (tmp_path / "nuself.sqlite").exists()
     finally:
         release.set()
         process.join(timeout=30)
@@ -526,8 +524,8 @@ def test_real_v025_private_fixture_migrates_and_reads_in_current_runtime(
         / "v0.2.5"
         / "private"
     )
-    private_root = tmp_path / "private"
-    shutil.copytree(fixture, private_root)
+    private_root = tmp_path
+    shutil.copytree(fixture, private_root, dirs_exist_ok=True)
     with pytest.warns(
         RuntimeWarning,
         match="deprecated_v025_langmem_adapter",

@@ -153,8 +153,7 @@ def _open_v1_authority_after_signal(
 def test_sqlite_backend_hardens_database_directory_and_sidecars(
     tmp_path: Path,
 ) -> None:
-    private = tmp_path / "private"
-    private.mkdir(mode=0o755)
+    private = tmp_path
     private.chmod(0o755)
     database = private / "nuself.sqlite"
     create_sqlite_backend(
@@ -375,13 +374,14 @@ def test_sqlite_open_rejects_redirected_private_before_side_effects(
     before_entries = tuple(
         sorted(path.name for path in external.iterdir())
     )
-    (project / "private").symlink_to(
+    authority = project / ".nuself"
+    authority.symlink_to(
         external,
         target_is_directory=True,
     )
 
     with pytest.raises(OSError, match="actual directory"):
-        opener(project, project / "private" / "nuself.sqlite")
+        opener(authority, authority / "nuself.sqlite")
 
     assert database.read_bytes() == before_bytes
     assert stat.S_IMODE(database.stat().st_mode) == 0o644
@@ -409,8 +409,7 @@ def test_open_rejects_unrecognized_database_without_mutation(
     kind: str,
     opener: Callable[[Path, Path], object],
 ) -> None:
-    private = tmp_path / "private"
-    private.mkdir()
+    private = tmp_path
     database = private / "nuself.sqlite"
     if kind == "empty":
         database.touch()
@@ -609,7 +608,7 @@ def test_repositories_share_the_project_default_backend(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    backend = FileStorageBackend(tmp_path / "private")
+    backend = FileStorageBackend(tmp_path)
     calls: list[Path | None] = []
 
     def default_backend(project_root: Path | None = None) -> StorageBackend:
@@ -647,7 +646,7 @@ def test_reset_closes_backend_used_by_default_repository(
 ) -> None:
     backend = create_sqlite_backend(
         tmp_path,
-        db_path=tmp_path / "private" / "nuself.sqlite",
+        db_path=tmp_path / "nuself.sqlite",
     )
     set_default_backend(backend, tmp_path)
     repository = MemoryEntryRepository(tmp_path)
@@ -1075,7 +1074,7 @@ def test_authority_open_does_not_run_thought_pack_integrity_scan(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    database = tmp_path / "private" / "nuself.sqlite"
+    database = tmp_path / "nuself.sqlite"
     create_sqlite_backend(tmp_path, db_path=database).close()
 
     def unexpected_integrity_scan(
@@ -1117,7 +1116,7 @@ def test_external_sqlite_open_preserves_parent_and_file_modes(
 def test_cross_process_live_writer_checkpoint_and_repeated_open(
     tmp_path: Path,
 ) -> None:
-    database = tmp_path / "private" / "nuself.sqlite"
+    database = tmp_path / "nuself.sqlite"
     create_sqlite_backend(tmp_path, db_path=database).close()
     context = _spawn_context()
     ready = context.Event()
@@ -1163,7 +1162,7 @@ def test_cross_process_live_writer_checkpoint_and_repeated_open(
 def test_open_recovers_committed_uncheckpointed_wal_after_crash(
     tmp_path: Path,
 ) -> None:
-    database = tmp_path / "private" / "nuself.sqlite"
+    database = tmp_path / "nuself.sqlite"
     create_sqlite_backend(tmp_path, db_path=database).close()
     context = _spawn_context()
     committed = context.Event()
@@ -1780,8 +1779,8 @@ def _create_v1_database(
 def test_cross_process_first_open_upgrades_v1_once(
     tmp_path: Path,
 ) -> None:
-    private = tmp_path / "private"
-    private.mkdir(mode=0o700)
+    private = tmp_path
+    private.chmod(0o700)
     database = private / "nuself.sqlite"
     _create_v1_database(
         database,

@@ -25,7 +25,8 @@ def test_runtime_paths_are_under_authority_root(tmp_path: Path) -> None:
     assert paths.authority_root == tmp_path
     assert paths.runtime_dir == tmp_path / "runtime"
     assert paths.logs_dir == tmp_path / "logs"
-    assert paths.socket_path == tmp_path / "runtime" / "nuself.sock"
+    assert paths.socket_path.parent == paths.socket_runtime_dir
+    assert paths.socket_path.name == f"{paths.scope.authority_id}.sock"
     assert paths.daemon_lock_path == tmp_path / "runtime" / "nuself.lock"
     assert (
         paths.daemon_process_log_path

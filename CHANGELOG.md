@@ -11,6 +11,13 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   `--workspace PATH` select isolated `.nuself` state. Workspace configuration
   inherits user defaults without merging databases or runtime state, and
   `init`, `dev paths`, and layered `dev config` expose the selected scope.
+  Authority-specific daemons use short sockets keyed by a verified authority
+  ID while persistent lifecycle metadata remains inside the authority.
+- Added explicit, fail-closed `migrate-layout` publication from a v0.3.0
+  checkout-local layout to a user or workspace authority. Migration preserves
+  the source, serializes concurrent publishers, uses SQLite online backup for
+  live databases, omits stale runtime/lock artifacts, validates staged state,
+  and never merges with or overwrites an existing target.
 
 ## v0.3.0 - 2026-07-30
 

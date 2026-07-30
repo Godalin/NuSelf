@@ -24,8 +24,8 @@ class PrivateWorkspaceStore:
         paths = runtime_paths(project_root)
         self._project_root = project_root
         self._scope = scope
-        self._root = paths.private_root / "workspaces" / scope
-        self._db_path = paths.private_root / "nuself.sqlite"
+        self._root = paths.authority_root / "workspaces" / scope
+        self._db_path = paths.authority_root / "nuself.sqlite"
 
     @property
     def scope(self) -> str:

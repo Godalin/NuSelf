@@ -7,6 +7,7 @@ from pathlib import Path
 
 from nuself.agent.chat import ConversationGraphRuntime
 from nuself.config import ConfigSystem
+from nuself.config import runtime_paths
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
     ReasonExportWorker,
@@ -30,6 +31,7 @@ class DaemonState:
 
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
+        self.authority_id = runtime_paths(project_root).scope.authority_id
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()

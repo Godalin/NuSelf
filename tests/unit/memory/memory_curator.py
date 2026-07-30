@@ -179,7 +179,6 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         assert isinstance(json.loads(line), dict)
     cursor_path = (
         tmp_path
-        / "private"
         / "memory"
         / "cursors"
         / "default.json"
@@ -222,7 +221,6 @@ def test_memory_curator_rejects_corrupt_cursor_without_replay(
     )
     cursor_path = (
         tmp_path
-        / "private"
         / "memory"
         / "cursors"
         / "default.json"
@@ -342,7 +340,6 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
     assert len(MemoryEntryRepository(tmp_path).list()) == int(auto_accept)
     cursor_path = (
         tmp_path
-        / "private"
         / "memory"
         / "cursors"
         / "default.json"
@@ -423,7 +420,6 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
     assert MemoryCandidateRepository(tmp_path).list() == []
     assert not (
         tmp_path
-        / "private"
         / "memory"
         / "cursors"
         / "default.json"
@@ -450,7 +446,6 @@ def test_memory_curator_rejects_incompatible_plan_without_model_replay(
     )
     plan_path = (
         tmp_path
-        / "private"
         / "memory"
         / "plans"
         / "default.json"
@@ -642,7 +637,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     assert agent.calls == []
     assert MemoryCandidateRepository(tmp_path).list() == []
     assert not (
-        tmp_path / "private" / "memory" / "cursors" / "default.json"
+        tmp_path / "memory" / "cursors" / "default.json"
     ).exists()
     events = [
         event
@@ -821,7 +816,7 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
             next_message_index=6,
         )
     )
-    cursor_path = tmp_path / "private" / "memory" / "cursors" / "default.json"
+    cursor_path = tmp_path / "memory" / "cursors" / "default.json"
     cursor_path.parent.mkdir(parents=True)
     cursor_path.write_text('{"thread_id":"default","processed_message_count":4}\n', encoding="utf-8")
     agent = _curator_agent(
@@ -1413,7 +1408,6 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
 
     cursor_path = (
         tmp_path
-        / "private"
         / "memory"
         / "cursors"
         / "default.json"

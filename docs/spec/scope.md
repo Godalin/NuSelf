@@ -17,8 +17,9 @@ discover `.nuself` directories in parents and does not switch scope merely
 because one exists in the current directory.
 
 The canonical authority root determines a stable `authority_id`. The ID is a
-versioned cryptographic digest of the scope kind and canonical root, suitable
-for filenames and protocol comparison. It is an identity, not a secret.
+versioned cryptographic digest of the canonical root, suitable for filenames
+and protocol comparison. Selecting the same root through different explicit
+means identifies the same authority. The ID is an identity, not a secret.
 
 ## Resolved Paths
 

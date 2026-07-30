@@ -14,6 +14,7 @@ from nuself.daemon.activity import (
     ActivitySubscriptionNotFound,
 )
 from nuself.daemon.payloads import (
+    DaemonIdentityPayload,
     ActivityCloseRequestPayload,
     ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
@@ -56,6 +57,7 @@ class DaemonRequestPayloadError(ProtocolError):
 
 class DaemonRequestState(Protocol):
     project_root: Path
+    authority_id: str
     conversation_runtime: ConversationGraphRuntime
     memory_curator: MemoryCurator
     shutdown_requested: threading.Event
@@ -137,11 +139,13 @@ def _handle_ping(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    del state
     _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
     return DaemonResponse.ok(
         request,
-        MessagePayload("pong").to_wire(),
+        DaemonIdentityPayload(
+            message="pong",
+            authority_id=state.authority_id,
+        ).to_wire(),
     )
 
 

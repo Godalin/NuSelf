@@ -11,7 +11,7 @@ def test_dev_eval_notifications_counts_structured_scenarios(
 ) -> None:
     result = main(
         [
-            "--project-root",
+            "--workspace",
             str(tmp_path),
             "dev",
             "eval",
