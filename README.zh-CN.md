@@ -54,6 +54,10 @@ checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file
 `nuself dev db-schema` 对 storage authority 是只读的：它要求当前已有活动的
 SQLite database，否则只会提示先执行 migration，不会创建
 `private/nuself.sqlite`。
+打开已有 SQLite authority 时，系统会先验证受管理的父目录，并通过无副作用的
+只读连接确认 NuSelf schema。被重定向的父目录、空文件、无关数据库、不完整
+schema、损坏数据库和不受支持的未来 schema，都会在 chmod、可写连接、schema
+升级或创建 sidecar 前 fail closed；只有 migration 可以初始化新数据库。
 文件后端 record 删除成功还要求同步 parent directory；若删除已可见但 crash
 durability 未知，系统会用独立 typed error 报告，而不是当作普通 unlink 失败。
 Memory candidate acceptance 对 target 和 review record 使用同一语义：若候选已

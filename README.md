@@ -63,6 +63,11 @@ custom migration destinations are not authority switches.
 `nuself dev db-schema` is read-only with respect to storage authority: it
 requires an already-active SQLite database and otherwise directs the user to
 run migration without creating `private/nuself.sqlite`.
+Opening an existing SQLite authority first validates the managed parent and
+NuSelf schema through a side-effect-free read-only connection. Redirected
+parents, empty or unrelated databases, incomplete schemas, corruption, and
+unsupported future schemas fail closed before chmod, writable connection,
+schema upgrade, or sidecar creation; only migration may initialize a database.
 Successful file-backed record deletion now includes parent-directory
 synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.

@@ -594,7 +594,13 @@ def _create_sqlite_backend(
 ) -> SqliteStorageBackend:
     """Create one unpublished SQLite database for atomic migration."""
     create_private_file(db_path)
-    return open_sqlite_backend(project_root, db_path=db_path)
+    from nuself.storage_sqlite import SqliteStorageBackend
+
+    return SqliteStorageBackend(
+        db_path,
+        project_root=project_root,
+        _initialize=True,
+    )
 
 
 def auto_backend(project_root: Path | None = None) -> StorageBackend:

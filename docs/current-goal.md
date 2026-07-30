@@ -5,7 +5,9 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The remaining v0.3.0 release-preparation findings are closed.
+Close the final v0.3.0 SQLite authority blockers: reject redirected managed
+parents before any database side effect, and refuse to adopt an empty,
+unrelated, or malformed canonical SQLite file.
 
 ## Active Branch
 
@@ -13,8 +15,15 @@ Idle. The remaining v0.3.0 release-preparation findings are closed.
 
 ## Ordered Work
 
-1. Discuss and specify stable `v0.3.0` promotion before changing release
-   metadata or `main`.
+1. Validate the managed database parent and final file type before any chmod,
+   SQLite connection, schema mutation, or sidecar creation.
+2. Require every opened database to prove NuSelf schema identity through a
+   read-only connection before reopening it for controlled v1/v2 operation;
+   keep new database initialization migration-private.
+3. Add side-effect-free symlink-parent regressions for both automatic and
+   explicit open paths plus empty, unrelated, malformed, and v1 upgrade cases.
+4. Run complete release gates, push the functional commits, and require the
+   final six-platform CI matrix before returning this board to idle.
 
 ## Out Of Scope
 
@@ -26,31 +35,16 @@ Idle. The remaining v0.3.0 release-preparation findings are closed.
 
 ## Completion Evidence
 
-- SQLite creation is now migration-private and limited to unpublished
-  temporary databases; runtime and direct backend opening require an existing
-  regular file. `dev db-schema` reuses the CLI-owned active backend and fails
-  on file authority without creating canonical SQLite or hiding an existing
-  record. The frozen v0.2.5 fixture now loads its historical config, migrates
-  through the exclusive atomic authority switch, reopens through
-  `auto_backend()`, decodes every current repository record, and proves file
-  authority cannot be reacquired. Focused release-storage verification:
-  135 passed; locked Pyright reported 0 errors and 0 warnings.
-- Every strict configuration model now rejects non-finite numbers, with YAML
-  regressions for positive infinity, negative infinity, and NaN across both
-  provider and chat timeout fields. Published-schema tests select and check
-  the validator from the document's declared Draft 7 dialect before comparing
-  acceptance. Focused configuration verification: 44 passed; locked Pyright
-  reported 0 errors and 0 warnings.
-- The notification CLI lifecycle regression now explicitly selects the
-  deterministic log adapter instead of invoking the host macOS notification
-  service, so the release gate does not depend on an interactive desktop.
-- Final local verification reported 2418 passed. Locked Pyright reported 0
-  errors and 0 warnings; `uv lock --check`, `git diff --check`, the
-  byte-identical official v0.2.5 config fixture check, and
-  `nuself 0.3.0rc1` passed.
-- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
-  environment installed only the wheel, imported `nuself.cli` and
-  `nuself.llm`, and reported `nuself 0.3.0rc1`.
-- GitHub Actions run `30514114057` passed on Ubuntu and macOS with Python
-  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
-  suite, distribution build, and clean-wheel smoke test for commit `f021ba7`.
+- Managed SQLite parent validation now precedes every file operation, and
+  existing authority identity is checked through a read-only immutable
+  connection before chmod, writable open, PRAGMA, schema upgrade, or sidecar
+  creation. New database initialization remains migration-private.
+- Automatic and explicit opening regressions prove a symlinked managed parent
+  leaves the external database bytes, file and directory modes, tables, and
+  sidecars unchanged. Empty, unrelated, and incomplete canonical databases
+  also fail closed without mutation, while supported NuSelf databases retain
+  controlled upgrade and concurrent-open behavior.
+- Focused storage verification reported 139 passed. Locked Pyright reported 0
+  errors and 0 warnings; `git diff --check` passed.
+- Complete local release gates, distribution verification, push, and final
+  six-platform CI are pending.

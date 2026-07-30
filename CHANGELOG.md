@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Existing SQLite authority is now validated without side effects before it is
+  hardened or opened for writes. Redirected managed parents, empty files,
+  unrelated databases, incomplete schemas, corrupt databases, and unsupported
+  future schemas fail closed; only migration may initialize a new database.
 - `dev db-schema` now inspects only an already-active SQLite backend and cannot
   create an empty canonical database that hides file-backed data. SQLite
   opening requires an existing database; only atomic migration may create its

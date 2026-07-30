@@ -20,6 +20,7 @@ from nuself.private_fs import (
     ensure_private_directory,
     ensure_private_file,
     harden_private_file,
+    require_private_file,
 )
 from nuself.runtime import (
     decode_json_value,
@@ -163,6 +164,10 @@ class SqliteStorageUnsupportedVersionError(
     SqliteStorageLifecycleError
 ):
     """Raised when a database is newer than this runtime."""
+
+
+class SqliteStorageIdentityError(SqliteStorageLifecycleError):
+    """Raised when an existing database is not a NuSelf authority."""
 
 
 class ThoughtPackValidationError(ValueError):
@@ -430,6 +435,7 @@ class SqliteStorageBackend:
         db_path: Path,
         *,
         project_root: Path | None = None,
+        _initialize: bool = False,
     ) -> None:
         self._db_path = db_path
         self._project_root = (
@@ -441,6 +447,10 @@ class SqliteStorageBackend:
                 else db_path.parent
             )
         )
+        ensure_private_directory(db_path.parent)
+        require_private_file(db_path)
+        if not _initialize:
+            _validate_existing_nuself_database(db_path)
         harden_private_file(db_path)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._lock = threading.RLock()
@@ -452,6 +462,7 @@ class SqliteStorageBackend:
                 self._conn.execute("PRAGMA journal_mode=WAL")
                 self._conn.execute("PRAGMA synchronous=NORMAL")
                 self._init_schema()
+                self._checkpoint_schema_identity()
                 _harden_sqlite_sidecars(db_path)
         except BaseException as init_error:
             try:
@@ -552,6 +563,22 @@ class SqliteStorageBackend:
                 "(id TEXT PRIMARY KEY)"
             )
         self._conn.commit()
+
+    def _checkpoint_schema_identity(self) -> None:
+        """Keep authority metadata visible without consulting live WAL."""
+
+        status = self._conn.execute(
+            "PRAGMA wal_checkpoint(PASSIVE)"
+        ).fetchone()
+        if (
+            status is None
+            or len(status) != 3
+            or any(type(value) is not int for value in status)
+            or status[0] != 0
+        ):
+            raise RuntimeError(
+                "SQLite schema identity checkpoint failed"
+            )
 
     def _apply_v2(self) -> None:
         """Expand a legacy v1 payload object into v2 dynamic columns."""
@@ -811,7 +838,6 @@ def _backup_connection_to_path(
 
 
 def _harden_sqlite_sidecars(database: Path) -> None:
-    ensure_private_directory(database.parent)
     for suffix in ("-wal", "-shm", "-journal"):
         sidecar = database.with_name(f"{database.name}{suffix}")
         if sidecar.exists():
@@ -836,6 +862,8 @@ def _thought_pack_collection_count(
 
 def _validate_thought_pack_connection(
     connection: sqlite3.Connection,
+    *,
+    authority: bool = False,
 ) -> int:
     try:
         check_rows = connection.execute("PRAGMA quick_check").fetchall()
@@ -866,6 +894,12 @@ def _validate_thought_pack_connection(
                 "thought pack has an invalid schema version"
             )
         if version > SQLITE_SCHEMA_VERSION:
+            if authority:
+                raise SqliteStorageUnsupportedVersionError(
+                    "SQLite schema version "
+                    f"{version} is newer than supported version "
+                    f"{SQLITE_SCHEMA_VERSION}"
+                )
             raise ThoughtPackValidationError(
                 f"thought pack schema version {version} is newer than "
                 f"supported version {SQLITE_SCHEMA_VERSION}"
@@ -895,3 +929,39 @@ def _validate_thought_pack_connection(
         raise ThoughtPackValidationError(
             "thought pack is not a valid SQLite database"
         ) from exc
+
+
+def _validate_existing_nuself_database(source: Path) -> int:
+    """Validate authority identity through a read-only connection."""
+
+    try:
+        with _readonly_authority_identity(source) as connection:
+            return _validate_thought_pack_connection(
+                connection,
+                authority=True,
+            )
+    except SqliteStorageUnsupportedVersionError:
+        raise
+    except ThoughtPackValidationError as exc:
+        raise SqliteStorageIdentityError(
+            "existing SQLite database is not a valid NuSelf authority"
+        ) from exc
+
+
+@contextmanager
+def _readonly_authority_identity(
+    source: Path,
+) -> Generator[sqlite3.Connection, None, None]:
+    """Inspect checkpointed authority metadata without creating sidecars."""
+
+    source_uri = f"{source.resolve().as_uri()}?mode=ro&immutable=1"
+    try:
+        connection = sqlite3.connect(source_uri, uri=True)
+    except sqlite3.DatabaseError as exc:
+        raise ThoughtPackValidationError(
+            "SQLite authority is not a readable database"
+        ) from exc
+    try:
+        yield connection
+    finally:
+        connection.close()

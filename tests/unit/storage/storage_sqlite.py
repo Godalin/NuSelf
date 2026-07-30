@@ -10,7 +10,7 @@ from pathlib import Path
 import sqlite3
 import stat
 import threading
-from typing import cast
+from typing import Callable, cast
 
 import pytest
 
@@ -29,6 +29,7 @@ from nuself.storage import (
     DefaultBackendResetError,
     FileStorageBackend,
     StorageBackend,
+    auto_backend,
     get_default_backend,
     open_sqlite_backend,
     reset_default_backend,
@@ -42,11 +43,39 @@ from nuself.storage_sqlite import (
     SqliteStorageCheckpointError,
     SqliteStorageCloseError,
     SqliteStorageInitializationCleanupError,
+    SqliteStorageIdentityError,
     SqliteStorageUnsupportedVersionError,
     SqliteTransactionCleanupError,
     SqliteTransactionRollbackOnlyError,
     inspect_sqlite_thought_pack,
 )
+
+
+def _sqlite_table_names(database: Path) -> tuple[str, ...]:
+    connection = sqlite3.connect(
+        f"{database.resolve().as_uri()}?mode=ro&immutable=1",
+        uri=True,
+    )
+    try:
+        return tuple(
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' ORDER BY name"
+            ).fetchall()
+            if len(row) == 1 and isinstance(row[0], str)
+        )
+    finally:
+        connection.close()
+
+
+def _open_automatically(project: Path, database: Path) -> object:
+    del database
+    return auto_backend(project)
+
+
+def _open_explicitly(project: Path, database: Path) -> object:
+    return open_sqlite_backend(project, db_path=database)
 
 
 def test_sqlite_backend_hardens_database_directory_and_sidecars(
@@ -56,7 +85,11 @@ def test_sqlite_backend_hardens_database_directory_and_sidecars(
     private.mkdir(mode=0o755)
     private.chmod(0o755)
     database = private / "nuself.sqlite"
-    database.write_bytes(b"")
+    create_sqlite_backend(
+        tmp_path,
+        db_path=database,
+    ).close()
+    private.chmod(0o755)
     database.chmod(0o644)
 
     backend = SqliteStorageBackend(database, project_root=tmp_path)
@@ -232,6 +265,99 @@ def test_direct_sqlite_backend_requires_existing_database(
         SqliteStorageBackend(db_path)
 
     assert not db_path.exists()
+
+
+@pytest.mark.parametrize(
+    "opener",
+    [
+        pytest.param(_open_automatically, id="auto-backend"),
+        pytest.param(_open_explicitly, id="explicit-open"),
+    ],
+)
+def test_sqlite_open_rejects_redirected_private_before_side_effects(
+    tmp_path: Path,
+    opener: Callable[[Path, Path], object],
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    external = tmp_path / "external"
+    external.mkdir(mode=0o755)
+    database = external / "nuself.sqlite"
+    create_sqlite_backend(db_path=database).close()
+    external.chmod(0o755)
+    database.chmod(0o644)
+    before_bytes = database.read_bytes()
+    before_tables = _sqlite_table_names(database)
+    (project / "private").symlink_to(
+        external,
+        target_is_directory=True,
+    )
+
+    with pytest.raises(OSError, match="actual directory"):
+        opener(project, project / "private" / "nuself.sqlite")
+
+    assert database.read_bytes() == before_bytes
+    assert stat.S_IMODE(database.stat().st_mode) == 0o644
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
+    assert _sqlite_table_names(database) == before_tables
+    assert tuple(path.name for path in external.iterdir()) == (
+        "nuself.sqlite",
+    )
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["empty", "ordinary-sqlite", "incomplete-nuself"],
+)
+@pytest.mark.parametrize(
+    "opener",
+    [
+        pytest.param(_open_automatically, id="auto-backend"),
+        pytest.param(_open_explicitly, id="explicit-open"),
+    ],
+)
+def test_open_rejects_unrecognized_database_without_mutation(
+    tmp_path: Path,
+    kind: str,
+    opener: Callable[[Path, Path], object],
+) -> None:
+    private = tmp_path / "private"
+    private.mkdir()
+    database = private / "nuself.sqlite"
+    if kind == "empty":
+        database.touch()
+    else:
+        connection = sqlite3.connect(database)
+        try:
+            if kind == "ordinary-sqlite":
+                connection.execute("CREATE TABLE unrelated (value TEXT)")
+            else:
+                connection.execute(
+                    "CREATE TABLE _schema_version "
+                    "(version INTEGER NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO _schema_version VALUES (2)"
+                )
+            connection.commit()
+        finally:
+            connection.close()
+    database.chmod(0o644)
+    before_bytes = database.read_bytes()
+    before_tables = _sqlite_table_names(database)
+
+    with pytest.raises(
+        SqliteStorageIdentityError,
+        match="not a valid NuSelf authority",
+    ):
+        opener(tmp_path, database)
+
+    assert database.read_bytes() == before_bytes
+    assert stat.S_IMODE(database.stat().st_mode) == 0o644
+    assert _sqlite_table_names(database) == before_tables
+    assert not database.with_name(f"{database.name}-wal").exists()
+    assert not database.with_name(f"{database.name}-shm").exists()
+    assert not database.with_name(f"{database.name}-journal").exists()
 
 
 def test_shared_connection_read_waits_for_transaction_commit(

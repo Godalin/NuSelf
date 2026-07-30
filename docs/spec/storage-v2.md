@@ -178,7 +178,17 @@ must fail.
 
 Opening and creating SQLite storage are separate operations.
 `open_sqlite_backend()` and direct `SqliteStorageBackend` construction require
-an existing regular database file and never create one. Creation is an
+an existing regular database file and never create one. Before inspecting or
+hardening that file they validate its managed parent without following
+symlinks. Before any chmod, writable SQLite connection, PRAGMA, schema change,
+or sidecar creation, opening uses a read-only connection to require a valid
+NuSelf `_schema_version`, every known collection table, and each collection's
+`id` primary key. Empty files, unrelated SQLite databases, incomplete NuSelf
+schemas, corrupt databases, and future schema versions fail closed without
+being adopted as authority or mutated. Recognized supported versions may then
+perform their documented controlled upgrade.
+
+Creation is an
 internal migration operation used only for the unpublished
 `nuself.sqlite.migrating-<uuid>` database while the exclusive file-authority
 lease is held. Ordinary runtime, developer inspection, and repository

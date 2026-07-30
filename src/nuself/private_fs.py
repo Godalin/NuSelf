@@ -134,10 +134,16 @@ def ensure_private_file(path: Path) -> None:
 def harden_private_file(path: Path) -> None:
     """Require and harden one existing NuSelf-owned regular file."""
 
+    require_private_file(path)
+    path.chmod(PRIVATE_FILE_MODE)
+
+
+def require_private_file(path: Path) -> None:
+    """Require one existing regular file without changing it."""
+
     if not stat.S_ISREG(path.lstat().st_mode):
         raise OSError(
             errno.EINVAL,
             "private file path must be a regular file",
             path,
         )
-    path.chmod(PRIVATE_FILE_MODE)
