@@ -242,6 +242,11 @@ has been written. Paths explicitly selected by the user for external exports
 are not owned by this invariant and retain normal
 destination-directory/`umask` semantics.
 
+The managed `private/` root and its managed directory descendants are opened
+component-by-component with no-follow directory handles. A symlink or
+non-directory component fails before NuSelf changes permissions, creates
+storage/lock/runtime files, or reads redirected state.
+
 The creator of a `SqliteStorageBackend` owns it and must call `close()` when
 the backend is no longer needed. Process-default backends are owned by the
 default-backend registry and released by `reset_default_backend()`; temporary

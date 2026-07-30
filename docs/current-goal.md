@@ -45,6 +45,12 @@ migration, validation, and notification-cleanup findings.
   existing collections reject every operation, and custom migration
   destinations are removed. Focused storage/CLI verification: 87 passed;
   locked Pyright reported 0 errors and 0 warnings.
-- Pending: the remaining managed-directory, configuration, schema, and
-  notification findings require implementation and direct regression evidence,
-  followed by the complete release gate.
+- Managed `private/` directories are now created and opened
+  component-by-component with no-follow directory handles. Direct filesystem,
+  config, file-storage, and SQLite regressions prove a redirected private root
+  fails before changing the external target's mode or contents. Focused
+  filesystem/config/storage verification: 168 passed; locked Pyright reported
+  0 errors and 0 warnings.
+- Pending: the remaining configuration migration, schema, and notification
+  findings require implementation and direct regression evidence, followed by
+  the complete release gate.

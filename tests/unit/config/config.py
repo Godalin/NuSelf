@@ -176,3 +176,31 @@ def test_config_read_rejects_symlink(tmp_path: Path) -> None:
 
     with pytest.raises(OSError, match="regular file"):
         ConfigSystem.load(project_root=tmp_path)
+
+
+def test_config_read_rejects_redirected_private_root_without_side_effects(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    external = tmp_path / "external"
+    external.mkdir(mode=0o755)
+    external.chmod(0o755)
+    config_path = external / "config.yaml"
+    config_path.write_text(
+        "email:\n  enabled: false\n",
+        encoding="utf-8",
+    )
+    config_path.chmod(0o644)
+    private = project / "private"
+    private.symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(OSError, match="actual directory"):
+        ConfigSystem.load(project_root=project)
+
+    assert private.is_symlink()
+    assert stat.S_IMODE(external.stat().st_mode) == 0o755
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o644
+    assert config_path.read_text(encoding="utf-8") == (
+        "email:\n  enabled: false\n"
+    )

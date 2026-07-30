@@ -10,6 +10,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   paused before shared-lease acquisition cannot resume on obsolete files,
   closed file backends and their existing collections reject all access, and
   `dev migrate` publishes only to canonical `private/nuself.sqlite`.
+- Managed private directories are now opened component-by-component without
+  following symlinks, preventing redirected external directories from being
+  chmodded, read, or populated with config, databases, locks, or runtime state.
 - Shared SQLite backends now isolate reads from uncommitted writes, immediately
   observe dynamic columns added by other processes, and reject mismatched
   record IDs instead of silently rewriting them.

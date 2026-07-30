@@ -188,7 +188,11 @@ silently discarded.
 
 Before reading a present `private/config.yaml`, NuSelf hardens `private/` to
 `0700`, rejects non-regular files and symlinks, and hardens the config file to
-`0600`. Secret values are never read from a permissive or redirected file.
+`0600`. Managed private-directory creation and hardening use no-follow
+directory handles: `private/` and every managed descendant must be an actual
+directory, never a symlink or another file type. Rejection occurs before
+changing the redirected target's permissions or contents. Secret values are
+never read from a permissive or redirected file.
 
 ## Email Delivery
 

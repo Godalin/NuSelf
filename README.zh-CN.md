@@ -38,6 +38,8 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 同时暴露两个错误和残留路径。
 文件后端的 collection identifier 是不透明 record key；共享存储边界会拒绝路径
 语法、record/key identity 不一致以及符号链接重定向。
+受管理的 `private/` 目录树通过 no-follow directory handle 打开，因此 NuSelf
+不会 chmod、读取或写入被符号链接重定向的外部目录。
 `nuself dev migrate` 现在会先写入并严格验证临时 SQLite database，完成
 checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file record 会
 中止迁移，不会暴露部分数据库。迁移只发布到权威路径

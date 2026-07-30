@@ -45,6 +45,8 @@ to callers.
 File-backed collection identifiers are opaque record keys: path syntax,
 record/key mismatches, and symlink redirection are rejected at the shared
 storage boundary.
+The managed `private/` tree is opened without following directory symlinks, so
+NuSelf cannot chmod, read, or populate a redirected external directory.
 `nuself dev migrate` now writes and validates a strict temporary SQLite
 database, then atomically publishes it only after checkpoint, close, and fsync;
 corrupt or ID-mismatched file records abort without exposing a partial
