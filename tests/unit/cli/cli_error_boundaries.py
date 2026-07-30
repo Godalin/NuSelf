@@ -23,9 +23,7 @@ def test_chat_timeout_uses_default_after_malformed_yaml(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir()
-    (private_dir / "config.yaml").write_text(
+    (tmp_path / "config.yaml").write_text(
         "chat: [unterminated",
         encoding="utf-8",
     )

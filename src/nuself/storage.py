@@ -570,7 +570,7 @@ def create_file_backend(
     _acquire_authority: bool = True,
 ) -> FileStorageBackend:
     """Create a ``FileStorageBackend`` rooted at ``private/``."""
-    base = root if root is not None else runtime_paths(project_root).private_root
+    base = root if root is not None else runtime_paths(project_root).authority_root
     return FileStorageBackend(
         base,
         project_root=runtime_paths(project_root).project_root,
@@ -584,7 +584,7 @@ def open_sqlite_backend(
     """Open an existing SQLite backend without creating its database."""
     from nuself.storage_sqlite import SqliteStorageBackend
     paths = runtime_paths(project_root)
-    canonical = paths.private_root / "nuself.sqlite"
+    canonical = paths.authority_root / "nuself.sqlite"
     path = db_path if db_path is not None else canonical
     managed = path.absolute() == canonical.absolute()
     return SqliteStorageBackend(
@@ -615,7 +615,7 @@ def _create_sqlite_backend(
 def auto_backend(project_root: Path | None = None) -> StorageBackend:
     """Return ``SqliteStorageBackend`` if *nuself.sqlite* exists, else ``FileStorageBackend``."""
     paths = runtime_paths(project_root)
-    db_path = paths.private_root / "nuself.sqlite"
+    db_path = paths.authority_root / "nuself.sqlite"
     if db_path.exists() or db_path.is_symlink():
         return open_sqlite_backend(project_root=project_root)
     try:
@@ -809,8 +809,8 @@ def migrate_file_backend_atomically(
 ) -> tuple[dict[str, int], Path]:
     """Migrate authoritative files and atomically publish one new SQLite DB."""
     paths = runtime_paths(project_root)
-    destination_path = paths.private_root / "nuself.sqlite"
-    with _exclusive_file_authority(paths.private_root):
+    destination_path = paths.authority_root / "nuself.sqlite"
+    with _exclusive_file_authority(paths.authority_root):
         return _migrate_file_backend_with_authority(
             paths.project_root,
             destination_path=destination_path,

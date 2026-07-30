@@ -160,7 +160,7 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     assert response.payload["epistemic_status"] == "grounded"
     assert response.payload["thread_id"] == "default"
     assert "node_trace" not in response.payload
-    assert (tmp_path / "private" / "threads" / "default.json").is_file()
+    assert (tmp_path / "threads" / "default.json").is_file()
 
 
 def test_daemon_chat_uses_state_event_publisher(
@@ -235,7 +235,7 @@ def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
 
     assert response.status == "ok"
     assert response.payload["thread_id"] == "custom"
-    assert (tmp_path / "private" / "threads" / "custom.json").is_file()
+    assert (tmp_path / "threads" / "custom.json").is_file()
 
 
 def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> None:
@@ -250,7 +250,7 @@ def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> N
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    stored = (tmp_path / "private" / "threads" / "default.json").read_text(encoding="utf-8")
+    stored = (tmp_path / "threads" / "default.json").read_text(encoding="utf-8")
     assert '"turn_id": "turn-retry"' in stored
 
 
@@ -450,6 +450,7 @@ def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
 
     assert response.status == "ok"
     assert response.payload["message"] == "pong"
+    assert response.payload["authority_id"] == state.authority_id
 
 
 def test_daemon_health_returns_worker_snapshots(tmp_path: Path) -> None:

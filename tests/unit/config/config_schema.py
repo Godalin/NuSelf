@@ -318,8 +318,8 @@ def test_runtime_and_published_schema_acceptance_are_identical(
     data: dict[str, Any],
     accepted: bool,
 ) -> None:
-    config_path = tmp_path / "private" / "config.yaml"
-    config_path.parent.mkdir()
+    config_path = tmp_path / "config.yaml"
+    config_path.parent.mkdir(exist_ok=True)
     config_path.write_text(
         yaml.safe_dump(data, sort_keys=True),
         encoding="utf-8",

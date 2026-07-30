@@ -141,7 +141,7 @@ class SqliteStore(BaseStore):
         db_path: Path | None = None,
     ) -> SqliteStore:
         """Create a ``SqliteStore`` backed by the main project database."""
-        path = db_path if db_path is not None else runtime_paths(project_root).private_root / "nuself.sqlite"
+        path = db_path if db_path is not None else runtime_paths(project_root).authority_root / "nuself.sqlite"
         return cls(path)
 
     def batch(self, ops: Iterable[Op]) -> list[Result]:

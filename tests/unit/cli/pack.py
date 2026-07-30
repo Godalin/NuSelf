@@ -37,13 +37,13 @@ def _create_pack_schema(path: Path, *, version: int) -> None:
 
 def test_pack_export_creates_sqlite(tmp_path: Path) -> None:
     # Create source database via migration
-    assert main(["--project-root", str(tmp_path), "dev", "migrate"]) == 0
-    db = tmp_path / "private" / "nuself.sqlite"
+    assert main(["--workspace", str(tmp_path), "dev", "migrate"]) == 0
+    db = tmp_path / ".nuself" / "nuself.sqlite"
     assert db.exists()
 
     # Export
-    assert main(["--project-root", str(tmp_path), "pack", "export", "test-pack"]) == 0
-    export = tmp_path / "private" / "exports" / "test-pack.sqlite"
+    assert main(["--workspace", str(tmp_path), "pack", "export", "test-pack"]) == 0
+    export = tmp_path / ".nuself" / "exports" / "test-pack.sqlite"
     assert export.exists()
     assert export.stat().st_size > 0
     assert stat.S_IMODE(export.parent.stat().st_mode) == 0o700
@@ -72,19 +72,19 @@ def test_pack_export_rejects_path_like_names(
     name: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert main(["--project-root", str(tmp_path), "dev", "migrate"]) == 0
+    assert main(["--workspace", str(tmp_path), "dev", "migrate"]) == 0
     capsys.readouterr()
 
     assert main(
-        ["--project-root", str(tmp_path), "pack", "export", name]
+        ["--workspace", str(tmp_path), "pack", "export", name]
     ) == 1
 
     assert "Invalid pack name" in capsys.readouterr().err
-    assert not (tmp_path / "private" / "escaped.sqlite").exists()
+    assert not (tmp_path / ".nuself" / "escaped.sqlite").exists()
 
 
 def test_pack_export_fails_without_db(tmp_path: Path) -> None:
-    result = main(["--project-root", str(tmp_path), "pack", "export", "no-db"])
+    result = main(["--workspace", str(tmp_path), "pack", "export", "no-db"])
     assert result != 0
 
 
@@ -92,10 +92,10 @@ def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
     from nuself.storage import _create_sqlite_backend
 
     backend = _create_sqlite_backend(
-        tmp_path,
-        db_path=tmp_path / "private" / "nuself.sqlite",
+        tmp_path / ".nuself",
+        db_path=tmp_path / ".nuself" / "nuself.sqlite",
     )
-    set_default_backend(backend, tmp_path)
+    set_default_backend(backend, tmp_path / ".nuself")
     backend.collection("memory_entries").put(
         "live-entry",
         {"id": "live-entry", "title": "Live WAL data"},
@@ -103,7 +103,7 @@ def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
 
     assert main(
         [
-            "--project-root",
+            "--workspace",
             str(tmp_path),
             "pack",
             "export",
@@ -112,7 +112,7 @@ def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
     ) == 0
 
     snapshot = SqliteStorageBackend(
-        tmp_path / "private" / "exports" / "live.sqlite"
+        tmp_path / ".nuself" / "exports" / "live.sqlite"
     )
     try:
         assert snapshot.collection("memory_entries").get(
@@ -138,8 +138,8 @@ def test_pack_import_copies_file(tmp_path: Path) -> None:
     finally:
         be.close()
 
-    assert main(["--project-root", str(tmp_path), "pack", "import", str(foreign)]) == 0
-    imported = tmp_path / "private" / "imports" / "friend-thoughts.sqlite"
+    assert main(["--workspace", str(tmp_path), "pack", "import", str(foreign)]) == 0
+    imported = tmp_path / ".nuself" / "imports" / "friend-thoughts.sqlite"
     assert imported.exists()
     assert stat.S_IMODE(imported.parent.stat().st_mode) == 0o700
     assert stat.S_IMODE(imported.stat().st_mode) == 0o600
@@ -150,15 +150,15 @@ def test_pack_import_rejects_duplicate(tmp_path: Path) -> None:
     from nuself.storage import _create_sqlite_backend
     _create_sqlite_backend(db_path=foreign).close()
 
-    assert main(["--project-root", str(tmp_path), "pack", "import", str(foreign)]) == 0
-    result = main(["--project-root", str(tmp_path), "pack", "import", str(foreign)])
+    assert main(["--workspace", str(tmp_path), "pack", "import", str(foreign)]) == 0
+    result = main(["--workspace", str(tmp_path), "pack", "import", str(foreign)])
     assert result != 0
 
 
 def test_pack_import_rejects_non_sqlite(tmp_path: Path) -> None:
     f = tmp_path / "data.txt"
     f.write_text("not a database")
-    result = main(["--project-root", str(tmp_path), "pack", "import", str(f)])
+    result = main(["--workspace", str(tmp_path), "pack", "import", str(f)])
     assert result != 0
 
 
@@ -169,12 +169,12 @@ def test_pack_import_rejects_corrupt_sqlite_without_destination(
     source.write_bytes(b"not a sqlite database")
 
     result = main(
-        ["--project-root", str(tmp_path), "pack", "import", str(source)]
+        ["--workspace", str(tmp_path), "pack", "import", str(source)]
     )
 
     assert result == 1
     assert not (
-        tmp_path / "private" / "imports" / source.name
+        tmp_path / ".nuself" / "imports" / source.name
     ).exists()
 
 
@@ -194,10 +194,10 @@ def test_pack_import_rejects_foreign_and_partial_schemas(
     connection.close()
 
     assert main(
-        ["--project-root", str(tmp_path), "pack", "import", str(foreign)]
+        ["--workspace", str(tmp_path), "pack", "import", str(foreign)]
     ) == 1
     assert main(
-        ["--project-root", str(tmp_path), "pack", "import", str(partial)]
+        ["--workspace", str(tmp_path), "pack", "import", str(partial)]
     ) == 1
 
 
@@ -208,7 +208,7 @@ def test_pack_import_rejects_future_schema_without_mutating_source(
     _create_pack_schema(source, version=99)
 
     assert main(
-        ["--project-root", str(tmp_path), "pack", "import", str(source)]
+        ["--workspace", str(tmp_path), "pack", "import", str(source)]
     ) == 1
 
     connection = sqlite3.connect(source)
@@ -227,10 +227,10 @@ def test_pack_import_accepts_legacy_schema_without_mutating_source(
     _create_pack_schema(source, version=1)
 
     assert main(
-        ["--project-root", str(tmp_path), "pack", "import", str(source)]
+        ["--workspace", str(tmp_path), "pack", "import", str(source)]
     ) == 0
 
-    imported = tmp_path / "private" / "imports" / source.name
+    imported = tmp_path / ".nuself" / "imports" / source.name
     for path in (source, imported):
         connection = sqlite3.connect(path)
         try:
@@ -253,7 +253,7 @@ def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
     try:
         assert main(
             [
-                "--project-root",
+                "--workspace",
                 str(tmp_path),
                 "pack",
                 "import",
@@ -264,7 +264,7 @@ def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
         backend.close()
 
     imported = SqliteStorageBackend(
-        tmp_path / "private" / "imports" / source.name
+        tmp_path / ".nuself" / "imports" / source.name
     )
     try:
         assert imported.collection("memory_entries").get(
@@ -290,17 +290,17 @@ def test_pack_inspect_shows_summary(tmp_path: Path) -> None:
         be.close()
 
     from nuself.cli import main
-    assert main(["--project-root", str(tmp_path), "pack", "inspect", str(db)]) == 0
+    assert main(["--workspace", str(tmp_path), "pack", "inspect", str(db)]) == 0
 
 
 def test_pack_inspect_defaults_to_main_db(tmp_path: Path) -> None:
     # Without a path, it should fall back to main db
-    result = main(["--project-root", str(tmp_path), "pack", "inspect"])
+    result = main(["--workspace", str(tmp_path), "pack", "inspect"])
     assert result != 0  # no main db yet
 
     # After migration, it should succeed
-    assert main(["--project-root", str(tmp_path), "dev", "migrate"]) == 0
-    assert main(["--project-root", str(tmp_path), "pack", "inspect"]) == 0
+    assert main(["--workspace", str(tmp_path), "dev", "migrate"]) == 0
+    assert main(["--workspace", str(tmp_path), "pack", "inspect"]) == 0
 
 
 def test_pack_inspect_preserves_legacy_schema(
@@ -312,7 +312,7 @@ def test_pack_inspect_preserves_legacy_schema(
     before = source.read_bytes()
 
     assert main(
-        ["--project-root", str(tmp_path), "pack", "inspect", str(source)]
+        ["--workspace", str(tmp_path), "pack", "inspect", str(source)]
     ) == 0
 
     assert source.read_bytes() == before
@@ -327,7 +327,7 @@ def test_pack_inspect_rejects_invalid_pack(
     source.write_bytes(b"invalid")
 
     assert main(
-        ["--project-root", str(tmp_path), "pack", "inspect", str(source)]
+        ["--workspace", str(tmp_path), "pack", "inspect", str(source)]
     ) == 1
 
     assert "Invalid thought pack:" in capsys.readouterr().err
@@ -348,7 +348,7 @@ def test_pack_inspect_counts_live_wal_data(
     try:
         assert main(
             [
-                "--project-root",
+                "--workspace",
                 str(tmp_path),
                 "pack",
                 "inspect",

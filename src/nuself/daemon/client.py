@@ -10,6 +10,7 @@ from typing import Literal, TypeAlias, TypeVar
 
 from nuself.config import runtime_paths
 from nuself.daemon.payloads import (
+    DaemonIdentityPayload,
     ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
     ActivityOpenResponsePayload,
@@ -188,12 +189,16 @@ def ping(
         )
         payload = decode_response(
             response,
-            MessagePayload.from_wire,
+            DaemonIdentityPayload.from_wire,
             operation="ping",
         )
     except (DaemonConnectionError, DaemonApplicationError):
         return False
-    return payload.message == "pong"
+    expected_id = runtime_paths(project_root).scope.authority_id
+    return (
+        payload.message == "pong"
+        and payload.authority_id == expected_id
+    )
 
 
 def health(

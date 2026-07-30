@@ -15,8 +15,8 @@ def test_private_workspace_store_initializes_sqlite(tmp_path: Path) -> None:
 
     workspace = store.ensure("reason-abc")
 
-    db_path = tmp_path / "private" / "nuself.sqlite"
-    assert workspace.root == tmp_path / "private" / "workspaces" / "reason" / "reason-abc"
+    db_path = tmp_path / "nuself.sqlite"
+    assert workspace.root == tmp_path / "workspaces" / "reason" / "reason-abc"
     assert workspace.database == db_path
     assert workspace.artifacts.is_dir()
     assert workspace.notes.is_dir()

@@ -22,6 +22,9 @@ reasoning. Its architecture follows four principles:
 CLI / interactive REPL
         |
         v
+explicit user/workspace scope resolution
+        |
+        v
 local daemon and direct-mode composition
         |
         +--> conversation graph and agent tools
@@ -102,15 +105,18 @@ Major domains are:
 
 ## Persistence And Privacy
 
-Real personal data and runtime state live under the ignored `private/`
-directory. Committed examples live under `examples/private/`. Authoritative
+Installed NuSelf defaults to a durable user authority under `~/.nuself`.
+Explicit workspace scope uses `<workspace>/.nuself`; configuration may inherit
+user defaults, but persisted state always belongs to exactly one selected
+authority. The source checkout is not an implicit data root. Authoritative
 domain records are preserved independently from derived indexes so projections
 can be rebuilt without changing identity or evidence.
 
 SQLite and file-backed stores are accessed through explicit storage and
 repository boundaries. Runtime paths and configuration precedence are governed
-by [`spec/config.md`](spec/config.md); migration and storage behavior are
-governed by [`spec/storage-v2.md`](spec/storage-v2.md).
+by [`spec/config.md`](spec/config.md) and [`spec/scope.md`](spec/scope.md);
+migration and storage behavior are governed by
+[`spec/storage-v2.md`](spec/storage-v2.md).
 
 ## Decision Boundaries
 

@@ -297,6 +297,7 @@ def test_owned_recovery_attempts_both_resources_and_retains_failures(
 
     paths = runtime_paths(tmp_path)
     paths.socket_path.mkdir(parents=True)
+    paths.pid_path.parent.mkdir(parents=True)
     paths.pid_path.mkdir()
 
     with pytest.raises(
@@ -326,6 +327,7 @@ def test_recovery_failure_still_runs_owned_metadata_cleanup(
 
     paths = runtime_paths(tmp_path)
     paths.socket_path.mkdir(parents=True)
+    paths.pid_path.parent.mkdir(parents=True)
     paths.pid_path.mkdir()
 
     def fail_if_constructed(project_root: Path) -> object:

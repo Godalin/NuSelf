@@ -4,10 +4,14 @@
 
 | Priority | Source | Override Behavior |
 |---|---|---|
-| 1 (highest) | `private/config.yaml` | Overrides defaults; missing uses defaults and malformed/unreadable warns before fallback |
-| 2 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
+| 1 (highest) | Selected workspace `.nuself/config.yaml` | Recursively overrides user configuration in explicit workspace scope |
+| 2 | User authority `config.yaml` | Overrides built-in defaults in every scope |
+| 3 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
 
-**Key rule**: YAML overrides hardcoded defaults. No other override mechanisms exist.
+The final merged mapping is validated once. Sequences and scalar values replace
+the lower layer; mappings merge recursively. Scope selection and the strict
+separation between layered configuration and single-authority state are
+governed by [`scope.md`](scope.md).
 
 ## Config Sections
 
@@ -27,7 +31,8 @@ not select an alternate memory-model runtime.
 
 ## JSON Schema
 
-`docs/nuself-config.schema.json` is the editor-facing and external validation schema for `private/config.yaml`.
+`docs/nuself-config.schema.json` is the editor-facing and external validation
+schema for every authority's `config.yaml`.
 
 Rules:
 
@@ -46,27 +51,13 @@ provider clients.
 
 ## Runtime Paths
 
-```
-<project_root>/
-  private/
-    runtime/          # PID, socket, cursors
-    logs/             # structured component logs plus daemon-process.log
-    outbox/           # notification entries
-    memory/
-      entries/        # MemoryEntry JSON files
-      candidates/     # MemoryCandidate JSON files
-    threads/          # ThreadState JSON files
-    sources/
-      documents/      # SourceDocument JSON files
-      chunks/         # SourceChunk JSON files
-    profile/items/    # ProfileItem JSON files
-    config.yaml       # live user config
-  examples/private/   # sample data for tests/demos
-```
+The default user authority is `~/.nuself`, optionally replaced by
+`NUSELF_HOME`. Explicit workspace scope uses `<workspace>/.nuself`. Both use
+the layout and resolution contract in [`scope.md`](scope.md).
 
-`runtime_paths(project_root)` resolves these. `daemon_log_path` names the
-structured `daemon.log`; `daemon_process_log_path` separately owns raw daemon
-stdout/stderr. `ensure_runtime_dirs()` creates missing directories.
+The resolved runtime-path object names the structured `daemon.log`; the daemon
+process log separately owns raw stdout/stderr. Runtime directory creation is
+explicit and limited to the selected managed authority.
 
 ## Language Preference
 
@@ -82,7 +73,8 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 
 ## Missing Config File Behavior
 
-If `private/config.yaml` is missing, `ConfigSystem.load()` proceeds with hardcoded defaults. No error is raised.
+If a configuration layer is missing, loading proceeds with lower layers. No
+error is raised.
 
 `nuself dev health` does not report a missing config file as unhealthy.
 `nuself dev config` describes the effective file/default state and explicitly
@@ -140,7 +132,8 @@ Rules:
   available. Chat returns its deterministic local configuration guidance;
   subsystems that require model generation fail clearly according to their own
   contract. NuSelf does not construct a local fallback LLM.
-- Runtime LLM state is stored under `private/runtime/llm_state.json`.
+- Runtime LLM state is stored under the selected authority's
+  `runtime/llm_state.json`.
 - State records the last successful configured endpoint index in the `llm` list.
 - On the next process use, NuSelf starts from the saved successful index, then wraps around through the configured endpoints.
 - The state is a versioned derived preference record and is written through

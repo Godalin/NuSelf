@@ -182,7 +182,7 @@ def export_interactive_transcript(
     if not messages:
         raise ValueError("no chat messages in this connection yet")
 
-    export_dir = paths.private_root / "transcripts"
+    export_dir = paths.authority_root / "transcripts"
     filename = (
         f"chat-{_safe_filename_component(thread_id)}-"
         f"{_compact_timestamp(connected_at)}-{_compact_timestamp(exported_at)}.md"

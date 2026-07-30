@@ -16,35 +16,25 @@ from nuself.config import (
     LegacyEmailConfigurationMigrationError,
     LlmEndpointConfig,
     SystemConfig,
-    find_project_root,
     runtime_paths,
 )
 
 
-def test_runtime_paths_are_under_private_root(tmp_path: Path) -> None:
+def test_runtime_paths_are_under_authority_root(tmp_path: Path) -> None:
     paths = runtime_paths(tmp_path)
-    assert paths.private_root == tmp_path / "private"
-    assert paths.runtime_dir == tmp_path / "private" / "runtime"
-    assert paths.logs_dir == tmp_path / "private" / "logs"
-    assert paths.socket_path == tmp_path / "private" / "runtime" / "nuself.sock"
-    assert paths.daemon_lock_path == tmp_path / "private" / "runtime" / "nuself.lock"
+    assert paths.authority_root == tmp_path
+    assert paths.runtime_dir == tmp_path / "runtime"
+    assert paths.logs_dir == tmp_path / "logs"
+    assert paths.socket_path.parent == paths.socket_runtime_dir
+    assert paths.socket_path.name == f"{paths.scope.authority_id}.sock"
+    assert paths.daemon_lock_path == tmp_path / "runtime" / "nuself.lock"
     assert (
         paths.daemon_process_log_path
-        == tmp_path / "private" / "logs" / "daemon-process.log"
+        == tmp_path / "logs" / "daemon-process.log"
     )
 
     with pytest.raises(FrozenInstanceError):
-        setattr(paths, "private_root", tmp_path)
-
-
-def test_find_project_root_finds_agents_md(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
-    assert find_project_root(tmp_path) == tmp_path
-
-
-def test_find_project_root_fallback_to_cwd_when_no_agents_md(tmp_path: Path) -> None:
-    result = find_project_root(tmp_path)
-    assert result == tmp_path
+        setattr(paths, "authority_root", tmp_path.parent)
 
 
 def test_flat_config_redacts_every_endpoint_key_without_aggregate_values(
@@ -113,8 +103,7 @@ def test_api_key_is_absent_from_model_repr() -> None:
 
 def test_validation_error_hides_secret_input(tmp_path: Path) -> None:
     secret = "invalid-secret-value"
-    config_path = tmp_path / "private" / "config.yaml"
-    config_path.parent.mkdir(parents=True)
+    config_path = tmp_path / "config.yaml"
     config_path.write_text(
         (
             "email:\n"
@@ -147,8 +136,7 @@ def test_invalid_or_unknown_configuration_fails_explicitly(
     tmp_path: Path,
     content: str,
 ) -> None:
-    config_path = tmp_path / "private" / "config.yaml"
-    config_path.parent.mkdir(parents=True)
+    config_path = tmp_path / "config.yaml"
     config_path.write_text(content, encoding="utf-8")
 
     with pytest.raises((ValueError, ValidationError)):
@@ -172,8 +160,7 @@ def test_non_finite_timeouts_are_rejected_before_runtime_clients(
     non_finite: str,
     template: str,
 ) -> None:
-    config_path = tmp_path / "private" / "config.yaml"
-    config_path.parent.mkdir(parents=True)
+    config_path = tmp_path / "config.yaml"
     config_path.write_text(
         template.format(value=non_finite),
         encoding="utf-8",
@@ -194,7 +181,7 @@ def test_complete_official_v025_config_loads_through_narrow_migration(
         / "v0.2.5"
         / "private"
     )
-    shutil.copytree(fixture, tmp_path / "private")
+    shutil.copytree(fixture, tmp_path, dirs_exist_ok=True)
 
     with pytest.warns(
         RuntimeWarning,
@@ -227,9 +214,8 @@ def test_complete_official_v025_config_loads_through_narrow_migration(
 def test_enabled_legacy_email_raises_typed_safe_migration_error(
     tmp_path: Path,
 ) -> None:
-    private = tmp_path / "private"
-    private.mkdir()
-    config_path = private / "config.yaml"
+    authority = tmp_path
+    config_path = authority / "config.yaml"
     config_path.write_text(
         (
             "email:\n"
@@ -241,7 +227,7 @@ def test_enabled_legacy_email_raises_typed_safe_migration_error(
         encoding="utf-8",
     )
     legacy_secret = "legacy-email-secret-must-not-leak"
-    (private / "email.toml").write_text(
+    (authority / "email.toml").write_text(
         (
             "[smtp]\n"
             'user = "owner@example.com"\n'
@@ -264,57 +250,26 @@ def test_enabled_legacy_email_raises_typed_safe_migration_error(
     assert "email.smtp.username" in message
 
 
-def test_config_read_hardens_private_root_and_file(
+def test_config_read_hardens_authority_root_and_file(
     tmp_path: Path,
 ) -> None:
-    private = tmp_path / "private"
-    private.mkdir(mode=0o755)
-    private.chmod(0o755)
-    config_path = private / "config.yaml"
+    authority = tmp_path
+    authority.chmod(0o755)
+    config_path = authority / "config.yaml"
     config_path.write_text("email:\n  enabled: false\n", encoding="utf-8")
     config_path.chmod(0o644)
 
     ConfigSystem.load(project_root=tmp_path)
 
-    assert stat.S_IMODE(private.stat().st_mode) == 0o700
+    assert stat.S_IMODE(authority.stat().st_mode) == 0o700
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
 
 
 def test_config_read_rejects_symlink(tmp_path: Path) -> None:
-    private = tmp_path / "private"
-    private.mkdir()
     target = tmp_path / "external.yaml"
     target.write_text("email:\n  enabled: false\n", encoding="utf-8")
-    config_path = private / "config.yaml"
+    config_path = tmp_path / "config.yaml"
     config_path.symlink_to(target)
 
     with pytest.raises(OSError, match="regular file"):
         ConfigSystem.load(project_root=tmp_path)
-
-
-def test_config_read_rejects_redirected_private_root_without_side_effects(
-    tmp_path: Path,
-) -> None:
-    project = tmp_path / "project"
-    project.mkdir()
-    external = tmp_path / "external"
-    external.mkdir(mode=0o755)
-    external.chmod(0o755)
-    config_path = external / "config.yaml"
-    config_path.write_text(
-        "email:\n  enabled: false\n",
-        encoding="utf-8",
-    )
-    config_path.chmod(0o644)
-    private = project / "private"
-    private.symlink_to(external, target_is_directory=True)
-
-    with pytest.raises(OSError, match="actual directory"):
-        ConfigSystem.load(project_root=project)
-
-    assert private.is_symlink()
-    assert stat.S_IMODE(external.stat().st_mode) == 0o755
-    assert stat.S_IMODE(config_path.stat().st_mode) == 0o644
-    assert config_path.read_text(encoding="utf-8") == (
-        "email:\n  enabled: false\n"
-    )

@@ -5,40 +5,53 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The `v0.3.0` README refresh and release replacement are complete.
+Deliver the v0.3.1 scoped-authority architecture so an installed NuSelf uses
+durable user-owned state by default while explicit workspaces remain isolated.
 
 ## Active Branch
 
-None.
+`feature/scoped-authorities`
 
 ## Ordered Work
 
-No active work.
+1. [complete] Define user/workspace scope, configuration layering, daemon
+   identity, and legacy-layout migration in the governing specifications.
+2. [complete] Introduce one scope resolver and immutable runtime-path model; remove
+   implicit repository-root path selection.
+3. [complete] Layer user and workspace configuration while selecting exactly one state
+   authority per invocation.
+4. [complete] Add explicit CLI scope selection, initialization, path inspection, and
+   legacy `private/` migration.
+5. [complete] Isolate daemon lifecycle and transport resources by authority identity.
+6. [complete] Migrate all composition roots and domain callers, then update public
+   documentation and v0.3.1 release metadata.
+7. [in progress] Run the complete local and six-platform release gates, integrate coherent
+   commits, publish, and verify the final release.
 
 ## Out Of Scope
 
-No active scope.
+- Automatic parent-directory workspace discovery.
+- Queries or writes spanning more than one state authority.
+- Local records that shadow or delete user-scope records.
+- A single daemon serving multiple authorities.
+- Package-manager publication, including Homebrew; v0.3.1 only makes the
+  installed runtime layout suitable for separately authorized publication.
 
 ## Completion Evidence
 
-- English README reduced from 954 to 209 lines; Chinese README reduced from
-  879 to 189 lines. Both retain the same project-front-page information
-  architecture and remain below the enforced 250-line limit.
-- Configuration, CLI, memory, and contributor guidance now lives in focused
-  documents. Local-link validation covers all six user-facing entry points.
-- CLI examples were checked against the v0.3.0 parser help; stale README
-  options such as `--content`, `--by-index`, and notification/reflection
-  `-i` selection were removed.
-- `uv lock --check`, `git diff --check`, v0.3.0 release metadata validation,
-  and `nuself 0.3.0` passed.
-- Complete local verification reported 2439 passed. Locked Pyright reported
+- Approved scope/authority contracts are recorded in `docs/spec/scope.md`.
+- Scope/path and layered-config tests: 41 passed; focused Pyright reported
   0 errors and 0 warnings.
-- `uv build` produced the v0.3.0 sdist and wheel. A clean Python 3.14.3
-  environment installed the wheel, reported `nuself 0.3.0`, and confirmed the
-  compact README is embedded in package metadata.
-- Branch CI run `30526417504` passed on Ubuntu and macOS with Python 3.12,
-  3.13, and 3.14.
-- The annotated `v0.3.0` tag now resolves to `d31502f`. Tagged Release run
-  `30526689042` passed its full release gate.
-- The final GitHub Release contains only the wheel, source archive, and
-  `SHA256SUMS`; downloaded artifacts passed their published checksums.
+- User/workspace CLI selection, `init`, `dev paths`, layered `dev config`, and
+  authority-root chat/config tests: 245 passed. Full-source Pyright remains at
+  0 errors and 0 warnings.
+- CLI scope and command regression suite: 493 passed.
+- Daemon/config isolation regression suite: 274 passed.
+- Legacy migration suite: 8 passed, including concurrent publication and live
+  SQLite WAL preservation.
+- Complete local unit suite: 2471 passed on Python 3.14.
+- Full-source Pyright: 0 errors and 0 warnings.
+- Lockfile, sdist/wheel build, clean Python 3.14 wheel import, and
+  `nuself --version` smoke passed for 0.3.1.
+- Release contract suite: 12 passed.
+- Pending: six-platform release CI and final integration/publishing.

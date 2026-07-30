@@ -5,13 +5,14 @@ Status: implemented current storage and migration contract.
 ## Goal
 
 Replace scattered file-backed repositories with a unified storage abstraction,
-then migrate to a single SQLite database (`private/nuself.sqlite`) that can be
-copied and shared as a complete thought pack.
+then migrate to a single SQLite database
+(`<authority-root>/nuself.sqlite`) that can be copied and shared as a complete
+thought pack.
 
 ## Directory Architecture
 
 ```
-private/                    ← durable, portable, version-controllable
+<authority-root>/          ← selected user or workspace authority
   config.yaml               ← local configuration
   threads/                  ← chat conversations (semi-durable)
   exports/                  ← export jobs + output
@@ -19,11 +20,8 @@ private/                    ← durable, portable, version-controllable
   backups/                  ← auto-backups of nuself.sqlite
   nuself.sqlite                 ← v0.2.4+: all durable user data
 
-$TMPDIR/nuself/             ← ephemeral, auto-cleaned on reboot
-  daemon.lock
-  daemon.sock
-  logs/                     ← structured log files (viewed via `nuself logs`)
-  cache/                    ← temporary cache
+<short-runtime-base>/       ← owner-private, short Unix socket paths
+  <authority-id>.sock
 ```
 
 ### 设计理由
@@ -157,7 +155,7 @@ succeeded; a post-unlink sync failure raises the typed visible-but-uncertain
 delete error rather than reporting a normal failure or silently succeeding.
 
 Each live `FileStorageBackend` holds a shared cross-process authority lease on
-`private/.storage-authority.lock` until `close()`. Lease acquisition is
+`<authority-root>/.storage-authority.lock` until `close()`. Lease acquisition is
 non-blocking: a command that races an authority migration fails rather than
 waiting and then continuing to use the obsolete file backend. File-to-SQLite
 migration takes the exclusive lease before inspecting source or destination
@@ -168,7 +166,7 @@ switch for v0.3.0.
 
 Shared lease acquisition and selection of file authority are one atomic
 decision. After acquiring the shared lease, a backend must re-check the
-canonical `private/nuself.sqlite` path while still holding that lease. If the
+canonical `<authority-root>/nuself.sqlite` path while still holding that lease. If the
 database exists or is a symlink, explicit file-backend construction fails and
 `auto_backend()` selects SQLite instead. Thus a process paused before lease
 acquisition cannot resume after migration publication and write to obsolete
@@ -285,10 +283,10 @@ not owned by this invariant: their parent and existing database mode remain
 unchanged, while SQLite coordination artifacts retain normal
 directory/`umask` semantics.
 
-Canonical ownership is determined by the database path and project root, not
+Canonical ownership is determined by the database path and authority root, not
 only by which factory called the backend. Direct construction of
-`<project>/private/nuself.sqlite` receives the same no-follow validation and
-hardening as `open_sqlite_backend(project_root)`. An explicit external path is
+`<authority-root>/nuself.sqlite` receives the same no-follow validation and
+hardening as `open_sqlite_backend(authority_root)`. An explicit external path is
 unmanaged unless a private internal creator marks it as an unpublished managed
 migration database.
 
@@ -299,7 +297,7 @@ database and the default public `backup_to(destination)` path preserve the
 existing parent mode and create a new regular file according to the caller's
 normal `umask`; they never route through private-directory hardening.
 
-The managed `private/` root and its managed directory descendants are opened
+The managed authority root and its managed directory descendants are opened
 component-by-component with no-follow directory handles. A symlink or
 non-directory component fails before NuSelf changes permissions, creates
 storage/lock/runtime files, or reads redirected state.
@@ -331,8 +329,8 @@ when the active backend is SQLite. On file authority it returns a diagnostic
 directing the user to `nuself dev migrate` and leaves the canonical path and
 file-backed records untouched.
 
-`nuself dev migrate` is the authority-switch command and therefore has exactly
-one destination: canonical `private/nuself.sqlite`. It does not expose a
+`nuself dev migrate` is the in-authority storage switch and therefore has
+exactly one destination: canonical `<authority-root>/nuself.sqlite`. It does not expose a
 custom `--db` destination; non-authoritative database copies belong to
 snapshot/export workflows. The command must never create or mutate its final
 database path while copying authoritative file data. It writes a uniquely
@@ -596,7 +594,7 @@ def _init_schema(self):
 思想包就是一份 `nuself.sqlite`。导出 = cp，导入 = cp，不需要中间格式。
 
 ```
-private/
+<authority-root>/
   nuself.sqlite             ← 当前思想（完整）
   exports/
     <name>.sqlite           ← 导出快照
@@ -623,14 +621,15 @@ nuself pack inspect [<path>]      → 展示 <path> 或主库的表统计
   case-insensitive first component must not be a Windows device name (`CON`,
   `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, or `LPT1`-`LPT9`), including a reserved
   name followed by another extension.
-- The destination is always exactly `private/exports/<name>.sqlite`; user input
+- The destination is always exactly
+  `<authority-root>/exports/<name>.sqlite`; user input
   cannot select another directory.
 - Export uses SQLite's online backup API through the shared project backend;
   it never copies only the main database file. The snapshot includes committed
   WAL data and remains consistent while another connection is writing.
 - The source default backend remains owned by the outer CLI lifecycle. The
   backup operation owns and always closes its destination connection.
-- Project-managed `private/exports/` and `private/imports/` snapshots inherit
+- Managed `exports/` and `imports/` snapshots under the selected authority inherit
   the owner-only SQLite file contract.
 - Runtime export, validated import, and pre-migration backup all use one
   connection-to-path backup primitive. It creates the destination directory,

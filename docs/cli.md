@@ -1,15 +1,37 @@
 # CLI Guide
 
-NuSelf is CLI-first. Run commands from the project root:
+NuSelf is CLI-first. Installed commands may run from any directory:
 
 ```bash
 uv run nuself --help
 uv run nuself <command> --help
 ```
 
-Use `--project-root PATH` before the command to target another NuSelf project.
+The default authority is `~/.nuself`. Use `--local` for `./.nuself` or
+`--workspace PATH` for `PATH/.nuself`; both flags precede the command and are
+mutually exclusive. NuSelf never switches scope merely because the current
+directory contains `.nuself`.
 The examples below omit the `uv run` prefix only in explanatory text; commands
 show the complete source-checkout invocation.
+
+## Authorities And Migration
+
+```bash
+uv run nuself init
+uv run nuself --local init
+uv run nuself --workspace /path/to/workspace init
+uv run nuself dev paths
+```
+
+Legacy v0.3.0 checkout-local state is migrated only by an explicit command.
+The source is validated and preserved, and an existing target is never merged
+or overwritten:
+
+```bash
+uv run nuself migrate-layout --from ./private --to user
+uv run nuself migrate-layout --from ./private --to-local
+uv run nuself migrate-layout --from ./private --workspace /path/to/workspace
+```
 
 ## Chat
 
@@ -110,8 +132,8 @@ provenance.
 
 ```bash
 uv run nuself pack export my-pack
-uv run nuself pack inspect private/exports/my-pack.sqlite
-uv run nuself pack import private/exports/my-pack.sqlite
+uv run nuself pack inspect ~/.nuself/exports/my-pack.sqlite
+uv run nuself pack import ~/.nuself/exports/my-pack.sqlite
 ```
 
 Thought packs are SQLite snapshots for explicit export/import. They are not a
@@ -123,6 +145,7 @@ replacement for normal project authority or backup discipline.
 uv run nuself dev status
 uv run nuself dev health
 uv run nuself dev config
+uv run nuself dev paths
 uv run nuself dev storage
 uv run nuself dev logs --component chat --tail 20
 ```

@@ -230,7 +230,7 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert result.confidence == 0.92
     assert result.epistemic_status == "grounded"
     assert response_service.calls[0][0].text.startswith("You are NuSelf")
-    thread_path = tmp_path / "private" / "threads" / "default.json"
+    thread_path = tmp_path / "threads" / "default.json"
     text = thread_path.read_text(encoding="utf-8")
     assert "Use the profile context." in text
 
@@ -258,7 +258,7 @@ def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
     agent.respond("two")
     agent.respond("three")
 
-    thread_path = tmp_path / "private" / "threads" / "default.json"
+    thread_path = tmp_path / "threads" / "default.json"
     text = thread_path.read_text(encoding="utf-8")
 
     assert "compressed context" in text
@@ -277,7 +277,7 @@ def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:
     agent.respond("two")
     agent.respond("three")
 
-    thread_path = tmp_path / "private" / "threads" / "default.json"
+    thread_path = tmp_path / "threads" / "default.json"
     text = thread_path.read_text(encoding="utf-8")
 
     assert "LLM API key is not configured" not in text
@@ -351,7 +351,7 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
     agent.respond("new question")
 
     prompt_text = "\n".join(message.text for message in llm.calls[0][1:])
-    saved_text = (tmp_path / "private" / "threads" / "default.json").read_text(encoding="utf-8")
+    saved_text = (tmp_path / "threads" / "default.json").read_text(encoding="utf-8")
     assert "LLM API is not configured yet" not in prompt_text
     assert "LLM API is not configured yet" not in saved_text
     assert "old question" in prompt_text
@@ -911,8 +911,8 @@ def test_conversation_runtime_capability_snapshot_is_stable(
 
 
 def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
-    private_dir = tmp_path / "private"
-    private_dir.mkdir(parents=True)
+    private_dir = tmp_path
+    private_dir.mkdir(parents=True, exist_ok=True)
     (private_dir / "config.yaml").write_text(
         "chat:\n  language_preference: zh-CN\n",
         encoding="utf-8",
