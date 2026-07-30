@@ -186,6 +186,13 @@ use the public endpoint-list shape. Wrong top-level shapes, obsolete nested LLM
 objects, unknown fields, and invalid values fail explicitly rather than being
 silently discarded.
 
+The v0.3 loader has one narrow v0.2.5 compatibility boundary before strict
+validation: it removes the retired `experimental.langmem_adapter` field and
+emits one fixed, payload-free deprecation warning per configuration path. No
+other unknown field is ignored. The frozen official v0.2.5 example config must
+load successfully through this boundary, and the compatibility shim may be
+removed only with the future configuration-system redesign.
+
 Before reading a present `private/config.yaml`, NuSelf hardens `private/` to
 `0700`, rejects non-regular files and symlinks, and hardens the config file to
 `0600`. Managed private-directory creation and hardening use no-follow
@@ -197,7 +204,11 @@ never read from a permissive or redirected file.
 ## Email Delivery
 
 Email has one configuration source: `private/config.yaml`. The obsolete
-`private/email.toml` path is not read.
+`private/email.toml` path is not read. If an enabled configuration has no
+non-blank `email.to_address`, loading raises a typed configuration-migration
+error before Pydantic validation. The diagnostic explicitly explains that
+v0.3 no longer reads `private/email.toml` and names the current YAML fields,
+without reading or rendering any legacy credential.
 
 When `email.enabled` is true, `email.smtp.host`, `email.from_address`, and
 `email.to_address` must be non-empty. SMTP `username` and `password` must be

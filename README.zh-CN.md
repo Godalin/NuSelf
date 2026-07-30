@@ -40,6 +40,10 @@ Persona graph 的 LLM 故障会保留确定性的贡献、汇总和激活 fallba
 语法、record/key identity 不一致以及符号链接重定向。
 受管理的 `private/` 目录树通过 no-follow directory handle 打开，因此 NuSelf
 不会 chmod、读取或写入被符号链接重定向的外部目录。
+v0.3 loader 可以读取完整的官方 v0.2.5 配置：它只移除已经退役的
+`experimental.langmem_adapter` 并发出一次警告。启用旧邮件配置但没有
+`email.to_address` 时会得到明确迁移错误，因为系统不再读取
+`private/email.toml`。
 `nuself dev migrate` 现在会先写入并严格验证临时 SQLite database，完成
 checkpoint、close 和 fsync 后才原子发布；损坏或 ID 不匹配的 file record 会
 中止迁移，不会暴露部分数据库。迁移只发布到权威路径

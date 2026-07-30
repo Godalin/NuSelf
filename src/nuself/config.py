@@ -24,6 +24,7 @@ from nuself.private_fs import (
     harden_private_file,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.diagnostics import emit_runtime_warning
 
 
 # ============================================================================
@@ -276,6 +277,14 @@ class SystemConfig(_ConfigModel):
     experimental: ExperimentalConfig = ExperimentalConfig()
 
 
+class ConfigurationMigrationError(ValueError):
+    """A supported legacy configuration requires an explicit user migration."""
+
+
+class LegacyEmailConfigurationMigrationError(ConfigurationMigrationError):
+    """Legacy email configuration cannot be used without a v0.3 recipient."""
+
+
 # ============================================================================
 # Configuration Loader
 # ============================================================================
@@ -343,6 +352,7 @@ def _is_sensitive_config_key(key: str) -> bool:
 
 
 _CONFIG_CACHE: dict[tuple[str, int, int], SystemConfig] = {}
+_WARNED_LEGACY_CONFIG_PATHS: set[str] = set()
 
 
 class ConfigSystem:
@@ -470,6 +480,7 @@ class ConfigSystem:
                 "NuSelf configuration 'llm' must be an endpoint list"
             )
 
+        _migrate_v025_config(yaml_data, config_path=config_path)
         defaults = cls._default_config().model_dump(mode="python")
         merged = _deep_merge(defaults, yaml_data)
         return SystemConfig.model_validate(merged)
@@ -492,3 +503,48 @@ class ConfigSystem:
             flat["llm.0.model"] = "(not set)"
 
         return flat
+
+
+def _migrate_v025_config(
+    data: dict[str, Any],
+    *,
+    config_path: Path | None,
+) -> None:
+    """Apply the narrow v0.2.5-to-v0.3 configuration boundary."""
+
+    experimental_raw: object = data.get("experimental")
+    if isinstance(experimental_raw, dict):
+        experimental = cast(dict[str, Any], experimental_raw)
+        if "langmem_adapter" in experimental:
+            experimental.pop("langmem_adapter")
+            warning_key = (
+                str(config_path.absolute())
+                if config_path is not None
+                else "<default>"
+            )
+            if warning_key not in _WARNED_LEGACY_CONFIG_PATHS:
+                _WARNED_LEGACY_CONFIG_PATHS.add(warning_key)
+                emit_runtime_warning(
+                    "config/deprecated_v025_langmem_adapter: ignored retired "
+                    "experimental.langmem_adapter; remove this field before "
+                    "the next configuration-system upgrade",
+                    stacklevel=2,
+                )
+
+    email_raw: object = data.get("email")
+    if not isinstance(email_raw, dict):
+        return
+    email = cast(dict[str, Any], email_raw)
+    if email.get("enabled") is not True:
+        return
+    recipient = email.get("to_address")
+    if isinstance(recipient, str) and recipient.strip():
+        return
+    if recipient is not None and not isinstance(recipient, str):
+        return
+    raise LegacyEmailConfigurationMigrationError(
+        "enabled legacy email configuration requires migration: v0.3 no "
+        "longer reads private/email.toml; set email.to_address and move "
+        "legacy smtp.user to email.smtp.username, notification.from to "
+        "email.from_address, and notification.to to email.to_address"
+    )

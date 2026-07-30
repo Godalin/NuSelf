@@ -125,3 +125,11 @@ including:
 The gate must verify both record counts and current runtime decoding. Adding
 new persisted fields must not silently rewrite the fixture to current output;
 compatibility must instead be provided by migration or fail-closed decoders.
+
+The same frozen migration fixture includes the complete official v0.2.5
+`examples/private/config.yaml`. The current loader must accept it, remove only
+the retired `experimental.langmem_adapter` key through the documented
+compatibility boundary, emit its deprecation warning once, and preserve every
+remaining configured value. Enabled legacy email configuration without
+`to_address` must fail with the typed migration diagnostic rather than an
+ordinary unknown-field or model-validation error.

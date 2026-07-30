@@ -51,6 +51,13 @@ migration, validation, and notification-cleanup findings.
   fails before changing the external target's mode or contents. Focused
   filesystem/config/storage verification: 168 passed; locked Pyright reported
   0 errors and 0 warnings.
-- Pending: the remaining configuration migration, schema, and notification
-  findings require implementation and direct regression evidence, followed by
-  the complete release gate.
+- The frozen migration fixture now includes the byte-identical official v0.2.5
+  example config. The loader removes only retired
+  `experimental.langmem_adapter` with one safe warning per path and preserves
+  all remaining values; enabled legacy email without a recipient raises a
+  credential-safe typed migration error naming the current YAML fields.
+  Focused config/email verification: 39 passed; locked Pyright reported 0
+  errors and 0 warnings.
+- Pending: strict runtime/schema behavioral parity and notification cleanup
+  require implementation and direct regression evidence, followed by the
+  complete release gate.
