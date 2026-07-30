@@ -21,16 +21,17 @@ None.
 
 ## Completion Evidence
 
-The Attention remediation loop is complete:
+The daemon deadlock and restart goal is complete:
 
-- `data check` reports current unique invalid records and exact manual repair
-  commands without exposing payloads or mutating authority;
-- `data repair memory` previews and transactionally applies the lossless
-  removal of empty obsolete relation fields, leaving unknown/non-empty shapes
-  untouched;
-- the repository-local authority preview found 87 safely repairable records
-  and 1 unresolved record; no private data was changed;
-- completed-but-undelivered chat replies now point to persisted `:history`,
-  while recurring delivery failure points to daemon restart;
-- focused tests passed 14 cases, Pyright completed with 0 errors and 0
-  warnings, and the full suite passed 2422 tests.
+- chat turns no longer hold the shared SQLite transaction lock across
+  LangGraph/model/tool execution; the final short transaction rechecks the raw
+  thread snapshot before commit;
+- graceful stop/restart has a 30-second ownership-release budget while each
+  control probe remains capped at two seconds;
+- the previously deadlocked PID `91335` was sampled, confirmed stuck in the
+  SQLite/thread-lock cycle, and replaced once after explicit approval;
+- a real restart completed from PID `90807` to PID `91116`; process inspection
+  confirmed exactly one NuSelf daemon and health reported all five owned
+  worker threads alive with zero failures;
+- focused regression tests passed 161 cases, Pyright completed with 0 errors
+  and 0 warnings, and the full suite passed 2425 tests.

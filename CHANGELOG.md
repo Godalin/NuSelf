@@ -6,6 +6,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Fixed a daemon-wide deadlock caused by holding the shared SQLite transaction
+  across LangGraph model/tool execution. Chat turns now retain only their
+  per-thread serialization lock during long work, then recheck and commit in a
+  short transaction. Graceful stop/restart now has a 30-second ownership
+  release budget while the authority lock continues to enforce one daemon
+  process.
 - Added `nuself data check` to report the current unique invalid memory or chat
   records and print validated edit/confirmed delete commands without exposing
   payloads or mutating data. `nuself data repair memory` previews and

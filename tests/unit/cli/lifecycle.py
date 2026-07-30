@@ -1084,6 +1084,11 @@ def test_shutdown_policy_rejects_invalid_timing(
         )
 
 
+def test_default_shutdown_budget_covers_worker_cleanup_contract() -> None:
+    assert lifecycle.DEFAULT_DAEMON_STARTUP_POLICY.timeout_seconds == 2.0
+    assert lifecycle.DEFAULT_DAEMON_SHUTDOWN_POLICY.timeout_seconds == 30.0
+
+
 def test_read_pid_missing_file_returns_none(tmp_path: Path) -> None:
     paths = runtime_paths(tmp_path)
     assert lifecycle.read_pid(paths) is None

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import threading
 import time
 from multiprocessing.context import SpawnContext
 from multiprocessing.synchronize import Event
@@ -12,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+from nuself.storage import get_default_backend
 
 
 def _hold_thread_lock(
@@ -85,6 +87,44 @@ def _spawn_context() -> SpawnContext:
 def test_list_returns_empty_when_no_threads(tmp_path: Path) -> None:
     store = ThreadStore(tmp_path)
     assert store.list() == []
+
+
+def test_update_does_not_hold_sqlite_lock_across_callback(
+    tmp_path: Path,
+) -> None:
+    store = ThreadStore(tmp_path)
+    backend = get_default_backend(tmp_path)
+    completed = threading.Event()
+
+    def read_from_worker() -> None:
+        backend.collection("memory_entries").list()
+        completed.set()
+
+    def update(state: ThreadState) -> tuple[ThreadState, None]:
+        worker = threading.Thread(target=read_from_worker)
+        worker.start()
+        worker.join(timeout=2)
+        assert completed.is_set()
+        return state, None
+
+    store.update("default", update)
+
+
+def test_update_rejects_direct_concurrent_thread_change(
+    tmp_path: Path,
+) -> None:
+    store = ThreadStore(tmp_path)
+    collection = get_default_backend(tmp_path).collection("chat_threads")
+
+    def update(state: ThreadState) -> tuple[ThreadState, None]:
+        collection.put(
+            "default",
+            ThreadState.empty("default").to_wire(),
+        )
+        return state, None
+
+    with pytest.raises(ValueError, match="changed concurrently"):
+        store.update("default", update)
 
 
 @pytest.mark.parametrize(

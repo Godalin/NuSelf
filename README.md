@@ -182,10 +182,9 @@ uv run nuself data export threads --format json
 
 `data check` finds invalid records without changing them and prints the exact
 `edit` or confirmed `delete` command for each one. `data repair memory`
-previews supported lossless legacy migrations; add `--apply` to commit them in
-one transaction. Generic editing validates
-the complete record, shows a diff, confirms the change, and rejects concurrent
-overwrites. Operational collections are hidden unless `--internal` is explicit.
+previews lossless legacy migrations; `--apply` commits them atomically. Generic
+editing validates full records and rejects concurrent overwrites. Operational
+collections stay hidden unless `--internal` is explicit.
 
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 `--help` output is the current command reference.
@@ -195,7 +194,9 @@ The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 Personal state defaults to `~/.nuself`. Use `--local` for `./.nuself` or
 `--workspace PATH` for `PATH/.nuself`; each selection is an isolated state
 authority. Workspace configuration inherits user defaults, but databases and
-runtime state are never merged.
+runtime state are never merged. Each authority permits exactly one NuSelf
+daemon operating-system process; its schedulers run as owned threads inside
+that process.
 
 Interactive chat shows a concise `Attention:` block when the selected
 authority has no usable model, a local workspace authority was not selected,

@@ -48,6 +48,12 @@ same change.
   values. Use a distinct missing sentinel for legacy derivation so internal
   construction rejects inconsistent indexes as strictly as wire decoding.
 
+## Test Runtime Hygiene
+
+- [ ] Isolate daemon socket-path adversarial tests under a test-owned temporary
+  runtime directory and clean every synthetic socket/file/directory artifact.
+  The shared per-user socket runtime must not accumulate fixture endpoints.
+
 ## Backlog Rules
 
 - Do not add completed checkboxes.

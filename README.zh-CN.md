@@ -178,7 +178,7 @@ uv run nuself data export threads --format json
 
 ## 隐私与存储
 
-个人状态默认位于 `~/.nuself`。`--local` 使用 `./.nuself`，`--workspace PATH` 使用 `PATH/.nuself`；每次选择都是隔离的状态 authority。工作区配置继承用户默认值，但数据库和运行状态绝不合并。
+个人状态默认位于 `~/.nuself`。`--local` 使用 `./.nuself`，`--workspace PATH` 使用 `PATH/.nuself`；每次选择都是隔离的状态 authority。工作区配置继承用户默认值，但数据库和运行状态绝不合并。每个 authority 严格只允许一个 NuSelf daemon 操作系统进程；各调度器是该进程内部受管的线程。
 
 交互聊天会用简洁的 `Attention:` 区块提示关键状态：当前 authority
 没有可用模型、本地工作区 authority 尚未被选择、持久化记录无法解码，

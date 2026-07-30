@@ -641,6 +641,11 @@ the publisher into `DaemonWorkerSupervisor`.
   a timed-out worker is still alive and has not emitted a stopped transition.
   It and `shutdown_cleanup_failed` resolve through the sealed
   `daemon/operations_audit.py` registry.
+- Public stop/restart allows one 30-second monotonic graceful-shutdown budget,
+  covering the declared five-second cleanup attempt for each owned worker plus
+  ownership release. Startup remains a short two-second readiness check.
+  Timeout never implies a second daemon may start: the stable authority lock
+  continues to enforce exactly one operating-system daemon process.
 
 Chat-turn lifecycle is the second production event boundary.
 `ConversationGraphRuntime`

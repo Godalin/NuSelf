@@ -180,15 +180,25 @@ class ThreadStore:
         thread_id: str,
         update: Callable[[ThreadState], tuple[ThreadState, UpdateResult]],
     ) -> UpdateResult:
-        """Atomically update one working-memory stream under an exclusive lock."""
+        """Serialize one turn without holding SQLite across model execution."""
 
         self._validate_id(thread_id)
-        with self._locked(thread_id), self._backend.transaction():
-            state = self._load_unlocked(thread_id)
+        with self._locked(thread_id):
+            original = self._collection.get(thread_id)
+            state = (
+                ThreadState.empty(thread_id)
+                if original is None
+                else ThreadState.from_wire(original)
+            )
             updated, result = update(state)
             if updated.thread_id != thread_id:
                 raise ValueError("thread update cannot change thread identity")
-            self._save_unlocked(updated)
+            with self._backend.transaction():
+                if self._collection.get(thread_id) != original:
+                    raise ValueError(
+                        "thread changed concurrently; retry the turn"
+                    )
+                self._save_unlocked(updated)
             return result
 
     def _load_unlocked(self, thread_id: str) -> ThreadState:

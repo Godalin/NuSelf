@@ -244,6 +244,14 @@ interactive input state.
   while producing a turn, but it must not prevent a second CLI from loading
   the last committed thread state, printing its interactive banner, or
   preparing transcript metadata.
+- A chat turn holds its stable per-thread advisory mutation lock across
+  context preparation, model execution, and tool calls, but never holds the
+  shared SQLite transaction lock across that work. After the turn completes,
+  one short transaction rechecks the original raw thread snapshot and commits
+  the updated state. A direct writer that bypasses the advisory lock therefore
+  causes a concurrent-state failure instead of being overwritten. This lock
+  order prevents LangGraph worker threads and daemon background workers from
+  deadlocking behind a transaction owned by the request thread.
 - Persisted ThreadState decoding is fail-closed. Every `messages` member must
   be an object accepted by the exact ThreadMessage decoder; malformed members
   invalidate the complete thread instead of being filtered. Message indexes

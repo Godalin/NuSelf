@@ -94,7 +94,8 @@ class DaemonWaitPolicy:
 
 
 DEFAULT_DAEMON_STARTUP_POLICY = DaemonWaitPolicy()
-DEFAULT_DAEMON_SHUTDOWN_POLICY = DaemonWaitPolicy()
+DEFAULT_DAEMON_SHUTDOWN_POLICY = DaemonWaitPolicy(timeout_seconds=30.0)
+DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS = 2.0
 
 DaemonStartFailureReason = Literal[
     "spawn_failed",
@@ -487,7 +488,10 @@ def stop(
     deadline = time.monotonic() + shutdown_policy.timeout_seconds
     current = _status_for_stop(
         paths.project_root,
-        ping_timeout=shutdown_policy.timeout_seconds,
+        ping_timeout=min(
+            DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
+            shutdown_policy.timeout_seconds,
+        ),
     )
     owner_active = current.owner_active
     assert owner_active is not None
@@ -510,7 +514,10 @@ def stop(
     try:
         client.shutdown(
             paths.project_root,
-            timeout=remaining,
+            timeout=min(
+                DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
+                remaining,
+            ),
         )
     except client.DaemonApplicationError as exc:
         raise DaemonStopError(
@@ -531,7 +538,10 @@ def stop(
             )
         current = _status_for_stop(
             paths.project_root,
-            ping_timeout=remaining,
+            ping_timeout=min(
+                DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
+                remaining,
+            ),
         )
         owner_active = current.owner_active
         assert owner_active is not None
