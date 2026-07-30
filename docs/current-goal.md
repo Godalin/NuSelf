@@ -5,31 +5,33 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Migrate NuSelf to reversible schema v4 with one compact records table, make
-workspace state part of the main authority, and clean the repository-local
-`.nuself` after verified migration.
+No active implementation goal.
 
 ## Active Branch
 
-Current working branch.
+None.
 
 ## Ordered Work
 
-1. Specify schema v4 and the compact authority layout.
-2. Implement and test reversible v3↔v4 scripts.
-3. Replace dynamic collection tables with the unified runtime records table.
-4. Move reason exports out of workspace directories and remove obsolete
-   workspace filesystem creation.
-5. Migrate and verify the repository-local `.nuself`, then remove only
-   superseded workspace artifacts.
-6. Run full gates and commit schema/runtime and layout/data cleanup separately.
+None.
 
 ## Out Of Scope
 
-- Deleting explicit exports, transcripts, logs, sources, or historical backups.
-- Migrating the default user authority outside this repository.
-- Release publication.
+None.
 
 ## Completion Evidence
 
-Pending.
+Schema v4 and the compact workspace layout are complete:
+
+- all 3654 repository-local domain records migrated into the unified records
+  table and remain readable through all 16 collections;
+- 93 legacy workspace/persona rows and 277 reason export files moved into the
+  main authority and `exports/reason`;
+- the verified legacy `workspaces/` tree is gone; one valid schema-v3 database
+  backup remains under `.nuself/backups`;
+- `PRAGMA quick_check` returned `ok`, all 89 memory records validate, and the
+  v3 database backup still reports schema version 3;
+- Pyright completed with 0 errors and 0 warnings, focused tests passed 179
+  cases, and the full suite passed 2439 tests;
+- the 0.3.1 sdist and wheel built successfully, and the wheel passed a clean
+  Python 3.14 import and CLI smoke test.

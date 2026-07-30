@@ -182,9 +182,9 @@ uv run nuself data export threads --format json
 live under `scripts/`, outside the installed runtime. Generic editing validates
 full records and rejects concurrent overwrites.
 
-Database schema upgrades are explicit scripts; opening an old database never
-mutates it. See the [migration specification](docs/spec/database-migrations.md)
-for dry-run, upgrade, downgrade, and backup behavior.
+Schema v4 keeps domain records and namespaced workspace state in one compact
+authority database. Upgrades remain explicit and reversible; see the
+[migration specification](docs/spec/database-migrations.md).
 
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 `--help` output is the current command reference.
