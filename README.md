@@ -107,6 +107,8 @@ uv run nuself
 
 Opening another interactive client remains responsive while the daemon is
 still completing a turn; startup reads the last committed thread snapshot.
+Ctrl-C cancels an in-flight turn only after its request transport is closed;
+Ctrl-D exits through transcript, curator, and storage cleanup.
 
 Send one message:
 

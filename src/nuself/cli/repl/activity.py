@@ -159,7 +159,21 @@ def run_live_activity_send(
                         printed_logs=printed_logs,
                     )
         except BaseException:
-            send_call.wait()
+            try:
+                send_call.cancel()
+            except Exception as cancellation_error:
+                report_chat_failure(
+                    cancellation_error,
+                    event="interactive_send_failed",
+                    project_root=project_root,
+                )
+            if not daemon_activity:
+                print(
+                    "\nInterrupt requested; waiting for the active local "
+                    "operation to release its resources.",
+                    file=sys.stderr,
+                )
+            _reap_cancelled_send(send_call)
             raise
 
         outcome = send_call.outcome()
@@ -217,6 +231,19 @@ def run_live_activity_send(
         captured_events,
         printed_logs,
     )
+
+
+def _reap_cancelled_send(
+    send_call: OwnedCall[InteractiveChatResult],
+) -> None:
+    """Join one cancelled owner even if cleanup receives another Ctrl-C."""
+
+    while True:
+        try:
+            if send_call.wait():
+                return
+        except KeyboardInterrupt:
+            continue
 
 
 def _open_activity_subscription(

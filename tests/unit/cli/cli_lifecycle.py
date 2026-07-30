@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.cli import CliLifecycleError, main
+from nuself.cli.exit_codes import CliExitCode
 
 
 class _Parser:
@@ -88,6 +89,35 @@ def test_cli_resets_backend_then_reraises_same_control_exception(
 
     assert captured.value is primary
     assert resets == [tmp_path / ".nuself"]
+
+
+def test_cli_interrupt_resets_backend_without_traceback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    resets: list[Path | None] = []
+    monkeypatch.setattr(
+        "nuself.cli.build_parser",
+        lambda: _Parser(tmp_path),
+    )
+
+    def interrupt_dispatch(
+        args: argparse.Namespace,
+        parser: object,
+    ) -> int:
+        del args, parser
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("nuself.cli.dispatch_cli", interrupt_dispatch)
+    monkeypatch.setattr(
+        "nuself.cli.reset_default_backend",
+        resets.append,
+    )
+
+    assert main(["status"]) is CliExitCode.INTERRUPTED
+    assert resets == [tmp_path / ".nuself"]
+    assert capsys.readouterr().err == "Interrupted.\n"
 
 
 def test_cli_cleanup_failure_retains_primary_as_cause(

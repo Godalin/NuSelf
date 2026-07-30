@@ -15,7 +15,7 @@ from nuself.runtime.audit_types import LOG_COMPONENTS
 from nuself.runtime.observability import write_observed_log_event
 
 ApprovalAuditEvent = Literal["approval_prompted", "approval_decided"]
-ApprovalInputKind = Literal["affirmative", "declined", "eof"]
+ApprovalInputKind = Literal["affirmative", "declined", "eof", "interrupt"]
 
 _MESSAGES: dict[ApprovalAuditEvent, str] = {
     "approval_prompted": "Tool approval requested",
@@ -67,7 +67,7 @@ def _validate_decided(metadata: Mapping[str, object]) -> None:
         )
     approver = metadata["approver"]
     input_kind = metadata["input_kind"]
-    if input_kind not in {"affirmative", "declined", "eof"}:
+    if input_kind not in {"affirmative", "declined", "eof", "interrupt"}:
         raise AuditSchemaError(
             "approval audit metadata input_kind is invalid"
         )

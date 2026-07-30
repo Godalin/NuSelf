@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import socket
+import time
 from collections.abc import Callable
 from math import isfinite
 from pathlib import Path
@@ -29,6 +30,7 @@ from nuself.daemon.protocol import (
 from nuself.daemon.transport import read_socket_frame
 from nuself.logs import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.execution import current_cancellation
 
 PayloadT = TypeVar("PayloadT")
 DaemonConnectionPhase: TypeAlias = Literal[
@@ -122,18 +124,53 @@ def request(
     phase: DaemonConnectionPhase = "connect"
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-            sock.settimeout(timeout)
-            sock.connect(str(paths.socket_path))
-            phase = "request_encode"
-            request_frame = req.to_json_line()
-            phase = "send"
-            sock.sendall(request_frame)
-            phase = "receive"
+            cancellation = current_cancellation()
+
+            def close_cancelled_socket() -> None:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                sock.close()
+
+            unregister_cancellation = (
+                cancellation.register(close_cancelled_socket)
+                if cancellation is not None
+                else lambda: None
+            )
+            deadline = time.monotonic() + timeout
+            sock.settimeout(
+                min(timeout, 0.1)
+                if cancellation is not None
+                else timeout
+            )
+            retry_timeout_callback: Callable[[], bool] | None = None
+            if cancellation is not None:
+
+                def should_retry_timeout() -> bool:
+                    return (
+                        not cancellation.cancelled
+                        and time.monotonic() < deadline
+                    )
+
+                retry_timeout_callback = should_retry_timeout
             try:
-                response_line = read_socket_frame(sock)
-            except ProtocolError:
-                phase = "response_decode"
-                raise
+                sock.connect(str(paths.socket_path))
+                phase = "request_encode"
+                request_frame = req.to_json_line()
+                phase = "send"
+                sock.sendall(request_frame)
+                phase = "receive"
+                try:
+                    response_line = read_socket_frame(
+                        sock,
+                        retry_timeout=retry_timeout_callback,
+                    )
+                except ProtocolError:
+                    phase = "response_decode"
+                    raise
+            finally:
+                unregister_cancellation()
         phase = "response_decode"
         response = DaemonResponse.from_json_line(response_line)
         phase = "response_identity"

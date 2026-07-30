@@ -47,6 +47,7 @@ def test_cli_exit_codes_are_typed_and_shell_stable() -> None:
     assert int(CliExitCode.SETUP_REQUIRED) == 3
     assert int(CliExitCode.TEMPORARY_FAILURE) == 4
     assert int(CliExitCode.CORRUPT_STATE) == 5
+    assert int(CliExitCode.INTERRUPTED) == 130
 
 
 def test_model_readiness_requires_init_first(tmp_path: Path) -> None:

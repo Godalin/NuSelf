@@ -257,6 +257,41 @@ def test_approval_eof_uses_safe_default_without_executing_tool(
     ]
 
 
+def test_approval_interrupt_uses_safe_default_without_executing_tool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    decisions: list[object] = []
+
+    def interrupt() -> str:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("builtins.input", interrupt)
+
+    def capture(envelope: RuntimeEnvelope, **_kwargs: object) -> object:
+        if envelope.name == "approval_decided":
+            decisions.append(envelope.payload["metadata"])
+        return object()
+
+    monkeypatch.setattr(
+        "nuself.runtime.observability.write_audit_envelope",
+        capture,
+    )
+
+    @approval_required("chat")
+    def tool() -> str:
+        raise AssertionError("interrupted approval must not execute")
+
+    assert json.loads(tool())["approved"] is False
+    assert decisions == [
+        {
+            "tool": "tool",
+            "approved": False,
+            "approver": None,
+            "input_kind": "interrupt",
+        }
+    ]
+
+
 def test_approval_render_failure_propagates_without_executing_tool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

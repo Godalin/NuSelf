@@ -14,3 +14,4 @@ class CliExitCode(IntEnum):
     SETUP_REQUIRED = 3
     TEMPORARY_FAILURE = 4
     CORRUPT_STATE = 5
+    INTERRUPTED = 130

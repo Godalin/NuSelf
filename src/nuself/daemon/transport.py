@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Protocol
 
 from nuself.daemon.protocol import (
@@ -51,12 +52,21 @@ def read_stream_frame(stream: BinaryFrameReader) -> bytes:
     return frame
 
 
-def read_socket_frame(sock: SocketFrameReader) -> bytes:
+def read_socket_frame(
+    sock: SocketFrameReader,
+    *,
+    retry_timeout: Callable[[], bool] | None = None,
+) -> bytes:
     """Receive one bounded frame, rejecting received trailing frame bytes."""
 
     buffer = bytearray()
     while True:
-        chunk = sock.recv(_SOCKET_CHUNK_BYTES)
+        try:
+            chunk = sock.recv(_SOCKET_CHUNK_BYTES)
+        except TimeoutError:
+            if retry_timeout is not None and retry_timeout():
+                continue
+            raise
         if not chunk:
             if not buffer:
                 raise DaemonPeerDisconnected(

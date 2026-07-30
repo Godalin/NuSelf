@@ -46,13 +46,19 @@ def approval_required(
             print("approve? [y/N] ", end="", flush=True)
             try:
                 resp = input()
-            except EOFError:
+            except (EOFError, KeyboardInterrupt) as control:
+                input_kind = (
+                    "eof"
+                    if isinstance(control, EOFError)
+                    else "interrupt"
+                )
+                print()
                 write_approval_decided(
                     component,
                     tool=fn.__name__,
                     approved=False,
                     approver=None,
-                    input_kind="eof",
+                    input_kind=input_kind,
                 )
                 return json.dumps(
                     {

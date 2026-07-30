@@ -56,12 +56,27 @@ Stable CLI exit statuses are:
 | `3` | initialization/configuration prerequisite missing |
 | `4` | temporary unavailability; a later retry is appropriate |
 | `5` | corrupt or unsafe authority state |
+| `130` | one-shot command interrupted by the user |
 
 NuSelf represents this table internally with the `CliExitCode` `IntEnum`.
 Command, readiness, and interactive transport infrastructure use named enum
 members rather than numeric literals. Conversion to a plain integer is only a
 process-boundary concern; the numeric interface above remains stable for
 shells and other callers.
+
+Terminal EOF and `KeyboardInterrupt` are user control, not application
+failures. EOF at the main REPL prompt is a successful session exit. Ctrl-C at
+an idle prompt cancels only the current line; Ctrl-C during a turn cancels the
+client wait and returns to the prompt after owned transport cleanup. A Ctrl-C
+escaping a one-shot command still runs the outer storage cleanup and returns
+status `130` without a traceback. If that cleanup fails, the cleanup aggregate
+retains the interrupt as its primary cause and takes precedence.
+
+EOF or Ctrl-C at a destructive confirmation is a negative decision and must
+not mutate state. Interactive approval prompts record the negative decision;
+one-shot CLI confirmation returns the typed interrupted status. Watch commands
+that explicitly advertise Ctrl-C as their stop control treat it as a
+successful, fully unwound stop.
 
 One-shot commands always terminate after rendering their disposition.
 Interactive transport failures keep the REPL alive. A retryable result states
@@ -679,6 +694,18 @@ failure of that diagnostic cannot replace the callback error. Callback
 values remain control flow. The same object is re-raised on the main thread
 after subscription close, with cause and traceback retained. Auxiliary final
 drain is skipped so it cannot mask the control exception.
+
+Manual interruption is an owned cancellation boundary, not permission to
+abandon a request thread. When the main thread receives `KeyboardInterrupt`
+during a live send, it first requests cooperative cancellation of that send.
+A daemon request reacts by shutting down its owned client socket, then the
+main thread waits for the owned call to reach a terminal outcome and closes
+the activity subscription before propagating the original control exception.
+Cancellation-caused transport failure is subordinate to that original control
+exception and must not be presented as a retryable chat failure. Waiting for a
+send without first requesting cancellation is forbidden. A later Ctrl-C
+received during the bounded reaping window cannot replace the original
+control exception or skip owned-call cleanup.
 
 REPL exit cleanup uses one lifecycle aggregation boundary. The ordered steps
 are `transcript.auto_save` and `memory.curator.run`. Both execute exactly once

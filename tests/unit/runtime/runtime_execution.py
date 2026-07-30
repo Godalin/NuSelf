@@ -3,7 +3,12 @@ import threading
 import pytest
 from pytest import MonkeyPatch
 
-from nuself.runtime.execution import CallOutcome, OwnedCall
+from nuself.runtime.execution import (
+    CallOutcome,
+    CancellationCleanupError,
+    OwnedCall,
+    current_cancellation,
+)
 
 
 def test_owned_call_runs_once_and_returns_value() -> None:
@@ -62,6 +67,70 @@ def test_owned_call_timeout_does_not_consume_later_outcome() -> None:
 
     release.set()
     assert call.outcome(timeout=1) == CallOutcome(value="done")
+
+
+def test_owned_call_cancel_releases_registered_resource() -> None:
+    started = threading.Event()
+    released = threading.Event()
+
+    def wait_for_cancellation() -> str:
+        cancellation = current_cancellation()
+        assert cancellation is not None
+        unregister = cancellation.register(released.set)
+        started.set()
+        try:
+            released.wait()
+            return "closed"
+        finally:
+            unregister()
+
+    call = OwnedCall(
+        name="test-call",
+        target=wait_for_cancellation,
+    )
+    call.start()
+    assert started.wait(timeout=1)
+
+    assert call.cancel() is True
+    assert call.cancel() is False
+    assert call.outcome(timeout=1) == CallOutcome(value="closed")
+
+
+def test_owned_call_cancel_attempts_every_registered_closer() -> None:
+    ready = threading.Event()
+    release = threading.Event()
+    calls: list[str] = []
+
+    def wait() -> None:
+        cancellation = current_cancellation()
+        assert cancellation is not None
+        cancellation.register(
+            lambda: calls.append("first")
+        )
+
+        def fail() -> None:
+            calls.append("second")
+            raise OSError("close failed")
+
+        def finish() -> None:
+            calls.append("third")
+            release.set()
+
+        cancellation.register(fail)
+        cancellation.register(finish)
+        ready.set()
+        release.wait()
+
+    call = OwnedCall(name="test-call", target=wait)
+    call.start()
+    assert ready.wait(timeout=1)
+
+    with pytest.raises(CancellationCleanupError) as captured:
+        call.cancel()
+
+    assert calls == ["first", "second", "third"]
+    assert len(captured.value.failures) == 1
+    assert call.wait(timeout=1)
 
 
 @pytest.mark.parametrize("timeout", [-1, float("inf"), float("nan"), True])

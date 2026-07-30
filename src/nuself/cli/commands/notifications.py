@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import select
 import sys
 import time
 from typing import cast
 
 from nuself.cli.commands.output import print_ansi, resolve_handle
+from nuself.cli.exit_codes import CliExitCode
 from nuself.notification import (
     NotificationOutbox,
     NotificationClearStatus,
@@ -80,14 +82,30 @@ def handle_notify_watch(args: argparse.Namespace) -> int:
     seen = {entry.id for entry in outbox.list()}
     try:
         while True:
-            time.sleep(interval)
+            if _watch_stop_requested(interval):
+                print("Stopped watching.")
+                return CliExitCode.SUCCESS
             for entry in outbox.list():
                 if entry.id not in seen:
                     seen.add(entry.id)
                     print_ansi(render_outbox_summary(entry))
     except KeyboardInterrupt:
         print("\nStopped watching.")
-        return 0
+        return CliExitCode.SUCCESS
+
+
+def _watch_stop_requested(interval: float) -> bool:
+    """Wait for the next poll while honoring q and terminal EOF."""
+
+    try:
+        readable, _, _ = select.select([sys.stdin], [], [], interval)
+    except (OSError, ValueError):
+        time.sleep(interval)
+        return False
+    if not readable:
+        return False
+    line = sys.stdin.readline()
+    return line == "" or line.strip().casefold() == "q"
 
 
 def handle_notify_send(args: argparse.Namespace) -> int:

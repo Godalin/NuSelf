@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # pyright: reportPrivateUsage=false
 
+import io
 import subprocess
 import stat
 import sys
@@ -56,6 +57,7 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.runtime.execution import current_cancellation
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceQueryService
 
@@ -645,6 +647,55 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_interactive_turn_interrupt_cancels_owned_send_before_return(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    started = threading.Event()
+    released = threading.Event()
+
+    def fake_send(
+        message: str,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> cli.InteractiveChatResult:
+        del message, thread_id, turn_id
+        cancellation = current_cancellation()
+        assert cancellation is not None
+        unregister = cancellation.register(released.set)
+        started.set()
+        try:
+            released.wait()
+            return cli.InteractiveChatResult(code=1)
+        finally:
+            unregister()
+
+    def interrupt_poll(_interval: float) -> None:
+        assert started.wait(timeout=1)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        "nuself.cli.repl.activity.time.sleep",
+        interrupt_poll,
+    )
+    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
+
+    with pytest.raises(KeyboardInterrupt):
+        cli._send_interactive_chat_turn(
+            fake_send,
+            _authority(tmp_path),
+            "default",
+            "hello",
+            session,
+        )
+
+    assert released.is_set()
+    assert not any(
+        thread.name == "nuself-interactive-send"
+        for thread in threading.enumerate()
+    )
 
 
 def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
@@ -6030,6 +6081,38 @@ def test_notify_watch_default_interval(
     assert result == 0
     assert sleep_calls == [5]
     assert "Watching outbox every 5s" in output
+
+
+@pytest.mark.parametrize("watch_input", ["q\n", ""])
+def test_notify_watch_stops_on_q_or_eof(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+    watch_input: str,
+) -> None:
+    stream = io.StringIO(watch_input)
+    monkeypatch.setattr("sys.stdin", stream)
+
+    def readable_input(
+        readers: list[object],
+        writers: list[object],
+        errors: list[object],
+        timeout: float,
+    ) -> tuple[list[object], list[object], list[object]]:
+        del timeout
+        return readers, writers, errors
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.notifications.select.select",
+        readable_input,
+    )
+
+    result = main(
+        ["--workspace", str(tmp_path), "inbox", "notify", "watch"]
+    )
+
+    assert result == 0
+    assert "Stopped watching." in capsys.readouterr().out
 
 
 def test_repl_watch_detects_new_entries(

@@ -174,6 +174,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise lifecycle_error from primary_error
         raise lifecycle_error
     if primary_error is not None:
+        if isinstance(primary_error, KeyboardInterrupt):
+            print("Interrupted.", file=sys.stderr)
+            return CliExitCode.INTERRUPTED
         raise primary_error.with_traceback(primary_error.__traceback__)
     return result
 

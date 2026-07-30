@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import socket
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -34,6 +35,7 @@ from nuself.daemon.transport import (
     write_stream_frame,
 )
 from nuself.logs import read_log_events
+from nuself.runtime.execution import OwnedCall
 
 
 class ChunkSocket:
@@ -43,6 +45,18 @@ class ChunkSocket:
     def recv(self, size: int) -> bytes:
         del size
         return self._chunks.pop(0) if self._chunks else b""
+
+
+class TimeoutChunkSocket:
+    def __init__(self, chunks: list[bytes | TimeoutError]) -> None:
+        self._chunks = list(chunks)
+
+    def recv(self, size: int) -> bytes:
+        del size
+        chunk = self._chunks.pop(0)
+        if isinstance(chunk, TimeoutError):
+            raise chunk
+        return chunk
 
 
 class PartialWriter:
@@ -139,10 +153,41 @@ class ReceiveFailingClientSocket(ClientSocket):
         raise socket.timeout("response timed out")
 
 
+class BlockingClientSocket(ClientSocket):
+    def __init__(self) -> None:
+        super().__init__(b"")
+        self.receiving = threading.Event()
+        self.closed = threading.Event()
+
+    def recv(self, size: int) -> bytes:
+        del size
+        self.receiving.set()
+        self.closed.wait()
+        raise OSError("cancelled socket closed")
+
+    def shutdown(self, how: int) -> None:
+        assert how == socket.SHUT_RDWR
+        self.closed.set()
+
+    def close(self) -> None:
+        self.closed.set()
+
+
 def test_socket_frame_reader_accepts_fragmented_frame() -> None:
     sock = ChunkSocket([b'{"ok":', b"true}\n"])
 
     assert read_socket_frame(sock) == b'{"ok":true}\n'  # type: ignore[arg-type]
+
+
+def test_socket_frame_reader_retries_timeout_without_losing_partial_frame() -> None:
+    sock = TimeoutChunkSocket(
+        [b'{"ok":', socket.timeout("poll"), b"true}\n"]
+    )
+
+    assert read_socket_frame(  # type: ignore[arg-type]
+        sock,
+        retry_timeout=lambda: True,
+    ) == b'{"ok":true}\n'
 
 
 def test_frame_readers_distinguish_clean_and_partial_eof() -> None:
@@ -744,6 +789,44 @@ def test_client_classifies_socket_io_phase(
     assert captured.value.request_may_have_completed is True
     assert message in str(captured.value)
     assert isinstance(captured.value.__cause__, OSError)
+
+
+def test_client_request_cancellation_closes_owned_socket(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _prepare_socket_path(tmp_path)
+    fake_socket = BlockingClientSocket()
+
+    def socket_factory(
+        *args: object,
+        **kwargs: object,
+    ) -> BlockingClientSocket:
+        del args, kwargs
+        return fake_socket
+
+    monkeypatch.setattr(
+        client.socket,
+        "socket",
+        socket_factory,
+    )
+    call = OwnedCall(
+        name="cancelled-daemon-request",
+        target=lambda: client.request(
+            "ping",
+            project_root=tmp_path,
+            timeout=60,
+        ),
+    )
+    call.start()
+    assert fake_socket.receiving.wait(timeout=1)
+
+    assert call.cancel() is True
+    outcome = call.outcome(timeout=1)
+
+    assert fake_socket.closed.is_set()
+    assert isinstance(outcome.error, DaemonConnectionError)
+    assert outcome.error.phase == "receive"
 
 
 def test_client_rejects_mismatched_response_identity(

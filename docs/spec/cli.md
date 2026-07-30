@@ -222,6 +222,13 @@ interactive input state.
   once, in that order. EOF does not perform an additional inline save.
 - Both cleanup steps are attempted even if the first fails. Cleanup failures
   are never converted into a successful exit code.
+- Ctrl-C while editing an idle prompt discards only that input and keeps the
+  session open. Ctrl-C during an in-flight turn cooperatively cancels and
+  closes the request transport before returning to the prompt. Ctrl-D at the
+  prompt is a graceful session exit and runs the complete exit lifecycle.
+- One-shot watch commands that advertise keyboard control poll stdin together
+  with their data source: Ctrl-C, terminal EOF/Ctrl-D, and `q` followed by
+  Enter all stop the watch cleanly without skipping outer storage cleanup.
 
 ### Command Prefix
 
@@ -330,11 +337,11 @@ An unexpected callback `Exception` becomes a non-retryable failed interactive
 result after final activity drain and subscription close, and emits
 `chat/interactive_send_failed`. A non-`Exception` `BaseException` such as
 `KeyboardInterrupt` or `SystemExit` is process-control state: the main thread
-stops auxiliary activity processing, waits for the already-started send call to
-finish, skips final drain, closes the subscription, and re-raises the same
-exception object with its traceback. Python threads are not killed or abandoned
-to simulate cancellation. Control state must not be converted into `code=1` or
-replaced by activity diagnostics.
+stops auxiliary activity processing, requests cooperative cancellation of the
+already-started send, waits for it to finish, skips final drain, closes the
+subscription, and re-raises the same exception object with its traceback.
+Python threads are not killed or abandoned to simulate cancellation. Control
+state must not be converted into `code=1` or replaced by activity diagnostics.
 
 The outer interactive lifecycle retains a main-loop `BaseException` while
 running exit cleanup. If cleanup succeeds, it re-raises the same primary object

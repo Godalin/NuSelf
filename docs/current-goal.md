@@ -5,29 +5,34 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-No active implementation goal.
+Make manual Ctrl-C and Ctrl-D control flow deterministic across NuSelf's CLI:
+an interrupted in-flight operation must release its transport and owned
+execution resources before the REPL continues or the process exits, and every
+real session exit must run the existing transcript, curator, and storage
+cleanup boundaries exactly once.
 
 ## Active Branch
 
-None.
+`main`
 
 ## Ordered Work
 
-None.
+1. Specify prompt cancellation, in-flight cancellation, EOF exit, watch-loop
+   stop, and outer process cleanup semantics.
+2. Add cooperative cancellation to owned interactive sends and daemon socket
+   requests; close activity subscriptions before returning control.
+3. Normalize interactive prompts and bounded loops so Ctrl-C/Ctrl-D cannot
+   bypass their owner cleanup.
+4. Add focused lifecycle, transport, and regression tests.
+5. Run targeted tests, Pyright, the full suite, build, and clean-wheel smoke.
 
 ## Out Of Scope
 
-None.
+- Cancellation of provider SDK calls that do not expose a cooperative
+  cancellation API; NuSelf still owns and closes its surrounding resources.
+- Changing daemon SIGINT/SIGTERM shutdown ordering, which already has a
+  dedicated signal owner and ordered cleanup contract.
 
 ## Completion Evidence
 
-The v0.3.1 interactive-startup blocking fix is complete:
-
-- thread snapshot reads no longer acquire the per-thread mutation lock or open
-  a SQLite write transaction;
-- a cross-process regression test holds both the mutation lock and
-  `BEGIN IMMEDIATE` while `load()` returns the last committed state promptly;
-- real `uv run --locked nuself --local` startup displayed the banner and
-  prompt immediately against the same daemon that reproduced the block;
-- Pyright completed with 0 errors and 0 warnings;
-- the full suite completed with 2404 passing tests.
+Pending.

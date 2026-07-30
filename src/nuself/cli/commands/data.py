@@ -14,6 +14,8 @@ import tempfile
 from typing import Callable, cast
 
 from nuself.agent.chat import ThreadState
+from nuself.cli.control import ConfirmationDecision, read_confirmation
+from nuself.cli.exit_codes import CliExitCode
 from nuself.domain.memory import MemoryEntry
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime import decode_json_value, encode_json_value
@@ -219,12 +221,13 @@ def handle_data_edit(args: argparse.Namespace) -> int:
             )
         )
         print(diff, end="")
-        if not args.yes and input("Apply changes? [y/N] ").strip().casefold() not in {
-            "y",
-            "yes",
-        }:
-            print("Cancelled.")
-            return 1
+        if not args.yes:
+            decision = read_confirmation("Apply changes? [y/N] ")
+            if decision is ConfirmationDecision.INTERRUPTED:
+                return CliExitCode.INTERRUPTED
+            if decision is ConfirmationDecision.NO:
+                print("Cancelled.")
+                return CliExitCode.FAILURE
         with backend.transaction():
             if collection.get(args.record_id) != original:
                 raise ValueError(
@@ -267,12 +270,13 @@ def handle_data_delete(args: argparse.Namespace) -> int:
             raise ValueError(
                 f"record not found: {args.collection}/{args.record_id}"
             )
-        if not args.yes and input("Delete permanently? [y/N] ").strip().casefold() not in {
-            "y",
-            "yes",
-        }:
-            print("Cancelled.")
-            return 1
+        if not args.yes:
+            decision = read_confirmation("Delete permanently? [y/N] ")
+            if decision is ConfirmationDecision.INTERRUPTED:
+                return CliExitCode.INTERRUPTED
+            if decision is ConfirmationDecision.NO:
+                print("Cancelled.")
+                return CliExitCode.FAILURE
         with backend.transaction():
             collection.delete(args.record_id)
         _write_change_audit(

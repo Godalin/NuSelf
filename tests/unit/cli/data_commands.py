@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.cli import main
+from nuself.cli.exit_codes import CliExitCode
 from nuself.domain.memory import MemoryEntry
 from nuself.logs import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
@@ -136,3 +137,34 @@ def test_data_internal_collections_are_hidden_by_default(
 
     assert main(["data", "list", "scheduler_state"]) == 1
     assert "requires --internal" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("control", [EOFError(), KeyboardInterrupt()])
+def test_data_delete_control_cancels_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    control: BaseException,
+) -> None:
+    authority = _set_home(tmp_path, monkeypatch)
+    repo = MemoryEntryRepository(authority)
+    entry = repo.save(
+        MemoryEntry(
+            type="belief",
+            title="Keep",
+            body="Terminal control must not delete this.",
+        )
+    )
+    reset_default_backend(authority)
+
+    def interrupt(_prompt: str) -> str:
+        raise control
+
+    monkeypatch.setattr("builtins.input", interrupt)
+
+    assert (
+        main(["data", "delete", "memory", entry.id])
+        is CliExitCode.INTERRUPTED
+    )
+    assert MemoryEntryRepository(authority).get(entry.id) is not None
+    assert "Cancelled." in capsys.readouterr().out

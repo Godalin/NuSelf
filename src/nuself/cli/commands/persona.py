@@ -10,6 +10,8 @@ from nuself.cli.commands.output import (
     resolve_handle,
     resolve_handle_selection,
 )
+from nuself.cli.control import ConfirmationDecision, read_confirmation
+from nuself.cli.exit_codes import CliExitCode
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     MODERATOR_PERSONA,
@@ -197,12 +199,14 @@ def handle_persona_delete(args: argparse.Namespace) -> int:
         ]
         if not names:
             return 1
-        confirm = input(
+        decision = read_confirmation(
             f"Delete persona(s): {', '.join(names)}? [y/N] "
-        ).strip().lower()
-        if confirm != "y":
+        )
+        if decision is ConfirmationDecision.INTERRUPTED:
+            return CliExitCode.INTERRUPTED
+        if decision is ConfirmationDecision.NO:
             print("Aborted.")
-            return 0
+            return CliExitCode.SUCCESS
     deleted: list[str] = []
     for prompt_id in prompt_ids:
         prompt = repository.get(prompt_id)
@@ -245,12 +249,14 @@ def _set_enabled(
         return 0
     verb = "Enable" if enabled else "Disable"
     if not args.yes:
-        confirm = input(
+        decision = read_confirmation(
             f"{verb} persona '{prompt.name}'? [y/N] "
-        ).strip().lower()
-        if confirm != "y":
+        )
+        if decision is ConfirmationDecision.INTERRUPTED:
+            return CliExitCode.INTERRUPTED
+        if decision is ConfirmationDecision.NO:
             print("Aborted.")
-            return 0
+            return CliExitCode.SUCCESS
     repository.set_disabled(prompt.id, not enabled)
     action = "enabled" if enabled else "disabled"
     _record_lifecycle(

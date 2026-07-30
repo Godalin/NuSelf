@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -23,7 +24,7 @@ from nuself.logs import (
     read_log_events,
     write_log_event,
 )
-from nuself.runtime.execution import OwnedCall
+from nuself.runtime.execution import OwnedCall, current_cancellation
 
 
 def _event(
@@ -1028,6 +1029,99 @@ def test_live_send_reaps_call_before_reraising_main_control(
 
     assert captured.value is control
     assert finished.is_set()
+
+
+def test_live_send_reap_ignores_second_interrupt_during_cleanup(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    started = threading.Event()
+    released = threading.Event()
+    primary = KeyboardInterrupt("cancel turn")
+
+    def send(
+        _message: str,
+        _thread_id: str,
+        _turn_id: str | None,
+    ) -> InteractiveChatResult:
+        cancellation = current_cancellation()
+        assert cancellation is not None
+        cancellation.register(released.set)
+        started.set()
+        released.wait()
+        return InteractiveChatResult(code=0)
+
+    def interrupt_poll(*_args: object, **_kwargs: object) -> tuple[LogEvent, ...]:
+        assert started.wait(timeout=1)
+        raise primary
+
+    original_wait = cast(
+        Callable[
+            [OwnedCall[InteractiveChatResult], float | None],
+            bool,
+        ],
+        activity.OwnedCall.wait,  # pyright: ignore[reportUnknownMemberType]
+    )
+    wait_calls = 0
+
+    def interrupt_first_cleanup_wait(
+        self: activity.OwnedCall[InteractiveChatResult],
+        timeout: float | None = None,
+    ) -> bool:
+        nonlocal wait_calls
+        wait_calls += 1
+        if wait_calls == 1:
+            raise KeyboardInterrupt("second interrupt")
+        return original_wait(self, timeout)
+
+    monkeypatch.setattr(activity.client, "next_activity", interrupt_poll)
+    monkeypatch.setattr(activity.OwnedCall, "wait", interrupt_first_cleanup_wait)
+
+    def open_activity(
+        turn_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> str:
+        del turn_id, project_root
+        return "sub-control"
+
+    def close_activity(
+        subscription_id: str,
+        *,
+        project_root: Path | None = None,
+    ) -> bool:
+        del subscription_id, project_root
+        return True
+
+    monkeypatch.setattr(
+        activity.client,
+        "open_activity",
+        open_activity,
+    )
+    monkeypatch.setattr(
+        activity.client,
+        "close_activity",
+        close_activity,
+    )
+
+    with pytest.raises(KeyboardInterrupt) as captured:
+        run_live_activity_send(
+            send,
+            "hello",
+            "default",
+            "turn-control",
+            tmp_path,
+            InteractiveLogCursor.from_project(tmp_path),
+            printed_logs=False,
+            daemon_activity=True,
+            poll_interval_seconds=0,
+            read_events=read_interactive_activity_events,
+            present_events=_mark_presented,
+        )
+
+    assert captured.value is primary
+    assert released.is_set()
+    assert wait_calls >= 2
 
 
 def test_live_send_closes_subscription_when_presenter_fails(

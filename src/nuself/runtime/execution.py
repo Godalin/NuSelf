@@ -3,14 +3,103 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 import threading
-from typing import Generic, TypeVar, cast
+from typing import Generator, Generic, TypeVar, cast
 
 from nuself.runtime.validation import validate_timeout
 
 ResultT = TypeVar("ResultT")
 _MISSING = object()
+CancelCallback = Callable[[], None]
+
+
+class CancellationCleanupError(RuntimeError):
+    """Raised after every cancellation closer was attempted."""
+
+    def __init__(self, failures: tuple[BaseException, ...]) -> None:
+        super().__init__(
+            f"owned call cancellation failed in {len(failures)} closer(s)"
+        )
+        self.failures = failures
+
+
+class CancellationToken:
+    """Thread-safe cooperative cancellation shared with one owned call."""
+
+    def __init__(self) -> None:
+        self._cancelled = threading.Event()
+        self._lock = threading.Lock()
+        self._callbacks: list[CancelCallback] = []
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled.is_set()
+
+    def cancel(self) -> bool:
+        """Request cancellation once and invoke every registered closer."""
+
+        with self._lock:
+            if self._cancelled.is_set():
+                return False
+            self._cancelled.set()
+            callbacks = tuple(self._callbacks)
+            self._callbacks.clear()
+        failures: list[BaseException] = []
+        for callback in callbacks:
+            try:
+                callback()
+            except BaseException as exc:
+                failures.append(exc)
+        if failures:
+            raise CancellationCleanupError(tuple(failures))
+        return True
+
+    def register(self, callback: CancelCallback) -> Callable[[], None]:
+        """Register a cancellation closer and return its removal callback."""
+
+        with self._lock:
+            if not self._cancelled.is_set():
+                self._callbacks.append(callback)
+                return lambda: self._discard(callback)
+        callback()
+        return lambda: None
+
+    def _discard(self, callback: CancelCallback) -> None:
+        with self._lock:
+            try:
+                self._callbacks.remove(callback)
+            except ValueError:
+                pass
+
+
+_CURRENT_CANCELLATION: ContextVar[CancellationToken | None] = ContextVar(
+    "nuself_current_cancellation",
+    default=None,
+)
+
+
+def current_cancellation() -> CancellationToken | None:
+    """Return the cooperative cancellation token for the current call."""
+
+    return _CURRENT_CANCELLATION.get()
+
+
+@contextmanager
+def use_cancellation(
+    cancellation: CancellationToken,
+) -> Generator[CancellationToken, None, None]:
+    """Bind one cancellation token for nested transport operations."""
+
+    binding: Token[CancellationToken | None] = (
+        _CURRENT_CANCELLATION.set(cancellation)
+    )
+    try:
+        yield cancellation
+    finally:
+        _CURRENT_CANCELLATION.reset(binding)
 
 
 @dataclass(frozen=True, init=False)
@@ -44,11 +133,13 @@ class OwnedCall(Generic[ResultT]):
         *,
         name: str,
         target: Callable[[], ResultT],
+        cancellation: CancellationToken | None = None,
     ) -> None:
         if not callable(target):
             raise TypeError("owned call target must be callable")
         self._name = name
         self._target = target
+        self._cancellation = cancellation or CancellationToken()
         self._lock = threading.Lock()
         self._done = threading.Event()
         self._thread: threading.Thread | None = None
@@ -80,6 +171,11 @@ class OwnedCall(Generic[ResultT]):
         _validate_timeout(timeout)
         return self._done.wait(timeout)
 
+    def cancel(self) -> bool:
+        """Request cooperative cancellation of the owned call."""
+
+        return self._cancellation.cancel()
+
     def outcome(self, timeout: float | None = None) -> CallOutcome[ResultT]:
         """Return the completed outcome without translating its error."""
 
@@ -99,7 +195,8 @@ class OwnedCall(Generic[ResultT]):
 
     def _run(self) -> None:
         try:
-            outcome = CallOutcome(value=self._target())
+            with use_cancellation(self._cancellation):
+                outcome = CallOutcome(value=self._target())
         except BaseException as exc:
             outcome = CallOutcome[ResultT](error=exc)
         with self._lock:
