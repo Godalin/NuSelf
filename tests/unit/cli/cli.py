@@ -1939,7 +1939,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
         "thread_id": "default",
         "processed_message_count": 3,
     }
-    assert candidate_repo.get(candidate.id) == candidate
+    assert MemoryCandidateRepository(tmp_path).get(candidate.id) == candidate
 
 
 def test_memory_plan_discard_requires_force() -> None:
@@ -2388,7 +2388,10 @@ def test_memory_candidate_accepts_batch_index_selection(
     output = capsys.readouterr().out
 
     accepted_ids = {entry.id for entry in MemoryEntryRepository(tmp_path).list()}
-    remaining_ids = {candidate.id for candidate in repo.list()}
+    remaining_ids = {
+        candidate.id
+        for candidate in MemoryCandidateRepository(tmp_path).list()
+    }
     assert result == 0
     assert output.count("Accepted memory candidate:") == 3
     assert expected_ids.isdisjoint(remaining_ids)
@@ -2417,10 +2420,11 @@ def test_memory_candidate_rejects_batch_index_selection(
 
     assert result == 0
     assert output.count("Rejected memory candidate:") == 3
-    assert repo.get(pending_id).review_state == "pending"
+    reopened = MemoryCandidateRepository(tmp_path)
+    assert reopened.get(pending_id).review_state == "pending"
     assert {candidate.id for candidate in created}.issuperset(rejected_ids)
     for candidate_id in rejected_ids:
-        assert repo.get(candidate_id).review_state == "rejected"
+        assert reopened.get(candidate_id).review_state == "rejected"
 
 
 def test_memory_candidate_batch_index_selection_rejects_whitespace(
@@ -2509,7 +2513,12 @@ def test_memory_candidate_edit_merge_and_reject(
     assert "Rejected memory candidate:" in reject_output
     assert merged.title == "Thought timeline"
     assert merged.observed_at == "2026-05-07"
-    assert candidate_repo.get(reject_candidate.id).review_state == "rejected"
+    assert (
+        MemoryCandidateRepository(tmp_path)
+        .get(reject_candidate.id)
+        .review_state
+        == "rejected"
+    )
 
 
 def test_memory_stats_and_filtered_search(
@@ -3328,7 +3337,7 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     assert "Test Notification" in show_output
     assert f"Sent: {entry.id}" in send_output
     assert f"Dismissed: {entry.id}" in dismiss_output
-    dismissed = outbox.get(entry.id)
+    dismissed = NotificationOutbox(tmp_path).get(entry.id)
     assert dismissed.required_adapters == ("macos",)
     assert dismissed.deliveries["macos"].status == "sent"
 
@@ -3376,7 +3385,7 @@ def test_notify_send_preserves_existing_adapter_plan_and_history(
 
     assert result == 1
     assert "Failed to send: existing-plan" in capsys.readouterr().err
-    preserved = outbox.get("existing-plan")
+    preserved = NotificationOutbox(tmp_path).get("existing-plan")
     assert preserved.status == "failed"
     assert preserved.required_adapters == ("email", "macos")
     assert preserved.deliveries["email"].status == "sent"
@@ -4508,7 +4517,9 @@ def test_notify_clear_removes_dismissed(tmp_path: Path, capsys: CaptureFixture) 
     captured = capsys.readouterr()
     assert result == 0
     assert "Cleared 1 dismissed" in captured.out
-    assert len(outbox.list(status="dismissed")) == 0
+    assert len(
+        NotificationOutbox(tmp_path).list(status="dismissed")
+    ) == 0
 
 
 def test_health_command_reports_missing_private_root(
@@ -4846,7 +4857,7 @@ def test_memory_source_delete_removes_document(
         ["--project-root", str(tmp_path), "memory", "source", "delete", doc.id]
     )
     assert result == 0
-    assert len(repo.list_documents()) == 0
+    assert len(SourceRepository(tmp_path).list_documents()) == 0
 
 
 def test_memory_source_chunks_empty_shows_message(
@@ -4908,7 +4919,10 @@ def test_memory_unquarantine_restores_draft(
     captured = capsys.readouterr()
     assert result == 0
     assert f"Unquarantined memory entry: {entry.id}" in captured.out
-    assert repo.get(entry.id).review_state == "draft"
+    assert (
+        MemoryEntryRepository(tmp_path).get(entry.id).review_state
+        == "draft"
+    )
 
 
 def test_memory_profile_list_shows_items(
@@ -5037,7 +5051,7 @@ def test_memory_profile_delete_removes_item(
         ["--project-root", str(tmp_path), "memory", "profile", "delete", item.id]
     )
     assert result == 0
-    assert len(repo.list()) == 0
+    assert len(ProfileItemRepository(tmp_path).list()) == 0
 
 
 def test_memory_profile_reindex_rebuilds_index(
@@ -5291,7 +5305,7 @@ def test_memory_candidate_edit_updates_fields(
         ]
     )
     assert result == 0
-    updated = repo.get(candidate.id)
+    updated = MemoryCandidateRepository(tmp_path).get(candidate.id)
     assert updated.title == "Concentration"
     assert updated.body == "Focus deeply."
 
@@ -5368,7 +5382,7 @@ def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> 
 
     result = main(["--project-root", str(tmp_path), "memory", "delete", entry.id])
     assert result == 0
-    assert len(repo.list()) == 0
+    assert len(MemoryEntryRepository(tmp_path).list()) == 0
 
 
 def test_memory_delete_accepts_batch_index_selection(
@@ -5389,8 +5403,11 @@ def test_memory_delete_accepts_batch_index_selection(
 
     assert result == 0
     assert output.count("Deleted memory entry:") == 3
-    assert {entry.id for entry in repo.list()} == {remaining_id}
-    assert deleted_ids.isdisjoint({entry.id for entry in repo.list()})
+    remaining = {
+        entry.id for entry in MemoryEntryRepository(tmp_path).list()
+    }
+    assert remaining == {remaining_id}
+    assert deleted_ids.isdisjoint(remaining)
 
 
 def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -5417,7 +5434,7 @@ def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     captured = capsys.readouterr()
     assert result == 0
     assert "Concentration" in captured.out
-    updated = repo.get(entry.id)
+    updated = MemoryEntryRepository(tmp_path).get(entry.id)
     assert updated.title == "Concentration"
     assert updated.body == "Focus deeply."
 
