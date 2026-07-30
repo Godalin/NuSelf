@@ -5,9 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close the remaining v0.3.0 release blockers by making canonical SQLite
-creation migration-owned, exercising the real v0.2.5 authority switch, and
-finishing strict finite-number and JSON Schema dialect validation.
+Idle. The remaining v0.3.0 release-preparation findings are closed.
 
 ## Active Branch
 
@@ -15,18 +13,8 @@ finishing strict finite-number and JSON Schema dialect validation.
 
 ## Ordered Work
 
-1. Replace the ambiguous SQLite factory with an existing-file opener and a
-   migration-private creator; make `dev db-schema` inspect only the active
-   backend and fail without publishing authority.
-2. Upgrade the frozen v0.2.5 fixture through the atomic migration boundary,
-   reopen it through automatic authority selection, and verify current domain
-   repositories plus rejection of renewed file authority.
-3. Reject non-finite configured numbers and validate the published schema with
-   the dialect it declares.
-4. Run focused and complete local gates, build and smoke-test the wheel, then
-   push the functional commits and require the six-platform CI matrix.
-5. Return this board to idle only after every release-preparation result is
-   recorded in Git.
+1. Discuss and specify stable `v0.3.0` promotion before changing release
+   metadata or `main`.
 
 ## Out Of Scope
 
@@ -63,4 +51,6 @@ finishing strict finite-number and JSON Schema dialect validation.
 - `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
   environment installed only the wheel, imported `nuself.cli` and
   `nuself.llm`, and reported `nuself 0.3.0rc1`.
-- Final branch push and the six-platform CI matrix remain.
+- GitHub Actions run `30514114057` passed on Ubuntu and macOS with Python
+  3.12, 3.13, and 3.14. Every job completed locked Pyright, the full test
+  suite, distribution build, and clean-wheel smoke test for commit `f021ba7`.
