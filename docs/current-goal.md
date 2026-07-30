@@ -5,34 +5,33 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Make manual Ctrl-C and Ctrl-D control flow deterministic across NuSelf's CLI:
-an interrupted in-flight operation must release its transport and owned
-execution resources before the REPL continues or the process exits, and every
-real session exit must run the existing transcript, curator, and storage
-cleanup boundaries exactly once.
+No active implementation goal.
 
 ## Active Branch
 
-`main`
+None.
 
 ## Ordered Work
 
-1. Specify prompt cancellation, in-flight cancellation, EOF exit, watch-loop
-   stop, and outer process cleanup semantics.
-2. Add cooperative cancellation to owned interactive sends and daemon socket
-   requests; close activity subscriptions before returning control.
-3. Normalize interactive prompts and bounded loops so Ctrl-C/Ctrl-D cannot
-   bypass their owner cleanup.
-4. Add focused lifecycle, transport, and regression tests.
-5. Run targeted tests, Pyright, the full suite, build, and clean-wheel smoke.
+None.
 
 ## Out Of Scope
 
-- Cancellation of provider SDK calls that do not expose a cooperative
-  cancellation API; NuSelf still owns and closes its surrounding resources.
-- Changing daemon SIGINT/SIGTERM shutdown ordering, which already has a
-  dedicated signal owner and ordered cleanup contract.
+None.
 
 ## Completion Evidence
 
-Pending.
+The terminal interruption lifecycle goal is complete:
+
+- in-flight daemon requests cooperatively close their owned socket, preserve
+  partial response framing across cancellation polling, and join the owned
+  send before the REPL continues;
+- repeated Ctrl-C during reaping cannot replace the original interrupt or
+  abandon the worker;
+- Ctrl-D and Ctrl-C at confirmation/watch boundaries use typed safe outcomes,
+  while true session exit still runs transcript, curator, and storage cleanup
+  exactly once;
+- local Pyright completed with 0 errors and 0 warnings, the full suite passed
+  2415 tests, and both distributions built successfully;
+- GitHub Actions run `30556773660` passed Ubuntu/macOS on Python
+  3.12/3.13/3.14, including clean-wheel installation and smoke tests.
