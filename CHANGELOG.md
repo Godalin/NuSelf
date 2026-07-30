@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Fixed interactive startup silently blocking behind a daemon chat turn.
+  Thread snapshot reads now use SQLite's last committed view without competing
+  for the long-lived per-thread mutation lock or a write transaction.
 - CLI startup now performs side-effect-free readiness checks before opening
   domain storage, starting a daemon, or entering interactive chat. Commands
   that need an initialized authority exit with status `3` and an exact scoped

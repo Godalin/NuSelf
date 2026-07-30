@@ -168,8 +168,7 @@ class ThreadStore:
 
     def load(self, thread_id: str) -> ThreadState:
         self._validate_id(thread_id)
-        with self._locked(thread_id), self._backend.transaction():
-            return self._load_unlocked(thread_id)
+        return self._load_unlocked(thread_id)
 
     def save(self, state: ThreadState) -> None:
         self._validate_id(state.thread_id)

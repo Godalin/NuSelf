@@ -94,6 +94,9 @@ uv run nuself dev config
 uv run nuself
 ```
 
+即使 daemon 仍在处理上一轮对话，新交互客户端也会立即启动，并读取最近一次
+已提交的线程快照。
+
 发送一条消息：
 
 ```bash

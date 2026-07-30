@@ -105,6 +105,9 @@ Start or connect to the local daemon-backed interactive session:
 uv run nuself
 ```
 
+Opening another interactive client remains responsive while the daemon is
+still completing a turn; startup reads the last committed thread snapshot.
+
 Send one message:
 
 ```bash

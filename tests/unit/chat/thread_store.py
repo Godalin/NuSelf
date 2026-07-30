@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import time
 from multiprocessing.context import SpawnContext
 from multiprocessing.synchronize import Event
 from pathlib import Path
@@ -406,6 +407,37 @@ def test_lifecycle_operations_wait_for_cross_process_thread_locks(
         / "thread-locks"
         / f"{held_thread_id}.lock"
     ).exists()
+
+
+def test_load_uses_committed_snapshot_while_write_transaction_is_held(
+    tmp_path: Path,
+) -> None:
+    store = ThreadStore(tmp_path)
+    expected = ThreadState.empty("default")
+    store.save(expected)
+    context = _spawn_context()
+    lock_ready = context.Event()
+    release_lock = context.Event()
+    owner = context.Process(
+        target=_hold_thread_update,
+        args=(str(tmp_path), lock_ready, release_lock),
+    )
+    owner.start()
+    assert lock_ready.wait(timeout=10)
+    try:
+        started_at = time.monotonic()
+        actual = store.load("default")
+        elapsed = time.monotonic() - started_at
+    finally:
+        release_lock.set()
+        owner.join(timeout=10)
+        if owner.is_alive():
+            owner.terminate()
+            owner.join(timeout=10)
+
+    assert owner.exitcode == 0
+    assert actual == expected
+    assert elapsed < 1.0
 
 
 def test_branch_missing_source_raises(tmp_path: Path) -> None:

@@ -21,12 +21,13 @@ None.
 
 ## Completion Evidence
 
-The v0.3.1 CLI exit-code typing correction is complete:
+The v0.3.1 interactive-startup blocking fix is complete:
 
-- `CliExitCode` is the single `IntEnum` for statuses `0` through `5`;
-- readiness, entrypoint, chat transport, dispatch, and REPL infrastructure use
-  named enum members instead of raw process-status literals;
-- the public shell values and existing failure classifications are unchanged;
+- thread snapshot reads no longer acquire the per-thread mutation lock or open
+  a SQLite write transaction;
+- a cross-process regression test holds both the mutation lock and
+  `BEGIN IMMEDIATE` while `load()` returns the last committed state promptly;
+- real `uv run --locked nuself --local` startup displayed the banner and
+  prompt immediately against the same daemon that reproduced the block;
 - Pyright completed with 0 errors and 0 warnings;
-- the full suite completed with 2403 passing tests, followed by 51 passing
-  focused CLI/REPL tests after the final infrastructure edits.
+- the full suite completed with 2404 passing tests.

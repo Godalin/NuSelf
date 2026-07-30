@@ -206,6 +206,11 @@ interactive input state.
   operations re-check source and destination state only after acquiring every
   required lock. Lock files are stable coordination inodes and are never
   removed by rename, archive, or delete.
+- Thread snapshot reads use SQLite's committed transactional snapshot and do
+  not acquire the per-thread mutation lock. A model call may hold that lock
+  while producing a turn, but it must not prevent a second CLI from loading
+  the last committed thread state, printing its interactive banner, or
+  preparing transcript metadata.
 - Persisted ThreadState decoding is fail-closed. Every `messages` member must
   be an object accepted by the exact ThreadMessage decoder; malformed members
   invalidate the complete thread instead of being filtered. Message indexes
