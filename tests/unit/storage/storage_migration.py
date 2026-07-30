@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+# pyright: reportPrivateUsage=false
+
 import multiprocessing
 from multiprocessing.context import SpawnContext
 from multiprocessing.synchronize import Event
 from pathlib import Path
 import shutil
-import stat
+import threading
 
 import pytest
 
+import nuself.storage as storage
 from nuself.agent.chat import ThreadStore
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.notification import NotificationOutbox
@@ -20,6 +23,7 @@ from nuself.storage import (
     COLLECTION_NAMES,
     FileStorageAuthorityError,
     FileStorageBackend,
+    SqliteStorageAuthorityError,
     StorageMigrationValidationError,
     StorageBackend,
     auto_backend,
@@ -267,6 +271,68 @@ def test_auto_backend_ignores_unpublished_migration_database(
     assert isinstance(backend, FileStorageBackend)
 
 
+def test_file_backend_rejects_published_sqlite_authority(
+    tmp_path: Path,
+) -> None:
+    database = create_sqlite_backend(tmp_path)
+    database.close()
+
+    with pytest.raises(
+        SqliteStorageAuthorityError,
+        match="SQLite authority",
+    ):
+        create_file_backend(tmp_path)
+
+
+def test_auto_backend_rechecks_authority_after_shared_lease_race(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    before_shared_lease = threading.Event()
+    resume_shared_lease = threading.Event()
+    original_open = storage._open_file_authority
+    selected: list[StorageBackend] = []
+    errors: list[BaseException] = []
+
+    def pause_before_shared_lease(
+        private_root: Path,
+        *,
+        exclusive: bool,
+    ) -> object:
+        if not exclusive:
+            before_shared_lease.set()
+            if not resume_shared_lease.wait(timeout=10):
+                raise RuntimeError("test did not resume shared lease")
+        return original_open(private_root, exclusive=exclusive)
+
+    monkeypatch.setattr(
+        storage,
+        "_open_file_authority",
+        pause_before_shared_lease,
+    )
+
+    def select_backend() -> None:
+        try:
+            selected.append(auto_backend(tmp_path))
+        except BaseException as exc:
+            errors.append(exc)
+
+    selector = threading.Thread(target=select_backend)
+    selector.start()
+    assert before_shared_lease.wait(timeout=10)
+
+    _, destination = migrate_file_backend_atomically(tmp_path)
+    assert destination.is_file()
+    resume_shared_lease.set()
+    selector.join(timeout=10)
+
+    assert not selector.is_alive()
+    assert errors == []
+    assert len(selected) == 1
+    assert not isinstance(selected[0], FileStorageBackend)
+    selected[0].close()  # type: ignore[attr-defined]
+
+
 def test_atomic_file_migration_rejects_missing_record_id(
     tmp_path: Path,
 ) -> None:
@@ -383,29 +449,6 @@ def test_atomic_file_migration_rejects_active_file_runtime(
             process.terminate()
             process.join(timeout=10)
     assert process.exitcode == 0
-
-
-def test_migration_rejects_external_db_without_chmod(
-    tmp_path: Path,
-) -> None:
-    project = tmp_path / "project"
-    external = tmp_path / "shared"
-    external.mkdir(mode=0o755)
-    external.chmod(0o755)
-    destination = external / "nuself.sqlite"
-
-    with pytest.raises(
-        ValueError,
-        match="inside the project private directory",
-    ):
-        migrate_file_backend_atomically(
-            project,
-            db_path=destination,
-        )
-
-    assert stat.S_IMODE(external.stat().st_mode) == 0o755
-    assert not destination.exists()
-    assert not (project / "private").exists()
 
 
 def test_migrate_normalizes_legacy_candidate_payload_relations(

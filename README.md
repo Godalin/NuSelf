@@ -48,7 +48,8 @@ storage boundary.
 `nuself dev migrate` now writes and validates a strict temporary SQLite
 database, then atomically publishes it only after checkpoint, close, and fsync;
 corrupt or ID-mismatched file records abort without exposing a partial
-database.
+database. It publishes only to the authoritative `private/nuself.sqlite`;
+custom migration destinations are not authority switches.
 Successful file-backed record deletion now includes parent-directory
 synchronization; a visible deletion whose crash durability is unknown is
 reported distinctly instead of being treated as an ordinary failed unlink.

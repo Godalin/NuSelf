@@ -166,6 +166,16 @@ file-backed runtime still owns a shared lease, migration fails without reading,
 copying, or publishing data. This is the enforced stop-the-world authority
 switch for v0.3.0.
 
+Shared lease acquisition and selection of file authority are one atomic
+decision. After acquiring the shared lease, a backend must re-check the
+canonical `private/nuself.sqlite` path while still holding that lease. If the
+database exists or is a symlink, explicit file-backend construction fails and
+`auto_backend()` selects SQLite instead. Thus a process paused before lease
+acquisition cannot resume after migration publication and write to obsolete
+files. A closed file backend is permanently unusable: `collection()`,
+`transaction()`, and every operation on collections created before closure
+must fail.
+
 ### Repository 模式变更（示例）
 
 ```python
@@ -258,9 +268,12 @@ closure to the outer CLI lifecycle. Developer migration and schema inspection
 create temporary SQLite backends for their operation and must close those
 owned connections before returning, including early-return paths.
 
-`nuself dev migrate` must never create or mutate its final database path while
-copying authoritative file data. It writes a uniquely named
-`<database>.migrating-<uuid>` sibling, performs the complete migration inside
+`nuself dev migrate` is the authority-switch command and therefore has exactly
+one destination: canonical `private/nuself.sqlite`. It does not expose a
+custom `--db` destination; non-authoritative database copies belong to
+snapshot/export workflows. The command must never create or mutate its final
+database path while copying authoritative file data. It writes a uniquely
+named `nuself.sqlite.migrating-<uuid>` sibling, performs the complete migration inside
 one SQLite transaction, validates the migrated collection IDs and wire values,
 then checkpoints and closes that temporary backend. Only after the temporary
 database file is synchronized may the command atomically replace the final
@@ -282,12 +295,6 @@ Final-name SQLite WAL/SHM/journal sidecars without a main database are also an
 incomplete/conflicting destination and block migration. Conversely,
 `auto_backend()` ignores uniquely named `.migrating-*` siblings: before atomic
 replacement they are never evidence that SQLite owns runtime authority.
-
-The optional `--db` destination must resolve inside the selected project's
-NuSelf-owned `private/` tree. Absolute or relative paths that resolve outside
-that tree, including paths escaping through a symlink, fail before any
-directory creation or permission change. Migration may harden managed private
-directories, but it never chmods an arbitrary external parent directory.
 
 `close()` is lock-protected and idempotent after the underlying connection has
 closed successfully. It first requests a truncating WAL checkpoint and always

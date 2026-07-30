@@ -16,7 +16,6 @@ from nuself.storage_sqlite import SqliteStorageBackend
 def handle_dev_migrate(args: argparse.Namespace) -> int:
     result, destination_path = migrate_file_backend_atomically(
         args.project_root,
-        db_path=args.db,
     )
     if result:
         for name, count in sorted(result.items()):

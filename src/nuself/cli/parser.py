@@ -570,12 +570,6 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     dev_migrate_parser = dev_subparsers.add_parser(
         "migrate", help="Migrate file-based data to private/nuself.sqlite."
     )
-    dev_migrate_parser.add_argument(
-        "--db",
-        type=Path,
-        default=None,
-        help="Destination database path (default: private/nuself.sqlite)",
-    )
     bind_handler(dev_migrate_parser, handle_dev_migrate)
 
     bind_handler(

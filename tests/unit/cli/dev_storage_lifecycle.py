@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.cli import build_parser
 from nuself.cli.commands.dev import (
     handle_dev_db_schema,
     handle_dev_migrate,
@@ -20,14 +21,12 @@ def test_dev_migrate_uses_atomic_migration_boundary(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     destination = tmp_path / "private" / "migration.sqlite"
-    calls: list[tuple[Path | None, Path | None]] = []
+    calls: list[Path | None] = []
 
     def migrate(
         project_root: Path | None,
-        *,
-        db_path: Path | None = None,
     ) -> tuple[dict[str, int], Path]:
-        calls.append((project_root, db_path))
+        calls.append(project_root)
         return {"memory_entries": 2}, destination
 
     monkeypatch.setattr(
@@ -38,10 +37,9 @@ def test_dev_migrate_uses_atomic_migration_boundary(
     assert handle_dev_migrate(
         argparse.Namespace(
             project_root=tmp_path,
-            db=destination,
         )
     ) == 0
-    assert calls == [(tmp_path, destination)]
+    assert calls == [tmp_path]
     assert "Migrated 2 items across 1 collections" in capsys.readouterr().out
 
 
@@ -64,11 +62,21 @@ def test_dev_migrate_propagates_atomic_migration_failure(
         handle_dev_migrate(
             argparse.Namespace(
                 project_root=tmp_path,
-                db=tmp_path / "migration.sqlite",
             )
         )
 
     assert captured.value is primary
+
+
+def test_dev_migrate_rejects_non_authoritative_db_destination() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit) as captured:
+        parser.parse_args(
+            ["dev", "migrate", "--db", "private/archive.sqlite"]
+        )
+
+    assert captured.value.code == 2
 
 
 def test_dev_db_schema_closes_backend_on_early_return(

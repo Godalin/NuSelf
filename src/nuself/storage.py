@@ -7,7 +7,7 @@ SQLite backend added in v0.2.4.
 from __future__ import annotations
 
 from contextlib import AbstractContextManager, contextmanager
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 import fcntl
 import os
 from pathlib import Path
@@ -173,6 +173,10 @@ class FileStorageAuthorityError(RuntimeError):
     """File-backed storage authority is held by an incompatible operation."""
 
 
+class SqliteStorageAuthorityError(FileStorageAuthorityError):
+    """Canonical SQLite storage has already replaced file authority."""
+
+
 def _read_json_record(path: Path) -> dict[str, object]:
     raw = decode_json_value(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -296,81 +300,92 @@ class _FileCollection:
         name: str,
         component: LogComponent,
         project_root: Path,
+        operation: Callable[[], AbstractContextManager[None]],
     ) -> None:
         self._dir = directory
         self._name = name
         self._component: LogComponent = component
         self._project_root = project_root
+        self._operation = operation
 
     def get(self, key: str) -> dict[str, object] | None:
-        path = self._record_path(key)
-        if not path.exists():
-            return None
-        self._require_regular_record(path)
-        return _read_json_record(path)
+        with self._operation():
+            path = self._record_path(key)
+            if not path.exists():
+                return None
+            self._require_regular_record(path)
+            return _read_json_record(path)
 
     def put(self, key: str, value: dict[str, object]) -> None:
-        if "id" in value and value["id"] != key:
-            raise ValueError(
-                "stored record id must equal its collection key"
-            )
-        self._ensure_collection_directory()
-        path = self._record_path(key)
-        if path.is_symlink():
-            raise ValueError("file collection record must not be a symlink")
-        write_json_atomic(path, value)
+        with self._operation():
+            if "id" in value and value["id"] != key:
+                raise ValueError(
+                    "stored record id must equal its collection key"
+                )
+            self._ensure_collection_directory()
+            path = self._record_path(key)
+            if path.is_symlink():
+                raise ValueError(
+                    "file collection record must not be a symlink"
+                )
+            write_json_atomic(path, value)
 
     def delete(self, key: str) -> None:
-        path = self._record_path(key)
-        if path.exists():
-            self._require_regular_record(path)
-            delete_file_durable(path)
-        elif path.is_symlink():
-            raise ValueError("file collection record must not be a symlink")
+        with self._operation():
+            path = self._record_path(key)
+            if path.exists():
+                self._require_regular_record(path)
+                delete_file_durable(path)
+            elif path.is_symlink():
+                raise ValueError(
+                    "file collection record must not be a symlink"
+                )
 
     def list(self) -> tuple[dict[str, object], ...]:
-        if not self._dir.exists():
-            return ()
-        self._require_collection_directory()
-        items: list[dict[str, object]] = []
-        for p in sorted(self._dir.glob("*.json")):
-            self._require_regular_record(p)
-            obj = _list_json_record(
-                p,
-                collection=self._name,
-                component=self._component,
-                project_root=self._project_root,
-            )
-            if obj is not None:
-                items.append(obj)
-        return tuple(items)
+        with self._operation():
+            if not self._dir.exists():
+                return ()
+            self._require_collection_directory()
+            items: list[dict[str, object]] = []
+            for p in sorted(self._dir.glob("*.json")):
+                self._require_regular_record(p)
+                obj = _list_json_record(
+                    p,
+                    collection=self._name,
+                    component=self._component,
+                    project_root=self._project_root,
+                )
+                if obj is not None:
+                    items.append(obj)
+            return tuple(items)
 
     def list_strict_for_migration(self) -> tuple[dict[str, object], ...]:
         """Read every authoritative record without corrupt-neighbor isolation."""
-        if not self._dir.exists():
-            return ()
-        self._require_collection_directory()
-        items: list[dict[str, object]] = []
-        for path in sorted(self._dir.iterdir()):
-            self._require_regular_record(path)
-            if path.suffix != ".json":
-                raise StorageMigrationValidationError(
-                    "file migration collection contains a non-JSON record: "
-                    f"{path.name}"
-                )
-            item = _read_json_record(path)
-            item_id = item.get("id")
-            if (
-                not isinstance(item_id, str)
-                or not item_id
-                or item_id != path.stem
-            ):
-                raise StorageMigrationValidationError(
-                    "file migration record id must be a non-empty string "
-                    f"matching its filename: {path.name}"
-                )
-            items.append(item)
-        return tuple(items)
+        with self._operation():
+            if not self._dir.exists():
+                return ()
+            self._require_collection_directory()
+            items: list[dict[str, object]] = []
+            for path in sorted(self._dir.iterdir()):
+                self._require_regular_record(path)
+                if path.suffix != ".json":
+                    raise StorageMigrationValidationError(
+                        "file migration collection contains a non-JSON "
+                        f"record: {path.name}"
+                    )
+                item = _read_json_record(path)
+                item_id = item.get("id")
+                if (
+                    not isinstance(item_id, str)
+                    or not item_id
+                    or item_id != path.stem
+                ):
+                    raise StorageMigrationValidationError(
+                        "file migration record id must be a non-empty string "
+                        f"matching its filename: {path.name}"
+                    )
+                items.append(item)
+            return tuple(items)
 
     def _record_path(self, key: str) -> Path:
         validate_storage_key(key)
@@ -453,6 +468,7 @@ class FileStorageBackend:
         self._transaction_state = threading.local()
         self._transaction_lock_path = self._root / ".storage-transaction.lock"
         self._authority_handle: BinaryIO | None = None
+        self._closed = False
         if _acquire_authority:
             self._authority_handle = _open_file_authority(
                 self._root,
@@ -461,25 +477,41 @@ class FileStorageBackend:
 
     def close(self) -> None:
         """Release this backend's shared file-authority lease."""
-        handle = self._authority_handle
-        if handle is None:
-            return
-        self._authority_handle = None
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        finally:
-            handle.close()
+        with self._transaction_lock:
+            if self._closed:
+                return
+            self._closed = True
+            handle = self._authority_handle
+            self._authority_handle = None
+            if handle is None:
+                return
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
 
     def collection(self, name: str) -> _FileCollection:
-        relative = self._map.get(name)
-        if relative is None:
-            raise ValueError(f"unknown collection: {name!r}")
-        return _FileCollection(
-            self._root / relative,
-            name=name,
-            component=COLLECTION_LOG_COMPONENTS[name],
-            project_root=self._project_root,
-        )
+        with self._operation():
+            relative = self._map.get(name)
+            if relative is None:
+                raise ValueError(f"unknown collection: {name!r}")
+            return _FileCollection(
+                self._root / relative,
+                name=name,
+                component=COLLECTION_LOG_COMPONENTS[name],
+                project_root=self._project_root,
+                operation=self._operation,
+            )
+
+    @contextmanager
+    def _operation(self) -> Generator[None, None, None]:
+        with self._transaction_lock:
+            self._require_open()
+            yield
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise RuntimeError("file storage backend is closed")
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
@@ -489,6 +521,7 @@ class FileStorageBackend:
         a multi-file batch crash-atomic.
         """
         with self._transaction_lock:
+            self._require_open()
             depth = getattr(self._transaction_state, "depth", 0)
             if depth > 0:
                 self._transaction_state.depth = depth + 1
@@ -558,9 +591,12 @@ def auto_backend(project_root: Path | None = None) -> StorageBackend:
     """Return ``SqliteStorageBackend`` if *nuself.sqlite* exists, else ``FileStorageBackend``."""
     paths = runtime_paths(project_root)
     db_path = paths.private_root / "nuself.sqlite"
-    if db_path.exists():
+    if db_path.exists() or db_path.is_symlink():
         return create_sqlite_backend(project_root=project_root)
-    return create_file_backend(project_root=project_root)
+    try:
+        return create_file_backend(project_root=project_root)
+    except SqliteStorageAuthorityError:
+        return create_sqlite_backend(project_root=project_root)
 
 
 _default_backends: dict[Path, StorageBackend] = {}
@@ -745,20 +781,10 @@ def migrate_all(
 
 def migrate_file_backend_atomically(
     project_root: Path | None = None,
-    *,
-    db_path: Path | None = None,
 ) -> tuple[dict[str, int], Path]:
     """Migrate authoritative files and atomically publish one new SQLite DB."""
     paths = runtime_paths(project_root)
-    destination_path = (
-        db_path
-        if db_path is not None
-        else paths.private_root / "nuself.sqlite"
-    )
-    _validate_managed_migration_destination(
-        destination_path,
-        private_root=paths.private_root,
-    )
+    destination_path = paths.private_root / "nuself.sqlite"
     with _exclusive_file_authority(paths.private_root):
         return _migrate_file_backend_with_authority(
             paths.project_root,
@@ -841,23 +867,6 @@ def _migrate_file_backend_with_authority(
         raise
 
 
-def _validate_managed_migration_destination(
-    destination: Path,
-    *,
-    private_root: Path,
-) -> None:
-    resolved_private = private_root.resolve(strict=False)
-    resolved_destination = destination.resolve(strict=False)
-    if (
-        resolved_destination == resolved_private
-        or not resolved_destination.is_relative_to(resolved_private)
-    ):
-        raise ValueError(
-            "SQLite migration destination must be inside the project "
-            "private directory"
-        )
-
-
 @contextmanager
 def _exclusive_file_authority(
     private_root: Path,
@@ -890,6 +899,16 @@ def _open_file_authority(
         raise FileStorageAuthorityError(
             f"cannot start {role} while file storage authority is active"
         ) from exc
+    if not exclusive:
+        canonical_database = private_root / "nuself.sqlite"
+        if canonical_database.exists() or canonical_database.is_symlink():
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
+            raise SqliteStorageAuthorityError(
+                "cannot start file storage after SQLite authority publication"
+            )
     return handle
 
 

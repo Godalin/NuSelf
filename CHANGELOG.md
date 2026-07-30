@@ -6,13 +6,17 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- File authority selection is now atomic with migration publication: a process
+  paused before shared-lease acquisition cannot resume on obsolete files,
+  closed file backends and their existing collections reject all access, and
+  `dev migrate` publishes only to canonical `private/nuself.sqlite`.
 - Shared SQLite backends now isolate reads from uncommitted writes, immediately
   observe dynamic columns added by other processes, and reject mismatched
   record IDs instead of silently rewriting them.
 - File-to-SQLite migration now refuses to run while any file-backed runtime is
-  active, blocks new file authority during publication, and rejects `--db`
-  destinations outside the managed private tree without changing external
-  directory permissions.
+  active and blocks new file authority during publication. The former custom
+  `--db` destination has been removed because only canonical
+  `private/nuself.sqlite` can become runtime authority.
 - Notification delivery, dismissal, and deletion now serialize per entry
   across processes. Adapter attempts persist `delivering` before external
   effects and recover interrupted attempts as `uncertain` without automatic

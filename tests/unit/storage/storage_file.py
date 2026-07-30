@@ -194,6 +194,44 @@ def test_file_backend_transaction_is_reentrant_in_one_thread(
     assert collection.get("inner") == {"id": "inner"}
 
 
+@pytest.mark.parametrize(
+    "operation",
+    ["collection", "get", "put", "delete", "list", "find", "transaction"],
+)
+def test_closed_file_backend_and_existing_collections_reject_access(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    backend = FileStorageBackend(
+        tmp_path / "private",
+        project_root=tmp_path,
+    )
+    collection = backend.collection("memory_entries")
+    collection.put("record", {"id": "record"})
+    backend.close()
+
+    with pytest.raises(RuntimeError, match="backend is closed"):
+        if operation == "collection":
+            backend.collection("memory_entries")
+        elif operation == "get":
+            collection.get("record")
+        elif operation == "put":
+            collection.put("new", {"id": "new"})
+        elif operation == "delete":
+            collection.delete("record")
+        elif operation == "list":
+            collection.list()
+        elif operation == "find":
+            collection.find(id="record")
+        else:
+            with backend.transaction():
+                pass
+
+    assert (
+        tmp_path / "private" / "memory" / "entries" / "record.json"
+    ).is_file()
+
+
 def test_write_text_atomic_replaces_complete_destination(
     tmp_path: Path,
 ) -> None:

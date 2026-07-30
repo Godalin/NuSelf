@@ -5,7 +5,8 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Idle. The v0.3.0 external-audit findings are closed.
+Close the remaining v0.3.0 authority, managed-directory, configuration
+migration, validation, and notification-cleanup findings.
 
 ## Active Branch
 
@@ -13,11 +14,22 @@ Idle. The v0.3.0 external-audit findings are closed.
 
 ## Ordered Work
 
-1. Discuss and specify the next objective before implementation.
+1. Make file authority selection atomic with migration publication, reject
+   file access after backend closure, and restrict authority migration to the
+   canonical SQLite path.
+2. Reject symlinked or non-directory managed private paths before permissions
+   or external contents can be changed.
+3. Add an explicit v0.2.5 configuration migration boundary, including a typed
+   legacy-email migration diagnostic.
+4. Make runtime validation type-strict and prove behavioral acceptance parity
+   with the published JSON Schema.
+5. Align notification cleanup help and behavior with explicit terminal-status
+   selection.
+6. Run complete concurrency, compatibility, schema, type, build, and
+   clean-wheel release gates.
 
 ## Out Of Scope
 
-- No implementation work is active.
 - Stable `v0.3.0` promotion, release metadata, and tagging require a separate
   goal on `main`.
 - Global plus directory-local configuration and package-manager publication
@@ -26,14 +38,13 @@ Idle. The v0.3.0 external-audit findings are closed.
 
 ## Completion Evidence
 
-- Functional completion is preserved in commits `fee6fcf`, `ac038fb`,
-  `719d9c1`, `ce1ce64`, and `5696840`, with user-visible behavior recorded
-  under `CHANGELOG.md` `Unreleased`.
-- Final default verification reported 2372 passed, including direct
-  multithread, multiprocess, rollback, crash-recovery, schema-parity, and
-  frozen v0.2.5 migration regressions.
-- Locked Pyright reported 0 errors and 0 warnings; `uv lock --check` and
-  `git diff --check` passed.
-- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
-  environment installed only that wheel, imported `nuself.cli` and
-  `nuself.llm`, and reported `nuself 0.3.0rc1`.
+- File authority selection now re-checks canonical SQLite authority while
+  holding the shared lease; a barrier regression proves a selector paused
+  before migration resumes on SQLite rather than obsolete files. Explicit
+  file construction rejects published SQLite authority, closed backends and
+  existing collections reject every operation, and custom migration
+  destinations are removed. Focused storage/CLI verification: 87 passed;
+  locked Pyright reported 0 errors and 0 warnings.
+- Pending: the remaining managed-directory, configuration, schema, and
+  notification findings require implementation and direct regression evidence,
+  followed by the complete release gate.
