@@ -9,7 +9,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Ctrl-C during an in-flight interactive turn now cooperatively closes its
   daemon request socket and joins the owned send before returning to the
   prompt. Ctrl-D and all true session exits continue through transcript,
-  curator, and storage cleanup exactly once.
+  curator, and storage cleanup exactly once. One-shot interrupts exit cleanly
+  with status `130`, destructive confirmations cancel without mutation, and
+  notification watch now honors both terminal EOF and `q`.
 - Fixed interactive startup silently blocking behind a daemon chat turn.
   Thread snapshot reads now use SQLite's last committed view without competing
   for the long-lived per-thread mutation lock or a write transaction.

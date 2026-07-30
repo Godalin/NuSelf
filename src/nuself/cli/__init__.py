@@ -136,12 +136,16 @@ class CliLifecycleError(RuntimeError):
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    scope = resolve_scope(
-        local=args.local,
-        workspace=args.workspace,
-    )
+    try:
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        scope = resolve_scope(
+            local=args.local,
+            workspace=args.workspace,
+        )
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        return CliExitCode.INTERRUPTED
     args.scope = scope
     args.project_root = scope.root
     project_root = scope.root

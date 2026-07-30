@@ -16,6 +16,7 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
+from nuself.runtime.execution import CancellationToken, use_cancellation
 
 
 def test_daemon_connection_failure_is_retryable(
@@ -69,6 +70,27 @@ def test_daemon_connection_failure_is_retryable(
             source="client",
         )
     ]
+
+
+def test_cancelled_daemon_failure_is_not_presented(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail_chat(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise DaemonConnectionError("cancelled socket")
+
+    monkeypatch.setattr(chat.client, "chat", fail_chat)
+    cancellation = CancellationToken()
+    cancellation.cancel()
+
+    with use_cancellation(cancellation):
+        result = chat.send_daemon_chat_interactive("hello", tmp_path)
+
+    assert result.code == 130
+    assert result.error is None
+    assert capsys.readouterr().err == ""
 
 
 def test_daemon_payload_decode_failure_is_not_retryable(

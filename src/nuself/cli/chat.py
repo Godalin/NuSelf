@@ -20,6 +20,7 @@ from nuself.memory.audit import report_memory_failure
 from nuself.memory.curator import MemoryCurator
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
 
 ReplyPrinter = Callable[[str], None]
@@ -75,6 +76,11 @@ def send_daemon_chat_interactive(
                 timeout=chat_request_timeout_seconds(project_root),
             )
         except client.DaemonConnectionError as exc:
+            cancellation = current_cancellation()
+            if cancellation is not None and cancellation.cancelled:
+                return InteractiveChatResult(
+                    code=CliExitCode.INTERRUPTED,
+                )
             error = (
                 "daemon request failed: "
                 f"{diagnostic_exception_message(exc)}"

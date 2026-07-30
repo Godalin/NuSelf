@@ -120,6 +120,19 @@ def test_cli_interrupt_resets_backend_without_traceback(
     assert capsys.readouterr().err == "Interrupted.\n"
 
 
+def test_cli_interrupt_before_scope_has_no_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def interrupt_parser() -> object:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("nuself.cli.build_parser", interrupt_parser)
+
+    assert main(["status"]) is CliExitCode.INTERRUPTED
+    assert capsys.readouterr().err == "Interrupted.\n"
+
+
 def test_cli_cleanup_failure_retains_primary_as_cause(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
