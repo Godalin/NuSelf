@@ -56,4 +56,11 @@ finishing strict finite-number and JSON Schema dialect validation.
 - The notification CLI lifecycle regression now explicitly selects the
   deterministic log adapter instead of invoking the host macOS notification
   service, so the release gate does not depend on an interactive desktop.
-- The final combined gate, wheel smoke test, push, and six-platform CI remain.
+- Final local verification reported 2418 passed. Locked Pyright reported 0
+  errors and 0 warnings; `uv lock --check`, `git diff --check`, the
+  byte-identical official v0.2.5 config fixture check, and
+  `nuself 0.3.0rc1` passed.
+- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
+  environment installed only the wheel, imported `nuself.cli` and
+  `nuself.llm`, and reported `nuself 0.3.0rc1`.
+- Final branch push and the six-platform CI matrix remain.
