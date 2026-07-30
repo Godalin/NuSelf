@@ -5,8 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-Close the remaining v0.3.0 authority, managed-directory, configuration
-migration, validation, and notification-cleanup findings.
+Idle. The remaining v0.3.0 external-audit findings are closed.
 
 ## Active Branch
 
@@ -14,22 +13,11 @@ migration, validation, and notification-cleanup findings.
 
 ## Ordered Work
 
-1. Make file authority selection atomic with migration publication, reject
-   file access after backend closure, and restrict authority migration to the
-   canonical SQLite path.
-2. Reject symlinked or non-directory managed private paths before permissions
-   or external contents can be changed.
-3. Add an explicit v0.2.5 configuration migration boundary, including a typed
-   legacy-email migration diagnostic.
-4. Make runtime validation type-strict and prove behavioral acceptance parity
-   with the published JSON Schema.
-5. Align notification cleanup help and behavior with explicit terminal-status
-   selection.
-6. Run complete concurrency, compatibility, schema, type, build, and
-   clean-wheel release gates.
+1. Discuss and specify the next objective before implementation.
 
 ## Out Of Scope
 
+- No implementation work is active.
 - Stable `v0.3.0` promotion, release metadata, and tagging require a separate
   goal on `main`.
 - Global plus directory-local configuration and package-manager publication
@@ -69,4 +57,9 @@ migration, validation, and notification-cleanup findings.
   work. A failed-selection regression covers a persisted `uncertain` adapter
   plan. Focused notification/CLI verification: 393 passed; locked Pyright
   reported 0 errors and 0 warnings.
-- Pending: the complete release gate must prove the combined changes.
+- Final combined verification reported 2408 passed. Locked Pyright reported 0
+  errors and 0 warnings; `uv lock --check`, `git diff --check`, and the
+  explicit v0.2.5 data/config compatibility gate passed.
+- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
+  environment installed only that wheel, imported `nuself.cli` and
+  `nuself.llm` under fail-fast execution, and reported `nuself 0.3.0rc1`.
