@@ -21,10 +21,12 @@ from pydantic import (
 
 from nuself.private_fs import (
     ensure_private_directory,
+    harden_managed_file,
     harden_private_file,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.diagnostics import emit_runtime_warning
+from nuself.scope import NuSelfScope, resolve_runtime_paths
 
 
 # ============================================================================
@@ -440,6 +442,34 @@ class ConfigSystem:
             _CONFIG_CACHE[cache_key] = result
         return result
 
+    @classmethod
+    def load_scope(cls, scope: NuSelfScope) -> SystemConfig:
+        """Load the selected scope's layered configuration."""
+
+        paths = resolve_runtime_paths(scope)
+        layer_paths = [paths.user_config_file]
+        if paths.config_file != paths.user_config_file:
+            layer_paths.append(paths.config_file)
+
+        merged_layers: dict[str, Any] = {}
+        for layer_path in layer_paths:
+            if not layer_path.exists():
+                continue
+            layer_root = (
+                scope.user_root
+                if layer_path == paths.user_config_file
+                else scope.root
+            )
+            harden_managed_file(layer_root, layer_path)
+            layer = cls._read_mapping(layer_path)
+            cls._normalize_mapping(layer, config_path=layer_path)
+            merged_layers = _deep_merge(merged_layers, layer)
+
+        defaults = cls._default_config().model_dump(mode="python")
+        return SystemConfig.model_validate(
+            _deep_merge(defaults, merged_layers)
+        )
+
     @staticmethod
     def clear_cache() -> None:
         """Drop all memoized configs (test helper / explicit reload)."""
@@ -447,33 +477,45 @@ class ConfigSystem:
 
     @classmethod
     def _build(cls, config_path: Path | None) -> SystemConfig:
-        yaml_data: dict[str, Any] = {}
-        if config_path and config_path.exists():
-            try:
-                raw: Any = yaml.safe_load(  # type: ignore[no-untyped-call]
-                    config_path.read_text(encoding="utf-8")
-                )
-                if raw is None:
-                    yaml_data = {}
-                elif not isinstance(raw, dict):
-                    raise ValueError(
-                        "NuSelf configuration root must be an object"
-                    )
-                else:
-                    yaml_data = cast(dict[str, Any], raw)
-            except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
-                # A malformed/unreadable config falls back to defaults but must be
-                # visible, not silently indistinguishable from "no config". Any
-                # other exception is a real bug and is left to propagate.
-                import sys
+        yaml_data = (
+            cls._read_mapping(config_path)
+            if config_path and config_path.exists()
+            else {}
+        )
+        cls._normalize_mapping(yaml_data, config_path=config_path)
+        defaults = cls._default_config().model_dump(mode="python")
+        merged = _deep_merge(defaults, yaml_data)
+        return SystemConfig.model_validate(merged)
 
-                print(
-                    f"nuself: ignoring unreadable config {config_path}: "
-                    f"{diagnostic_exception_message(exc)}",
-                    file=sys.stderr,
-                )
+    @staticmethod
+    def _read_mapping(config_path: Path) -> dict[str, Any]:
+        try:
+            raw: Any = yaml.safe_load(  # type: ignore[no-untyped-call]
+                config_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            import sys
 
-        # Normalize llm: [...] (YAML list) to llm: {endpoints: [...]}
+            print(
+                f"nuself: ignoring unreadable config {config_path}: "
+                f"{diagnostic_exception_message(exc)}",
+                file=sys.stderr,
+            )
+            return {}
+        if raw is None:
+            return {}
+        if not isinstance(raw, dict):
+            raise ValueError("NuSelf configuration root must be an object")
+        return cast(dict[str, Any], raw)
+
+    @staticmethod
+    def _normalize_mapping(
+        yaml_data: dict[str, Any],
+        *,
+        config_path: Path | None,
+    ) -> None:
+        """Normalize one configuration layer before merging."""
+
         llm_raw: object = yaml_data.get("llm")
         if isinstance(llm_raw, list):
             endpoints = cast(list[Any], llm_raw)
@@ -484,9 +526,6 @@ class ConfigSystem:
             )
 
         _migrate_v025_config(yaml_data, config_path=config_path)
-        defaults = cls._default_config().model_dump(mode="python")
-        merged = _deep_merge(defaults, yaml_data)
-        return SystemConfig.model_validate(merged)
 
     def as_flat_dict(self, config: SystemConfig) -> dict[str, Any]:
         """Return configuration as flat key/value pairs for CLI inspection."""
