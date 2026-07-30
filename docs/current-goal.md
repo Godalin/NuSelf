@@ -46,5 +46,10 @@ unrelated, or malformed canonical SQLite file.
   controlled upgrade and concurrent-open behavior.
 - Focused storage verification reported 139 passed. Locked Pyright reported 0
   errors and 0 warnings; `git diff --check` passed.
-- Complete local release gates, distribution verification, push, and final
-  six-platform CI are pending.
+- Complete local verification reported 2426 passed. Locked Pyright reported 0
+  errors and 0 warnings; `uv lock --check`, `git diff --check`, the frozen
+  v0.2.5 migration fixture coverage, and `nuself 0.3.0rc1` passed.
+- `uv build` produced the 0.3.0rc1 sdist and wheel. A clean Python 3.14
+  environment installed only the wheel plus its declared dependencies,
+  imported `nuself.cli` and `nuself.llm`, and reported `nuself 0.3.0rc1`.
+- Push and final six-platform CI are pending.
