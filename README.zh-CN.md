@@ -30,7 +30,7 @@ NuSelf 仍在激进开发中。v0.3 系列建立了运行时、存储、Agent �
 - 后台记忆整理与主动反思
 - 支持日志、邮件和 macOS 的持久通知 outbox
 - 本地 SQLite authority、迁移工具和可移植 thought pack
-- 有序模型端点及显式 OpenAI-compatible / Anthropic 协议
+- 瞬时重试及有序 OpenAI-compatible / Anthropic 端点切换
 - 自动隐藏凭据的结构化诊断
 
 ## 快速开始

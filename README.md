@@ -38,7 +38,7 @@ locks and Unix-domain sockets.
 - Background memory curation and proactive reflection
 - Durable notification outbox with log, email, and macOS adapters
 - Local SQLite authority, migration tooling, and portable thought packs
-- Ordered model endpoints with OpenAI-compatible or Anthropic protocols
+- Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
 - Structured diagnostics with credential redaction
 
 ## Quick Start

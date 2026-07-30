@@ -205,6 +205,36 @@ def test_data_repair_refuses_nonempty_legacy_relations(
     )
 
 
+def test_data_repair_adds_missing_empty_relations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    authority = _set_home(tmp_path, monkeypatch)
+    entry = MemoryEntry(type="belief", title="Older", body="Preserve me.")
+    legacy = entry.to_wire()
+    del legacy["relations"]
+    get_default_backend(authority).collection("memory_entries").put(
+        entry.id,
+        legacy,
+    )
+    reset_default_backend(authority)
+
+    assert (
+        main(["data", "repair", "memory", "--apply"])
+        == CliExitCode.SUCCESS
+    )
+    assert "Repaired 1 record(s)." in capsys.readouterr().out
+    repaired = (
+        get_default_backend(authority)
+        .collection("memory_entries")
+        .get(entry.id)
+    )
+    assert repaired is not None
+    assert repaired["relations"] == {}
+    assert MemoryEntry.from_wire(repaired).body == "Preserve me."
+
+
 def test_data_edit_rejects_identity_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -76,7 +76,12 @@ def build_memory_tool_set(
             )
         )
         if not packed.text:
-            return f"No matches found for query: {query_str}"
+            return (
+                f"No matches found for query: {query_str}. "
+                "If this is the first empty search for the current question, "
+                "retry memory_search exactly once with a distinct broader "
+                "query using fewer, shorter, or synonymous keywords."
+            )
         return packed.text
 
     def count_memory(

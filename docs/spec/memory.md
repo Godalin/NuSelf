@@ -415,6 +415,18 @@ ProfileItem and delete targets have no MemoryEntry review-state transition.
 
 Entries with `score <= 0` excluded.
 
+The chat memory skill may not conclude from its first empty tool result. It
+must issue exactly one distinct broader `memory_search` using fewer, shorter,
+or synonymous keywords before reporting that no matching stored memory was
+found. The second empty result ends retrieval; the agent must not loop. This
+conversation policy does not change deterministic `MemoryQueryService`
+scoring or make a claim that the authority contains no memories.
+
+The one-shot `memory search` command uses the same ranked token query service
+as the chat tool, then applies its CLI-only temporal and exact filters to those
+matches. It must not retain the older whole-query substring behavior that can
+disagree with chat for multi-keyword queries.
+
 ### Relation Expansion
 
 - Direct matches sorted by `(-score, updated_at, id)`, capped at `limit`.

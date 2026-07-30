@@ -19,6 +19,7 @@ from nuself.domain.memory import (
     default_memory_type_registry,
 )
 from nuself.memory.intake import MemoryIntakeAgent
+from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryEntryRepository,
@@ -286,18 +287,37 @@ def handle_memory_delete(args: argparse.Namespace) -> int:
 
 
 def handle_memory_search(args: argparse.Namespace) -> int:
-    entries = MemoryEntryRepository(args.project_root).search(
-        args.query,
-        MemorySearchFilters(
-            type=args.type,
-            tag=args.tag,
-            review_state=args.review_state,
-            observed_from=args.observed_from,
-            observed_to=args.observed_to,
-            valid_on=args.valid_on,
-            min_importance=args.min_importance,
-        ),
+    repository = MemoryEntryRepository(args.project_root)
+    filters = MemorySearchFilters(
+        type=args.type,
+        tag=args.tag,
+        review_state=args.review_state,
+        observed_from=args.observed_from,
+        observed_to=args.observed_to,
+        valid_on=args.valid_on,
+        min_importance=args.min_importance,
     )
+    eligible_ids = {
+        entry.id for entry in repository.search("", filters)
+    }
+    matches = MemoryQueryService(repository).search(
+        MemoryQuery(
+            text=args.query,
+            limit=max(len(eligible_ids), 1),
+            review_states=(
+                "draft",
+                "reviewed",
+                "rejected",
+                "quarantined",
+                "archived",
+            ),
+        )
+    )
+    entries = [
+        match.entry
+        for match in matches
+        if match.entry.id in eligible_ids
+    ]
     if not entries:
         print("No matching memory entries.")
         return 0

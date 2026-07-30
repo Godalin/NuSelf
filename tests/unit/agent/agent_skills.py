@@ -50,6 +50,7 @@ def test_render_agent_skill_sections_with_generated_allowed_tools() -> None:
     assert any(line.startswith("- memory:") for line in lines)
     assert any("Allowed tools: memory_search" in line for line in lines)
     assert any("MUST call `memory_search` before answering" in line for line in lines)
+    assert any("exactly once more" in line for line in lines)
     assert any("Use `reflection_list_pending` when" in line for line in lines)
     assert any("Call `reason_export` directly" in line for line in lines)
     assert any("Call `reason_propose` only after" in line for line in lines)

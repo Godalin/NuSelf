@@ -219,6 +219,9 @@ def _repair_legacy_memory_record(
             return None
         del repaired[field]
         changed = True
+    if "relations" not in repaired:
+        repaired["relations"] = {}
+        changed = True
     if not changed:
         return None
     MemoryEntry.from_wire(repaired)

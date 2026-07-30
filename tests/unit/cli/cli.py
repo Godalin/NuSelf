@@ -4949,6 +4949,37 @@ def test_memory_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> No
     assert "Relax" not in captured.out
 
 
+def test_memory_search_uses_ranked_tokens_not_whole_query_substring(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+) -> None:
+    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.repository import MemoryEntryRepository
+
+    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo.save(
+        MemoryEntry(
+            type="episode",
+            title="NuSelf name",
+            body="New Self and 努思 explain the name.",
+        )
+    )
+
+    result = main(
+        [
+            "--workspace",
+            str(tmp_path),
+            "memory",
+            "search",
+            "NuSelf 名字 含义 由来",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "NuSelf name" in captured.out
+
+
 def test_memory_search_no_match_shows_message(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:

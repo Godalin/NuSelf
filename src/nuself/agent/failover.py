@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+import time
+from math import isfinite
 from typing import TypeVar
 
 from nuself.agent.errors import AgentModelUnavailableError
@@ -53,12 +55,21 @@ def invoke_agent_endpoint(
     retry_if: FailurePredicate | None = None,
     failover_if: FailurePredicate | None = None,
     on_retry: RetryObserver | None = None,
+    retry_delay_seconds: float = 0.0,
 ) -> ResultT:
     """Invoke one capability with shared retry and ordered endpoint failover."""
     if not endpoints:
         raise AgentModelUnavailableError("no configured LangChain model")
     if attempts_per_endpoint < 1:
         raise ValueError("attempts_per_endpoint must be at least 1")
+    if (
+        isinstance(retry_delay_seconds, bool)
+        or not isfinite(retry_delay_seconds)
+        or retry_delay_seconds < 0
+    ):
+        raise ValueError(
+            "retry_delay_seconds must be finite and non-negative"
+        )
     should_failover = failover_if or _is_availability_failure
 
     last_error: Exception | None = None
@@ -76,6 +87,8 @@ def invoke_agent_endpoint(
                 ):
                     if on_retry is not None:
                         on_retry(endpoint, exc)
+                    if retry_delay_seconds:
+                        time.sleep(retry_delay_seconds)
                     continue
                 if not should_failover(exc):
                     raise

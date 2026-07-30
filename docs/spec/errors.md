@@ -550,9 +550,12 @@ attribute, import, lookup, memory exhaustion, name resolution, unimplemented
 path, recursion, syntax, interpreter-system, and type errors. These errors
 propagate unchanged and are ineligible for retry, endpoint failover, or local
 fallback. After a tool outcome exists, the non-replay contract suppresses every
-further model call. Recoverable failures may use local fallback; sharedly
-classified implementation and process-integrity failures propagate unchanged
-after retry suppression.
+further model call only when at least one outcome came from a write-capable
+tool. A transient availability failure receives one delayed retry on the same
+endpoint before ordered failover. Readonly tool outcomes may be replayed by
+that retry because they cannot duplicate mutation. Recoverable failures may
+use local fallback; sharedly classified implementation and process-integrity
+failures propagate unchanged after retry suppression.
 
 Chat fallback text must identify its actual cause. When no configured endpoint
 has a usable API key, it may provide local configuration guidance. When one or

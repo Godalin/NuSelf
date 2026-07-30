@@ -333,7 +333,7 @@ def test_availability_failure_uses_shared_endpoint_failover(
         [HumanMessage(content="hello")]
     )
 
-    assert endpoint_calls == [0, 1]
+    assert endpoint_calls == [0, 0, 1]
     assert result.answer == "backup response"
 
 
@@ -370,7 +370,7 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         del error
         events.append(str(kwargs["event"]))
 
-    def has_tool_outcomes(self: object) -> bool:
+    def has_mutating_tool_outcomes(self: object) -> bool:
         del self
         return True
 
@@ -381,8 +381,8 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
     )
     monkeypatch.setattr(
         _LangChainChatSupervisor,
-        "has_tool_outcomes",
-        property(has_tool_outcomes),
+        "has_mutating_tool_outcomes",
+        property(has_mutating_tool_outcomes),
     )
     monkeypatch.setattr(
         "nuself.agent.chat.response.report_chat_failure",
@@ -424,6 +424,57 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
 
     assert endpoint_calls == 1
     assert events == ["llm_retry_suppressed_after_tool_call"]
+
+
+def test_readonly_tool_outcome_allows_transient_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    endpoint_calls = 0
+
+    def complete_after_read(
+        self: _LangChainChatSupervisor,
+        prompt: list[BaseMessage],
+    ) -> ChatStructuredOutput:
+        del self, prompt
+        nonlocal endpoint_calls
+        endpoint_calls += 1
+        if endpoint_calls == 1:
+            error = RuntimeError("temporary provider failure")
+            error.status_code = 503  # type: ignore[attr-defined]
+            raise error
+        return ChatStructuredOutput(answer="recovered")
+
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "complete",
+        complete_after_read,
+    )
+    monkeypatch.setattr(
+        _LangChainChatSupervisor,
+        "has_mutating_tool_outcomes",
+        property(lambda self: False),
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://example.invalid",
+            api_key="test",
+            model="test-model",
+        ),
+        model=cast(Any, object()),
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=tmp_path,
+        langchain_models=(endpoint,),
+        tools=(),
+        log_tool_outcome=_ignore_tool_outcome,
+    )
+
+    result = synthesizer.complete([HumanMessage(content="remember")])
+
+    assert endpoint_calls == 2
+    assert result.answer == "recovered"
 
 
 def test_diagnostic_failure_preserves_retry_and_local_fallback(

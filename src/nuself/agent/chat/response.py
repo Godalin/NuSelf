@@ -115,7 +115,7 @@ class ConversationResponseSynthesizer:
             try:
                 return supervisor.complete(prompt)
             except Exception:
-                if supervisor.has_tool_outcomes:
+                if supervisor.has_mutating_tool_outcomes:
                     retry_suppressed = True
                 raise
 
@@ -129,7 +129,6 @@ class ConversationResponseSynthesizer:
                 retry_if=lambda exc: (
                     not retry_suppressed
                     and is_recoverable_agent_failure(exc)
-                    and not is_endpoint_availability_error(exc)
                 ),
                 failover_if=lambda exc: (
                     not retry_suppressed
@@ -137,6 +136,7 @@ class ConversationResponseSynthesizer:
                     and is_endpoint_availability_error(exc)
                 ),
                 on_retry=self._log_retry,
+                retry_delay_seconds=0.25,
             )
         except Exception as exc:
             if retry_suppressed:
@@ -200,6 +200,18 @@ class _LangChainChatSupervisor:
     @property
     def has_tool_outcomes(self) -> bool:
         return bool(self._tool_outcomes)
+
+    @property
+    def has_mutating_tool_outcomes(self) -> bool:
+        readonly_names = {
+            tool.name
+            for tool in self._tools
+            if "readonly" in (tool.tags or ())
+        }
+        return any(
+            outcome.name not in readonly_names
+            for outcome in self._tool_outcomes
+        )
 
     def complete(
         self,

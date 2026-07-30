@@ -199,8 +199,10 @@ migrations supported by the current release. `--apply` rechecks every original
 inside one storage transaction and aborts on concurrent change. The current
 migration removes only obsolete `related_memory_ids` and `supersedes` fields
 when both are empty and the resulting record passes the complete current
-validator. Non-empty legacy relations and every other malformed shape remain
-unresolved for explicit user editing; automatic repair never discards data.
+validator. A record with no legacy relation values and a missing current
+`relations` field receives `{}`. Non-empty legacy relations and every other
+malformed shape remain unresolved for explicit user editing; automatic repair
+never discards data.
 
 ### Session State Ownership
 

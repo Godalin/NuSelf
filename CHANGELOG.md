@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Transient model-availability failures now retry the same endpoint once before
+  ordered failover. Readonly tool outcomes remain replayable while any
+  write-capable outcome still suppresses replay. An empty chat memory search
+  now requires one distinct broader query before reporting no stored match.
 - Fixed a daemon-wide deadlock caused by holding the shared SQLite transaction
   across LangGraph model/tool execution. Chat turns now retain only their
   per-thread serialization lock during long work, then recheck and commit in a

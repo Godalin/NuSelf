@@ -21,17 +21,16 @@ None.
 
 ## Completion Evidence
 
-The daemon deadlock and restart goal is complete:
+The chat recovery and memory retrieval goal is complete:
 
-- chat turns no longer hold the shared SQLite transaction lock across
-  LangGraph/model/tool execution; the final short transaction rechecks the raw
-  thread snapshot before commit;
-- graceful stop/restart has a 30-second ownership-release budget while each
-  control probe remains capped at two seconds;
-- the previously deadlocked PID `91335` was sampled, confirmed stuck in the
-  SQLite/thread-lock cycle, and replaced once after explicit approval;
-- a real restart completed from PID `90807` to PID `91116`; process inspection
-  confirmed exactly one NuSelf daemon and health reported all five owned
-  worker threads alive with zero failures;
-- focused regression tests passed 161 cases, Pyright completed with 0 errors
-  and 0 warnings, and the full suite passed 2425 tests.
+- transient endpoint availability failures retry the same endpoint once after
+  250ms before ordered failover;
+- readonly tool outcomes permit safe replay, while any write-capable outcome
+  still suppresses every further model call;
+- an empty memory tool result instructs exactly one distinct broader search;
+- one-shot `memory search` now uses the same ranked token retrieval as chat;
+- after explicit approval, all 88 local legacy memory records were migrated
+  and validated; the previously failing NuSelf-name query now returns the
+  authoritative name-design memory and related records;
+- focused tests passed 424 cases, Pyright completed with 0 errors and 0
+  warnings, and the full suite passed 2429 tests.

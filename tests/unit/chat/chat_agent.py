@@ -981,6 +981,26 @@ def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
     assert "Error" in result
 
 
+def test_empty_memory_search_requests_one_broader_query(
+    tmp_path: Path,
+) -> None:
+    repo = MemoryEntryRepository(tmp_path)
+    tool = _chat_tool(
+        tmp_path,
+        "memory_search",
+        query_service=MemoryQueryService(repo),
+    )
+
+    result = _invoke_chat_tool(
+        tool,
+        {"query": "NuSelf 名字 含义 由来"},
+    )
+
+    assert "No matches found" in result
+    assert "retry memory_search exactly once" in result
+    assert "distinct broader query" in result
+
+
 # --- Reflection consumption tools ---
 
 def test_reflection_list_pending_empty(tmp_path: Path) -> None:
