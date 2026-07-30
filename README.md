@@ -173,7 +173,6 @@ uv run nuself dev logs --component chat --tail 20
 ```bash
 uv run nuself data collections
 uv run nuself data check memory
-uv run nuself data repair memory
 uv run nuself data list memory
 uv run nuself data show memory <memory-id>
 uv run nuself data edit memory <memory-id>
@@ -181,10 +180,9 @@ uv run nuself data export threads --format json
 ```
 
 `data check` finds invalid records without changing them and prints the exact
-`edit` or confirmed `delete` command for each one. `data repair memory`
-previews lossless legacy migrations; `--apply` commits them atomically. Generic
-editing validates full records and rejects concurrent overwrites. Operational
-collections stay hidden unless `--internal` is explicit.
+`edit` or confirmed `delete` command for each one. One-time legacy migrations
+live under `scripts/`, outside the installed runtime. Generic editing validates
+full records and rejects concurrent overwrites.
 
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 `--help` output is the current command reference.

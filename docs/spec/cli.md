@@ -199,15 +199,13 @@ edited record before committing, or removable with the existing confirmed
 `nuself data delete` command. Collections without a declared generic validator
 remain read-only and cannot claim a meaningful generic repair contract.
 
-`nuself data repair memory` previews the closed set of lossless legacy-memory
-migrations supported by the current release. `--apply` rechecks every original
-inside one storage transaction and aborts on concurrent change. The current
-migration removes only obsolete `related_memory_ids` and `supersedes` fields
-when both are empty and the resulting record passes the complete current
-validator. A record with no legacy relation values and a missing current
-`relations` field receives `{}`. Non-empty legacy relations and every other
-malformed shape remain unresolved for explicit user editing; automatic repair
-never discards data.
+One-time legacy-record migrations are not installed CLI behavior. They live in
+the repository `scripts/` directory, default to dry-run, require an explicit
+authority root and `--apply`, recheck every original inside one transaction,
+and abort on concurrent change. The legacy-memory script removes obsolete
+relation fields only when empty, supplies a missing empty `relations` mapping
+only when no legacy relation data exists, and validates the complete result.
+Unknown or non-empty legacy shapes remain untouched.
 
 ### Session State Ownership
 

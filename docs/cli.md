@@ -104,7 +104,6 @@ See [`memory.md`](memory.md) for the ingestion, review, and curation workflow.
 ```bash
 uv run nuself data collections
 uv run nuself data check memory
-uv run nuself data repair memory
 uv run nuself data list memory
 uv run nuself data show threads default
 uv run nuself data export memory --format json --output memory.json
@@ -120,10 +119,10 @@ memory and chat-thread records; other domains use their dedicated commands.
 Mutation shows a diff or destructive prompt unless `--yes` is explicit. Add
 `--internal` only when diagnosing hidden curator or scheduler state.
 
-`data repair memory` previews supported lossless migrations and `--apply`
-commits them atomically. It currently removes obsolete legacy relation fields
-only when they are empty and the complete resulting memory is valid; non-empty
-legacy data is left untouched for explicit editing.
+One-time record migrations are repository scripts rather than installed CLI
+commands. Preview with
+`uv run python scripts/migrate_legacy_memory_records.py --authority-root .nuself`
+and add `--apply` explicitly to commit. Unknown legacy data stays untouched.
 
 ## Reflections And Notifications
 
