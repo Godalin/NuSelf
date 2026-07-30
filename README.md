@@ -157,6 +157,20 @@ uv run nuself dev health
 uv run nuself dev logs --component chat --tail 20
 ```
 
+### Inspect or edit stored data
+
+```bash
+uv run nuself data collections
+uv run nuself data list memory
+uv run nuself data show memory <memory-id>
+uv run nuself data edit memory <memory-id>
+uv run nuself data export threads --format json
+```
+
+Generic editing validates the complete record, shows a diff, confirms the
+change, and rejects concurrent overwrites. Operational collections are hidden
+unless `--internal` is explicit.
+
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
 `--help` output is the current command reference.
 

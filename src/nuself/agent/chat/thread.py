@@ -6,13 +6,12 @@ from collections.abc import Callable
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 import fcntl
-import json
 from pathlib import Path
 from typing import Generator, Literal, TypeVar, cast
 
 from nuself.config import runtime_paths
 from nuself.private_fs import ensure_private_directory, ensure_private_file
-from nuself.storage import write_json_atomic
+from nuself.storage import StorageBackend, get_default_backend
 
 ThreadRole = Literal["user", "assistant"]
 UpdateResult = TypeVar("UpdateResult")
@@ -62,6 +61,7 @@ class ThreadState:
     messages: list[ThreadMessage] = field(default_factory=empty_thread_messages)
     message_start_index: int = 0
     next_message_index: int = 0
+    archived: bool = False
 
     def __post_init__(self) -> None:
         if self.next_message_index == self.message_start_index and self.messages:
@@ -76,6 +76,7 @@ class ThreadState:
             "messages": [message.to_wire() for message in self.messages],
             "message_start_index": self.message_start_index,
             "next_message_index": self.next_message_index,
+            "archived": self.archived,
         }
 
     def _validate_indexes(self) -> None:
@@ -110,6 +111,7 @@ class ThreadState:
         messages = data.get("messages")
         message_start_index = data.get("message_start_index", 0)
         next_message_index = data.get("next_message_index")
+        archived = data.get("archived", False)
         if not isinstance(thread_id, str):
             raise ValueError("thread_id must be a string")
         if not isinstance(summary, str):
@@ -129,6 +131,8 @@ class ThreadState:
             next_message_index = message_start_index + len(parsed_messages)
         if type(next_message_index) is not int or next_message_index < 0:
             raise ValueError("next_message_index must be a non-negative integer")
+        if not isinstance(archived, bool):
+            raise ValueError("archived must be a boolean")
         expected_next_index = message_start_index + len(parsed_messages)
         if next_message_index != expected_next_index:
             raise ValueError(
@@ -141,22 +145,35 @@ class ThreadState:
             messages=parsed_messages,
             message_start_index=message_start_index,
             next_message_index=next_message_index,
+            archived=archived,
         )
 
 
 class ThreadStore:
-    """File-backed chat thread store under the selected authority."""
+    """SQLite-backed chat thread store under the selected authority."""
 
-    def __init__(self, project_root: Path | None = None) -> None:
-        paths = runtime_paths(project_root)
-        self._threads_dir = paths.authority_root / "threads"
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        *,
+        backend: StorageBackend | None = None,
+    ) -> None:
+        self._locks_dir = runtime_paths(project_root).runtime_dir / "thread-locks"
+        self._backend = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
+        self._collection = self._backend.collection("chat_threads")
 
     def load(self, thread_id: str) -> ThreadState:
-        with self._locked(thread_id):
+        self._validate_id(thread_id)
+        with self._locked(thread_id), self._backend.transaction():
             return self._load_unlocked(thread_id)
 
     def save(self, state: ThreadState) -> None:
-        with self._locked(state.thread_id):
+        self._validate_id(state.thread_id)
+        with self._locked(state.thread_id), self._backend.transaction():
             self._save_unlocked(state)
 
     def update(
@@ -166,95 +183,96 @@ class ThreadStore:
     ) -> UpdateResult:
         """Atomically update one working-memory stream under an exclusive lock."""
 
-        with self._locked(thread_id):
+        self._validate_id(thread_id)
+        with self._locked(thread_id), self._backend.transaction():
             state = self._load_unlocked(thread_id)
             updated, result = update(state)
+            if updated.thread_id != thread_id:
+                raise ValueError("thread update cannot change thread identity")
             self._save_unlocked(updated)
             return result
 
+    def _load_unlocked(self, thread_id: str) -> ThreadState:
+        raw = self._collection.get(thread_id)
+        if raw is None:
+            return ThreadState.empty(thread_id)
+        return ThreadState.from_wire(raw)
+
+    def _save_unlocked(self, state: ThreadState) -> None:
+        self._collection.put(state.thread_id, state.to_wire())
+
     def _locked(self, thread_id: str) -> "_ThreadLock":
-        ensure_private_directory(self._threads_dir)
-        return _ThreadLock(self._lock_path_for(thread_id))
+        self._validate_id(thread_id)
+        ensure_private_directory(self._locks_dir)
+        return _ThreadLock(self._locks_dir / f"{thread_id}.lock")
 
     @contextmanager
     def _locked_many(
         self,
         *thread_ids: str,
     ) -> Generator[None, None, None]:
-        """Lock distinct logical threads in one deterministic order."""
-
-        ordered = sorted(set(thread_ids))
         with ExitStack() as stack:
-            for thread_id in ordered:
+            for thread_id in sorted(set(thread_ids)):
                 stack.enter_context(self._locked(thread_id))
             yield
 
-    def _load_unlocked(self, thread_id: str) -> ThreadState:
-        path = self._path_for(thread_id)
-        if not path.exists():
-            return ThreadState.empty(thread_id)
-        raw: object = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError(f"thread file must contain an object: {path}")
-        return ThreadState.from_wire(cast(dict[str, object], raw))
-
-    def _save_unlocked(self, state: ThreadState) -> None:
-        ensure_private_directory(self._threads_dir)
-        path = self._path_for(state.thread_id)
-        write_json_atomic(path, state.to_wire())
-
-    def _path_for(self, thread_id: str) -> Path:
-        if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
+    @staticmethod
+    def _validate_id(thread_id: str) -> None:
+        if (
+            thread_id == ""
+            or "/" in thread_id
+            or "\\" in thread_id
+            or thread_id in {".", ".."}
+        ):
             raise ValueError(f"invalid thread id: {thread_id}")
-        return self._threads_dir / f"{thread_id}.json"
-
-    def _lock_path_for(self, thread_id: str) -> Path:
-        if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
-            raise ValueError(f"invalid thread id: {thread_id}")
-        return self._threads_dir / f"{thread_id}.lock"
 
     def list(self) -> list[str]:
         """List persisted thread IDs, excluding archived threads."""
-        if not self._threads_dir.exists():
-            return []
-        ids: list[str] = []
-        for path in sorted(self._threads_dir.glob("*.json")):
-            ids.append(path.stem)
-        return ids
+        return sorted(
+            state.thread_id
+            for state in self._states()
+            if not state.archived
+        )
 
     def list_archived(self) -> list[str]:
         """List archived thread IDs."""
-        archived_dir = self._threads_dir / "archived"
-        if not archived_dir.exists():
-            return []
-        ids: list[str] = []
-        for path in sorted(archived_dir.glob("*.json")):
-            ids.append(path.stem)
-        return ids
+        return sorted(
+            state.thread_id
+            for state in self._states()
+            if state.archived
+        )
+
+    def _states(self) -> tuple[ThreadState, ...]:
+        return tuple(
+            ThreadState.from_wire(item)
+            for item in self._collection.list()
+        )
 
     def rename(self, old_thread_id: str, new_thread_id: str) -> None:
         """Rename one latest locked thread snapshot."""
         if old_thread_id == new_thread_id:
             return
-        with self._locked_many(old_thread_id, new_thread_id):
-            old_path = self._path_for(old_thread_id)
-            new_path = self._path_for(new_thread_id)
-            if not old_path.exists():
+        self._validate_id(old_thread_id)
+        self._validate_id(new_thread_id)
+        with self._locked_many(old_thread_id, new_thread_id), self._backend.transaction():
+            raw = self._collection.get(old_thread_id)
+            if raw is None:
                 raise ValueError(f"thread not found: {old_thread_id}")
-            if new_path.exists():
+            if self._collection.get(new_thread_id) is not None:
                 raise ValueError(
                     f"thread already exists: {new_thread_id}"
                 )
-            state = self._load_unlocked(old_thread_id)
+            state = ThreadState.from_wire(raw)
             renamed = ThreadState(
                 thread_id=new_thread_id,
                 summary=state.summary,
                 messages=state.messages,
                 message_start_index=state.message_start_index,
                 next_message_index=state.next_message_index,
+                archived=state.archived,
             )
             self._save_unlocked(renamed)
-            old_path.unlink()
+            self._collection.delete(old_thread_id)
 
     def branch(
         self,
@@ -266,18 +284,19 @@ class ThreadStore:
 
         If message_index is None, branches from the current end.
         """
-        with self._locked_many(source_thread_id, new_thread_id):
-            source_path = self._path_for(source_thread_id)
-            new_path = self._path_for(new_thread_id)
-            if not source_path.exists():
+        self._validate_id(source_thread_id)
+        self._validate_id(new_thread_id)
+        with self._locked_many(source_thread_id, new_thread_id), self._backend.transaction():
+            source_raw = self._collection.get(source_thread_id)
+            if source_raw is None:
                 raise ValueError(
                     f"source thread not found: {source_thread_id}"
                 )
-            if new_path.exists():
+            if self._collection.get(new_thread_id) is not None:
                 raise ValueError(
                     f"thread already exists: {new_thread_id}"
                 )
-            source = self._load_unlocked(source_thread_id)
+            source = ThreadState.from_wire(source_raw)
             branch_index = (
                 len(source.messages)
                 if message_index is None
@@ -304,45 +323,55 @@ class ThreadStore:
             return branched
 
     def archive(self, thread_id: str) -> None:
-        """Move a thread file to the archived subdirectory."""
-        with self._locked(thread_id):
-            source_path = self._path_for(thread_id)
-            if not source_path.exists():
+        """Mark a thread as archived."""
+        self._validate_id(thread_id)
+        with self._locked(thread_id), self._backend.transaction():
+            raw = self._collection.get(thread_id)
+            if raw is None:
                 raise ValueError(f"thread not found: {thread_id}")
-            archived_dir = self._threads_dir / "archived"
-            ensure_private_directory(archived_dir)
-            target_path = archived_dir / f"{thread_id}.json"
-            if target_path.exists():
+            state = ThreadState.from_wire(raw)
+            if state.archived:
                 raise ValueError(
                     f"archived thread already exists: {thread_id}"
                 )
-            source_path.rename(target_path)
+            self._save_unlocked(_with_archived(state, True))
 
     def unarchive(self, thread_id: str) -> None:
-        """Move a thread file from the archived subdirectory back to active."""
-        with self._locked(thread_id):
-            archived_dir = self._threads_dir / "archived"
-            source_path = archived_dir / f"{thread_id}.json"
-            if not source_path.exists():
+        """Restore an archived thread."""
+        self._validate_id(thread_id)
+        with self._locked(thread_id), self._backend.transaction():
+            raw = self._collection.get(thread_id)
+            if raw is None:
                 raise ValueError(
                     f"archived thread not found: {thread_id}"
                 )
-            target_path = self._path_for(thread_id)
-            if target_path.exists():
+            state = ThreadState.from_wire(raw)
+            if not state.archived:
                 raise ValueError(f"thread already exists: {thread_id}")
-            source_path.rename(target_path)
+            self._save_unlocked(_with_archived(state, False))
 
     def delete(self, thread_id: str) -> None:
-        """Permanently delete a thread while retaining its stable lock."""
-        with self._locked(thread_id):
-            path = self._path_for(thread_id)
-            if not path.exists():
+        """Permanently delete a thread."""
+        self._validate_id(thread_id)
+        with self._locked(thread_id), self._backend.transaction():
+            if self._collection.get(thread_id) is None:
                 raise ValueError(f"thread not found: {thread_id}")
-            path.unlink()
+            self._collection.delete(thread_id)
+
+
+def _with_archived(state: ThreadState, archived: bool) -> ThreadState:
+    return ThreadState(
+        thread_id=state.thread_id,
+        summary=state.summary,
+        messages=state.messages,
+        message_start_index=state.message_start_index,
+        next_message_index=state.next_message_index,
+        archived=archived,
+    )
 
 
 class _ThreadLock:
-    """Advisory file lock for one working-memory stream."""
+    """Stable advisory lock for one working-memory stream."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -353,7 +382,12 @@ class _ThreadLock:
         self._file = self._path.open("ab")
         fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
 
-    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+    def __exit__(
+        self,
+        exc_type: object,
+        exc_value: object,
+        traceback: object,
+    ) -> None:
         if self._file is None:
             return
         try:

@@ -30,8 +30,7 @@ def handle_pack_export(args: argparse.Namespace) -> int:
     source = paths.authority_root / "nuself.sqlite"
     if not source.exists():
         print(
-            "No nuself.sqlite found. Run 'nuself dev migrate' "
-            "first.",
+            "No nuself.sqlite authority found. Run 'nuself init' first.",
             file=sys.stderr,
         )
         return 1

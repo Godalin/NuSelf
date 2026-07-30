@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
-import json
 from pathlib import Path
 from typing import IO, Literal, Never, cast
 from uuid import NAMESPACE_URL, uuid5
@@ -21,7 +20,7 @@ from nuself.memory.curator_contract import (
 )
 from nuself.private_fs import ensure_private_file
 from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import write_json_atomic
+from nuself.storage import StorageBackend, get_default_backend
 
 
 @dataclass(frozen=True)
@@ -239,28 +238,30 @@ class MemoryCuratorPlanStore:
         project_root: Path | None = None,
         *,
         registry: MemoryTypeRegistry | None = None,
+        backend: StorageBackend | None = None,
     ) -> None:
         self._paths = runtime_paths(project_root)
         self._registry = registry or default_memory_type_registry()
+        self._backend = (
+            backend
+            if backend is not None
+            else get_default_backend(project_root)
+        )
+        self._collection = self._backend.collection(
+            "memory_curator_plans"
+        )
 
     def get(self, thread_id: str) -> MemoryCuratorPlan | None:
-        path = self._path(thread_id)
         try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ValueError(
-                    "curator plan record must be a JSON object"
-                )
+            raw = self._collection.get(thread_id)
+            if raw is None:
+                return None
             return MemoryCuratorPlan.from_wire(
-                cast(dict[str, object], raw),
+                _without_storage_id(raw),
                 expected_thread_id=thread_id,
                 allowed_types=self._registry.names(),
             )
-        except FileNotFoundError:
-            return None
         except (
-            json.JSONDecodeError,
-            UnicodeDecodeError,
             TypeError,
             ValueError,
         ) as exc:
@@ -273,14 +274,11 @@ class MemoryCuratorPlanStore:
         cursor: int,
         next_message_index: int,
     ) -> MemoryCuratorPlan | None:
-        path = self._path(thread_id)
         try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ValueError(
-                    "curator plan record must be a JSON object"
-                )
-            raw_mapping = cast(dict[str, object], raw)
+            raw = self._collection.get(thread_id)
+            if raw is None:
+                return None
+            raw_mapping = _without_storage_id(raw)
             stored_thread_id = raw_mapping.get("thread_id")
             stored_source_end = raw_mapping.get("source_end")
             if (
@@ -304,49 +302,31 @@ class MemoryCuratorPlanStore:
                     "curator plan extends beyond the current thread"
                 )
             return plan
-        except FileNotFoundError:
-            return None
         except (
-            json.JSONDecodeError,
-            UnicodeDecodeError,
             TypeError,
             ValueError,
         ) as exc:
             self._raise_corrupt(thread_id, exc)
 
     def save(self, plan: MemoryCuratorPlan) -> MemoryCuratorPlan:
-        write_json_atomic(
-            self._path(plan.thread_id),
-            plan.to_wire(),
-        )
+        self._collection.put(plan.thread_id, plan.to_wire())
         return plan
 
     def discard(self, thread_id: str) -> None:
         with self.exclusive(thread_id):
-            path = self._path(thread_id)
-            try:
-                path.unlink()
-            except FileNotFoundError as exc:
-                raise MemoryCuratorPlanNotFound(thread_id) from exc
+            with self._backend.transaction():
+                if self._collection.get(thread_id) is None:
+                    raise MemoryCuratorPlanNotFound(thread_id)
+                self._collection.delete(thread_id)
 
     def exclusive(self, thread_id: str) -> MemoryCuratorPlanLock:
         """Return the authoritative mutation lock for one curator thread."""
 
         validate_curator_thread_id(thread_id)
         return MemoryCuratorPlanLock(
-            self._paths.authority_root
-            / "memory"
-            / "locks"
+            self._paths.runtime_dir
+            / "curator-locks"
             / f"{thread_id}.lock"
-        )
-
-    def _path(self, thread_id: str) -> Path:
-        validate_curator_thread_id(thread_id)
-        return (
-            self._paths.authority_root
-            / "memory"
-            / "plans"
-            / f"{thread_id}.json"
         )
 
     def _raise_corrupt(
@@ -371,3 +351,9 @@ class MemoryCuratorPlanStore:
 def validate_curator_thread_id(thread_id: str) -> None:
     if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
         raise ValueError(f"invalid thread id: {thread_id}")
+
+
+def _without_storage_id(
+    record: dict[str, object],
+) -> dict[str, object]:
+    return {key: value for key, value in record.items() if key != "id"}

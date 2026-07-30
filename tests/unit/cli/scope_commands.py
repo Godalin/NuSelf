@@ -31,7 +31,7 @@ def test_default_init_uses_nuself_home(
     assert stat.S_IMODE(user_root.stat().st_mode) == 0o700
     for name in ("sources", "logs", "exports", "imports", "runtime"):
         assert (user_root / name).is_dir()
-    assert not (user_root / "nuself.sqlite").exists()
+    assert (user_root / "nuself.sqlite").is_file()
     assert str(user_root) in capsys.readouterr().out
 
 

@@ -110,6 +110,18 @@ Logs, `memory list/show`, `reflection list/show`, `notify list/show`, and REPL v
 - Disables color automatically.
 - Uses `sort_keys=True, ensure_ascii=True`.
 
+## Generic Data Commands
+
+`nuself data` provides a discoverable, validated view of authoritative SQLite
+records for users who previously inspected or edited JSON files directly.
+Its `collections`, `list`, `show`, `edit`, `delete`, and `export` commands
+follow the storage contract in [`storage-v2.md`](storage-v2.md).
+
+Human-readable list/show output uses the shared record renderer. Machine output
+uses the JSON mode contract. Generic mutation is descriptor-driven and must
+pass the same domain decoder and identity rules as a repository write; direct
+SQL, raw table mutation, and validation bypass flags are not supported.
+
 ## REPL Conventions
 
 ### Session State Ownership

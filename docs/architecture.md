@@ -112,8 +112,12 @@ authority. The source checkout is not an implicit data root. Authoritative
 domain records are preserved independently from derived indexes so projections
 can be rebuilt without changing identity or evidence.
 
-SQLite and file-backed stores are accessed through explicit storage and
-repository boundaries. Runtime paths and configuration precedence are governed
+SQLite is the only authoritative structured-data store. Typed repositories
+isolate domain models from SQL, and the validated `nuself data` service gives
+users an inspectable/editable surface without exposing internal tables as a
+writable API. Configuration, raw source files, logs, explicit exchange files,
+runtime coordination, and rebuildable caches remain filesystem artifacts but
+are not parallel authorities. Runtime paths and configuration precedence are governed
 by [`spec/config.md`](spec/config.md) and [`spec/scope.md`](spec/scope.md);
 migration and storage behavior are governed by
 [`spec/storage-v2.md`](spec/storage-v2.md).

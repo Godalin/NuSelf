@@ -13,6 +13,7 @@ from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationGraphRuntime,
     ConversationTurnState,
+    ThreadStore,
 )
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
@@ -160,7 +161,7 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     assert response.payload["epistemic_status"] == "grounded"
     assert response.payload["thread_id"] == "default"
     assert "node_trace" not in response.payload
-    assert (tmp_path / "threads" / "default.json").is_file()
+    assert ThreadStore(tmp_path).list() == ["default"]
 
 
 def test_daemon_chat_uses_state_event_publisher(
@@ -235,7 +236,7 @@ def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
 
     assert response.status == "ok"
     assert response.payload["thread_id"] == "custom"
-    assert (tmp_path / "threads" / "custom.json").is_file()
+    assert ThreadStore(tmp_path).list() == ["custom"]
 
 
 def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> None:
@@ -250,8 +251,9 @@ def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> N
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    stored = (tmp_path / "threads" / "default.json").read_text(encoding="utf-8")
-    assert '"turn_id": "turn-retry"' in stored
+    stored = ThreadStore(tmp_path).load("default")
+    assert stored.messages[0].turn_id == "turn-retry"
+    assert stored.messages[1].turn_id == "turn-retry"
 
 
 def test_daemon_chat_error_includes_root_cause(tmp_path: Path) -> None:

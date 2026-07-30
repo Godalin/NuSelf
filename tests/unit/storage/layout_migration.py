@@ -12,11 +12,16 @@ from nuself.cli import main
 from nuself.layout_migration import LayoutMigrationError, migrate_legacy_layout
 from nuself.scope import resolve_scope
 from nuself.storage import (
-    FileStorageBackend,
     _create_sqlite_backend,
     auto_backend,
 )
 from nuself.storage_sqlite import SqliteStorageBackend
+
+
+def _sqlite_backend(path: Path) -> SqliteStorageBackend:
+    backend = auto_backend(path)
+    assert isinstance(backend, SqliteStorageBackend)
+    return backend
 
 
 def _migrate_in_process(source: str, workspace: str) -> str:
@@ -28,12 +33,12 @@ def _migrate_in_process(source: str, workspace: str) -> str:
     return "published"
 
 
-def test_file_layout_is_atomically_published_and_source_is_preserved(
+def test_sqlite_layout_is_atomically_published_and_source_is_preserved(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "legacy-private"
     source.mkdir()
-    backend = FileStorageBackend(source)
+    backend = _sqlite_backend(source)
     backend.collection("memory_entries").put(
         "mem-legacy",
         {"id": "mem-legacy", "title": "Legacy memory"},
@@ -53,14 +58,14 @@ def test_file_layout_is_atomically_published_and_source_is_preserved(
     assert source.is_dir()
     assert (source / "config.yaml").is_file()
     assert (target / "config.yaml").is_file()
-    migrated = auto_backend(target)
+    migrated = _sqlite_backend(target)
     try:
         assert migrated.collection("memory_entries").get("mem-legacy") == {
             "id": "mem-legacy",
             "title": "Legacy memory",
         }
     finally:
-        assert isinstance(migrated, FileStorageBackend | SqliteStorageBackend)
+        assert isinstance(migrated, SqliteStorageBackend)
         migrated.close()
     assert stat.S_IMODE(target.stat().st_mode) == 0o700
     assert stat.S_IMODE((target / "config.yaml").stat().st_mode) == 0o600
@@ -74,6 +79,7 @@ def test_transient_runtime_and_lock_files_are_not_migrated(
     source = tmp_path / "legacy-private"
     runtime = source / "runtime"
     runtime.mkdir(parents=True)
+    _sqlite_backend(source).close()
     (source / ".storage-authority.lock").write_text(
         "stale-source-lock",
         encoding="utf-8",
@@ -90,9 +96,7 @@ def test_transient_runtime_and_lock_files_are_not_migrated(
         resolve_scope(workspace=workspace, environ={}),
     )
 
-    assert (
-        target / ".storage-authority.lock"
-    ).read_text(encoding="utf-8") != "stale-source-lock"
+    assert not (target / ".storage-authority.lock").exists()
     assert not (target / "runtime" / "nuself.pid").exists()
     assert not (target / "runtime" / "nuself.lock").exists()
     assert not (target / "runtime" / "nuself.sock").exists()
@@ -104,6 +108,7 @@ def test_concurrent_migration_publishes_exactly_once(
 ) -> None:
     source = tmp_path / "legacy-private"
     source.mkdir()
+    _sqlite_backend(source).close()
     (source / "config.yaml").write_text("{}\n", encoding="utf-8")
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -144,14 +149,14 @@ def test_live_sqlite_layout_uses_backup_and_keeps_wal_data(
     finally:
         backend.close()
 
-    migrated = auto_backend(target)
+    migrated = _sqlite_backend(target)
     try:
         assert migrated.collection("memory_entries").get("mem-wal") == {
             "id": "mem-wal",
             "title": "Committed in WAL",
         }
     finally:
-        assert isinstance(migrated, FileStorageBackend | SqliteStorageBackend)
+        assert isinstance(migrated, SqliteStorageBackend)
         migrated.close()
     assert (source / "nuself.sqlite").is_file()
 
@@ -161,6 +166,7 @@ def test_existing_target_is_rejected_without_source_changes(
 ) -> None:
     source = tmp_path / "legacy-private"
     source.mkdir()
+    _sqlite_backend(source).close()
     sentinel = source / "sentinel.txt"
     sentinel.write_text("unchanged", encoding="utf-8")
     workspace = tmp_path / "workspace"
@@ -198,6 +204,7 @@ def test_source_symlink_is_rejected_without_target_creation(
 def test_nested_source_symlink_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "legacy-private"
     source.mkdir()
+    _sqlite_backend(source).close()
     external = tmp_path / "external"
     external.mkdir()
     (source / "redirect").symlink_to(external, target_is_directory=True)
@@ -217,6 +224,7 @@ def test_cli_migrates_to_explicit_workspace_and_reports_preserved_source(
 ) -> None:
     source = tmp_path / "private"
     source.mkdir()
+    _sqlite_backend(source).close()
     (source / "config.yaml").write_text("{}\n", encoding="utf-8")
     workspace = tmp_path / "workspace"
     workspace.mkdir()

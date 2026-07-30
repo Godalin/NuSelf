@@ -42,7 +42,8 @@ from nuself.storage import (
 )
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
-SQLITE_SCHEMA_VERSION = 2
+SQLITE_SCHEMA_VERSION = 3
+_V2_COLLECTION_NAMES = COLLECTION_NAMES[:-4]
 
 
 def _json(v: object) -> str:
@@ -383,8 +384,6 @@ class SqliteCollection:
 
     def _list_locked(self) -> tuple[dict[str, object], ...]:
         cols = self._columns()
-        if len(cols) <= 1:
-            return ()
         col_list = ", ".join(_identifier(c) for c in cols)
         rows = self._conn.execute(
             f"SELECT {col_list} FROM {_identifier(self._table)}"
@@ -467,7 +466,7 @@ class SqliteStorageBackend:
             and observed_version < SQLITE_SCHEMA_VERSION
         )
         lease = (
-            _schema_upgrade_lease(
+            sqlite_schema_lease(
                 db_path,
                 managed=self._managed,
             )
@@ -595,23 +594,25 @@ class SqliteStorageBackend:
             current_version = 1
         if current_version >= SQLITE_SCHEMA_VERSION:
             return
-        if initialize:
-            self._upgrade_v1_to_v2()
-            return
         if upgrade_lease_held:
             refreshed_version = self._read_schema_version()
             self._require_supported_schema_version(refreshed_version)
-            if refreshed_version < SQLITE_SCHEMA_VERSION:
-                self._upgrade_v1_to_v2()
+            self._upgrade_schema(refreshed_version)
             return
-        with _schema_upgrade_lease(
+        with sqlite_schema_lease(
             self._db_path,
             managed=self._managed,
         ):
             refreshed_version = self._read_schema_version()
             self._require_supported_schema_version(refreshed_version)
-            if refreshed_version < SQLITE_SCHEMA_VERSION:
-                self._upgrade_v1_to_v2()
+            self._upgrade_schema(refreshed_version)
+
+    def _upgrade_schema(self, current_version: int) -> None:
+        if current_version < 2:
+            self._upgrade_v1_to_v2()
+            current_version = 2
+        if current_version < 3:
+            self._upgrade_v2_to_v3()
 
     def _read_schema_version(self) -> int:
         row = self._conn.execute(
@@ -643,11 +644,23 @@ class SqliteStorageBackend:
             self._apply_v2()
             self._conn.execute(
                 "INSERT INTO _schema_version (version) VALUES (?)",
-                (SQLITE_SCHEMA_VERSION,),
+                (2,),
+            )
+
+    def _upgrade_v2_to_v3(self) -> None:
+        with self.transaction():
+            for name in COLLECTION_NAMES:
+                table = _collection_table(name)
+                self._conn.execute(
+                    f"CREATE TABLE IF NOT EXISTS {_identifier(table)} "
+                    "(id TEXT PRIMARY KEY)"
+                )
+            self._conn.execute(
+                "INSERT INTO _schema_version (version) VALUES (3)"
             )
 
     def _apply_v1(self) -> None:
-        for name in COLLECTION_NAMES:
+        for name in _V2_COLLECTION_NAMES:
             table = _collection_table(name)
             self._conn.execute(
                 f"CREATE TABLE IF NOT EXISTS {_identifier(table)} "
@@ -657,7 +670,7 @@ class SqliteStorageBackend:
 
     def _apply_v2(self) -> None:
         """Expand a legacy v1 payload object into v2 dynamic columns."""
-        for name in COLLECTION_NAMES:
+        for name in _V2_COLLECTION_NAMES:
             table = _collection_table(name)
             info = self._conn.execute(
                 f"PRAGMA table_info({_identifier(table)})"
@@ -710,7 +723,7 @@ class SqliteStorageBackend:
 
     def _backup_before_v2_if_needed(self) -> None:
         has_payload = False
-        for name in COLLECTION_NAMES:
+        for name in _V2_COLLECTION_NAMES:
             table = _collection_table(name)
             info = self._conn.execute(
                 f"PRAGMA table_info({_identifier(table)})"
@@ -945,7 +958,7 @@ def _prepare_backup_destination(
 
 
 @contextmanager
-def _schema_upgrade_lease(
+def sqlite_schema_lease(
     database: Path,
     *,
     managed: bool,
@@ -1052,7 +1065,12 @@ def _validate_nuself_schema_connection(
                 f"thought pack schema version {version} is newer than "
                 f"supported version {SQLITE_SCHEMA_VERSION}"
             )
-        for collection_name in COLLECTION_NAMES:
+        required_collections = (
+            COLLECTION_NAMES
+            if version >= 3
+            else _V2_COLLECTION_NAMES
+        )
+        for collection_name in required_collections:
             table = _collection_table(collection_name)
             if table not in tables:
                 raise ThoughtPackValidationError(

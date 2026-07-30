@@ -15,7 +15,7 @@ from nuself.domain.memory import (
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
 from nuself.memory.repository import MemorySearchFilters, MemoryStats, memory_stats
 from nuself.logs import read_log_events
-from nuself.storage import FileStorageBackend
+from nuself.storage import auto_backend
 
 
 def test_memory_repository_crud(tmp_path: Path) -> None:
@@ -44,7 +44,7 @@ def test_memory_repository_crud(tmp_path: Path) -> None:
 def test_memory_repository_isolates_and_reports_corrupt_neighbor(
     tmp_path: Path,
 ) -> None:
-    backend = FileStorageBackend(tmp_path / "private")
+    backend = auto_backend(tmp_path / "private")
     repo = MemoryEntryRepository(tmp_path, backend=backend)
     healthy = repo.save(
         MemoryEntry(type="concept", title="Healthy", body="Readable")

@@ -231,7 +231,7 @@ NuSelf is a multi-subservice system. Major domains such as memory, reflection, n
 Each subsystem should expose these layers when the domain is non-trivial:
 
 1. **Domain models**: typed records and validation rules.
-2. **Repository**: file-backed persistence and rebuildable indexes.
+2. **Repository**: SQLite-backed persistence and rebuildable indexes.
 3. **Service**: user-intent operations and policy decisions.
 4. **Renderer**: human-readable CLI/REPL presentation.
 5. **Tool-facing adapter**: a small interface suitable for use by chat, reason, reflection, or future agents.
@@ -543,7 +543,7 @@ boundary and re-exports caller-facing names.
 - Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
 - Descriptors own validation, summarization, merge, decay, conflict, retrieval, and reflection rules.
 - Symbolic memory evolves as a derived open graph with `RelationDescriptor` rules.
-- File-backed private memory is authoritative; all indexes are derived and rebuildable.
+- SQLite private memory is authoritative; all indexes are derived and rebuildable.
 
 ## Private Memory
 

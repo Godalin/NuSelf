@@ -14,7 +14,7 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.scheduler import ReasonScheduler
 from nuself.reason.service import ReasonService
-from nuself.storage import FileStorageBackend
+from nuself.storage import auto_backend
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -71,7 +71,7 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
 def test_run_once_never_advances_corrupt_cooldown_record(
     tmp_path: Path,
 ) -> None:
-    backend = FileStorageBackend(tmp_path / "private")
+    backend = auto_backend(tmp_path / "private")
     thread = ReasoningThread(topic="Corrupt cooldown")
     wire = thread.to_wire()
     wire["skip_next_advance_until"] = "not-a-time"

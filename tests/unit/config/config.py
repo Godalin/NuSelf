@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from pathlib import Path
-import shutil
 import stat
 import warnings
 
@@ -177,11 +176,13 @@ def test_complete_official_v025_config_loads_through_narrow_migration(
         Path(__file__).resolve().parents[3]
         / "tests"
         / "fixtures"
-        / "migrations"
-        / "v0.2.5"
-        / "private"
+        / "config"
+        / "v0.2.5.yaml"
     )
-    shutil.copytree(fixture, tmp_path, dirs_exist_ok=True)
+    (tmp_path / "config.yaml").write_text(
+        fixture.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
     with pytest.warns(
         RuntimeWarning,

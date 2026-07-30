@@ -28,7 +28,7 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.storage import (
-    FileStorageBackend,
+    auto_backend,
     StorageBackend,
     StorageCollection,
 )
@@ -139,7 +139,7 @@ class DeleteFailingCollection:
 
 class DeleteFailingBackend:
     def __init__(self, root: Path) -> None:
-        delegate = FileStorageBackend(root)
+        delegate = auto_backend(root)
         self._delegate = delegate
         self._outbox = DeleteFailingCollection(
             delegate.collection("notification_outbox")
@@ -672,7 +672,7 @@ def test_outbox_list_isolates_invalid_persisted_timestamps(
     field_name: str,
     value: object,
 ) -> None:
-    backend = FileStorageBackend(tmp_path / "private")
+    backend = auto_backend(tmp_path / "private")
     wire = OutboxEntry(
         id="corrupt-time",
         title="Private title",
@@ -701,7 +701,7 @@ def test_outbox_list_isolates_invalid_persisted_timestamps(
 def test_outbox_list_isolates_invalid_present_context(
     tmp_path: Path,
 ) -> None:
-    backend = FileStorageBackend(tmp_path / "private")
+    backend = auto_backend(tmp_path / "private")
     wire = OutboxEntry(
         id="corrupt-context",
         title="Private title",

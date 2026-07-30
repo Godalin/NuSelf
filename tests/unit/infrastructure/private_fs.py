@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # pyright: reportPrivateUsage=false
 
-from collections.abc import Callable
 from pathlib import Path
 import stat
 
@@ -11,7 +10,6 @@ import pytest
 from nuself.private_fs import ensure_private_directory
 from nuself.storage import (
     _create_sqlite_backend,
-    create_file_backend,
 )
 
 
@@ -48,13 +46,8 @@ def test_managed_private_tree_rejects_symlink_without_external_changes(
     assert list(external.iterdir()) == [sentinel]
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [create_file_backend, _create_sqlite_at_project],
-)
 def test_storage_rejects_redirected_private_root_before_writes(
     tmp_path: Path,
-    factory: Callable[[Path | None], object],
 ) -> None:
     project = tmp_path / "project"
     project.mkdir()
@@ -68,7 +61,7 @@ def test_storage_rejects_redirected_private_root_before_writes(
     )
 
     with pytest.raises(OSError, match="actual directory"):
-        factory(authority)
+        _create_sqlite_at_project(authority)
 
     assert stat.S_IMODE(external.stat().st_mode) == 0o755
     assert list(external.iterdir()) == []

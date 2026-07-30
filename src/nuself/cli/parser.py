@@ -15,9 +15,16 @@ from nuself.cli.commands.daemon import (
     handle_daemon_status,
     handle_daemon_stop,
 )
+from nuself.cli.commands.data import (
+    handle_data_collections,
+    handle_data_delete,
+    handle_data_edit,
+    handle_data_export,
+    handle_data_list,
+    handle_data_show,
+)
 from nuself.cli.commands.dev import (
     handle_dev_db_schema,
-    handle_dev_migrate,
     handle_dev_storage,
 )
 from nuself.cli.commands.eval import handle_eval
@@ -178,6 +185,59 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         help="Migrate to PATH/.nuself.",
     )
     bind_handler(migrate_layout_parser, handle_migrate_layout)
+
+    data_parser = subparsers.add_parser(
+        "data",
+        help="Inspect and safely edit authoritative data.",
+    )
+    bind_help(data_parser)
+    data_subparsers = data_parser.add_subparsers(
+        dest="data_command",
+        metavar="<command>",
+    )
+    data_collections = data_subparsers.add_parser(
+        "collections",
+        help="List discoverable data collections.",
+    )
+    data_collections.add_argument("--internal", action="store_true")
+    bind_handler(data_collections, handle_data_collections)
+    data_list = data_subparsers.add_parser("list", help="List collection records.")
+    data_list.add_argument("collection")
+    data_list.add_argument("--json", action="store_true")
+    data_list.add_argument("--internal", action="store_true")
+    bind_handler(data_list, handle_data_list)
+    data_show = data_subparsers.add_parser("show", help="Show one record.")
+    data_show.add_argument("collection")
+    data_show.add_argument("record_id")
+    data_show.add_argument("--json", action="store_true")
+    data_show.add_argument("--internal", action="store_true")
+    bind_handler(data_show, handle_data_show)
+    data_edit = data_subparsers.add_parser("edit", help="Edit one validated record.")
+    data_edit.add_argument("collection")
+    data_edit.add_argument("record_id")
+    data_edit.add_argument("--file", type=Path, default=None)
+    data_edit.add_argument("--editor", default=None)
+    data_edit.add_argument("--yes", "-y", action="store_true")
+    data_edit.add_argument("--internal", action="store_true")
+    bind_handler(data_edit, handle_data_edit)
+    data_delete = data_subparsers.add_parser(
+        "delete",
+        help="Delete one editable record.",
+    )
+    data_delete.add_argument("collection")
+    data_delete.add_argument("record_id")
+    data_delete.add_argument("--yes", "-y", action="store_true")
+    data_delete.add_argument("--internal", action="store_true")
+    bind_handler(data_delete, handle_data_delete)
+    data_export = data_subparsers.add_parser(
+        "export",
+        help="Export one collection as JSON or JSONL.",
+    )
+    data_export.add_argument("collection")
+    data_export.add_argument("--format", choices=("json", "jsonl"), default="jsonl")
+    data_export.add_argument("--output", type=Path, default=None)
+    data_export.add_argument("--internal", action="store_true")
+    bind_handler(data_export, handle_data_export)
 
     daemon_parser = subparsers.add_parser(
         "daemon",
@@ -635,12 +695,6 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         "--component", choices=["conversations", "notifications", "all"], default="all"
     )
     bind_handler(dev_eval_parser, handle_eval)
-
-    dev_migrate_parser = dev_subparsers.add_parser(
-        "migrate",
-        help="Migrate file-based data to the selected authority database.",
-    )
-    bind_handler(dev_migrate_parser, handle_dev_migrate)
 
     bind_handler(
         dev_subparsers.add_parser("db-schema", help="Show SQLite database schema."),

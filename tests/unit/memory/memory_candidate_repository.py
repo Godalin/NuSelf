@@ -12,8 +12,6 @@ from nuself.domain.memory import (
     MemoryEvidence,
 )
 from nuself.memory.repository import (
-    MemoryCandidateAmbiguousCommitError,
-    MemoryCandidateCommitError,
     MemoryCandidateNotFound,
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -363,7 +361,7 @@ def test_accept_delete_restores_target_when_candidate_commit_fails(
     assert repo.get(candidate.id).review_state == "pending"
 
 
-def test_accept_preserves_visible_logical_commit_when_candidate_durability_is_uncertain(
+def test_accept_rolls_back_when_candidate_write_reports_durability_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -387,21 +385,17 @@ def test_accept_preserves_visible_logical_commit_when_candidate_durability_is_un
 
     monkeypatch.setattr(repo, "save", save_then_fail_once)
 
-    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
         repo.accept(candidate.id)
 
-    error = captured.value
     accepted = repo.get(candidate.id)
-    assert error.durability_error is durability_error
-    assert error.candidate_id == candidate.id
-    assert error.candidate_state == "accepted"
-    assert error.target_state == "expected"
-    assert accepted.review_state == "accepted"
-    assert accepted.target_entry_id is not None
-    assert entry_repo.get(accepted.target_entry_id).title == "Visible"
+    assert captured.value is durability_error
+    assert accepted.review_state == "pending"
+    assert accepted.target_entry_id is None
+    assert entry_repo.list() == []
 
 
-def test_accept_preserves_ambiguous_commit_when_candidate_readback_fails(
+def test_accept_rolls_back_without_candidate_readback_reconciliation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -444,24 +438,18 @@ def test_accept_preserves_ambiguous_commit_when_candidate_readback_fails(
 
     monkeypatch.setattr(repo, "save", save_then_make_readback_fail)
 
-    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
         repo.accept(candidate.id)
 
-    error = captured.value
     monkeypatch.setattr(repo, "get", original_get)
     accepted = repo.get(candidate.id)
-    assert error.durability_error is durability_error
-    assert error.observation_errors == (observation_error,)
-    assert error.candidate_state == "unknown"
-    assert error.target_state == "expected"
-    assert accepted.review_state == "accepted"
-    assert accepted.target_entry_id is not None
-    assert entry_repo.get(accepted.target_entry_id).title == (
-        "Unknown candidate state"
-    )
+    assert captured.value is durability_error
+    assert accepted.review_state == "pending"
+    assert accepted.target_entry_id is None
+    assert entry_repo.list() == []
 
 
-def test_accept_preserves_ambiguous_commit_when_target_readback_fails(
+def test_accept_rolls_back_without_target_readback_reconciliation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -508,22 +496,17 @@ def test_accept_preserves_ambiguous_commit_when_target_readback_fails(
         save_then_make_target_readback_fail,
     )
 
-    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
         repo.accept(candidate.id)
 
-    error = captured.value
     monkeypatch.setattr(entry_repo, "get", original_entry_get)
     accepted = repo.get(candidate.id)
-    assert error.observation_errors == (observation_error,)
-    assert error.candidate_state == "accepted"
-    assert error.target_state == "unknown"
-    assert accepted.target_entry_id is not None
-    assert entry_repo.get(accepted.target_entry_id).title == (
-        "Unknown target state"
-    )
+    assert captured.value is durability_error
+    assert accepted.target_entry_id is None
+    assert entry_repo.list() == []
 
 
-def test_accept_does_not_compensate_visibly_accepted_unexpected_target(
+def test_accept_rolls_back_concurrent_target_change_in_same_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -557,21 +540,16 @@ def test_accept_does_not_compensate_visibly_accepted_unexpected_target(
 
     monkeypatch.setattr(repo, "save", save_then_change_target)
 
-    with pytest.raises(MemoryCandidateAmbiguousCommitError) as captured:
+    with pytest.raises(AtomicWriteDurabilityError) as captured:
         repo.accept(candidate.id)
 
-    error = captured.value
     accepted = repo.get(candidate.id)
-    assert error.candidate_state == "accepted"
-    assert error.target_state == "unexpected"
-    assert error.observation_errors == ()
-    assert accepted.target_entry_id is not None
-    assert entry_repo.get(accepted.target_entry_id).title == (
-        "Unexpected target"
-    )
+    assert captured.value is durability_error
+    assert accepted.target_entry_id is None
+    assert entry_repo.list() == []
 
 
-def test_accept_compensates_visible_new_target_when_target_durability_is_uncertain(
+def test_accept_rolls_back_new_target_when_target_write_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -601,7 +579,7 @@ def test_accept_compensates_visible_new_target_when_target_durability_is_uncerta
     assert repo.get(candidate.id).review_state == "pending"
 
 
-def test_merge_restores_previous_target_when_target_durability_is_uncertain(
+def test_merge_rolls_back_previous_target_when_target_write_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -640,7 +618,7 @@ def test_merge_restores_previous_target_when_target_durability_is_uncertain(
     assert repo.get(candidate.id).review_state == "pending"
 
 
-def test_delete_restores_target_when_delete_durability_is_uncertain(
+def test_delete_rolls_back_target_when_delete_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -679,7 +657,7 @@ def test_delete_restores_target_when_delete_durability_is_uncertain(
     assert repo.get(candidate.id).review_state == "pending"
 
 
-def test_accept_retains_commit_and_compensation_failures(
+def test_accept_propagates_commit_failure_after_transaction_rollback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -696,26 +674,19 @@ def test_accept_retains_commit_and_compensation_failures(
         )
     )
     operation_error = OSError("candidate commit failed")
-    compensation_error = OSError("target rollback failed")
 
     def fail_accepted_save(updated: MemoryCandidate) -> MemoryCandidate:
         if updated.review_state == "accepted":
             raise operation_error
         return updated
 
-    def fail_delete(entry_id: str) -> None:
-        raise compensation_error
-
     monkeypatch.setattr(repo, "save", fail_accepted_save)
-    monkeypatch.setattr(entry_repo, "delete", fail_delete)
 
-    with pytest.raises(MemoryCandidateCommitError) as captured:
+    with pytest.raises(OSError) as captured:
         repo.accept(candidate.id)
 
-    assert captured.value.primary_error is operation_error
-    assert captured.value.compensation_error is compensation_error
-    assert captured.value.__cause__ is operation_error
-    assert len(entry_repo.list()) == 1
+    assert captured.value is operation_error
+    assert entry_repo.list() == []
     assert repo.get(candidate.id).review_state == "pending"
 
 

@@ -6,6 +6,20 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Structured state is now SQLite-only in user and workspace authorities.
+  Chat threads, curator cursors/plans, and scheduler state have joined the
+  domain collections; file-backend fallback and `dev migrate` are removed.
+  Missing canonical databases initialize atomically, while invalid existing
+  authority still fails closed.
+- Added `nuself data collections/list/show/export` for discoverable SQLite
+  data and validated `data edit/delete` workflows for memory and chat threads.
+  Editing preserves stable identity, shows a diff, confirms changes, detects
+  concurrent updates, and writes metadata-only audit events. Internal
+  operational collections remain hidden unless explicitly requested.
+- The repository authority was migrated to schema v3 and verified before
+  legacy JSON directories were retired. The public example now contains only
+  configuration and source inputs; obsolete example profile/manifest/share
+  state and frozen file-backend migration fixtures are removed.
 - The committed public authority example now lives at `examples/.nuself/`,
   matching the v0.3.1 workspace layout and documentation. Repository-local
   `.nuself/` state and its migration lease are ignored.

@@ -146,6 +146,19 @@ uv run nuself dev health
 uv run nuself dev logs --component chat --tail 20
 ```
 
+### 查看或编辑存储数据
+
+```bash
+uv run nuself data collections
+uv run nuself data list memory
+uv run nuself data show memory <memory-id>
+uv run nuself data edit memory <memory-id>
+uv run nuself data export threads --format json
+```
+
+通用编辑会校验完整记录、显示 diff、要求确认，并拒绝覆盖并发修改。
+内部运行状态默认隐藏，只有显式使用 `--internal` 才能查看。
+
 [CLI 指南](docs/cli.md)按工作流整理了命令；CLI 自身的 `--help` 是最新命令参考。
 
 ## 隐私与存储

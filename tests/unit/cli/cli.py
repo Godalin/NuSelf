@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # pyright: reportPrivateUsage=false
 
-import json
 import subprocess
 import stat
 import sys
@@ -57,6 +56,7 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.storage import get_default_backend
 from nuself.trace.service import TraceQueryService
 
 
@@ -143,7 +143,7 @@ def test_chat_uses_one_shot_when_daemon_is_missing(
     assert result == 0
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello" in captured.out
-    assert (_authority(tmp_path) / "threads" / "default.json").is_file()
+    assert ThreadStore(_authority(tmp_path)).list() == ["default"]
 
 
 def test_one_shot_chat_runs_memory_curator_after_reply(
@@ -1878,24 +1878,17 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    plan_path = (
-        _authority(tmp_path)
-        / "memory"
-        / "plans"
-        / "default.json"
+    backend = get_default_backend(_authority(tmp_path))
+    backend.collection("memory_curator_plans").put(
+        "default",
+        {"thread_id": "default"},
     )
-    plan_path.parent.mkdir(parents=True)
-    plan_path.write_text("{", encoding="utf-8")
-    cursor_path = (
-        _authority(tmp_path)
-        / "memory"
-        / "cursors"
-        / "default.json"
-    )
-    cursor_path.parent.mkdir(parents=True)
-    cursor_path.write_text(
-        '{"thread_id":"default","processed_message_count":3}\n',
-        encoding="utf-8",
+    backend.collection("memory_curator_cursors").put(
+        "default",
+        {
+            "thread_id": "default",
+            "processed_message_count": 3,
+        },
     )
     candidate_repo = MemoryCandidateRepository(_authority(tmp_path))
     candidate = candidate_repo.save(
@@ -1938,8 +1931,10 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
         "Cursor and candidates were not changed."
         in discard_output.out
     )
-    assert not plan_path.exists()
-    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+    backend = get_default_backend(_authority(tmp_path))
+    assert backend.collection("memory_curator_plans").get("default") is None
+    assert backend.collection("memory_curator_cursors").get("default") == {
+        "id": "default",
         "thread_id": "default",
         "processed_message_count": 3,
     }
@@ -1998,7 +1993,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
         == "Curator plan is busy for thread: default; "
         "no plan was discarded.\n"
     )
-    assert store.get("default") == plan
+    assert MemoryCuratorPlanStore(_authority(tmp_path)).get("default") == plan
 
 
 def test_memory_plan_show_missing_is_an_explicit_error(
@@ -3046,9 +3041,7 @@ def test_thread_create_makes_new_thread(tmp_path: Path, capsys: CaptureFixture) 
 
     assert result == 0
     assert "Created thread: new-thread" in captured.out
-    assert "new-thread.json" in [
-        p.name for p in (_authority(tmp_path) / "threads").glob("*.json")
-    ]
+    assert ThreadStore(_authority(tmp_path)).list() == ["new-thread"]
 
 
 def test_thread_create_fails_when_thread_exists(
@@ -3109,7 +3102,7 @@ def test_thread_branch_copies_messages(tmp_path: Path, capsys: CaptureFixture) -
 
     assert result == 0
     assert "Branched thread: source -> fork" in captured.out
-    fork = store.load("fork")
+    fork = ThreadStore(_authority(tmp_path)).load("fork")
     assert len(fork.messages) == 2
     assert fork.thread_id == "fork"
 
@@ -3143,7 +3136,7 @@ def test_thread_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
     )
 
     assert result == 0
-    fork = store.load("fork")
+    fork = ThreadStore(_authority(tmp_path)).load("fork")
     assert len(fork.messages) == 2
     assert fork.next_message_index == 7
 
@@ -3157,8 +3150,7 @@ def test_thread_archive_moves_to_subdir(tmp_path: Path, capsys: CaptureFixture) 
     assert result == 0
     assert "Archived thread: old" in captured.out
     assert ThreadStore(_authority(tmp_path)).list() == []
-    archived = _authority(tmp_path) / "threads" / "archived" / "old.json"
-    assert archived.exists()
+    assert ThreadStore(_authority(tmp_path)).list_archived() == ["old"]
 
 
 def test_thread_delete_removes_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -3195,8 +3187,7 @@ def test_thread_unarchive_restores_thread(
 
     assert result == 0
     assert "Unarchived thread: old" in captured.out
-    assert store.list() == ["old"]
-    assert not (_authority(tmp_path) / "threads" / "archived" / "old.json").exists()
+    assert ThreadStore(_authority(tmp_path)).list() == ["old"]
 
 
 def test_thread_unarchive_fails_when_missing(
@@ -3269,9 +3260,7 @@ def test_open_create_makes_thread_and_enters_repl(
     assert result == 0
     assert "Created thread: new-thread" in captured.out
     assert "thread=new-thread" in captured.out
-    assert "new-thread.json" in [
-        p.name for p in (_authority(tmp_path) / "threads").glob("*.json")
-    ]
+    assert ThreadStore(_authority(tmp_path)).list() == ["new-thread"]
 
 
 def test_open_with_message_sends_then_enters_repl(

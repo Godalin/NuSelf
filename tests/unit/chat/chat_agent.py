@@ -230,9 +230,8 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert result.confidence == 0.92
     assert result.epistemic_status == "grounded"
     assert response_service.calls[0][0].text.startswith("You are NuSelf")
-    thread_path = tmp_path / "threads" / "default.json"
-    text = thread_path.read_text(encoding="utf-8")
-    assert "Use the profile context." in text
+    thread = ThreadStore(tmp_path).load("default")
+    assert thread.messages[-1].content == "Use the profile context."
 
 
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
@@ -258,11 +257,9 @@ def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
     agent.respond("two")
     agent.respond("three")
 
-    thread_path = tmp_path / "threads" / "default.json"
-    text = thread_path.read_text(encoding="utf-8")
-
-    assert "compressed context" in text
-    assert text.count('"role"') == 2
+    thread = ThreadStore(tmp_path).load("default")
+    assert thread.summary == "compressed context"
+    assert len(thread.messages) == 2
     assert len(compression_agent.calls) == 1
     assert "Compress a private NuSelf conversation" in (
         compression_agent.calls[0][0].text
@@ -276,13 +273,12 @@ def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:
     agent.respond("one")
     agent.respond("two")
     agent.respond("three")
+    agent.respond("four")
 
-    thread_path = tmp_path / "threads" / "default.json"
-    text = thread_path.read_text(encoding="utf-8")
-
-    assert "LLM API key is not configured" not in text
-    assert '"content": "three"' in text
-    assert '"summary":' in text
+    thread = ThreadStore(tmp_path).load("default")
+    assert "LLM API key is not configured" not in thread.summary
+    assert thread.messages[-2].content == "four"
+    assert thread.summary
 
 
 def test_chat_compression_failure_falls_back_and_is_observable(
@@ -351,7 +347,7 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
     agent.respond("new question")
 
     prompt_text = "\n".join(message.text for message in llm.calls[0][1:])
-    saved_text = (tmp_path / "threads" / "default.json").read_text(encoding="utf-8")
+    saved_text = str(thread_store.load("default").to_wire())
     assert "LLM API is not configured yet" not in prompt_text
     assert "LLM API is not configured yet" not in saved_text
     assert "old question" in prompt_text

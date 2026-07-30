@@ -37,7 +37,7 @@ def _create_pack_schema(path: Path, *, version: int) -> None:
 
 def test_pack_export_creates_sqlite(tmp_path: Path) -> None:
     # Create source database via migration
-    assert main(["--workspace", str(tmp_path), "dev", "migrate"]) == 0
+    assert main(["--workspace", str(tmp_path), "init"]) == 0
     db = tmp_path / ".nuself" / "nuself.sqlite"
     assert db.exists()
 
@@ -72,7 +72,7 @@ def test_pack_export_rejects_path_like_names(
     name: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert main(["--workspace", str(tmp_path), "dev", "migrate"]) == 0
+    assert main(["--workspace", str(tmp_path), "init"]) == 0
     capsys.readouterr()
 
     assert main(
@@ -299,7 +299,7 @@ def test_pack_inspect_defaults_to_main_db(tmp_path: Path) -> None:
     assert result != 0  # no main db yet
 
     # After migration, it should succeed
-    assert main(["--workspace", str(tmp_path), "dev", "migrate"]) == 0
+    assert main(["--workspace", str(tmp_path), "init"]) == 0
     assert main(["--workspace", str(tmp_path), "pack", "inspect"]) == 0
 
 

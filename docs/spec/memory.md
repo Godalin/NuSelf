@@ -367,51 +367,16 @@ correlation rather than duplicating the thread id.
 Accepting a candidate is one logical commit across the target collection and
 the candidate review record. The repository enters the shared backend
 transaction before creating, merging, or deleting the target and before
-writing `review_state="accepted"`. SQLite provides atomic rollback. Because
-the file backend serializes but cannot make multiple files crash-atomic, an
-in-process failure writing the accepted candidate must synchronously compensate
-the target mutation: delete a newly created target, restore the pre-merge
-target, or restore a deleted target. After successful compensation the original
-write exception propagates unchanged and the candidate remains pending. If
-compensation also fails, a typed commit error retains both the primary and
-rollback exceptions; it must never report acceptance.
-
-File replacement and deletion can also fail after the new directory entry is
-already visible but before its parent directory is synchronized. Candidate
-acceptance must distinguish that durability-uncertain result from a
-pre-mutation failure:
-
-- If a target mutation reports a visible-but-durability-uncertain error while
-  the candidate is still pending, acceptance compensates the visible target
-  mutation and propagates the original error after successful compensation.
-- If the final candidate write reports a visible-but-durability-uncertain error,
-  acceptance reads back both records. When the candidate is visibly accepted
-  and the target matches the intended final state (or is absent for delete), it
-  must not compensate an already-visible logical commit. It raises a typed
-  ambiguous-commit error retaining the original durability error and the
-  observed candidate/target state so callers can reconcile or retry safely.
-- Once that durability error is reported, destructive compensation is allowed
-  only when a successful candidate read proves the final accepted record is
-  absent or still non-accepted. A candidate read failure, a visibly accepted
-  candidate with an unexpected target, or a target read failure is ambiguous
-  and must not compensate. The typed ambiguous error records `unknown`,
-  `unexpected`, `absent`, or the observed review state without payload content,
-  retains the original durability error, and retains every secondary
-  observation error.
-- A successful read-back proving the candidate is not accepted is compensated
-  where possible. A failed compensation retains both errors in the typed
-  commit error.
-
-An ambiguous commit must never be reported as success, silently retried as a
-new candidate, or converted back to pending by deleting/restoring its target.
-Its error message and structured fields identify record IDs and states only;
-they do not expose candidate or memory content.
+writing `review_state="accepted"`. SQLite provides atomic commit or rollback.
+Any exception before commit leaves both the candidate and target at their
+pre-operation state. Repositories do not perform file-era manual compensation
+inside this transaction.
 
 For MemoryEntry targets, `accept` accepts only `draft` or `reviewed` as the
 requested final target state. The initial save still applies quarantine rules;
 only a non-quarantined entry is promoted. Promotion happens before the
-candidate final-state write, so a promotion failure triggers the same create
-deletion or merge restoration compensation and leaves the candidate pending.
+candidate final-state write, so a promotion failure rolls back the transaction
+and leaves the candidate pending.
 ProfileItem and delete targets have no MemoryEntry review-state transition.
 
 ### Entry Review States

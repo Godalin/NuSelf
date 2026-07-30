@@ -245,7 +245,7 @@ Trace is a subsystem service, not only a repository.
 Layers:
 
 - `ThoughtTrace` / `TraceLink`: domain models and validation.
-- `TraceRepository`: file-backed persistence and index rebuild.
+- `TraceRepository`: SQLite persistence and derived index rebuild.
 - `TraceRecorder`: service interface used by other subsystems to create traces and links.
 - `TraceQueryService`: service interface for list/show/search.
 - Trace renderers: human-readable CLI/REPL output.

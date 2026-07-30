@@ -7,7 +7,7 @@ from nuself.notification import NotificationOutbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
-from nuself.storage import FileStorageBackend
+from nuself.storage import auto_backend
 from nuself.trace.repository import TraceRepository
 
 CASES: tuple[tuple[str, LogComponent], ...] = (
@@ -26,8 +26,11 @@ def test_repository_lists_report_corrupt_records(
     collection: str,
     component: LogComponent,
 ) -> None:
-    backend = FileStorageBackend(tmp_path / "private")
-    backend.collection(collection).put("bad_record", {"id": "bad_record"})
+    backend = auto_backend(tmp_path)
+    backend.collection(collection).put(
+        "bad_record",
+        {"id": "bad_record", "invalid": True},
+    )
 
     if collection == "persona_prompts":
         result = PersonaPromptRepository(

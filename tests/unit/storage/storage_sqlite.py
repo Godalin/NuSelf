@@ -33,9 +33,8 @@ from nuself.reflection.repository import ReflectionRepository
 from nuself.storage import (
     _create_sqlite_backend as create_sqlite_backend,
     DefaultBackendResetError,
-    FileStorageBackend,
-    StorageBackend,
     auto_backend,
+    StorageBackend,
     get_default_backend,
     open_sqlite_backend,
     reset_default_backend,
@@ -90,6 +89,24 @@ def _open_directly(project: Path, database: Path) -> object:
 
 def _spawn_context() -> SpawnContext:
     return multiprocessing.get_context("spawn")
+
+
+def _initialize_authority_and_write(
+    project_root: str,
+    start: Event,
+    index: int,
+) -> None:
+    if not start.wait(timeout=30):
+        raise RuntimeError("parent did not start authority initialization")
+    backend = auto_backend(Path(project_root))
+    try:
+        backend.collection("memory_entries").put(
+            f"initializer-{index}",
+            {"id": f"initializer-{index}", "sequence": index},
+        )
+    finally:
+        assert isinstance(backend, SqliteStorageBackend)
+        backend.close()
 
 
 def _write_and_checkpoint_live_authority(
@@ -608,7 +625,7 @@ def test_repositories_share_the_project_default_backend(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    backend = FileStorageBackend(tmp_path)
+    backend = auto_backend(tmp_path)
     calls: list[Path | None] = []
 
     def default_backend(project_root: Path | None = None) -> StorageBackend:
@@ -680,7 +697,7 @@ def test_explicit_candidate_backend_isolated_from_default_registry(
 
     repository = MemoryCandidateRepository(
         tmp_path,
-        backend=FileStorageBackend(tmp_path / "isolated"),
+        backend=auto_backend(tmp_path / "isolated"),
     )
 
     assert repository.list() == []
@@ -925,7 +942,7 @@ def test_readonly_inspection_closes_source_connection(
 
     inspection = inspect_sqlite_thought_pack(database)
 
-    assert inspection.schema_version == 2
+    assert inspection.schema_version == 3
     assert inspection.total_items == 0
     assert len(connections) == 1
     assert connections[0].close_calls == 1
@@ -1068,6 +1085,37 @@ def test_concurrent_backend_initialization_waits_for_wal_setup(
     assert all(backend.collection("memory_entries").list() == () for backend in backends)
     for backend in backends:
         backend.close()
+
+
+def test_cross_process_missing_authority_initializes_once_without_lost_writes(
+    tmp_path: Path,
+) -> None:
+    context = _spawn_context()
+    start = context.Event()
+    processes = tuple(
+        context.Process(
+            target=_initialize_authority_and_write,
+            args=(str(tmp_path), start, index),
+        )
+        for index in range(8)
+    )
+    for process in processes:
+        process.start()
+    start.set()
+    for process in processes:
+        process.join(timeout=30)
+        assert process.exitcode == 0
+
+    backend = auto_backend(tmp_path)
+    try:
+        records = backend.collection("memory_entries").list()
+        assert {record["id"] for record in records} == {
+            f"initializer-{index}" for index in range(8)
+        }
+    finally:
+        assert isinstance(backend, SqliteStorageBackend)
+        backend.close()
+    assert not tuple(tmp_path.glob("nuself.sqlite.initializing-*"))
 
 
 def test_authority_open_does_not_run_thought_pack_integrity_scan(
@@ -1804,7 +1852,7 @@ def test_cross_process_first_open_upgrades_v1_once(
         )
         for ready in ready_events
     )
-    with sqlite_storage._schema_upgrade_lease(
+    with sqlite_storage.sqlite_schema_lease(
         database,
         managed=True,
     ):
@@ -1828,7 +1876,7 @@ def test_cross_process_first_open_upgrades_v1_once(
         )
     finally:
         connection.close()
-    assert versions == (1, 2)
+    assert versions == (1, 2, 3)
 
     backup = database.with_name(f"{database.name}.v1.bak")
     schema_lock = database.with_name(f"{database.name}.schema.lock")

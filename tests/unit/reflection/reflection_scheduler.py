@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Never
@@ -420,7 +419,7 @@ def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionSchedu
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler.reflect(now)
     # Clear last reflection so the second run is not blocked by novelty gate
-    scheduler._last_reflection_path.unlink(missing_ok=True)
+    scheduler._schedule_collection.delete("reflection")
     time.sleep(0.01)  # ensure unique candidate id timestamp
     scheduler.reflect(now)
     entries = scheduler._reflection_repo.list()
@@ -499,21 +498,18 @@ def test_read_write_last_reflection_roundtrip(scheduler: ReflectionScheduler) ->
     loaded = scheduler._read_last_reflection()
     assert loaded is not None
     assert loaded.isoformat() == now.isoformat()
-    record = json.loads(
-        scheduler._last_reflection_path.read_text(encoding="utf-8")
-    )
+    record = scheduler._schedule_collection.get("reflection")
     assert record == {
+        "id": "reflection",
         "daily_count": 1,
         "daily_date": "2024-01-01",
         "schema_version": 1,
         "timestamp": "2024-01-01T12:00:00Z",
     }
-    assert list(scheduler._last_reflection_path.parent.glob("*.tmp")) == []
 
 
-def test_read_last_reflection_corrupt_file(scheduler: ReflectionScheduler) -> None:
-    scheduler._last_reflection_path.parent.mkdir(parents=True, exist_ok=True)
-    scheduler._last_reflection_path.write_text("not-json", encoding="utf-8")
+def test_read_last_reflection_corrupt_record(scheduler: ReflectionScheduler) -> None:
+    scheduler._schedule_collection.put("reflection", {"invalid": True})
     with pytest.raises(
         ReflectionScheduleStateError,
         match="malformed or unsupported",
@@ -522,9 +518,9 @@ def test_read_last_reflection_corrupt_file(scheduler: ReflectionScheduler) -> No
 
 
 def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) -> None:
-    scheduler._last_reflection_path.parent.mkdir(parents=True, exist_ok=True)
-    scheduler._last_reflection_path.write_text(
-        json.dumps({"timestamp": "not-a-date"}), encoding="utf-8"
+    scheduler._schedule_collection.put(
+        "reflection",
+        {"timestamp": "not-a-date"},
     )
     with pytest.raises(
         ReflectionScheduleStateError,
@@ -565,10 +561,7 @@ def test_corrupt_schedule_state_fails_closed(
     scheduler: ReflectionScheduler,
     record: dict[str, object],
 ) -> None:
-    scheduler._last_reflection_path.write_text(
-        json.dumps(record),
-        encoding="utf-8",
-    )
+    scheduler._schedule_collection.put("reflection", record)
 
     assert scheduler.should_reflect(
         datetime(2024, 1, 2, 12, tzinfo=UTC)
@@ -579,7 +572,9 @@ def test_corrupt_schedule_state_fails_closed(
     )
     assert events[-1].event == "schedule_state_corrupt"
     assert events[-1].status == "degraded"
-    assert events[-1].metadata == {"record": "last_reflection.json"}
+    assert events[-1].metadata == {
+        "record": "scheduler_state/reflection"
+    }
     assert "2024-01-01" not in (events[-1].error or "")
 
 
@@ -590,9 +585,9 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    scheduler._last_reflection_path.write_text(
-        '{"schema_version":1}',
-        encoding="utf-8",
+    scheduler._schedule_collection.put(
+        "reflection",
+        {"schema_version": 1},
     )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
@@ -617,9 +612,9 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
 def test_reflect_reports_corrupt_schedule_state_as_blocked(
     scheduler: ReflectionScheduler,
 ) -> None:
-    scheduler._last_reflection_path.write_text(
-        '{"schema_version":1}',
-        encoding="utf-8",
+    scheduler._schedule_collection.put(
+        "reflection",
+        {"schema_version": 1},
     )
 
     assert scheduler.reflect(
@@ -1001,16 +996,13 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
 
     config = _reflection_settings(cooldown_seconds=600)
     gate = LLMRelevanceGate(tmp_path, config=config)
-    # Write a recent last_reflection to trigger cooldown
-    last_path = tmp_path / "runtime" / "last_reflection.json"
-    last_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(UTC)
-    last_path.write_text(json.dumps({
+    gate._schedule_collection.put("reflection", {
         "schema_version": 1,
         "timestamp": now.isoformat(),
         "daily_count": 1,
         "daily_date": now.astimezone().date().isoformat(),
-    }))
+    })
     assert gate._cooldown_ok() is False
 
 
@@ -1020,9 +1012,10 @@ def test_relevance_gate_corrupt_state_keeps_cooldown_active(
     from nuself.reflection import LLMRelevanceGate
 
     gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
-    last_path = tmp_path / "runtime" / "last_reflection.json"
-    last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
+    gate._schedule_collection.put(
+        "reflection",
+        {"timestamp": "not-a-date"},
+    )
 
     assert gate._cooldown_ok() is False
     events = read_log_events(project_root=tmp_path, component="reflection")
@@ -1040,9 +1033,10 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
         raise OSError("audit store unavailable")
 
     gate = LLMRelevanceGate(tmp_path, agent=_RelevanceAgent())
-    last_path = tmp_path / "runtime" / "last_reflection.json"
-    last_path.parent.mkdir(parents=True, exist_ok=True)
-    last_path.write_text('{"timestamp":"not-a-date"}', encoding="utf-8")
+    gate._schedule_collection.put(
+        "reflection",
+        {"timestamp": "not-a-date"},
+    )
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,

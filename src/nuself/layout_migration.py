@@ -19,12 +19,9 @@ from nuself.private_fs import (
 from nuself.scope import NuSelfScope
 from nuself.storage import (
     COLLECTION_NAMES,
-    FileStorageBackend,
-    auto_backend,
     open_sqlite_backend,
     reset_default_backend,
 )
-from nuself.storage_sqlite import SqliteStorageBackend
 
 _SQLITE_TRANSIENT_SUFFIXES = ("-wal", "-shm", "-journal")
 _TRANSIENT_FILENAMES = frozenset(
@@ -85,6 +82,10 @@ def _validate_source_tree(source: Path) -> None:
         raise LayoutMigrationError(
             f"legacy layout must be an actual directory: {source}"
         )
+    if not (source / "nuself.sqlite").is_file():
+        raise LayoutMigrationError(
+            "layout migration requires a SQLite authority"
+        )
     for root, directories, files in os.walk(source, followlinks=False):
         root_path = Path(root)
         for name in (*directories, *files):
@@ -144,15 +145,12 @@ def _validate_staged_authority(stage: Path) -> None:
             (Path(root) / directory).chmod(PRIVATE_DIRECTORY_MODE)
         for file in files:
             (Path(root) / file).chmod(PRIVATE_FILE_MODE)
-    backend = auto_backend(stage)
+    backend = open_sqlite_backend(stage)
     try:
         for name in COLLECTION_NAMES:
             backend.collection(name).list()
     finally:
-        if isinstance(backend, FileStorageBackend | SqliteStorageBackend):
-            backend.close()
-        else:
-            raise TypeError("unknown staged storage backend")
+        backend.close()
         reset_default_backend(stage)
 
 

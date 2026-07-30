@@ -26,11 +26,19 @@ from nuself.memory.curator import (
 )
 from nuself.memory.curator_plan import MemoryCuratorPlanStore
 from nuself.memory.repository import (
-    MemoryCandidateCommitError,
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import get_default_backend
+
+
+def _stored_record(
+    root: Path,
+    collection: str,
+    record_id: str,
+) -> dict[str, object] | None:
+    return get_default_backend(root).collection(collection).get(record_id)
 
 
 class FakeCuratorAgent:
@@ -177,32 +185,26 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         encoding="utf-8"
     ).splitlines():
         assert isinstance(json.loads(line), dict)
-    cursor_path = (
-        tmp_path
-        / "memory"
-        / "cursors"
-        / "default.json"
-    )
-    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+    assert _stored_record(
+        tmp_path, "memory_curator_cursors", "default"
+    ) == {
+        "id": "default",
         "thread_id": "default",
         "processed_message_count": 2,
     }
-    assert list(cursor_path.parent.glob("default.json.*.tmp")) == []
 
 
 @pytest.mark.parametrize(
-    "cursor_text",
+    "cursor_record",
     [
-        "{",
-        "[]",
-        '{"thread_id":"other","processed_message_count":0}',
-        '{"thread_id":"default","processed_message_count":true}',
-        '{"thread_id":"default","processed_message_count":-1}',
+        {"thread_id": "other", "processed_message_count": 0},
+        {"thread_id": "default", "processed_message_count": True},
+        {"thread_id": "default", "processed_message_count": -1},
     ],
 )
 def test_memory_curator_rejects_corrupt_cursor_without_replay(
     tmp_path: Path,
-    cursor_text: str,
+    cursor_record: dict[str, object],
 ) -> None:
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
@@ -219,14 +221,9 @@ def test_memory_curator_rejects_corrupt_cursor_without_replay(
             ],
         )
     )
-    cursor_path = (
-        tmp_path
-        / "memory"
-        / "cursors"
-        / "default.json"
-    )
-    cursor_path.parent.mkdir(parents=True)
-    cursor_path.write_text(cursor_text, encoding="utf-8")
+    get_default_backend(tmp_path).collection(
+        "memory_curator_cursors"
+    ).put("default", cursor_record)
     agent = _curator_agent('{"actions":[]}')
     curator = MemoryCurator(
         tmp_path,
@@ -264,8 +261,6 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
     auto_accept: bool,
     candidate_state: str,
 ) -> None:
-    from nuself.storage import write_json_atomic as real_write_json_atomic
-
     first_message = ThreadMessage(
         role="user",
         content=(
@@ -284,27 +279,29 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
         '"tags":["memory"],"confidence":0.9,'
         '"reason":"explicit replay-safety requirement"}]}'
     )
-    fail_cursor = True
-
-    def fail_first_cursor_write(
-        path: Path,
-        payload: dict[str, object],
-    ) -> None:
-        nonlocal fail_cursor
-        if path.parent.name == "cursors" and fail_cursor:
-            fail_cursor = False
-            raise OSError("cursor store unavailable")
-        real_write_json_atomic(path, payload)
-
-    monkeypatch.setattr(
-        "nuself.memory.curator.write_json_atomic",
-        fail_first_cursor_write,
-    )
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
         thread_store=thread_store,
         settings=MemoryCuratorSettings(auto_accept=auto_accept),
+    )
+    real_cursor_put = curator._cursor_collection.put  # pyright: ignore[reportPrivateUsage]
+    fail_cursor = True
+
+    def fail_first_cursor_write(
+        key: str,
+        payload: dict[str, object],
+    ) -> None:
+        nonlocal fail_cursor
+        if fail_cursor:
+            fail_cursor = False
+            raise OSError("cursor store unavailable")
+        real_cursor_put(key, payload)
+
+    monkeypatch.setattr(
+        curator._cursor_collection,  # pyright: ignore[reportPrivateUsage]
+        "put",
+        fail_first_cursor_write,
     )
 
     with pytest.raises(OSError, match="cursor store unavailable"):
@@ -338,13 +335,10 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
     assert resumed_candidate.review_state == candidate_state
     assert resumed_candidate.source_refs == ("thread:default:0-1",)
     assert len(MemoryEntryRepository(tmp_path).list()) == int(auto_accept)
-    cursor_path = (
-        tmp_path
-        / "memory"
-        / "cursors"
-        / "default.json"
-    )
-    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+    assert _stored_record(
+        tmp_path, "memory_curator_cursors", "default"
+    ) == {
+        "id": "default",
         "thread_id": "default",
         "processed_message_count": 1,
     }
@@ -359,7 +353,10 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
         ("thread:default:0-1",),
         ("thread:default:1-2",),
     }
-    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+    assert _stored_record(
+        tmp_path, "memory_curator_cursors", "default"
+    ) == {
+        "id": "default",
         "thread_id": "default",
         "processed_message_count": 2,
     }
@@ -369,8 +366,6 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.storage import write_json_atomic as real_write_json_atomic
-
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
         ThreadState(
@@ -394,16 +389,17 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
         '"reason":"explicit commit-order requirement"}]}'
     )
 
+    plan_store = MemoryCuratorPlanStore(tmp_path)
+
     def fail_plan_write(
-        path: Path,
-        payload: dict[str, object],
+        _key: str,
+        _payload: dict[str, object],
     ) -> None:
-        if path.parent.name == "plans":
-            raise OSError("plan store unavailable")
-        real_write_json_atomic(path, payload)
+        raise OSError("plan store unavailable")
 
     monkeypatch.setattr(
-        "nuself.memory.curator_plan.write_json_atomic",
+        plan_store._collection,  # pyright: ignore[reportPrivateUsage]
+        "put",
         fail_plan_write,
     )
     curator = MemoryCurator(
@@ -411,6 +407,7 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
         agent=agent,
         thread_store=thread_store,
         settings=MemoryCuratorSettings(auto_accept=False),
+        plan_store=plan_store,
     )
 
     with pytest.raises(OSError, match="plan store unavailable"):
@@ -418,12 +415,12 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
 
     assert len(agent.calls) == 1
     assert MemoryCandidateRepository(tmp_path).list() == []
-    assert not (
-        tmp_path
-        / "memory"
-        / "cursors"
-        / "default.json"
-    ).exists()
+    assert (
+        get_default_backend(tmp_path)
+        .collection("memory_curator_cursors")
+        .get("default")
+        is None
+    )
 
 
 def test_memory_curator_rejects_incompatible_plan_without_model_replay(
@@ -444,16 +441,11 @@ def test_memory_curator_rejects_incompatible_plan_without_model_replay(
             ],
         )
     )
-    plan_path = (
-        tmp_path
-        / "memory"
-        / "plans"
-        / "default.json"
-    )
-    plan_path.parent.mkdir(parents=True)
-    plan_path.write_text(
-        json.dumps(
-            {
+    get_default_backend(tmp_path).collection(
+        "memory_curator_plans"
+    ).put(
+        "default",
+        {
                 "thread_id": "default",
                 "source_start": 0,
                 "source_end": 2,
@@ -470,9 +462,7 @@ def test_memory_curator_rejects_incompatible_plan_without_model_replay(
                         "reason": "no durable signal",
                     }
                 ],
-            }
-        ),
-        encoding="utf-8",
+            },
     )
     agent = _curator_agent('{"actions":[]}')
     curator = MemoryCurator(
@@ -636,9 +626,9 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     assert result.ignored == 0
     assert agent.calls == []
     assert MemoryCandidateRepository(tmp_path).list() == []
-    assert not (
-        tmp_path / "memory" / "cursors" / "default.json"
-    ).exists()
+    assert _stored_record(
+        tmp_path, "memory_curator_cursors", "default"
+    ) is None
     events = [
         event
         for event in read_log_events(
@@ -816,9 +806,15 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
             next_message_index=6,
         )
     )
-    cursor_path = tmp_path / "memory" / "cursors" / "default.json"
-    cursor_path.parent.mkdir(parents=True)
-    cursor_path.write_text('{"thread_id":"default","processed_message_count":4}\n', encoding="utf-8")
+    get_default_backend(tmp_path).collection(
+        "memory_curator_cursors"
+    ).put(
+        "default",
+        {
+            "thread_id": "default",
+            "processed_message_count": 4,
+        },
+    )
     agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Compressed cursor continuity",'
         '"body":"Memory curation should continue after thread compression by using absolute message indexes.",'
@@ -1348,15 +1344,9 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
     ("accept_error", "expected_error"),
     [
         (OSError("candidate storage unavailable"), "candidate storage unavailable"),
-        (
-            MemoryCandidateCommitError(
-                primary_error=OSError("candidate commit failed"),
-                compensation_error=OSError("target compensation failed"),
-            ),
-            "memory candidate acceptance failed and target compensation failed",
-        ),
+        (RuntimeError("candidate transaction failed"), "candidate transaction failed"),
     ],
-    ids=["storage-failure", "compensation-failure"],
+    ids=["storage-failure", "transaction-failure"],
 )
 def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_failure(
     tmp_path: Path,
@@ -1406,18 +1396,15 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
     result = curator.run_once()
     second = curator.run_once()
 
-    cursor_path = (
-        tmp_path
-        / "memory"
-        / "cursors"
-        / "default.json"
-    )
     assert result.created == 1
     assert second.processed_messages == 0
     assert len(agent.calls) == 1
     [candidate] = candidate_repo.list()
     assert candidate.review_state == "pending"
-    assert json.loads(cursor_path.read_text(encoding="utf-8")) == {
+    assert _stored_record(
+        tmp_path, "memory_curator_cursors", "default"
+    ) == {
+        "id": "default",
         "thread_id": "default",
         "processed_message_count": 1,
     }

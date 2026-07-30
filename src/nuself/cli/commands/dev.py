@@ -7,33 +7,15 @@ import sys
 
 from nuself.storage import (
     get_default_backend,
-    migrate_file_backend_atomically,
 )
 from nuself.storage_sqlite import SqliteStorageBackend
-
-
-def handle_dev_migrate(args: argparse.Namespace) -> int:
-    result, destination_path = migrate_file_backend_atomically(
-        args.project_root,
-    )
-    if result:
-        for name, count in sorted(result.items()):
-            print(f"  {name}: {count} items")
-    else:
-        print("  (no data to migrate)")
-    total = sum(result.values())
-    print(
-        f"Migrated {total} items across {len(result)} "
-        f"collections to {destination_path}"
-    )
-    return 0
 
 
 def handle_dev_db_schema(args: argparse.Namespace) -> int:
     backend = get_default_backend(args.project_root)
     if not isinstance(backend, SqliteStorageBackend):
         print(
-            "No active SQLite database. Run 'nuself dev migrate' first.",
+            "No active SQLite database. Run 'nuself init' first.",
             file=sys.stderr,
         )
         return 1
@@ -76,10 +58,4 @@ def handle_dev_storage(args: argparse.Namespace) -> int:
             if count:
                 print(f"    {name}: {count} items")
         return 0
-    root = getattr(backend, "_root", None)
-    if root is not None:
-        print("Active backend: FileStorageBackend")
-        print(f"  file root: {root}")
-    else:
-        print(f"Active backend: {type(backend).__name__}")
-    return 0
+    raise TypeError("default storage backend must be SQLite")

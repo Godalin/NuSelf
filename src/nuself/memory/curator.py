@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from pathlib import Path
 from typing import cast
 
@@ -49,7 +48,7 @@ from nuself.memory.repository import (
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import write_json_atomic
+from nuself.storage import get_default_backend
 from nuself.trace.service import TraceRecorder
 
 DURABLE_SIGNAL_MARKERS: tuple[str, ...] = (
@@ -216,6 +215,10 @@ class MemoryCurator:
             component="memory",
         )
         self._settings = settings or MemoryCuratorSettings()
+        self._backend = get_default_backend(paths.project_root)
+        self._cursor_collection = self._backend.collection(
+            "memory_curator_cursors"
+        )
         self._thread_store = thread_store or ThreadStore(paths.project_root)
         self._repository = repository or MemoryEntryRepository(paths.project_root)
         self._profile_repository = profile_repository or ProfileItemRepository(paths.project_root)
@@ -731,18 +734,20 @@ class MemoryCurator:
         )
 
     def _load_cursor(self, thread_id: str) -> int:
-        path = self._cursor_path(thread_id)
         try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                raise ValueError("cursor record must be a JSON object")
+            validate_curator_thread_id(thread_id)
+            raw = self._cursor_collection.get(thread_id)
+            if raw is None:
+                return 0
             cursor = MemoryCuratorCursor.from_wire(
-                cast(dict[str, object], raw),
+                {
+                    key: value
+                    for key, value in raw.items()
+                    if key != "id"
+                },
                 expected_thread_id=thread_id,
             )
-        except FileNotFoundError:
-            return 0
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        except ValueError as exc:
             report_corrupt_record(
                 exc,
                 component="memory",
@@ -774,16 +779,12 @@ class MemoryCurator:
             ) from exc
 
     def _save_cursor(self, thread_id: str, processed_message_count: int) -> None:
-        path = self._cursor_path(thread_id)
         cursor = MemoryCuratorCursor(
             thread_id=thread_id,
             processed_message_count=processed_message_count,
         )
-        write_json_atomic(path, cursor.to_wire())
-
-    def _cursor_path(self, thread_id: str) -> Path:
         validate_curator_thread_id(thread_id)
-        return self._paths.authority_root / "memory" / "cursors" / f"{thread_id}.json"
+        self._cursor_collection.put(thread_id, cursor.to_wire())
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"

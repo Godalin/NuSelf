@@ -26,8 +26,9 @@ from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
 from nuself.persona.audit import write_persona_audit
+from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import write_json_atomic
+from nuself.storage import StorageCollection, get_default_backend
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
 
@@ -59,17 +60,23 @@ class ReflectionScheduleState(BaseModel):
         return cast(dict[str, object], self.model_dump(mode="json", exclude_none=True))
 
 
-def _read_reflection_schedule_state(path: Path) -> ReflectionScheduleState | None:
-    if not path.exists():
+def _read_schedule_collection(
+    collection: StorageCollection,
+) -> ReflectionScheduleState | None:
+    record = collection.get("reflection")
+    if record is None:
         return None
     try:
         return ReflectionScheduleState.model_validate_json(
-            path.read_text(encoding="utf-8")
+            encode_json_value(
+                {
+                    key: value
+                    for key, value in record.items()
+                    if key != "id"
+                },
+                ensure_ascii=True,
+            )
         )
-    except OSError:
-        raise ReflectionScheduleStateError(
-            "reflection schedule state could not be read"
-        ) from None
     except ValidationError:
         raise ReflectionScheduleStateError(
             "reflection schedule state is malformed or unsupported"
@@ -138,7 +145,9 @@ class ReflectionScheduler:
             system_config = ConfigSystem.load(project_root=project_root)
             self._config = system_config.reflection
 
-        self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
+        self._schedule_collection = get_default_backend(
+            project_root
+        ).collection("scheduler_state")
         self._reflection_repo = ReflectionRepository(project_root)
         self._outbox = NotificationOutbox(project_root)
     def should_reflect(self, now: datetime | None = None) -> bool:
@@ -297,9 +306,7 @@ class ReflectionScheduler:
         if self._in_quiet_hours(now):
             return "quiet_hours"
         try:
-            state = _read_reflection_schedule_state(
-                self._last_reflection_path
-            )
+            state = _read_schedule_collection(self._schedule_collection)
         except ReflectionScheduleStateError as exc:
             self._report_schedule_state_corrupt(exc)
             return "state_corrupt"
@@ -361,15 +368,11 @@ class ReflectionScheduler:
         return 0
 
     def _read_last_reflection(self) -> datetime | None:
-        state = _read_reflection_schedule_state(
-            self._last_reflection_path
-        )
+        state = _read_schedule_collection(self._schedule_collection)
         return state.timestamp if state is not None else None
 
     def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
-        current = _read_reflection_schedule_state(
-            self._last_reflection_path
-        )
+        current = _read_schedule_collection(self._schedule_collection)
         count = self._reflection_count_today(now, current) + 1
         state = ReflectionScheduleState(
             schema_version=REFLECTION_SCHEDULE_STATE_VERSION,
@@ -379,7 +382,7 @@ class ReflectionScheduler:
             title=title,
             body=body,
         )
-        write_json_atomic(self._last_reflection_path, state.to_record())
+        self._schedule_collection.put("reflection", state.to_record())
 
     def _report_schedule_state_corrupt(
         self,
@@ -390,7 +393,7 @@ class ReflectionScheduler:
             event="schedule_state_corrupt",
             message="Reflection schedule state is invalid; scheduling is blocked",
             project_root=self._project_root,
-            metadata={"record": self._last_reflection_path.name},
+            metadata={"record": "scheduler_state/reflection"},
         )
 
     def _candidate_to_reflection_entry(
@@ -471,7 +474,9 @@ class LLMRelevanceGate:
     ) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
-        self._last_reflection_path = paths.runtime_dir / "last_reflection.json"
+        self._schedule_collection = get_default_backend(
+            project_root
+        ).collection("scheduler_state")
 
         if config is not None:
             self._config = config
@@ -600,9 +605,7 @@ class LLMRelevanceGate:
 
     def _cooldown_ok(self) -> bool:
         try:
-            state = _read_reflection_schedule_state(
-                self._last_reflection_path
-            )
+            state = _read_schedule_collection(self._schedule_collection)
         except ReflectionScheduleStateError as exc:
             report_reflection_failure(
                 exc,
@@ -612,7 +615,7 @@ class LLMRelevanceGate:
                     "cooldown remains active"
                 ),
                 project_root=self._project_root,
-                metadata={"record": self._last_reflection_path.name},
+                metadata={"record": "scheduler_state/reflection"},
             )
             return False
         if state is None:

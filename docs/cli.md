@@ -99,6 +99,23 @@ uv run nuself memory graph search "project"
 
 See [`memory.md`](memory.md) for the ingestion, review, and curation workflow.
 
+## Data Inspection And Editing
+
+```bash
+uv run nuself data collections
+uv run nuself data list memory
+uv run nuself data show threads default
+uv run nuself data export memory --format json --output memory.json
+uv run nuself data edit memory <memory-id>
+uv run nuself data delete threads <thread-id>
+```
+
+List, show, and export cover all public structured collections. Generic edit
+and delete are limited to domain-validated memory and chat-thread records;
+other domains use their dedicated commands. Mutation shows a diff or
+destructive prompt unless `--yes` is explicit. Add `--internal` only when
+diagnosing hidden curator or scheduler state.
+
 ## Reflections And Notifications
 
 ```bash
@@ -150,15 +167,14 @@ uv run nuself dev storage
 uv run nuself dev logs --component chat --tail 20
 ```
 
-Migration and schema inspection are developer operations:
+Schema inspection is a developer operation:
 
 ```bash
-uv run nuself dev migrate
 uv run nuself dev db-schema
 ```
 
-Read their `--help` output before use. Migration is the only supported
-file-to-SQLite authority switch.
+Use `nuself migrate-layout` for an explicit legacy directory move. It accepts
+only a valid SQLite authority; file-backed collection migration is retired.
 
 ## Discoverability
 

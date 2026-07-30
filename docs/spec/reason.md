@@ -263,16 +263,10 @@ Archived threads are hidden from default list output but remain addressable by i
 
 ## Storage & Persistence
 
-### File Layout
-
-```
-<authority-root>/reasoning/threads/{thread_id}.json
-<authority-root>/reasoning/steps/{thread_id}/{step_id}.json
-```
-
-Machine-readable records store timezone-aware ISO timestamps. Human-readable CLI output renders timestamps in the current system timezone per `cli.md`.
-
-Repository writes must be atomic: write to a temporary sibling file, then replace the target file.
+Reasoning threads and steps are stored in the `reason_threads` and
+`reason_steps` SQLite collections. Related changes use the shared backend
+transaction. Machine-readable records store timezone-aware ISO timestamps;
+human-readable CLI output renders them in the current system timezone.
 
 ### Per-Thread Workspace
 
@@ -315,7 +309,7 @@ Reason is a subsystem service. It should not be implemented as CLI code that dir
 Layers:
 
 - `ReasoningThread` / `ReasoningStep`: domain models and validation.
-- `ReasonRepository`: file-backed persistence for threads and steps.
+- `ReasonRepository`: SQLite persistence for threads and steps.
 - `ReasonService`: user-intent operations and state transitions.
 - Reason renderers: human-readable CLI/REPL output.
 - Tool-facing adapter: explicit, typed operations suitable for chat and future agents.

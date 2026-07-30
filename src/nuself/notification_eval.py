@@ -19,7 +19,7 @@ from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import FileStorageBackend
+from nuself.storage import auto_backend
 
 
 def run_notification_eval(
@@ -158,9 +158,9 @@ def _evaluate_scheduler(
     scheduler._config = settings  # pyright: ignore[reportPrivateUsage]
     project_root.mkdir(parents=True, exist_ok=True)
     scheduler._project_root = project_root  # pyright: ignore[reportPrivateUsage]
-    scheduler._last_reflection_path = (  # pyright: ignore[reportPrivateUsage]
-        project_root / "last_reflection.json"
-    )
+    scheduler._schedule_collection = auto_backend(  # pyright: ignore[reportPrivateUsage]
+        project_root
+    ).collection("scheduler_state")
     if last is not None:
         scheduler._write_last_reflection(last)  # pyright: ignore[reportPrivateUsage]
     actual = scheduler.should_reflect(now)
@@ -180,10 +180,7 @@ def _evaluate_outbox(
 ) -> None:
     storage_root.mkdir(parents=True, exist_ok=True)
     outbox = NotificationOutbox(
-        backend=FileStorageBackend(
-            storage_root,
-            {"notification_outbox": "."},
-        )
+        backend=auto_backend(storage_root)
     )
     for action in _required_objects(scenario, "actions"):
         action_name = _required_str(action, "action")

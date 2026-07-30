@@ -1,8 +1,8 @@
-"""File-backed repository for user-visible memory entries."""
+"""SQLite repositories for user-visible memory and review candidates."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from dataclasses import asdict
 from pathlib import Path
@@ -23,15 +23,10 @@ from nuself.domain.memory import (
     merge_relations,
 )
 from nuself.domain.profile import ProfileItem
-from nuself.profile.repository import ProfileItemNotFound, ProfileItemRepository
+from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.observability import decode_observed_record
 from nuself.runtime import freeze_json_value
-from nuself.storage import (
-    AtomicDeleteDurabilityError,
-    AtomicWriteDurabilityError,
-    StorageBackend,
-    get_default_backend,
-)
+from nuself.storage import StorageBackend, get_default_backend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -189,48 +184,6 @@ class MemoryEntryNotFound(KeyError):
 
 class MemoryCandidateNotFound(KeyError):
     """Raised when a memory candidate does not exist."""
-
-
-class MemoryCandidateCommitError(RuntimeError):
-    """Raised when candidate acceptance and compensation both fail."""
-
-    def __init__(
-        self,
-        *,
-        primary_error: BaseException,
-        compensation_error: BaseException,
-    ) -> None:
-        super().__init__(
-            "memory candidate acceptance failed and target compensation failed"
-        )
-        self.primary_error = primary_error
-        self.compensation_error = compensation_error
-
-
-class MemoryCandidateAmbiguousCommitError(RuntimeError):
-    """Raised when a logical commit is visible but may not be crash-durable."""
-
-    def __init__(
-        self,
-        *,
-        candidate_id: str,
-        target_id: str,
-        candidate_state: str,
-        target_state: str,
-        durability_error: BaseException,
-        observation_errors: tuple[BaseException, ...] = (),
-    ) -> None:
-        super().__init__(
-            "memory candidate commit is visible but durability is uncertain: "
-            f"candidate={candidate_id} candidate_state={candidate_state} "
-            f"target={target_id} target_state={target_state}"
-        )
-        self.candidate_id = candidate_id
-        self.target_id = target_id
-        self.candidate_state = candidate_state
-        self.target_state = target_state
-        self.durability_error = durability_error
-        self.observation_errors = observation_errors
 
 
 def _entry_from_wire(data: dict[str, object]) -> MemoryEntry:
@@ -571,28 +524,12 @@ class MemoryCandidateRepository:
                 raise ValueError(f"delete candidate requires target_entry_id: {candidate_id}")
             with self._backend.transaction():
                 entry = self._get_target(candidate, candidate.target_entry_id)
-                try:
-                    self._delete_target(candidate)
-                except (AtomicWriteDurabilityError, AtomicDeleteDurabilityError) as operation_error:
-                    self._compensate_target(
-                        operation_error,
-                        lambda: self._restore_target(entry),
-                    )
-                    raise
-                try:
-                    accepted = candidate.with_updates(
-                        review_state="accepted",
-                        target_entry_id=entry.id,
-                    )
-                    self._commit_candidate(accepted, expected_target=None)
-                except MemoryCandidateAmbiguousCommitError:
-                    raise
-                except BaseException as operation_error:
-                    self._compensate_target(
-                        operation_error,
-                        lambda: self._restore_target(entry),
-                    )
-                    raise
+                self._delete_target(candidate)
+                accepted = candidate.with_updates(
+                    review_state="accepted",
+                    target_entry_id=entry.id,
+                )
+                self.save(accepted)
                 return entry
         if candidate.action in {"update", "merge"}:
             if candidate.target_entry_id is None:
@@ -604,29 +541,13 @@ class MemoryCandidateRepository:
             )
         with self._backend.transaction():
             entry = self._new_target(candidate)
-            try:
-                entry = self._save_new_target(entry)
-            except (AtomicWriteDurabilityError, AtomicDeleteDurabilityError) as operation_error:
-                self._compensate_target(
-                    operation_error,
-                    lambda: self._delete_saved_target(entry),
-                )
-                raise
-            try:
-                entry = self._promote_target(entry, target_review_state)
-                accepted = candidate.with_updates(
-                    review_state="accepted",
-                    target_entry_id=entry.id,
-                )
-                self._commit_candidate(accepted, expected_target=entry)
-            except MemoryCandidateAmbiguousCommitError:
-                raise
-            except BaseException as operation_error:
-                self._compensate_target(
-                    operation_error,
-                    lambda: self._delete_saved_target(entry),
-                )
-                raise
+            entry = self._save_new_target(entry)
+            entry = self._promote_target(entry, target_review_state)
+            accepted = candidate.with_updates(
+                review_state="accepted",
+                target_entry_id=entry.id,
+            )
+            self.save(accepted)
             return entry
 
     def reject(self, candidate_id: str) -> MemoryCandidate:
@@ -673,30 +594,13 @@ class MemoryCandidateRepository:
         if candidate.review_state != "pending":
             raise ValueError(f"candidate is already {candidate.review_state}: {candidate_id}")
         with self._backend.transaction():
-            previous = self._get_target(candidate, entry_id)
-            try:
-                merged = self._merge_target(candidate, entry_id)
-            except (AtomicWriteDurabilityError, AtomicDeleteDurabilityError) as operation_error:
-                self._compensate_target(
-                    operation_error,
-                    lambda: self._restore_target(previous),
-                )
-                raise
-            try:
-                merged = self._promote_target(merged, target_review_state)
-                accepted = candidate.with_updates(
-                    review_state="accepted",
-                    target_entry_id=entry_id,
-                )
-                self._commit_candidate(accepted, expected_target=merged)
-            except MemoryCandidateAmbiguousCommitError:
-                raise
-            except BaseException as operation_error:
-                self._compensate_target(
-                    operation_error,
-                    lambda: self._restore_target(previous),
-                )
-                raise
+            merged = self._merge_target(candidate, entry_id)
+            merged = self._promote_target(merged, target_review_state)
+            accepted = candidate.with_updates(
+                review_state="accepted",
+                target_entry_id=entry_id,
+            )
+            self.save(accepted)
             return merged
 
     def _promote_target(
@@ -773,108 +677,6 @@ class MemoryCandidateRepository:
         if candidate.type == "profile_fact":
             return self._profile_repository.get(target_id)
         return self._entry_repository.get(target_id)
-
-    def _restore_target(self, target: MemoryEntry | ProfileItem) -> None:
-        if isinstance(target, ProfileItem):
-            self._profile_repository.save(target)
-            return
-        self._entry_repository.save(target)
-
-    def _delete_saved_target(self, target: MemoryEntry | ProfileItem) -> None:
-        if isinstance(target, ProfileItem):
-            self._profile_repository.delete(target.id)
-            return
-        self._entry_repository.delete(target.id)
-
-    def _commit_candidate(
-        self,
-        accepted: MemoryCandidate,
-        *,
-        expected_target: MemoryEntry | ProfileItem | None,
-    ) -> None:
-        try:
-            self.save(accepted)
-        except (AtomicWriteDurabilityError, AtomicDeleteDurabilityError) as durability_error:
-            observation_errors: list[BaseException] = []
-            observed_candidate: MemoryCandidate | None = None
-            try:
-                observed_candidate = self.get(accepted.id)
-            except MemoryCandidateNotFound:
-                pass
-            except BaseException as observation_error:
-                observation_errors.append(observation_error)
-
-            if (
-                not observation_errors
-                and (
-                    observed_candidate is None
-                    or observed_candidate.review_state != "accepted"
-                )
-            ):
-                raise
-
-            observed_target: MemoryEntry | ProfileItem | None = None
-            target_observed = False
-            try:
-                observed_target = self._read_target_optional(
-                    accepted,
-                    accepted.target_entry_id or "",
-                )
-                target_observed = True
-            except BaseException as observation_error:
-                observation_errors.append(observation_error)
-
-            candidate_state = (
-                "unknown"
-                if observed_candidate is None and observation_errors
-                else (
-                    "absent"
-                    if observed_candidate is None
-                    else observed_candidate.review_state
-                )
-            )
-            if not target_observed:
-                target_state = "unknown"
-            elif observed_target == expected_target:
-                target_state = (
-                    "absent"
-                    if observed_target is None
-                    else "expected"
-                )
-            else:
-                target_state = "unexpected"
-            raise MemoryCandidateAmbiguousCommitError(
-                candidate_id=accepted.id,
-                target_id=accepted.target_entry_id or "",
-                candidate_state=candidate_state,
-                target_state=target_state,
-                durability_error=durability_error,
-                observation_errors=tuple(observation_errors),
-            ) from durability_error
-
-    def _read_target_optional(
-        self,
-        candidate: MemoryCandidate,
-        target_id: str,
-    ) -> MemoryEntry | ProfileItem | None:
-        try:
-            return self._get_target(candidate, target_id)
-        except (MemoryEntryNotFound, ProfileItemNotFound):
-            return None
-
-    @staticmethod
-    def _compensate_target(
-        operation_error: BaseException,
-        compensate: Callable[[], None],
-    ) -> None:
-        try:
-            compensate()
-        except BaseException as compensation_error:
-            raise MemoryCandidateCommitError(
-                primary_error=operation_error,
-                compensation_error=compensation_error,
-            ) from operation_error
-
 
 def memory_stats(project_root: Path | None = None) -> MemoryStats:
     """Return compact stats across durable entries and review candidates."""

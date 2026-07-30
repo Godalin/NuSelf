@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.storage import get_default_backend
 from nuself.trace import ThoughtTrace, TraceNotFound, TraceRepository, TraceRecorder
 
 
@@ -31,8 +32,18 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
     assert traces == [trace]
     assert matches == [trace]
     assert links == [link]
-    assert (tmp_path / "traces" / "traces" / f"{trace.id}.json").is_file()
-    assert (tmp_path / "traces" / "links" / f"{link.id}.json").is_file()
+    assert (
+        get_default_backend(tmp_path)
+        .collection("trace_nodes")
+        .get(trace.id)
+        == trace.to_wire()
+    )
+    assert (
+        get_default_backend(tmp_path)
+        .collection("trace_edges")
+        .get(link.id)
+        == link.to_wire()
+    )
 
 
 def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> None:

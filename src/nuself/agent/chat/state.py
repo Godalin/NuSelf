@@ -127,6 +127,10 @@ class ConversationStateManager:
         else:
             try:
                 summary = self._text_agent.invoke(prompt)
+                if summary.strip() == "":
+                    raise ValueError(
+                        "compression model returned an empty summary"
+                    )
             except Exception as exc:
                 self._report_compression_fallback(exc)
                 summary = _local_summary(
