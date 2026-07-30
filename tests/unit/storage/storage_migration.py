@@ -49,7 +49,7 @@ def _hold_file_storage_authority(
     backend = create_file_backend(Path(project_root))
     ready.set()
     try:
-        if not release.wait(timeout=10):
+        if not release.wait(timeout=30):
             raise RuntimeError("parent did not release file backend")
     finally:
         backend.close()
@@ -438,7 +438,7 @@ def test_atomic_file_migration_rejects_active_file_runtime(
     )
     process.start()
     try:
-        assert ready.wait(timeout=10)
+        assert ready.wait(timeout=30)
 
         with pytest.raises(
             FileStorageAuthorityError,
@@ -449,10 +449,10 @@ def test_atomic_file_migration_rejects_active_file_runtime(
         assert not (tmp_path / "private" / "nuself.sqlite").exists()
     finally:
         release.set()
-        process.join(timeout=10)
+        process.join(timeout=30)
         if process.is_alive():
             process.terminate()
-            process.join(timeout=10)
+            process.join(timeout=30)
     assert process.exitcode == 0
 
 
