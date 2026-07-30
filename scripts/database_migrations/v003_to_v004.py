@@ -25,15 +25,58 @@ def _create_v4_tables(connection: sqlite3.Connection) -> None:
     connection.execute(
         "CREATE INDEX idx_records_collection ON records(collection)"
     )
+    existing_workspace = connection.execute(
+        "SELECT 1 FROM sqlite_master "
+        "WHERE type='table' AND name='workspace_entries'"
+    ).fetchone()
+    if existing_workspace is not None:
+        connection.execute(
+            "ALTER TABLE workspace_entries "
+            "RENAME TO _workspace_entries_v3"
+        )
     connection.execute(
-        "CREATE TABLE IF NOT EXISTS workspace_entries ("
+        "CREATE TABLE workspace_entries ("
         "namespace TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL "
         "CHECK(json_valid(value) AND json_type(value) = 'object'), "
         "created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "
         "PRIMARY KEY (namespace, key)) WITHOUT ROWID"
     )
+    if existing_workspace is not None:
+        rows = connection.execute(
+            "SELECT namespace, key, value, created_at, updated_at "
+            "FROM _workspace_entries_v3"
+        ).fetchall()
+        for namespace, key, value, created_at, updated_at in rows:
+            if (
+                not isinstance(namespace, str)
+                or not isinstance(key, str)
+                or not isinstance(value, str)
+                or not isinstance(created_at, str)
+                or not isinstance(updated_at, str)
+            ):
+                raise ValueError("invalid schema v3 workspace row")
+            decoded = decode_json_value(value)
+            if not isinstance(decoded, dict):
+                raise ValueError(
+                    "schema v3 workspace value must be a JSON object"
+                )
+            connection.execute(
+                "INSERT INTO workspace_entries VALUES (?, ?, ?, ?, ?)",
+                (
+                    namespace,
+                    key,
+                    encode_json_value(
+                        cast(dict[str, object], decoded),
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                    ),
+                    created_at,
+                    updated_at,
+                ),
+            )
+        connection.execute("DROP TABLE _workspace_entries_v3")
     connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_workspace_entries_ns "
+        "CREATE INDEX idx_workspace_entries_ns "
         "ON workspace_entries(namespace)"
     )
 
@@ -79,6 +122,13 @@ def upgrade(connection: sqlite3.Connection) -> None:
 
 
 def downgrade(connection: sqlite3.Connection) -> None:
+    workspace_count = connection.execute(
+        "SELECT COUNT(*) FROM workspace_entries"
+    ).fetchone()
+    if workspace_count != (0,):
+        raise ValueError(
+            "schema v4 workspace_entries must be exported before downgrade"
+        )
     for collection in COLLECTIONS:
         table = f"col_{collection}"
         connection.execute(
@@ -121,4 +171,5 @@ def downgrade(connection: sqlite3.Connection) -> None:
                 f"VALUES ({', '.join('?' for _ in columns)})",
                 values,
             )
+    connection.execute("DROP TABLE workspace_entries")
     connection.execute("DROP TABLE records")

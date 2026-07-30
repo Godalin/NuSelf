@@ -171,8 +171,9 @@ uv run nuself data export threads --format json
 并拒绝覆盖并发修改。内部运行状态默认隐藏，只有显式使用 `--internal`
 才能查看。
 
-Schema v4 将领域记录和 namespaced workspace 状态收进一个紧致的 authority
-数据库。升级仍须显式执行且支持反向迁移，详见[迁移规范](docs/spec/database-migrations.md)。
+Schema v5 将领域记录和 namespaced workspace 状态收进一个无冗余索引的紧致
+authority 数据库。升级仍须显式执行且支持反向迁移，详见
+[迁移规范](docs/spec/database-migrations.md)。
 
 [CLI 指南](docs/cli.md)按工作流整理了命令；CLI 自身的 `--help` 是最新命令参考。
 

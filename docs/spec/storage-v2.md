@@ -51,12 +51,25 @@ Values are strict JSON objects. A record's `id`, when present, must equal its
 storage key. Collection writes replace the complete object. Repository/domain
 decoders remain responsible for semantic validation.
 
-Schema v4 stores every domain collection in one `records` table keyed by
+Schema v4 introduced one `records` table keyed by
 `(collection, id)`. Its strict JSON `payload` omits the redundant `id`; reads
 restore it from the primary key. Adding a record field or collection does not
 mutate the SQL schema. Namespaced scratch state uses `workspace_entries` in the
 same authority database. Runtime code writes rows but never creates or alters
 these schema tables.
+
+Both tables are `WITHOUT ROWID`. Schema v5 removes v4's redundant prefix
+indexes because the composite primary keys already serve lookups by
+`collection` and `namespace`. Exact versioned identity validation checks
+the required columns, column order, primary-key order, strict JSON checks, and
+`WITHOUT ROWID` definition, plus the version-specific index contract, rather
+than accepting tables by name alone.
+
+Before schema v4 can be downgraded, `workspace_entries` must be empty. Operators
+first export that state with `scripts/migrate_workspace_layout.py --to legacy
+--apply --delete-source`. The v4→v3 migration then drops both compact tables
+and recreates only the schema-v3 collection tables; a non-empty workspace
+fails inside the migration transaction without publishing schema v3.
 
 All related multi-record changes use `backend.transaction()`. SQLite provides
 the commit/rollback boundary; repositories must not retain file-era
@@ -97,7 +110,8 @@ Internal collections:
 Schema migrations may add collections or columns. `_schema_version` records each
 completed version exactly once. All schema changes follow
 [`database-migrations.md`](database-migrations.md); schema v3 is the historical
-baseline and schema v4 is the first strictly reversible migration.
+baseline, schema v4 is the first strictly reversible migration, and schema v5
+is the current compact identity.
 
 ## Initialization and upgrades
 

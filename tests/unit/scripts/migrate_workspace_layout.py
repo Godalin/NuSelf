@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import runpy
 import sqlite3
+import subprocess
 import sys
 from typing import Callable, cast
 
@@ -18,7 +19,7 @@ _SCRIPT = (
 )
 sys.path.insert(0, str(_SCRIPT.parents[1]))
 migrate = cast(
-    Callable[..., tuple[int, int, int]],
+    Callable[..., tuple[int, int]],
     runpy.run_path(str(_SCRIPT))["migrate"],
 )
 
@@ -80,7 +81,7 @@ def test_imports_and_deletes_verified_legacy_workspace(tmp_path: Path) -> None:
     ) == (2, 1)
 
     assert not (authority / "workspaces").exists()
-    assert (authority / "backups" / "legacy-workspaces-v3").is_dir()
+    assert not (authority / "backups").exists()
     assert (
         authority
         / "exports"
@@ -134,3 +135,33 @@ def test_imports_and_deletes_verified_legacy_workspace(tmp_path: Path) -> None:
     finally:
         connection.close()
     assert remaining == (0,)
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(authority / "nuself.sqlite"),
+            "--to",
+            "3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(authority / "nuself.sqlite")
+    try:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        version = connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone()
+    finally:
+        connection.close()
+    assert version == (3,)
+    assert "records" not in tables
+    assert "workspace_entries" not in tables

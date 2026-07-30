@@ -938,7 +938,7 @@ def test_readonly_inspection_closes_source_connection(
 
     inspection = inspect_sqlite_thought_pack(database)
 
-    assert inspection.schema_version == 4
+    assert inspection.schema_version == 5
     assert inspection.total_items == 0
     assert len(connections) == 1
     assert connections[0].close_calls == 1
@@ -1858,7 +1858,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "4",
+            "5",
             "--dry-run",
         ],
         check=True,
@@ -1869,6 +1869,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
         "upgrade v001_to_v002",
         "upgrade v002_to_v003",
         "upgrade v003_to_v004",
+        "upgrade v004_to_v005",
     ]
     subprocess.run(
         [
@@ -1877,7 +1878,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "4",
+            "5",
         ],
         check=True,
         capture_output=True,
@@ -1886,7 +1887,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
     backend = SqliteStorageBackend(db_path)
 
     assert backend.collection("memory_entries").get("mem_legacy") == wire
-    assert (tmp_path / "nuself.sqlite.pre-v1-to-v4.bak").exists()
+    assert (tmp_path / "nuself.sqlite.pre-v1-to-v5.bak").exists()
     assert backend.collection("memory_entries").get("mem_legacy") == wire
     backend.close()
 
@@ -2108,7 +2109,7 @@ def test_registry_rejects_post_v3_migration_without_downgrade() -> None:
     assert "post-v3 migrations must define downgrade" in result.stderr
 
 
-def test_v4_migration_round_trip_preserves_records(tmp_path: Path) -> None:
+def test_v5_migration_round_trip_preserves_records(tmp_path: Path) -> None:
     db_path = tmp_path / "nuself.sqlite"
     backend = create_sqlite_backend(db_path=db_path)
     record_id = "mem_round_trip"
@@ -2121,7 +2122,86 @@ def test_v4_migration_round_trip_preserves_records(tmp_path: Path) -> None:
     backend.collection("memory_entries").put(record_id, record)
     backend.close()
 
-    for target in ("3", "4"):
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+    finally:
+        connection.close()
+    assert "records" not in tables
+    assert "workspace_entries" not in tables
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "5",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    reopened = SqliteStorageBackend(db_path)
+    try:
+        assert reopened.collection("memory_entries").get(record_id) == record
+    finally:
+        reopened.close()
+
+
+def test_v5_schema_has_no_redundant_prefix_indexes(tmp_path: Path) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        indexes = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='index'"
+            )
+            if isinstance(row[0], str)
+        }
+    finally:
+        connection.close()
+
+    assert "idx_records_collection" not in indexes
+    assert "idx_workspace_entries_ns" not in indexes
+
+
+def test_v4_v5_index_migration_is_reversible(tmp_path: Path) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+
+    cases: tuple[tuple[str, set[str]], ...] = (
+        (
+            "4",
+            {"idx_records_collection", "idx_workspace_entries_ns"},
+        ),
+        ("5", set()),
+    )
+    for target, expected_indexes in cases:
         subprocess.run(
             [
                 sys.executable,
@@ -2135,12 +2215,336 @@ def test_v4_migration_round_trip_preserves_records(tmp_path: Path) -> None:
             capture_output=True,
             text=True,
         )
+        connection = sqlite3.connect(db_path)
+        try:
+            indexes = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='index' AND sql IS NOT NULL"
+                )
+                if isinstance(row[0], str)
+            }
+            assert connection.execute(
+                "SELECT MAX(version) FROM _schema_version"
+            ).fetchone() == (int(target),)
+        finally:
+            connection.close()
+        assert indexes == expected_indexes
 
-    reopened = SqliteStorageBackend(db_path)
+
+def test_v4_upgrade_compacts_existing_v3_workspace_entries(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
     try:
-        assert reopened.collection("memory_entries").get(record_id) == record
+        connection.execute(
+            "CREATE TABLE workspace_entries ("
+            "namespace TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, "
+            "created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "
+            "PRIMARY KEY(namespace, key))"
+        )
+        connection.execute(
+            "INSERT INTO workspace_entries VALUES (?, ?, ?, ?, ?)",
+            (
+                "workspace/reason/thread",
+                "state",
+                '{"value": 1}',
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
     finally:
-        reopened.close()
+        connection.close()
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "4",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    connection = sqlite3.connect(db_path)
+    try:
+        assert connection.execute(
+            "SELECT value FROM workspace_entries"
+        ).fetchone() == ('{"value":1}',)
+        table_sql = connection.execute(
+            "SELECT sql FROM sqlite_master "
+            "WHERE type='table' AND name='workspace_entries'"
+        ).fetchone()
+    finally:
+        connection.close()
+    assert table_sql is not None
+    assert "WITHOUT ROWID" in table_sql[0]
+
+
+def test_v5_identity_rejects_named_but_malformed_compact_table(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("DROP TABLE records")
+        connection.execute(
+            "CREATE TABLE records (collection TEXT, id TEXT, payload TEXT)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(
+        SqliteStorageIdentityError,
+        match="not a valid NuSelf authority",
+    ):
+        SqliteStorageBackend(db_path)
+
+
+def test_v5_identity_rejects_redundant_secondary_index(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "CREATE INDEX redundant_records_collection "
+            "ON records(collection)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(
+        SqliteStorageIdentityError,
+        match="not a valid NuSelf authority",
+    ):
+        SqliteStorageBackend(db_path)
+
+
+def test_v5_identity_rejects_unversioned_extra_table(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("CREATE TABLE unversioned_data (value TEXT)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(
+        SqliteStorageIdentityError,
+        match="not a valid NuSelf authority",
+    ):
+        SqliteStorageBackend(db_path)
+
+
+def test_v5_wire_payload_does_not_duplicate_record_id(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    record: dict[str, object] = {
+        "id": "mem_compact",
+        "title": "Stored once",
+        "body": "The primary key owns identity.",
+    }
+    backend.collection("memory_entries").put("mem_compact", record)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        row = connection.execute(
+            "SELECT id, payload FROM records "
+            "WHERE collection='memory_entries'"
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert row is not None
+    assert row[0] == "mem_compact"
+    assert json.loads(row[1]) == {
+        "title": "Stored once",
+        "body": "The primary key owns identity.",
+    }
+
+
+def test_v4_downgrade_requires_workspace_export(tmp_path: Path) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO workspace_entries VALUES (?,?,?,?,?)",
+            (
+                "workspace/reason/thread",
+                "state",
+                '{"value":1}',
+                "2026-01-01T00:00:00+00:00",
+                "2026-01-01T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "must be exported before downgrade" in result.stderr
+    connection = sqlite3.connect(db_path)
+    try:
+        assert connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone() == (5,)
+        assert connection.execute(
+            "SELECT value FROM workspace_entries"
+        ).fetchone() == ('{"value":1}',)
+    finally:
+        connection.close()
+
+
+def test_v4_downgrade_failure_rolls_back_all_schema_changes(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.close()
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO records VALUES (?,?,?)",
+            ("memory_entries", "mem_invalid_column", '{"\\u0000":"value"}'),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    connection = sqlite3.connect(db_path)
+    try:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        assert connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone() == (5,)
+        assert connection.execute(
+            "SELECT payload FROM records WHERE id='mem_invalid_column'"
+        ).fetchone() == ('{"\\u0000":"value"}',)
+    finally:
+        connection.close()
+    assert "records" in tables
+    assert "workspace_entries" in tables
+    assert not any(table.startswith("col_") for table in tables)
+
+
+def test_v5_compact_layout_uses_fewer_pages_than_v3(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    collection = backend.collection("memory_entries")
+    with backend.transaction():
+        for index in range(400):
+            record_id = f"mem_{index:04d}"
+            collection.put(
+                record_id,
+                {
+                    "id": record_id,
+                    "title": f"Compact record {index}",
+                    "body": "repeated-body-" * 20,
+                    "tags": ["compact", "schema-v5"],
+                },
+            )
+    backend.close()
+
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("VACUUM")
+        v5_pages = connection.execute("PRAGMA page_count").fetchone()[0]
+    finally:
+        connection.close()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "3",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute("VACUUM")
+        v3_pages = connection.execute("PRAGMA page_count").fetchone()[0]
+    finally:
+        connection.close()
+
+    assert v5_pages < v3_pages
 
 
 def test_explicit_script_rejects_duplicate_version_history_before_mutation(

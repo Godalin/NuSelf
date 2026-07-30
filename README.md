@@ -182,8 +182,9 @@ uv run nuself data export threads --format json
 live under `scripts/`, outside the installed runtime. Generic editing validates
 full records and rejects concurrent overwrites.
 
-Schema v4 keeps domain records and namespaced workspace state in one compact
-authority database. Upgrades remain explicit and reversible; see the
+Schema v5 keeps domain records and namespaced workspace state in one compact
+authority database without redundant indexes. Upgrades remain explicit and
+reversible; see the
 [migration specification](docs/spec/database-migrations.md).
 
 The [CLI guide](docs/cli.md) groups the available workflows; the CLI's
@@ -246,5 +247,4 @@ See the [memory guide](docs/memory.md) and
 - [TODOs](docs/TODOs.md)
 
 Behavioral contracts belong in `docs/spec/`; completed release history belongs
-in `CHANGELOG.md`. The README intentionally stays a concise project entry
-point.
+in `CHANGELOG.md`. This README intentionally stays a concise project entry point.

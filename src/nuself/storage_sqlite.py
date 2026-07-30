@@ -41,7 +41,7 @@ from nuself.storage import (
 )
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
-SQLITE_SCHEMA_VERSION = 4
+SQLITE_SCHEMA_VERSION = 5
 _V2_COLLECTION_NAMES = (
     "memory_entries",
     "memory_candidates",
@@ -529,16 +529,10 @@ class SqliteStorageBackend:
             "PRIMARY KEY (collection, id)) WITHOUT ROWID"
         )
         self._conn.execute(
-            "CREATE INDEX idx_records_collection ON records(collection)"
-        )
-        self._conn.execute(
             "CREATE TABLE workspace_entries (namespace TEXT NOT NULL, "
             "key TEXT NOT NULL, value TEXT NOT NULL CHECK(json_valid(value) "
             "AND json_type(value) = 'object'), created_at TEXT NOT NULL, "
             "updated_at TEXT NOT NULL, PRIMARY KEY (namespace, key)) WITHOUT ROWID"
-        )
-        self._conn.execute(
-            "CREATE INDEX idx_workspace_entries_ns ON workspace_entries(namespace)"
         )
 
     @contextmanager
@@ -825,6 +819,17 @@ def _validate_nuself_schema_connection(
             raise ThoughtPackValidationError(
                 "thought pack is missing NuSelf schema metadata"
             )
+        version_info = connection.execute(
+            "PRAGMA table_info(_schema_version)"
+        ).fetchall()
+        if tuple(
+            (row[1], str(row[2]).upper(), row[3], row[5])
+            for row in version_info
+            if len(row) >= 6
+        ) != (("version", "INTEGER", 1, 0),):
+            raise ThoughtPackValidationError(
+                "thought pack has invalid NuSelf schema metadata"
+            )
         version_rows = connection.execute(
             "SELECT version FROM _schema_version ORDER BY version"
         ).fetchall()
@@ -853,11 +858,34 @@ def _validate_nuself_schema_connection(
                 f"thought pack schema version {version} is newer than "
                 f"supported version {SQLITE_SCHEMA_VERSION}"
             )
-        if version == 4:
-            if "records" not in tables or "workspace_entries" not in tables:
+        if version in (4, 5):
+            expected_tables = {
+                "_schema_version",
+                "records",
+                "workspace_entries",
+            }
+            if tables != expected_tables:
                 raise ThoughtPackValidationError(
-                    "thought pack is missing schema v4 storage tables"
+                    "thought pack has invalid schema v4+ table set"
                 )
+            _validate_compact_table(
+                connection,
+                "records",
+                secondary_index=(
+                    ("idx_records_collection", "collection")
+                    if version == 4
+                    else None
+                ),
+            )
+            _validate_compact_table(
+                connection,
+                "workspace_entries",
+                secondary_index=(
+                    ("idx_workspace_entries_ns", "namespace")
+                    if version == 4
+                    else None
+                ),
+            )
             if authority and version < SQLITE_SCHEMA_VERSION:
                 raise SqliteStorageUnsupportedVersionError(
                     f"SQLite schema version {version} requires explicit migration"
@@ -899,6 +927,77 @@ def _validate_nuself_schema_connection(
         raise ThoughtPackValidationError(
             "thought pack is not a valid SQLite database"
         ) from exc
+
+
+def _validate_compact_table(
+    connection: sqlite3.Connection,
+    table: str,
+    *,
+    secondary_index: tuple[str, str] | None,
+) -> None:
+    expected = {
+        "records": (
+            ("collection", "TEXT", 1, 1),
+            ("id", "TEXT", 1, 2),
+            ("payload", "TEXT", 1, 0),
+        ),
+        "workspace_entries": (
+            ("namespace", "TEXT", 1, 1),
+            ("key", "TEXT", 1, 2),
+            ("value", "TEXT", 1, 0),
+            ("created_at", "TEXT", 1, 0),
+            ("updated_at", "TEXT", 1, 0),
+        ),
+    }[table]
+    info = connection.execute(
+        f"PRAGMA table_info({_identifier(table)})"
+    ).fetchall()
+    observed = tuple(
+        (row[1], str(row[2]).upper(), row[3], row[5])
+        for row in info
+        if len(row) >= 6
+    )
+    json_column = "payload" if table == "records" else "value"
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+        (table,),
+    ).fetchone()
+    sql = row[0] if row is not None and len(row) == 1 else None
+    normalized = " ".join(sql.upper().split()) if isinstance(sql, str) else ""
+    if (
+        observed != expected
+        or "WITHOUT ROWID" not in normalized
+        or f"JSON_VALID({json_column.upper()})" not in normalized
+        or f"JSON_TYPE({json_column.upper()}) = 'OBJECT'" not in normalized
+    ):
+        raise ThoughtPackValidationError(
+            f"thought pack has invalid schema v4 table {table}"
+        )
+    indexes = connection.execute(
+        f"PRAGMA index_list({_identifier(table)})"
+    ).fetchall()
+    secondary = tuple(
+        (index[1], index[2], index[3], index[4])
+        for index in indexes
+        if len(index) >= 5 and index[3] != "pk"
+    )
+    expected_secondary = (
+        ((secondary_index[0], 0, "c", 0),)
+        if secondary_index is not None
+        else ()
+    )
+    if secondary != expected_secondary:
+        raise ThoughtPackValidationError(
+            f"thought pack has invalid schema v4+ indexes on {table}"
+        )
+    if secondary_index is not None:
+        index_columns = connection.execute(
+            f"PRAGMA index_info({_identifier(secondary_index[0])})"
+        ).fetchall()
+        if tuple(row[2] for row in index_columns) != (secondary_index[1],):
+            raise ThoughtPackValidationError(
+                f"thought pack has invalid schema v4+ index on {table}"
+            )
 
 
 def _validate_existing_nuself_database(source: Path) -> int:

@@ -109,5 +109,6 @@ Every new migration includes:
 - registry validation and source-checkout invocation tests.
 
 Release compatibility tests migrate the oldest supported schema through every
-intermediate version. The compact storage redesign begins at schema v4 and
-must be implemented as the first migration governed fully by this contract.
+intermediate version. The compact storage redesign begins at schema v4. Schema
+v5 removes v4's redundant prefix indexes through an explicit reversible
+migration rather than silently redefining an already-applied schema version.

@@ -73,13 +73,10 @@ def migrate(
     files = 0
     database = authority / "nuself.sqlite"
     require_private_file(database)
-    backup = authority / "backups" / "legacy-workspaces-v3"
-    if apply and delete_source and owners and backup.exists():
-        raise FileExistsError(backup)
     connection = sqlite3.connect(database)
     try:
-        if validate_schema(connection) != 4:
-            raise ValueError("workspace migration requires schema v4")
+        if validate_schema(connection) not in (4, 5):
+            raise ValueError("workspace migration requires compact schema v4+")
         connection.execute("BEGIN IMMEDIATE")
         for owner in owners:
             thread_id = owner.name
@@ -149,8 +146,7 @@ def migrate(
     finally:
         connection.close()
     if apply and delete_source and owners:
-        ensure_private_directory(backup.parent)
-        shutil.move(str(legacy.parent), backup)
+        shutil.rmtree(legacy.parent)
     return entries, files
 
 
@@ -163,9 +159,12 @@ def _restore_legacy(
     database = authority / "nuself.sqlite"
     require_private_file(database)
     connection = sqlite3.connect(database)
+    legacy_root = authority / "workspaces"
+    exports_root = authority / "exports" / "reason"
+    created_legacy = False
     try:
-        if validate_schema(connection) != 4:
-            raise ValueError("workspace migration requires schema v4")
+        if validate_schema(connection) not in (4, 5):
+            raise ValueError("workspace migration requires compact schema v4+")
         rows = connection.execute(
             "SELECT namespace,key,value,created_at,updated_at "
             "FROM workspace_entries "
@@ -178,48 +177,62 @@ def _restore_legacy(
         }
         if not apply:
             return len(rows), len(owners)
-        legacy_root = authority / "workspaces"
-        backup = authority / "backups" / "legacy-workspaces-v3"
         if legacy_root.exists() or legacy_root.is_symlink():
             raise FileExistsError(legacy_root)
         connection.execute("BEGIN IMMEDIATE")
-        if backup.is_dir():
-            shutil.copytree(backup, legacy_root)
-        else:
-            for owner_id in sorted(owners):
-                root = legacy_root / "reason" / owner_id
-                ensure_private_directory(root)
-                database_path = root / "workspace.sqlite"
-                ensure_private_file(database_path)
-                legacy = sqlite3.connect(database_path)
-                try:
-                    legacy.execute(
-                        "CREATE TABLE workspace_entries ("
-                        "namespace TEXT NOT NULL, key TEXT NOT NULL, "
-                        "value TEXT NOT NULL, created_at TEXT NOT NULL, "
-                        "updated_at TEXT NOT NULL, "
-                        "PRIMARY KEY(namespace,key))"
-                    )
-                    legacy.executemany(
-                        "INSERT INTO workspace_entries VALUES (?,?,?,?,?)",
-                        tuple(
-                            row
-                            for row in rows
-                            if row[0].split("/")[2] == owner_id
-                        ),
-                    )
-                    legacy.commit()
-                finally:
-                    legacy.close()
+        created_legacy = True
+        for owner_id in sorted(owners):
+            root = legacy_root / "reason" / owner_id
+            ensure_private_directory(root)
+            database_path = root / "workspace.sqlite"
+            ensure_private_file(database_path)
+            legacy = sqlite3.connect(database_path)
+            try:
+                legacy.execute(
+                    "CREATE TABLE workspace_entries ("
+                    "namespace TEXT NOT NULL, key TEXT NOT NULL, "
+                    "value TEXT NOT NULL, created_at TEXT NOT NULL, "
+                    "updated_at TEXT NOT NULL, "
+                    "PRIMARY KEY(namespace,key))"
+                )
+                legacy.executemany(
+                    "INSERT INTO workspace_entries VALUES (?,?,?,?,?)",
+                    tuple(
+                        row
+                        for row in rows
+                        if row[0].split("/")[2] == owner_id
+                    ),
+                )
+                legacy.commit()
+            finally:
+                legacy.close()
+            export_source = authority / "exports" / "reason" / owner_id
+            if export_source.is_dir():
+                export_destination = root / "artifacts" / "export"
+                shutil.copytree(export_source, export_destination)
+                for source in export_source.rglob("*"):
+                    if source.is_file():
+                        restored = (
+                            export_destination
+                            / source.relative_to(export_source)
+                        )
+                        if restored.read_bytes() != source.read_bytes():
+                            raise RuntimeError(
+                                f"export verification failed: {restored}"
+                            )
         if delete_source:
             connection.execute(
                 "DELETE FROM workspace_entries "
                 "WHERE namespace LIKE 'workspace/reason/%'"
             )
         connection.commit()
+        if delete_source and exports_root.exists():
+            shutil.rmtree(exports_root)
         return len(rows), len(owners)
     except BaseException:
         connection.rollback()
+        if created_legacy and legacy_root.exists():
+            shutil.rmtree(legacy_root)
         raise
     finally:
         connection.close()
