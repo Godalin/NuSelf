@@ -238,6 +238,11 @@ Shared modules use specific names such as `runtime.handlers` or
 `runtime.cleanup`; new catch-all `utils`, `helpers`, or `common` modules are
 forbidden. Existing modules with those names must remain narrowly scoped.
 
+Logging persistence remains the single internal event-log implementation, but
+its terminal warning schemas belong to `runtime.log_warning_contracts`. The
+log engine consumes the sealed registry instead of defining presentation
+warning validation beside append, rotation, recovery, and read semantics.
+
 ## Presentation Boundary
 
 Domain models expose typed state or wire-safe data. Agent tools return

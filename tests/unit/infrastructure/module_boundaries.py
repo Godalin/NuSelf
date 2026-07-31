@@ -464,6 +464,12 @@ def test_conversation_runtime_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_log_warning_contracts_are_separate_from_log_engine() -> None:
+    source = (_SOURCE_ROOT / "logs.py").read_text(encoding="utf-8")
+    assert "def _build_log_terminal_warning_registry" not in source
+    assert "runtime.log_warning_contracts" in source
+
+
 def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:
     paths = (
         _SOURCE_ROOT / "memory" / "repository.py",

@@ -43,6 +43,9 @@ from nuself.runtime.identities import (
     require_persisted_event_name,
     require_runtime_event_name,
 )
+from nuself.runtime.log_warning_contracts import (
+    LOG_TERMINAL_WARNING_REGISTRY,
+)
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
@@ -50,9 +53,6 @@ from nuself.runtime.messages import (
     thaw_json_value,
 )
 from nuself.runtime.warning_definitions import (
-    TerminalWarningDefinition,
-    TerminalWarningRegistry,
-    TerminalWarningSchemaError,
     emit_registered_terminal_warning,
 )
 
@@ -125,119 +125,6 @@ def _build_log_infrastructure_audit_registry() -> AuditDefinitionRegistry:
 LOG_INFRASTRUCTURE_AUDIT_REGISTRY = (
     _build_log_infrastructure_audit_registry()
 )
-
-
-def _require_warning_component(
-    metadata: Mapping[str, object],
-    field: str = "component",
-) -> None:
-    if metadata[field] not in LOG_COMPONENTS:
-        raise TerminalWarningSchemaError(
-            f"logging terminal warning {field} is invalid"
-        )
-
-
-def _require_warning_string(
-    metadata: Mapping[str, object],
-    field: str,
-) -> str:
-    value = metadata[field]
-    if not isinstance(value, str) or not value.strip():
-        raise TerminalWarningSchemaError(
-            f"logging terminal warning {field} must be non-blank"
-        )
-    return value
-
-
-def _require_warning_count(metadata: Mapping[str, object]) -> None:
-    count = metadata["count"]
-    if type(count) is not int or count < 1:
-        raise TerminalWarningSchemaError(
-            "logging terminal warning count must be positive"
-        )
-
-
-def _validate_lock_cleanup_warning(
-    metadata: Mapping[str, object],
-) -> None:
-    _require_warning_component(metadata)
-    if metadata["operation"] not in {"unlock", "close"}:
-        raise TerminalWarningSchemaError(
-            "logging terminal warning operation is invalid"
-        )
-    _require_warning_string(metadata, "error_type")
-
-
-def _validate_component_error_warning(
-    metadata: Mapping[str, object],
-) -> None:
-    _require_warning_component(metadata)
-    _require_warning_string(metadata, "error_type")
-
-
-def _validate_observer_warning(metadata: Mapping[str, object]) -> None:
-    _require_warning_string(metadata, "observer_error")
-    _require_warning_string(metadata, "log_error")
-
-
-def _validate_corruption_warning(metadata: Mapping[str, object]) -> None:
-    _require_warning_component(metadata)
-    filename = _require_warning_string(metadata, "file")
-    if Path(filename).name != filename:
-        raise TerminalWarningSchemaError(
-            "logging terminal warning file must be a basename"
-        )
-    _require_warning_count(metadata)
-    _require_warning_string(metadata, "first_error")
-
-
-def _validate_identity_warning(metadata: Mapping[str, object]) -> None:
-    _require_warning_count(metadata)
-    _require_warning_component(metadata, "first_component")
-    _require_warning_string(metadata, "first_event")
-
-
-def _build_log_terminal_warning_registry() -> TerminalWarningRegistry:
-    definitions = (
-        TerminalWarningDefinition(
-            "logs/lock_cleanup_failed",
-            ("component", "operation", "error_type"),
-            _validate_lock_cleanup_warning,
-        ),
-        TerminalWarningDefinition(
-            "logs/append_rollback_failed",
-            ("component", "error_type"),
-            _validate_component_error_warning,
-        ),
-        TerminalWarningDefinition(
-            "logs/rotation_failed",
-            ("component", "error_type"),
-            _validate_component_error_warning,
-            suffix="continuing without guaranteed retention bounds",
-        ),
-        TerminalWarningDefinition(
-            "daemon/log_observer_failed",
-            ("observer_error", "log_error"),
-            _validate_observer_warning,
-        ),
-        TerminalWarningDefinition(
-            "logs/corrupt_records_skipped",
-            ("component", "file", "count", "first_error"),
-            _validate_corruption_warning,
-        ),
-        TerminalWarningDefinition(
-            "logs/event_identity_conflict",
-            ("count", "first_component", "first_event"),
-            _validate_identity_warning,
-        ),
-    )
-    registry = TerminalWarningRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
-
-
-LOG_TERMINAL_WARNING_REGISTRY = _build_log_terminal_warning_registry()
 
 
 class LogAppendLifecycleError(RuntimeError):

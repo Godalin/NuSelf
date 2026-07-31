@@ -40,7 +40,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   schedulers receive the repository explicitly. The
   conversation graph runtime now requires its complete memory, thread,
   reflection, reason, trace, and persona capability set instead of rebuilding
-  authority resources inside the agent layer. Trace
+  authority resources inside the agent layer. Logging terminal-warning schemas
+  are isolated from the durable log engine in a dedicated runtime contract
+  module. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

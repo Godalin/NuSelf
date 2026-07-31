@@ -87,6 +87,8 @@ Current working branch for v0.3.1.
 - `ConversationGraphRuntime` now requires its complete memory, thread,
   reflection, reason, trace, and persona capability set; `application.chat`
   is the sole production and evaluation composition boundary.
+- Logging terminal-warning schemas and validation now live in
+  `runtime.log_warning_contracts`, separate from the durable log engine.
 
 ## Completion Standard
 

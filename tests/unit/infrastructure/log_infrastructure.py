@@ -14,6 +14,7 @@ from typing import IO, BinaryIO, cast
 import pytest
 
 import nuself.logs as logs
+from nuself.runtime.warning_definitions import TerminalWarningSchemaError
 from nuself.logs import (
     InteractiveLogCursor,
     LogAppendLifecycleError,
@@ -102,7 +103,7 @@ def test_log_terminal_warning_registry_rejects_invalid_domain_facts(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    with pytest.raises(logs.TerminalWarningSchemaError):
+    with pytest.raises(TerminalWarningSchemaError):
         logs.LOG_TERMINAL_WARNING_REGISTRY.resolve(event).render(metadata)
 
 
