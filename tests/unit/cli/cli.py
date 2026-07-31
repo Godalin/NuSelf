@@ -28,7 +28,8 @@ import pytest
 from langchain_core.messages import BaseMessage
 
 from nuself import cli
-from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat import ThreadMessage, ThreadState
+from thread_fixtures import ThreadStore
 from nuself.cli import build_parser, main
 from nuself.config import runtime_paths
 from nuself.daemon.client import DaemonConnectionError
@@ -3968,7 +3969,7 @@ def test_eval_command_runs_conversation_fixtures(
 def test_interactive_history_shows_recent_messages(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+    from nuself.agent.chat import ThreadMessage, ThreadState
 
     store = ThreadStore(_authority(tmp_path))
     state = ThreadState.empty("default")
@@ -3999,7 +4000,7 @@ def test_interactive_history_shows_recent_messages(
 def test_interactive_archive_unarchive_delete_and_archived(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.agent.chat import ThreadState, ThreadStore
+    from nuself.agent.chat import ThreadState
 
     store = ThreadStore(_authority(tmp_path))
     store.save(ThreadState.empty("alpha"))
@@ -4024,7 +4025,7 @@ def test_interactive_archive_unarchive_delete_and_archived(
 
 
 def test_thread_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+    from nuself.agent.chat import ThreadMessage, ThreadState
 
     store = ThreadStore(_authority(tmp_path))
     state = ThreadState.empty("focus")

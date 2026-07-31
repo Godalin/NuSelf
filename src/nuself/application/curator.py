@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from nuself.agent.chat import ThreadStore
 from nuself.application.composition import ApplicationGraph
+from nuself.application.thread import compose_thread_store
 from nuself.memory.curator import MemoryCurator
 from nuself.memory.optimizer import (
     MemoryOptimizer,
@@ -19,10 +19,7 @@ def compose_memory_curator(
     paths = application.paths
     return MemoryCurator(
         paths,
-        thread_store=ThreadStore(
-            paths.project_root,
-            backend=application.backend,
-        ),
+        thread_store=compose_thread_store(application),
         repository=application.memory.entries,
         candidate_repository=application.memory.candidates,
         profile_repository=application.memory.profile,

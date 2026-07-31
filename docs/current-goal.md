@@ -99,6 +99,12 @@ Current working branch for v0.3.1.
   requires explicit graph-owned prompt/trace/path/storage resources; migration
   is proceeding through persona tools and reason advancers before thread
   consumers.
+- Persona tools and reason advancers now receive graph-owned path, prompt,
+  workspace, and trace capabilities, and schedulers receive a finished
+  advancer rather than composing one.
+- `ThreadStore` now requires resolved paths and storage. Application, CLI, REPL,
+  daemon, chat, curator, and reflection consumers obtain it from application
+  composition; only test fixtures retain root-based convenience construction.
 
 ## Completion Standard
 

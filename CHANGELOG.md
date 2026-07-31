@@ -44,7 +44,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   graph-owned memory repository rather than opening storage from persona
   policy. Persona tools and reason advancement now also receive graph-owned
   prompt, trace, path, and workspace capabilities instead of selecting a
-  second authority during tool construction. Logging terminal-warning schemas
+  second authority during tool construction. Chat thread persistence now
+  receives resolved paths and storage explicitly, while CLI, REPL, daemon,
+  curator, reflection, and chat composition share the application-owned
+  factory. Logging terminal-warning schemas
   are isolated from the durable log engine in a dedicated runtime contract
   module. Trace
   repositories and services now require explicitly composed storage instead

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.agent.chat import ThreadStore
+from thread_fixtures import ThreadStore
 from nuself.cli import entrypoints
 from nuself.cli.entrypoints import (
     EntrypointCallbacks,

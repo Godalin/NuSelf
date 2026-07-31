@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.cli.composition import compose_cli_thread_store
 from nuself.cli.daemon_lifecycle import (
     format_start_failure,
     start_daemon_observed,
@@ -160,7 +161,7 @@ class EntrypointController:
         return self._run_daemon_interactive(args.project_root)
 
     def handle_open(self, args: argparse.Namespace) -> int:
-        store = ThreadStore(args.project_root)
+        store = compose_cli_thread_store(args.project_root)
         target = self._prepare_open_thread(args, store)
         if target is None:
             return CliExitCode.FAILURE

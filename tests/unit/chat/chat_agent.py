@@ -24,8 +24,8 @@ from nuself.agent.chat import (
     ConversationTurnState,
     ThreadMessage,
     ThreadState,
-    ThreadStore,
 )
+from thread_fixtures import ThreadStore
 from nuself.agent.chat import ConversationGraphRuntimeError
 from nuself.agent.tool_utils import tool_service_component
 from nuself.application import compose_trace_services

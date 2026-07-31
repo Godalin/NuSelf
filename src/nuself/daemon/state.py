@@ -13,7 +13,10 @@ from nuself.application.runtime import (
     open_application_runtime,
 )
 from nuself.application.reflection import compose_reflection_scheduler
-from nuself.application.reason import compose_reason_service
+from nuself.application.reason import (
+    compose_reason_advancer,
+    compose_reason_service,
+)
 from nuself.config import ConfigSystem
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
@@ -148,8 +151,6 @@ class DaemonState:
             capabilities = (
                 self.conversation_runtime.capability_snapshot()
             )
-            from nuself.application.reason import compose_reason_advancer
-
             self.reason_scheduler = ReasonScheduler(
                 self.project_root,
                 advancer=compose_reason_advancer(

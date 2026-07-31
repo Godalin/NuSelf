@@ -10,8 +10,8 @@ from langchain_core.tools import BaseTool
 from nuself.agent.chat import (
     ChatAgentSettings,
     ConversationGraphRuntime as _ConversationGraphRuntime,
-    ThreadStore,
 )
+from thread_fixtures import ThreadStore
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.text import TextAgent
 from nuself.application.composition import compose_application
@@ -76,7 +76,10 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             memory_query_service=memory_query_service
             or MemoryQueryService(entries, sources, profile),
             thread_store=thread_store
-            or ThreadStore(project_root, backend=application.backend),
+            or ThreadStore(
+                project_root,
+                backend=application.backend,
+            ),
             job_sink=job_sink,
             section_planner=section_planner,
             event_publisher=event_publisher,

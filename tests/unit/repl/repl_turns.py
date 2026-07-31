@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 import nuself.cli.repl.turns as turns
-from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat import ThreadMessage, ThreadState
+from thread_fixtures import ThreadStore
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.turns import send_interactive_chat_turn
 from nuself.cli.repl.types import InteractiveChatResult

@@ -6,12 +6,13 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.agent.chat import ThreadState
+from nuself.cli.composition import compose_cli_thread_store
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_thread_list(args: argparse.Namespace) -> int:
-    ids = ThreadStore(args.project_root).list()
+    ids = compose_cli_thread_store(args.project_root).list()
     if not ids:
         print("No active threads.")
         return 0
@@ -21,7 +22,7 @@ def handle_thread_list(args: argparse.Namespace) -> int:
 
 
 def handle_thread_show(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     state = store.load(args.thread_id)
     if not state.messages and args.thread_id not in store.list():
         print(f"Thread not found: {args.thread_id}", file=sys.stderr)
@@ -40,7 +41,7 @@ def handle_thread_show(args: argparse.Namespace) -> int:
 
 
 def handle_thread_create(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     if args.thread_id in store.list():
         print(f"Thread already exists: {args.thread_id}", file=sys.stderr)
         return 1
@@ -66,7 +67,7 @@ def _run_thread_action(
 
 
 def handle_thread_rename(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     return _run_thread_action(
         lambda: store.rename(args.old_thread_id, args.new_thread_id),
         f"Renamed thread: {args.old_thread_id} -> {args.new_thread_id}",
@@ -74,7 +75,7 @@ def handle_thread_rename(args: argparse.Namespace) -> int:
 
 
 def handle_thread_branch(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     return _run_thread_action(
         lambda: store.branch(
             args.source_thread_id, args.new_thread_id, args.index
@@ -84,7 +85,7 @@ def handle_thread_branch(args: argparse.Namespace) -> int:
 
 
 def handle_thread_archive(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     return _run_thread_action(
         lambda: store.archive(args.thread_id),
         f"Archived thread: {args.thread_id}",
@@ -92,7 +93,7 @@ def handle_thread_archive(args: argparse.Namespace) -> int:
 
 
 def handle_thread_delete(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     return _run_thread_action(
         lambda: store.delete(args.thread_id),
         f"Deleted thread: {args.thread_id}",
@@ -100,7 +101,7 @@ def handle_thread_delete(args: argparse.Namespace) -> int:
 
 
 def handle_thread_unarchive(args: argparse.Namespace) -> int:
-    store = ThreadStore(args.project_root)
+    store = compose_cli_thread_store(args.project_root)
     return _run_thread_action(
         lambda: store.unarchive(args.thread_id),
         f"Unarchived thread: {args.thread_id}",
@@ -108,7 +109,7 @@ def handle_thread_unarchive(args: argparse.Namespace) -> int:
 
 
 def handle_thread_archived(args: argparse.Namespace) -> int:
-    ids = ThreadStore(args.project_root).list_archived()
+    ids = compose_cli_thread_store(args.project_root).list_archived()
     if not ids:
         print("No archived threads.")
         return 0

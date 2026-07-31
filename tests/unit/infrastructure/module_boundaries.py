@@ -104,6 +104,19 @@ def test_conversation_runtime_does_not_compose_authority() -> None:
     ] == []
 
 
+def test_thread_store_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "thread.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
+
+
 def test_persona_definition_loader_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "persona" / "definition.py"
     forbidden = {

@@ -11,7 +11,7 @@ from nuself.application import (
     compose_trace_services,
 )
 from nuself.application.reflection import compose_reflection_repository
-from nuself.agent.chat import ThreadStore
+from nuself.cli.composition import compose_cli_thread_store
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
     format_start_failure,
@@ -496,7 +496,7 @@ def interactive_memory_help(command: str | None = None) -> str:
 
 def handle_interactive_history_command(project_root: Path | None, thread_id: str) -> str:
     try:
-        state = ThreadStore(project_root).load(thread_id)
+        state = compose_cli_thread_store(project_root).load(thread_id)
     except Exception as exc:
         report_chat_failure(
             exc,
@@ -695,7 +695,7 @@ def handle_interactive_watch_command(project_root: Path | None) -> None:
 
 
 def handle_interactive_threads_command(project_root: Path | None) -> str:
-    store = ThreadStore(project_root)
+    store = compose_cli_thread_store(project_root)
     ids = store.list()
     if not ids:
         return "No active threads."

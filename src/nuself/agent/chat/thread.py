@@ -9,9 +9,9 @@ import fcntl
 from pathlib import Path
 from typing import Generator, Literal, TypeVar, cast
 
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.private_fs import ensure_private_directory, ensure_private_file
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 ThreadRole = Literal["user", "assistant"]
 UpdateResult = TypeVar("UpdateResult")
@@ -154,16 +154,12 @@ class ThreadStore:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
     ) -> None:
-        self._locks_dir = runtime_paths(project_root).runtime_dir / "thread-locks"
-        self._backend = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
+        self._locks_dir = paths.runtime_dir / "thread-locks"
+        self._backend = backend
         self._collection = self._backend.collection("chat_threads")
 
     def load(self, thread_id: str) -> ThreadState:

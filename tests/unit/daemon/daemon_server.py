@@ -15,8 +15,8 @@ from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
-    ThreadStore,
 )
+from thread_fixtures import ThreadStore
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
@@ -524,7 +524,7 @@ def test_reason_scheduler_uses_public_agent_capability_snapshot(
         build_scheduler,
     )
     monkeypatch.setattr(
-        "nuself.application.reason.compose_reason_advancer",
+        "nuself.daemon.state.compose_reason_advancer",
         build_advancer,
     )
     monkeypatch.setattr(

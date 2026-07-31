@@ -58,7 +58,7 @@ def compose_reflection_scheduler(
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
 
-    from nuself.agent.chat import ThreadStore
+    from nuself.agent.chat.thread import ThreadStore
 
     schedule_collection = backend.collection("scheduler_state")
     generator = IdeaCandidateGenerator(
@@ -67,7 +67,7 @@ def compose_reflection_scheduler(
         memory_repository=memory_repository,
         source_repository=source_repository,
         profile_repository=profile_repository,
-        thread_context=ThreadStore(paths.project_root, backend=backend),
+        thread_context=ThreadStore(paths, backend=backend),
     )
     gate = LLMRelevanceGate(
         paths.project_root,

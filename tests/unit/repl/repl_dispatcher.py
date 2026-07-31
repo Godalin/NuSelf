@@ -6,7 +6,8 @@ from pathlib import Path
 from _pytest.capture import CaptureFixture
 import pytest
 
-from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.agent.chat import ThreadState
+from thread_fixtures import ThreadStore
 import nuself.cli.repl.dispatcher as dispatcher_module
 from nuself.cli.repl.dispatcher import ReplCommandDispatcher
 from nuself.cli.repl.registry import command_names

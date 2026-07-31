@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.chat import ThreadStore
+from thread_fixtures import ThreadStore
 from nuself.agent.structured import StructuredAgent
 from nuself.application import compose_trace_services
 from nuself.config import RuntimePaths, runtime_paths

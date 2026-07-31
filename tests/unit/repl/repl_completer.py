@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 from prompt_toolkit.document import Document
 
-from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.agent.chat import ThreadState
+from thread_fixtures import ThreadStore
 from nuself.cli import _InteractiveCompleter
 from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository
@@ -78,7 +79,17 @@ def test_thread_completion_failure_is_observed(
     def fail(*args: object, **kwargs: object) -> None:
         raise OSError("thread index unavailable")
 
-    monkeypatch.setattr(ThreadStore, method_name, fail)
+    store = ThreadStore(tmp_path)
+    monkeypatch.setattr(store, method_name, fail)
+
+    def selected_store(project_root: Path | None) -> ThreadStore:
+        del project_root
+        return store
+
+    monkeypatch.setattr(
+        "nuself.cli.repl.input.compose_cli_thread_store",
+        selected_store,
+    )
     completer = _InteractiveCompleter(tmp_path)
 
     completions = list(

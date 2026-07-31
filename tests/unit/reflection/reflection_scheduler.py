@@ -21,7 +21,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
-from nuself.agent.chat import ThreadStore
+from thread_fixtures import ThreadStore
 from nuself.application.composition import compose_application
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
@@ -750,7 +750,7 @@ def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
 
 def test_generator_produces_ideas_from_threads(tmp_path: Path) -> None:
     """Conversations alone should be enough to generate ideas."""
-    from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+    from nuself.agent.chat import ThreadMessage, ThreadState
 
     store = ThreadStore(tmp_path)
     state = ThreadState.empty("default")

@@ -6,7 +6,8 @@ import stat
 
 from _pytest.monkeypatch import MonkeyPatch
 
-from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat import ThreadMessage, ThreadState
+from thread_fixtures import ThreadStore
 from nuself.cli.repl import transcript
 from nuself.cli.repl.session import InteractiveSession
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.agent.chat import ConversationGraphRuntime, ThreadStore
+from nuself.agent.chat import ConversationGraphRuntime
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.application.composition import ApplicationGraph
 from nuself.memory.query import MemoryQueryService
@@ -10,6 +10,7 @@ from nuself.persona.tools import build_persona_tools
 from nuself.persona.definition import load_persona_definitions
 from nuself.reason.output import SectionPlanner
 from nuself.application.reason import compose_reason_service
+from nuself.application.thread import compose_thread_store
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
 
@@ -46,10 +47,7 @@ def compose_conversation_runtime(
             application.memory.entries,
             project_root=paths.project_root,
         ),
-        thread_store=ThreadStore(
-            paths.project_root,
-            backend=application.backend,
-        ),
+        thread_store=compose_thread_store(application),
         job_sink=job_sink,
         section_planner=section_planner,
         event_publisher=event_publisher,

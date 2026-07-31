@@ -6,7 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.agent.chat import ThreadState
+from nuself.cli.composition import compose_cli_thread_store
 from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.commands.memory.entries import format_memory_preview
 from nuself.cli.commands.output import print_ansi
@@ -499,7 +500,7 @@ def _handle_thread_switch(
     if thread_id == "":
         print_ansi(handle_interactive_threads_command(project_root))
         return ("", current_thread_id)
-    store = ThreadStore(project_root)
+    store = compose_cli_thread_store(project_root)
     if thread_id not in store.list():
         store.save(ThreadState.empty(thread_id))
     print(f"Switched to thread: {thread_id}")
@@ -516,7 +517,9 @@ def _handle_thread_rename(
         print(interactive_help(":rename"))
     else:
         try:
-            ThreadStore(project_root).rename(current_thread_id, new_id)
+            compose_cli_thread_store(project_root).rename(
+                current_thread_id, new_id
+            )
             print(f"Renamed thread to: {new_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
@@ -542,7 +545,9 @@ def _handle_thread_branch(
         print(interactive_help(":branch"))
     else:
         try:
-            ThreadStore(project_root).branch(current_thread_id, new_id, index)
+            compose_cli_thread_store(project_root).branch(
+                current_thread_id, new_id, index
+            )
             print(f"Branched to thread: {new_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
@@ -555,7 +560,7 @@ def _handle_thread_archive(
 ) -> InteractiveCommandResult:
     print()
     try:
-        ThreadStore(project_root).archive(current_thread_id)
+        compose_cli_thread_store(project_root).archive(current_thread_id)
         print(f"Archived thread: {current_thread_id}")
     except ValueError as exc:
         print(f"Error: {diagnostic_exception_message(exc)}")
@@ -572,7 +577,7 @@ def _handle_thread_unarchive(
         print(interactive_help(":unarchive"))
     else:
         try:
-            ThreadStore(project_root).unarchive(thread_id)
+            compose_cli_thread_store(project_root).unarchive(thread_id)
             print(f"Unarchived thread: {thread_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
@@ -581,7 +586,7 @@ def _handle_thread_unarchive(
 
 def _print_archived_threads(project_root: Path | None) -> None:
     print()
-    ids = ThreadStore(project_root).list_archived()
+    ids = compose_cli_thread_store(project_root).list_archived()
     if not ids:
         print("No archived threads.")
     else:
@@ -595,7 +600,7 @@ def _handle_thread_delete(
 ) -> InteractiveCommandResult:
     print()
     try:
-        ThreadStore(project_root).delete(current_thread_id)
+        compose_cli_thread_store(project_root).delete(current_thread_id)
         print(f"Deleted thread: {current_thread_id}")
     except ValueError as exc:
         print(f"Error: {diagnostic_exception_message(exc)}")

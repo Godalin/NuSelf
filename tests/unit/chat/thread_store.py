@@ -12,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from nuself.agent.chat import ThreadState, ThreadStore, ThreadMessage
+from nuself.agent.chat import ThreadMessage, ThreadState
+from thread_fixtures import ThreadStore
 from nuself.storage import get_default_backend
 
 

@@ -15,7 +15,7 @@ from prompt_toolkit.styles import Style
 
 from nuself.application.reason import compose_reason_repository
 from nuself.agent.chat.audit import run_chat_observed
-from nuself.agent.chat import ThreadStore
+from nuself.cli.composition import compose_cli_thread_store
 from nuself.cli.repl.registry import (
     command_tokens,
     render_help_lines,
@@ -143,7 +143,9 @@ class InteractiveCompleter(Completer):
     def _thread_completions(self, word: str) -> Iterable[Completion]:
         threads = (
             run_chat_observed(
-                lambda: ThreadStore(self._project_root).list(),
+                lambda: compose_cli_thread_store(
+                    self._project_root
+                ).list(),
                 event="completion_load_failed",
                 project_root=self._project_root,
                 metadata={"completion": "threads"},
@@ -157,7 +159,9 @@ class InteractiveCompleter(Completer):
     def _archived_thread_completions(self, word: str) -> Iterable[Completion]:
         threads = (
             run_chat_observed(
-                lambda: ThreadStore(self._project_root).list_archived(),
+                lambda: compose_cli_thread_store(
+                    self._project_root
+                ).list_archived(),
                 event="completion_load_failed",
                 project_root=self._project_root,
                 metadata={"completion": "archived_threads"},

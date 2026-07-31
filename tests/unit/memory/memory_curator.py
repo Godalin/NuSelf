@@ -19,7 +19,8 @@ import pytest
 from langchain_core.messages import BaseMessage
 
 from nuself.application import compose_trace_services
-from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat import ThreadMessage, ThreadState
+from thread_fixtures import ThreadStore
 from nuself.config import runtime_paths
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.domain.memory import (

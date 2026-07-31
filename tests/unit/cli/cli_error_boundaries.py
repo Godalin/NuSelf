@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from nuself import cli
-from nuself.agent.chat import ThreadStore
+from nuself.agent.chat.thread import ThreadStore
 from nuself.cli.chat import chat_request_timeout_seconds
 from nuself.cli.commands.reason import handle_reason_start
 from nuself.cli.repl.commands import (

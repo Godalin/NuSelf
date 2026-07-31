@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from nuself.agent.chat import ThreadState, ThreadStore
+from nuself.agent.chat import ThreadState
+from nuself.cli.composition import compose_cli_thread_store
 from nuself.cli.repl.input import interactive_help
 from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
@@ -177,7 +178,7 @@ def export_interactive_transcript(
 ) -> tuple[Path, str]:
     paths = runtime_paths(project_root)
     if messages is None:
-        thread = ThreadStore(project_root).load(thread_id)
+        thread = compose_cli_thread_store(project_root).load(thread_id)
         messages = thread_messages_from_index(thread, start_index)
     if not messages:
         raise ValueError("no chat messages in this connection yet")
