@@ -6,6 +6,7 @@ from notification_fixtures import notification_outbox
 
 from memory_fixtures import (
     memory_candidate_repository,
+    memory_curator_plan_store,
     memory_entry_repository,
     source_repository,
 )
@@ -1963,7 +1964,7 @@ def test_memory_plan_show_is_payload_safe(
             ),
         ),
     )
-    MemoryCuratorPlanStore(_authority(tmp_path)).save(plan)
+    memory_curator_plan_store(_authority(tmp_path)).save(plan)
 
     result = main(
         [
@@ -2074,7 +2075,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    store = MemoryCuratorPlanStore(_authority(tmp_path))
+    store = memory_curator_plan_store(_authority(tmp_path))
     plan = store.save(
         MemoryCuratorPlan(
             thread_id="default",
@@ -2113,7 +2114,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
         == "Curator plan is busy for thread: default; "
         "no plan was discarded.\n"
     )
-    assert MemoryCuratorPlanStore(_authority(tmp_path)).get("default") == plan
+    assert memory_curator_plan_store(_authority(tmp_path)).get("default") == plan
 
 
 def test_memory_plan_show_missing_is_an_explicit_error(

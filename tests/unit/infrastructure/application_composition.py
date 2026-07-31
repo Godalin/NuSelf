@@ -22,6 +22,8 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert graph.paths is paths
     assert graph.backend is backend
     assert graph.notifications._backend is backend
+    assert graph.persona_prompts._project_root == paths.project_root
+    assert graph.memory.curator_plans._backend is backend
     assert graph.memory.candidates._entry_repository is graph.memory.entries
     assert graph.memory.candidates._profile_repository is graph.memory.profile
     assert (

@@ -42,11 +42,10 @@ def build_persona_tools(
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
+    paths = runtime_paths(project_root)
     repo = PersonaPromptRepository(
-        collection=get_default_backend(project_root).collection(
-            "persona_prompts"
-        ),
-        project_root=project_root,
+        get_default_backend(project_root).collection("persona_prompts"),
+        paths,
     )
     persona_agent = (
         text_agent
@@ -74,7 +73,7 @@ def build_persona_tools(
         if len(name) > 40:
             return "Error: name must be 40 characters or fewer"
 
-        persona = create_persona_prompt(name, prompt, project_root=project_root)
+        persona = create_persona_prompt(name, prompt)
         existing = repo.get_by_name(name)
         if existing is not None:
             persona = PersonaPrompt(
@@ -277,20 +276,21 @@ def build_reason_persona_tools(
     """
 
     def _thread_repo() -> PersonaPromptRepository:
+        paths = runtime_paths(global_project_root)
         return PersonaPromptRepository(
             WorkspaceCollection(
                 get_thread_workspace(),
                 namespace="persona_prompts",
             ),
-            project_root=global_project_root,
+            paths,
         )
 
     global_repo = (
         PersonaPromptRepository(
-            collection=get_default_backend(global_project_root).collection(
+            get_default_backend(global_project_root).collection(
                 "persona_prompts"
             ),
-            project_root=global_project_root,
+            runtime_paths(global_project_root),
         )
         if global_project_root
         else None
@@ -315,7 +315,7 @@ def build_reason_persona_tools(
             return "Error: name must be 40 characters or fewer"
 
         repo = _thread_repo()
-        persona = create_persona_prompt(name, prompt, project_root=global_project_root)
+        persona = create_persona_prompt(name, prompt)
         existing = repo.get_by_name(name)
         if existing is not None:
             persona = PersonaPrompt(

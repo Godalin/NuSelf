@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import IO, Literal, Never, cast
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.domain.memory import (
     MemoryTypeRegistry,
     default_memory_type_registry,
@@ -20,7 +20,7 @@ from nuself.memory.curator_contract import (
 )
 from nuself.private_fs import ensure_private_file
 from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 
 @dataclass(frozen=True)
@@ -235,18 +235,14 @@ class MemoryCuratorPlanStore:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
+        backend: StorageBackend,
         *,
         registry: MemoryTypeRegistry | None = None,
-        backend: StorageBackend | None = None,
     ) -> None:
-        self._paths = runtime_paths(project_root)
+        self._paths = paths
         self._registry = registry or default_memory_type_registry()
-        self._backend = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
+        self._backend = backend
         self._collection = self._backend.collection(
             "memory_curator_plans"
         )

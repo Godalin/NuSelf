@@ -100,11 +100,18 @@ such as memory statistics receive repositories rather than resolving an
 authority. The application layer owns the immutable repository bundle and
 must reuse its instances for one authority.
 
+Curator recovery plans are part of that memory persistence graph. Their store
+receives the same resolved paths and selected backend so its durable records
+and per-thread locks cannot drift across authorities. Persona prompt
+persistence likewise receives its collection and resolved paths explicitly;
+outer tools and adapters may compose those resources but the repository may
+not select them.
+
 `ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
 one selected `StorageBackend`. It retains those exact resources and the shared
-memory, reason, reflection, and trace graph. Process adapters may choose
-transport and lifecycle, but must not rebuild domain dependencies after a
-graph has been supplied.
+memory, notification, persona, reason, reflection, and trace graph. Process
+adapters may choose transport and lifecycle, but must not rebuild domain
+dependencies after a graph has been supplied.
 
 `NotificationOutbox` is persistence and follows the same rule: it receives
 resolved paths and the selected backend, derives its entry-lock directory only

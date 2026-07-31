@@ -35,8 +35,8 @@ def test_repository_lists_report_corrupt_records(
 
     if collection == "persona_prompts":
         result = PersonaPromptRepository(
-            collection=backend.collection("persona_prompts"),
-            project_root=tmp_path,
+            backend.collection("persona_prompts"),
+            runtime_paths(tmp_path),
         ).list()
     elif collection == "reason_threads":
         result = ReasonRepository(

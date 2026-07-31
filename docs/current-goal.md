@@ -18,10 +18,10 @@ Current working branch for v0.3.1.
 1. Define and enforce package dependency rules. Complete: AST gates now reject
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
-3. Remove hidden backend/path resolution from domain repositories. In
-   progress: trace, profile, reason, reflection, memory, source, and
-   notification persistence now require explicit authority resources and
-   application-owned composition; persona prompts and curator plans remain.
+3. Remove hidden backend/path resolution from domain repositories. Complete:
+   trace, profile, reason, reflection, memory, source, notification, persona
+   prompt, and curator-plan persistence require explicit authority resources
+   and application-owned composition.
 4. Extract narrow cross-domain ports and shared contracts.
 5. Remove agent/domain dependencies on CLI/TUI presentation.
 6. Split oversized cross-cutting modules along their actual ownership.
@@ -67,6 +67,9 @@ In progress:
 - notification persistence and per-entry lock paths now receive the graph's
   explicit paths/backend, with CLI, daemon, reflection, and delivery workflows
   sharing the injected outbox and an authority-resolution regression gate;
+- persona prompts and memory curator recovery plans are now graph-owned
+  persistence; their repositories receive explicit paths/backend or collection
+  resources, and boundary gates cover the complete migrated persistence set;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
   600 tests after moving trace composition into the application layer; the
@@ -75,4 +78,6 @@ In progress:
   slice passed 815 tests and cold imports; the memory/source cross-module slice
   passed 1280 tests, followed by the complete 2464-test suite; Pyright reported
   0 errors and 0 warnings. The notification cross-module slice passed 1117
-  tests with Pyright still at 0 errors and 0 warnings.
+  tests, followed by the complete 2465-test suite, with Pyright still at 0
+  errors and 0 warnings. The persona/curator/CLI slice passed 675 tests and its
+  focused persistence slice passed 56 tests; Pyright remained clean.

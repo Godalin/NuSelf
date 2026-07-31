@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from pathlib import Path
 import threading
 from uuid import uuid4
 
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageCollection
 
@@ -74,10 +73,9 @@ class PersonaPromptRepository:
     def __init__(
         self,
         collection: StorageCollection,
-        *,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
     ) -> None:
-        self._project_root = runtime_paths(project_root).project_root
+        self._project_root = paths.project_root
         self._collection = collection
         self._lock = threading.RLock()
 
@@ -131,7 +129,7 @@ class PersonaPromptRepository:
         self.save(updated)
 
 
-def create_persona_prompt(name: str, prompt_text: str, *, project_root: Path | None = None) -> PersonaPrompt:
+def create_persona_prompt(name: str, prompt_text: str) -> PersonaPrompt:
     """Create a new PersonaPrompt with generated id and timestamps."""
     now = utc_now_iso()
     return PersonaPrompt(

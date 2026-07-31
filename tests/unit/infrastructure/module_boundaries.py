@@ -154,12 +154,28 @@ def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
         ("nuself.config", "runtime_paths"),
     }
     paths = (
+        _SOURCE_ROOT / "memory" / "curator_plan.py",
         _SOURCE_ROOT / "memory" / "repository.py",
         _SOURCE_ROOT / "memory" / "source_repository.py",
     )
     violations = [
         f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
         for path in paths
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []
+
+
+def test_migrated_persona_repository_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "persona" / "prompt_repo.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
         for imported in _from_imports(path)
         if imported in forbidden
     ]
@@ -175,6 +191,25 @@ def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
     }
     violations = [
         f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []
+
+
+def test_remaining_persistence_stores_do_not_resolve_authority() -> None:
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    paths = (
+        _SOURCE_ROOT / "persona" / "prompt_repo.py",
+        _SOURCE_ROOT / "memory" / "curator_plan.py",
+    )
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for path in paths
         for imported in _from_imports(path)
         if imported in forbidden
     ]

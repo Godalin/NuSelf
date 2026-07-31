@@ -37,7 +37,6 @@ from nuself.memory.repository import (
 from nuself.memory.source_repository import (
     SourceDocumentNotFound,
 )
-from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
@@ -357,12 +356,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = PersonaPromptRepository(
-            collection=get_default_backend(project_root).collection(
-                "persona_prompts"
-            ),
-            project_root=project_root,
-        )
+        repo = compose_cli_application(project_root).persona_prompts
         if command in {"", "list"}:
             prompts = repo.list()
             if not prompts:

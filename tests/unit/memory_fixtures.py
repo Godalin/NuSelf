@@ -13,6 +13,7 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
+from nuself.memory.curator_plan import MemoryCuratorPlanStore
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import StorageBackend, get_default_backend
@@ -43,6 +44,20 @@ def memory_entry_repository(
         backend=selected_backend,
         registry=registry,
         relation_registry=relation_registry,
+    )
+
+
+def memory_curator_plan_store(
+    root_or_paths: Path | RuntimePaths,
+    *,
+    backend: StorageBackend | None = None,
+    registry: MemoryTypeRegistry | None = None,
+) -> MemoryCuratorPlanStore:
+    paths, selected_backend = _resources(root_or_paths, backend)
+    return MemoryCuratorPlanStore(
+        paths,
+        selected_backend,
+        registry=registry,
     )
 
 

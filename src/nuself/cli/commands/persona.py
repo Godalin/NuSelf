@@ -11,6 +11,7 @@ from nuself.cli.commands.output import (
     resolve_handle,
     resolve_handle_selection,
 )
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.config import runtime_paths
@@ -21,7 +22,6 @@ from nuself.persona.definition import (
 )
 from nuself.persona.prompt_repo import (
     PersonaPrompt,
-    PersonaPromptRepository,
     create_persona_prompt,
 )
 from nuself.persona.audit import run_persona_observed
@@ -35,12 +35,7 @@ _theme = TerminalTheme()
 def _prompts_for_list(
     project_root: Path | None,
 ) -> tuple[PersonaPrompt, ...]:
-    return PersonaPromptRepository(
-        collection=get_default_backend(project_root).collection(
-            "persona_prompts"
-        ),
-        project_root=project_root,
-    ).list()
+    return compose_cli_application(project_root).persona_prompts.list()
 
 
 def resolve_persona_id(args: argparse.Namespace) -> str | None:
@@ -131,15 +126,8 @@ def handle_persona_list(args: argparse.Namespace) -> int:
 
 
 def handle_persona_create(args: argparse.Namespace) -> int:
-    repository = PersonaPromptRepository(
-        collection=get_default_backend(args.project_root).collection(
-            "persona_prompts"
-        ),
-        project_root=args.project_root,
-    )
-    persona = create_persona_prompt(
-        args.name, args.prompt, project_root=args.project_root
-    )
+    repository = compose_cli_application(args.project_root).persona_prompts
+    persona = create_persona_prompt(args.name, args.prompt)
     existing = repository.get_by_name(args.name)
     if existing is not None:
         persona = PersonaPrompt(
@@ -163,12 +151,7 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 
 
 def handle_persona_show(args: argparse.Namespace) -> int:
-    repository = PersonaPromptRepository(
-        collection=get_default_backend(args.project_root).collection(
-            "persona_prompts"
-        ),
-        project_root=args.project_root,
-    )
+    repository = compose_cli_application(args.project_root).persona_prompts
     prompt_id = resolve_persona_id(args)
     if prompt_id is None:
         return 1
@@ -184,12 +167,7 @@ def handle_persona_show(args: argparse.Namespace) -> int:
 
 
 def handle_persona_delete(args: argparse.Namespace) -> int:
-    repository = PersonaPromptRepository(
-        collection=get_default_backend(args.project_root).collection(
-            "persona_prompts"
-        ),
-        project_root=args.project_root,
-    )
+    repository = compose_cli_application(args.project_root).persona_prompts
     prompt_ids = resolve_persona_ids(args)
     if prompt_ids is None:
         return 1
@@ -228,12 +206,7 @@ def handle_persona_delete(args: argparse.Namespace) -> int:
 def _set_enabled(
     args: argparse.Namespace, *, enabled: bool
 ) -> int:
-    repository = PersonaPromptRepository(
-        collection=get_default_backend(args.project_root).collection(
-            "persona_prompts"
-        ),
-        project_root=args.project_root,
-    )
+    repository = compose_cli_application(args.project_root).persona_prompts
     prompt_id = resolve_persona_id(args)
     if prompt_id is None:
         return 1

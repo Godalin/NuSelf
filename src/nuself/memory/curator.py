@@ -236,7 +236,8 @@ class MemoryCurator:
         )
         self._registry = registry or default_memory_type_registry()
         self._plan_store = plan_store or MemoryCuratorPlanStore(
-            paths.project_root,
+            paths,
+            self._backend,
             registry=self._registry,
         )
         self._trace_recorder = trace_recorder

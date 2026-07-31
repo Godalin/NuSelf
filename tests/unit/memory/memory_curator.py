@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from memory_fixtures import (
     memory_candidate_repository,
+    memory_curator_plan_store,
     memory_entry_repository,
     source_repository,
 )
@@ -34,7 +35,6 @@ from nuself.memory.curator import (
     MemoryCuratorSettings,
     _actions_from_output,  # pyright: ignore[reportPrivateUsage]
 )
-from nuself.memory.curator_plan import MemoryCuratorPlanStore
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -399,7 +399,7 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
         '"reason":"explicit commit-order requirement"}]}'
     )
 
-    plan_store = MemoryCuratorPlanStore(tmp_path)
+    plan_store = memory_curator_plan_store(tmp_path)
 
     def fail_plan_write(
         _key: str,
@@ -627,7 +627,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
-    with MemoryCuratorPlanStore(tmp_path).exclusive("default"):
+    with memory_curator_plan_store(tmp_path).exclusive("default"):
         result = curator.run_once()
 
     assert result.processed_messages == 0

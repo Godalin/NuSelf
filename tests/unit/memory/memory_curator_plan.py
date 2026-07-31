@@ -15,8 +15,8 @@ from nuself.memory.curator_plan import (
     MemoryCuratorPlanLock,
     MemoryCuratorPlanLockCleanupError,
     MemoryCuratorPlanLockContended,
-    MemoryCuratorPlanStore,
 )
+from memory_fixtures import memory_curator_plan_store
 
 
 def _plan(thread_id: str = "default") -> MemoryCuratorPlan:
@@ -42,7 +42,7 @@ def _hold_curator_lock(
     ready: Event,
     release: Event,
 ) -> None:
-    store = MemoryCuratorPlanStore(Path(project_root))
+    store = memory_curator_plan_store(Path(project_root))
     with store.exclusive(thread_id):
         ready.set()
         if not release.wait(timeout=10):
@@ -52,7 +52,7 @@ def _hold_curator_lock(
 def test_plan_lock_excludes_other_process_and_retains_plan(
     tmp_path: Path,
 ) -> None:
-    store = MemoryCuratorPlanStore(tmp_path)
+    store = memory_curator_plan_store(tmp_path)
     plan = store.save(_plan())
     context: SpawnContext = multiprocessing.get_context("spawn")
     ready = context.Event()
@@ -82,7 +82,7 @@ def test_plan_lock_excludes_other_process_and_retains_plan(
 def test_plan_locks_are_per_thread_and_stable_after_exception(
     tmp_path: Path,
 ) -> None:
-    store = MemoryCuratorPlanStore(tmp_path)
+    store = memory_curator_plan_store(tmp_path)
     default_lock = store.exclusive("default")
     other_lock = store.exclusive("other")
 

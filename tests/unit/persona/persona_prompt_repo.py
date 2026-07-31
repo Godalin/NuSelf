@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
+from nuself.config import runtime_paths
 from nuself.persona.prompt_repo import PersonaPromptRepository, create_persona_prompt
 from nuself.storage import (
     _create_sqlite_backend,
@@ -20,7 +21,7 @@ def _durable_repo(tmp_path: Path) -> PersonaPromptRepository:
     backend = open_sqlite_backend(db_path=tmp_path / "nuself.sqlite")
     return PersonaPromptRepository(
         backend.collection("persona_prompts"),
-        project_root=tmp_path,
+        runtime_paths(tmp_path),
     )
 
 
@@ -31,7 +32,7 @@ def _workspace_repo(tmp_path: Path) -> PersonaPromptRepository:
     workspace = ScopedWorkspace(store, ("reason-1",))
     return PersonaPromptRepository(
         WorkspaceCollection(workspace, namespace="persona_prompts"),
-        project_root=tmp_path,
+        runtime_paths(tmp_path),
     )
 
 
@@ -101,7 +102,7 @@ def test_workspace_persona_collection_is_isolated_from_other_scratch(
     workspace.put("note-1", {"text": "private note"}, sub="notes")
     repo = PersonaPromptRepository(
         WorkspaceCollection(workspace, namespace="persona_prompts"),
-        project_root=tmp_path,
+        runtime_paths(tmp_path),
     )
 
     assert repo.list() == ()
