@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
@@ -34,8 +33,7 @@ from nuself.persona.audit import write_persona_audit
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import StorageBackend, StorageCollection, get_default_backend
-from nuself.trace.repository import TraceRepository
+from nuself.storage import StorageCollection
 from nuself.trace.service import TraceRecorder
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
@@ -145,38 +143,26 @@ class ReflectionScheduler:
 
     def __init__(
         self,
-        project_root: Path | None = None,
-        config: ReflectionSettings | None = None,
+        project_root: Path,
+        config: ReflectionSettings,
         *,
-        backend: StorageBackend | None = None,
-        repository: ReflectionRepository | None = None,
-        outbox: NotificationOutbox | None = None,
-        trace_recorder: TraceRecorder | None = None,
+        schedule_collection: StorageCollection,
+        repository: ReflectionRepository,
+        outbox: NotificationOutbox,
+        trace_recorder: TraceRecorder,
+        candidate_generator: IdeaCandidateGenerator,
+        relevance_gate: LLMRelevanceGate,
+        organizer: ReflectionOrganizer,
     ) -> None:
-        paths = runtime_paths(project_root)
-        self._project_root = paths.project_root
-        selected_backend = backend or get_default_backend(project_root)
-
-        if config is not None:
-            self._config = config
-        else:
-            system_config = ConfigSystem.load(project_root=project_root)
-            self._config = system_config.reflection
-
-        self._schedule_collection = selected_backend.collection(
-            "scheduler_state"
-        )
-        self._reflection_repo = repository or ReflectionRepository(
-            paths,
-            backend=selected_backend,
-        )
-        self._outbox = outbox or NotificationOutbox(
-            paths,
-            selected_backend,
-        )
-        self._trace_recorder = trace_recorder or TraceRecorder(
-            TraceRepository(paths, backend=selected_backend)
-        )
+        self._project_root = project_root
+        self._config = config
+        self._schedule_collection = schedule_collection
+        self._reflection_repo = repository
+        self._outbox = outbox
+        self._trace_recorder = trace_recorder
+        self._candidate_generator = candidate_generator
+        self._relevance_gate = relevance_gate
+        self._organizer = organizer
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
         if now is None:
@@ -207,13 +193,12 @@ class ReflectionScheduler:
 
         self._organize_pending_reflections()
 
-        candidates = IdeaCandidateGenerator(self._project_root, config=self._config).generate()
+        candidates = self._candidate_generator.generate()
         if not candidates:
             return False
         
-        gate = LLMRelevanceGate(self._project_root, config=self._config)
         best = candidates[0]
-        score = gate.score(best)
+        score = self._relevance_gate.score(best)
         if not score.passes:
             write_reflection_audit(
                 "cycle_filtered",
@@ -306,7 +291,7 @@ class ReflectionScheduler:
     def _organize_pending_reflections(self) -> None:
 
         try:
-            ReflectionOrganizer(self._project_root, repository=self._reflection_repo).organize_pending()
+            self._organizer.organize_pending()
         except Exception as exc:
             report_reflection_failure(
                 exc,
@@ -493,30 +478,23 @@ class LLMRelevanceGate:
 
     def __init__(
         self,
-        project_root: Path | None = None,
-        config: ReflectionSettings | None = None,
+        project_root: Path,
+        config: ReflectionSettings,
         agent: StructuredAgent[RelevanceScoreOutput] | None = None,
+        *,
+        schedule_collection: StorageCollection,
+        repository: ReflectionRepository,
     ) -> None:
-        paths = runtime_paths(project_root)
-        self._project_root = paths.project_root
-        backend = get_default_backend(project_root)
-        self._schedule_collection = backend.collection("scheduler_state")
-
-        if config is not None:
-            self._config = config
-        else:
-            system_config = ConfigSystem.load(project_root=project_root)
-            self._config = system_config.reflection
+        self._project_root = project_root
+        self._schedule_collection = schedule_collection
+        self._config = config
 
         self._agent = agent or default_structured_agent(
             RelevanceScoreOutput,
             project_root=self._project_root,
             component="reflection",
         )
-        self._reflection_repo = ReflectionRepository(
-            paths,
-            backend=backend,
-        )
+        self._reflection_repo = repository
 
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
         cooldown_ok = self._cooldown_ok()
@@ -661,45 +639,25 @@ class IdeaCandidateGenerator:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         *,
         agent: StructuredAgent[CandidateListOutput] | None = None,
-        config: ReflectionSettings | None = None,
+        config: ReflectionSettings,
+        memory_repository: MemoryEntryRepository,
+        source_repository: SourceRepository,
+        profile_repository: ProfileItemRepository,
     ) -> None:
-        paths = runtime_paths(project_root)
-        self._project_root = paths.project_root
-        backend = get_default_backend(self._project_root)
-        self._memory_repository = MemoryEntryRepository(
-            paths,
-            backend=backend,
-        )
-        self._profile_repository = ProfileItemRepository(
-            paths,
-            backend=backend,
-        )
-        candidate_repository = MemoryCandidateRepository(
-            paths,
-            backend=backend,
-            entry_repository=self._memory_repository,
-            profile_repository=self._profile_repository,
-        )
-        self._source_repository = SourceRepository(
-            paths,
-            backend=backend,
-            candidate_repository=candidate_repository,
-            profile_repository=self._profile_repository,
-        )
+        self._project_root = project_root
+        self._memory_repository = memory_repository
+        self._profile_repository = profile_repository
+        self._source_repository = source_repository
         self._agent = agent or default_structured_agent(
             CandidateListOutput,
             project_root=self._project_root,
             component="reflection",
         )
 
-        if config is not None:
-            self._config_obj = config
-        else:
-            system_config = ConfigSystem.load(project_root=self._project_root)
-            self._config_obj = system_config.reflection
+        self._config_obj = config
 
         # Load language preference for user-facing output
         system_config = ConfigSystem.load(project_root=self._project_root)

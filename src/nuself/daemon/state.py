@@ -11,6 +11,7 @@ from nuself.application.runtime import (
     current_application_runtime,
     open_application_runtime,
 )
+from nuself.application.reflection import compose_reflection_scheduler
 from nuself.config import ConfigSystem
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
@@ -106,12 +107,16 @@ class DaemonState:
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
         )
-        self.reflection_scheduler = ReflectionScheduler(
-            project_root,
-            backend=self.application.backend,
+        self.reflection_scheduler = compose_reflection_scheduler(
+            paths,
+            self.application.backend,
+            config=config.reflection,
             repository=self.application.reflection,
             outbox=self.application.notifications,
             trace_recorder=self.application.trace.recorder,
+            memory_repository=self.application.memory.entries,
+            source_repository=self.application.memory.sources,
+            profile_repository=self.application.memory.profile,
         )
         self.reflection_check_interval_seconds: float = (
             config.daemon.reflection_scheduler.check_interval_seconds

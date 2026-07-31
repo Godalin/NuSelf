@@ -130,6 +130,12 @@ same rule: process composition supplies their backend, repositories, outbox,
 plans, and trace recorder from the existing graph. A worker must not select a
 second authority after those collaborators have been supplied.
 
+Reflection scheduling is orchestration, not a composition root. Candidate
+generation, relevance evaluation, organization, schedule-state storage, and
+publication dependencies are constructed outside the scheduler and injected.
+Those collaborators may depend on reflection-owned repository interfaces, but
+must not rediscover storage after explicit resources are provided.
+
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.

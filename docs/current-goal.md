@@ -18,23 +18,23 @@ Current working branch for v0.3.1.
 1. Define and enforce package dependency rules. Complete: AST gates now reject
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
-   Complete: CLI and daemon entrypoints borrow one lazy `ApplicationRuntime`
-   and close it once at their outer lifecycle boundary.
+   In progress: CLI and daemon entrypoints borrow one lazy
+   `ApplicationRuntime` and close it once, but direct chat and several worker
+   services still rebuild collaborators from a project root.
 3. Remove hidden backend/path resolution from domain repositories. Complete:
    trace, profile, reason, reflection, memory, source, notification, persona
    prompt, and curator-plan persistence require explicit authority resources
    and application-owned composition.
-4. Extract narrow cross-domain ports and shared contracts. Complete: profile
-   consumers and reflection promotion depend on narrow capability protocols;
-   shared jobs, events, handlers, storage, and model agents retain their
-   existing neutral contracts.
+4. Extract narrow cross-domain ports and shared contracts. In progress:
+   profile consumers and reflection promotion use narrow capabilities; the
+   remaining service constructors and scheduler collaborators are under audit.
 5. Remove agent/domain dependencies on CLI/TUI presentation. Complete: the
    dependency scan is clean and executable AST gates cover both domains and
    agent adapters.
 6. Split oversized cross-cutting modules along their actual ownership.
-   Complete: the audit identified notification persistence/delivery as the
-   remaining mixed lifecycle owner, and delivery orchestration now has its own
-   module while public package imports remain stable.
+   In progress: notification delivery has been separated from persistence;
+   reflection scheduling still mixes policy models, candidate generation,
+   relevance evaluation, persistence, and orchestration in one module.
 7. Run complete gates and close the goal with dependency evidence.
 
 ## Out Of Scope

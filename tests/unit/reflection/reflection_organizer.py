@@ -52,7 +52,10 @@ def test_reflection_organizer_merges_similar_pending_entries(tmp_path: Path) -> 
         )
     )
 
-    result = ReflectionOrganizer(tmp_path).organize_pending()
+    result = ReflectionOrganizer(
+        tmp_path,
+        repository=repo,
+    ).organize_pending()
 
     assert result.merged_groups == 1
     assert result.archived_entries == 1
@@ -87,7 +90,10 @@ def test_reflection_organizer_leaves_distinct_entries_pending(tmp_path: Path) ->
         )
     )
 
-    result = ReflectionOrganizer(tmp_path).organize_pending()
+    result = ReflectionOrganizer(
+        tmp_path,
+        repository=repo,
+    ).organize_pending()
 
     assert result.merged_groups == 0
     assert result.archived_entries == 0

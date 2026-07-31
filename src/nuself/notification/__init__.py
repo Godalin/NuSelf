@@ -597,6 +597,6 @@ def validate_adapter_ids(adapter_ids: tuple[str, ...]) -> None:
 
 
 from nuself.notification.delivery import (  # noqa: E402
-    NotificationDeliveryLoop,
-    deliver_entry_once,
+    NotificationDeliveryLoop as NotificationDeliveryLoop,
+    deliver_entry_once as deliver_entry_once,
 )

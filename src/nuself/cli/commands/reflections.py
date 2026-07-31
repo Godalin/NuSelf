@@ -127,7 +127,10 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_organize(args: argparse.Namespace) -> int:
-    result = ReflectionOrganizer(args.project_root).organize_pending()
+    result = ReflectionOrganizer(
+        args.project_root,
+        repository=_repository(args),
+    ).organize_pending()
     print(
         "Organized reflections: "
         f"merged_groups={result.merged_groups} "
