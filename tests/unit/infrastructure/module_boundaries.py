@@ -108,3 +108,18 @@ def test_migrated_profile_package_does_not_resolve_authority() -> None:
                 )
 
     assert violations == []
+
+
+def test_migrated_reason_repository_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "reason" / "repository.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []

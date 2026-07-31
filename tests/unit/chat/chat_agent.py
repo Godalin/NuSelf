@@ -1392,7 +1392,7 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
         _should_not_compose,
     )
 
-    service = ReasonService(repository=ReasonRepository(tmp_path), project_root=tmp_path, prompt_generator=lambda *args, **kwargs: "Test-generated reasoning prompt.")
+    service = ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *args, **kwargs: "Test-generated reasoning prompt.")
     thread = service.start_thread("Queued export")
     service.advance_thread(
         thread.id,

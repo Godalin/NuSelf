@@ -8,12 +8,12 @@ from contextlib import contextmanager
 from typing import Generator
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.derived import write_derived_index
 from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 REASON_STORAGE_VERSION = "NuSelfReasonStore/v1"
 
@@ -25,24 +25,18 @@ class ReasonRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
     ) -> None:
-        self._project_root = project_root
-        effective = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._backend = effective
-        self._threads = effective.collection("reason_threads")
-        self._steps = effective.collection("reason_steps")
-        self._paths = runtime_paths(project_root)
+        self._backend = backend
+        self._threads = backend.collection("reason_threads")
+        self._steps = backend.collection("reason_steps")
+        self._paths = paths
 
     @property
     def project_root(self) -> Path | None:
-        return self._project_root
+        return self._paths.project_root
 
     @contextmanager
     def batch_write(self) -> Generator[None]:

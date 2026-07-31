@@ -13,6 +13,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
+from nuself.application.reason import compose_reason_repository
 from nuself.agent.chat.audit import run_chat_observed
 from nuself.agent.chat import ThreadStore
 from nuself.cli.repl.registry import (
@@ -22,6 +23,7 @@ from nuself.cli.repl.registry import (
 )
 from nuself.config import ensure_runtime_dirs, runtime_paths
 from nuself.reason.audit import run_reason_observed
+from nuself.storage import get_default_backend
 
 
 class DedupFileHistory(FileHistory):
@@ -123,9 +125,10 @@ class InteractiveCompleter(Completer):
 
     def _all_thread_ids_with_status(self) -> list[str]:
         def load() -> list[str]:
-            from nuself.reason.repository import ReasonRepository
-
-            repo = ReasonRepository(self._project_root)
+            repo = compose_reason_repository(
+                runtime_paths(self._project_root),
+                get_default_backend(self._project_root),
+            )
             return [f"{t.id} ({t.status}, {t.topic[:40]})" for t in repo.list_threads(status="all")]
 
         return (

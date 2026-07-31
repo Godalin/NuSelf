@@ -19,8 +19,8 @@ Current working branch for v0.3.1.
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
 3. Remove hidden backend/path resolution from domain repositories. In
-   progress: the trace repository and services now require explicit storage
-   composition.
+   progress: trace, profile, and reason persistence now require explicit
+   authority resources and application-owned composition.
 4. Extract narrow cross-domain ports and shared contracts.
 5. Remove agent/domain dependencies on CLI/TUI presentation.
 6. Split oversized cross-cutting modules along their actual ownership.
@@ -50,8 +50,13 @@ In progress:
 - profile persistence and aggregation now receive explicit resources and are
   assembled by the application layer; their domain package has the same
   authority-resolution gate as trace;
+- reason persistence now receives explicit paths and storage and has its own
+  application-owned constructor plus an authority-resolution regression gate;
+  cold application and CLI imports pass after removing the resulting
+  reason-to-application cycle;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
   600 tests after moving trace composition into the application layer; the
-  profile integration slice passed 756 tests; Pyright reported 0 errors and
-  0 warnings.
+  profile integration slice passed 756 tests; the reason integration slice
+  passed 966 tests including subprocess cold starts; Pyright reported 0 errors
+  and 0 warnings.

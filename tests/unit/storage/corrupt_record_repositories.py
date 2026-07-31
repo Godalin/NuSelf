@@ -39,7 +39,10 @@ def test_repository_lists_report_corrupt_records(
             project_root=tmp_path,
         ).list()
     elif collection == "reason_threads":
-        result = ReasonRepository(tmp_path, backend=backend).list_threads()
+        result = ReasonRepository(
+            runtime_paths(tmp_path),
+            backend=backend,
+        ).list_threads()
     elif collection == "reflection_entries":
         result = ReflectionRepository(tmp_path, backend=backend).list()
     elif collection == "notification_outbox":

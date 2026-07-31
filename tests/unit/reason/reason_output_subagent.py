@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.reason.domain import ReasoningStep
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.output import ReasonOutputPaths
@@ -14,10 +15,11 @@ from nuself.reason.output import ReasonOutputManifest
 from nuself.reason.output import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
+from nuself.storage import get_default_backend
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:
-    return ReasonService(repository=ReasonRepository(tmp_path), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
+    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
 
 
 def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

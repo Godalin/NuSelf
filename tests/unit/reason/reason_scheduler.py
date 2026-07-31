@@ -8,13 +8,14 @@ from typing import Any, cast
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.logs import read_log_events
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.scheduler import ReasonScheduler
 from nuself.reason.service import ReasonService
-from nuself.storage import auto_backend
+from nuself.storage import auto_backend, get_default_backend
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -29,14 +30,14 @@ def test_run_once_no_active_threads_does_nothing(tmp_path: Path) -> None:
     scheduler = ReasonScheduler(
         project_root=tmp_path,
         advancer=_null_advancer(),
-        service=_reason_service(repository=ReasonRepository(tmp_path)),
+        service=_reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))),
         interval_seconds=600,
     )
     scheduler.run_once()
 
 
 def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("Test")
     cooldown_end = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     cooled = ReasoningThread(
@@ -56,7 +57,7 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
         next_steps_data=thread.next_steps_data,
         mandates_data=thread.mandates_data,
     )
-    repo = ReasonRepository(tmp_path)
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     repo.save_thread(cooled)
 
     scheduler = ReasonScheduler(
@@ -76,7 +77,10 @@ def test_run_once_never_advances_corrupt_cooldown_record(
     wire = thread.to_wire()
     wire["skip_next_advance_until"] = "not-a-time"
     backend.collection("reason_threads").put(thread.id, wire)
-    repository = ReasonRepository(tmp_path, backend=backend)
+    repository = ReasonRepository(
+        runtime_paths(tmp_path),
+        backend=backend,
+    )
     service = _reason_service(
         project_root=tmp_path,
         repository=repository,
@@ -124,7 +128,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
         "nuself.reason.scheduler.write_reason_audit",
         drop_audit,
     )
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("Test advance")
 
     called = False
@@ -155,7 +159,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
 
 
 def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("Test cooldown")
 
     class Advancer:
@@ -182,7 +186,7 @@ def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
 
 
 def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("Test failure")
 
     class FailingAdvancer:
@@ -215,7 +219,7 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("Test failure")
 
     class FailingAdvancer:

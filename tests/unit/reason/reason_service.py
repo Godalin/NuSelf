@@ -220,7 +220,7 @@ def test_reason_prompt_output_is_exact(
 
 
 def test_start_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("What should I do?")
     assert thread.topic == "What should I do?"
     assert thread.status == "active"
@@ -265,7 +265,7 @@ def test_start_thread_uses_main_authority_without_workspace_directory(
 
 
 def test_start_and_list(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     service.start_thread("Question 1")
     service.start_thread("Question 2")
     threads = service.list_threads()
@@ -273,7 +273,7 @@ def test_start_and_list(tmp_path: Path) -> None:
 
 
 def test_start_with_evidence(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("Test", evidence_refs=("ref-1", "ref-2"))
     assert thread.evidence_refs == ("ref-1", "ref-2")
 
@@ -293,7 +293,7 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
-    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(tmp_path))
+    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
 
     thread = service.start_thread("Injected repository should still trace")
 
@@ -349,14 +349,14 @@ def test_start_projections_cannot_replace_persisted_thread(
 
 
 def test_show_thread_by_id(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     created = service.start_thread("Show me")
     shown = service.show_thread(created.id)
     assert shown.id == created.id
 
 
 def test_pause_and_resume_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     t = service.start_thread("Test")
     paused = service.pause_thread(t.id)
     assert paused.status == "paused"
@@ -394,21 +394,21 @@ def test_transition_audit_failure_cannot_replace_persisted_status(
 
 
 def test_resolve_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     t = service.start_thread("Test")
     resolved = service.resolve_thread(t.id)
     assert resolved.status == "resolved"
 
 
 def test_archive_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     t = service.start_thread("Test")
     archived = service.archive_thread(t.id)
     assert archived.status == "archived"
 
 
 def test_invalid_transition_raises(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     t = service.start_thread("Test")
     service.resolve_thread(t.id)
     with pytest.raises(ReasonTransitionError):
@@ -416,7 +416,7 @@ def test_invalid_transition_raises(tmp_path: Path) -> None:
 
 
 def test_advance_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     t = service.start_thread("Test advance")
     step = _test_step(t.id)
     advanced = service.advance_thread(t.id, step=step)
@@ -586,7 +586,7 @@ def test_delete_failure_does_not_emit_success_audit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repository = ReasonRepository(tmp_path)
+    repository = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     service = _reason_service(
         project_root=tmp_path,
         repository=repository,
@@ -630,7 +630,7 @@ def test_reason_step_rejects_non_object_tool_logs() -> None:
 
 
 def test_advance_without_advancer_or_step_raises(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     thread = service.start_thread("No fallback advance")
 
     with pytest.raises(
@@ -645,7 +645,7 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
         def advance(self, thread: object) -> None:
             return None
 
-    service = _reason_service(repository=ReasonRepository(tmp_path), advancer=EmptyAdvancer())
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), advancer=EmptyAdvancer())
     thread = service.start_thread("No fake steps")
 
     with pytest.raises(
@@ -656,7 +656,7 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(tmp_path))
+    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     t = service.start_thread("Test")
     service.pause_thread(t.id)
     with pytest.raises(ReasonAdvanceError):

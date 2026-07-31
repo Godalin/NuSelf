@@ -6,8 +6,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
 
-from nuself.clock import utc_now_iso
 from nuself.application import compose_trace_services
+from nuself.clock import utc_now_iso
 from nuself.config import runtime_paths
 from nuself.reason.audit import run_reason_observed, write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
@@ -77,7 +77,10 @@ class ReasonService:
         advancer: ReasonAdvancerProtocol | None = None,
         prompt_generator: Callable[..., str] | None = None,
     ) -> None:
-        self._repository = repository or ReasonRepository(project_root)
+        self._repository = repository or ReasonRepository(
+            runtime_paths(project_root),
+            backend=get_default_backend(project_root),
+        )
         repo_root = self._repository.project_root
         effective_root = repo_root if repo_root is not None else runtime_paths(project_root).project_root
         self._project_root = effective_root

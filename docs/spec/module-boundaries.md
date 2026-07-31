@@ -77,6 +77,14 @@ paths and storage, profile aggregation receives a repository, and the
 application layer owns concrete profile construction. Neither domain may
 recover authority resources from a project root.
 
+`ReasonRepository` likewise receives resolved paths and storage, and the
+application layer owns its concrete factory. Existing reason workflow
+constructors remain migration scope and may still resolve authority while the
+service graph is centralized, but the repository itself must never recover
+authority. Reason domain modules must not import the application package:
+doing so creates an application→reason→application cycle during cold process
+startup.
+
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.

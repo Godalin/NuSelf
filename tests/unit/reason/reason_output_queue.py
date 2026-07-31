@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.logs import read_log_events
+from nuself.storage import get_default_backend
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output import (
     ReasonOutputManifest,
@@ -23,7 +25,7 @@ from nuself.runtime.jobs import JobMessage
 
 def _reason_service(tmp_path: Path) -> ReasonService:
     return ReasonService(
-        repository=ReasonRepository(tmp_path),
+        repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)),
         project_root=tmp_path,
         prompt_generator=lambda *a, **k: "P",
     )
