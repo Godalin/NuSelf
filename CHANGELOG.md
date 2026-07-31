@@ -24,7 +24,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   same graph and likewise receive explicit authority resources. Persona prompts
   and memory curator recovery plans complete the persistence migration: both
   now receive graph-owned authority resources instead of resolving defaults
-  inside their repositories.
+  inside their repositories. Memory persistence and query components now
+  depend on a narrow profile capability contract instead of the concrete
+  profile storage adapter.
 - Schema v4 replaces per-collection dynamic-column tables with one compact
   strict-JSON `records` table and makes namespaced workspace state part of the
   main authority. Its v3↔v4 migration is reversible. Reason exports now live

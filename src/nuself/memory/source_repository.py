@@ -15,7 +15,7 @@ from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
 from nuself.memory.repository import MemoryCandidateRepository
-from nuself.profile.repository import ProfileItemRepository
+from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 
@@ -55,7 +55,7 @@ class SourceRepository:
         *,
         backend: StorageBackend,
         candidate_repository: MemoryCandidateRepository,
-        profile_repository: ProfileItemRepository,
+        profile_repository: ProfileRepositoryPort,
     ) -> None:
         self._documents = backend.collection("source_documents")
         self._chunks = backend.collection("source_chunks")

@@ -133,6 +133,11 @@ Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.
 
+Profile consumers use the stable `ProfileRepositoryPort` contract rather than
+the concrete storage adapter. The contract exposes only list/search and the
+mutations required by memory candidate workflows; authority paths, collections,
+reindexing, and storage implementation remain private to profile composition.
+
 ## Shared Infrastructure Extraction
 
 Code becomes shared infrastructure only when all of these are true:

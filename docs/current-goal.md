@@ -24,7 +24,9 @@ Current working branch for v0.3.1.
    trace, profile, reason, reflection, memory, source, notification, persona
    prompt, and curator-plan persistence require explicit authority resources
    and application-owned composition.
-4. Extract narrow cross-domain ports and shared contracts.
+4. Extract narrow cross-domain ports and shared contracts. In progress:
+   memory persistence and query services now depend on the stable
+   `ProfileRepositoryPort` rather than the concrete profile adapter.
 5. Remove agent/domain dependencies on CLI/TUI presentation.
 6. Split oversized cross-cutting modules along their actual ownership.
 7. Run complete gates and close the goal with dependency evidence.
@@ -75,6 +77,10 @@ In progress:
 - persona prompts and memory curator recovery plans are now graph-owned
   persistence; their repositories receive explicit paths/backend or collection
   resources, and boundary gates cover the complete migrated persistence set;
+- the first shared cross-domain contract, `ProfileRepositoryPort`, limits
+  memory consumers to profile list/search and required candidate mutations;
+  an AST gate prevents core memory persistence from importing the concrete
+  profile adapter;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
   600 tests after moving trace composition into the application layer; the
@@ -90,3 +96,4 @@ In progress:
   complete 2467-test suite; Pyright again reported 0 errors and 0 warnings.
   The shared CLI/daemon runtime integration slice passed 533 tests, and its
   focused lifecycle slice passed 27 tests.
+  The profile-port memory slice passed 232 tests with Pyright clean.

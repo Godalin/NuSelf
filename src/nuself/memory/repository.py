@@ -23,7 +23,7 @@ from nuself.domain.memory import (
     merge_relations,
 )
 from nuself.domain.profile import ProfileItem
-from nuself.profile.repository import ProfileItemRepository
+from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record
 from nuself.runtime import freeze_json_value
 from nuself.storage import StorageBackend
@@ -454,7 +454,7 @@ class MemoryCandidateRepository:
         *,
         backend: StorageBackend,
         entry_repository: MemoryEntryRepository,
-        profile_repository: ProfileItemRepository,
+        profile_repository: ProfileRepositoryPort,
     ) -> None:
         self._backend = backend
         self._col = backend.collection("memory_candidates")

@@ -17,6 +17,7 @@ from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, 
 from nuself.memory.audit import write_optimizer_audit
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
+from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import get_default_backend
 
@@ -110,7 +111,7 @@ class MemoryOptimizer:
         settings: MemoryOptimizerSettings | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
-        profile_repository: ProfileItemRepository | None = None,
+        profile_repository: ProfileRepositoryPort | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         paths = runtime_paths(project_root)

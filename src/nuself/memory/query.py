@@ -10,7 +10,7 @@ from nuself.domain.memory import MemoryEntry, MemoryTypeRegistry, RelationDescri
 from nuself.domain.profile import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository, SymbolicGraphEdge, SymbolicGraphNode
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
-from nuself.profile.repository import ProfileItemRepository
+from nuself.profile.contracts import ProfileRepositoryPort
 
 DEFAULT_MEMORY_LIMIT = 8
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -63,7 +63,7 @@ class MemoryQueryService:
         self,
         repository: MemoryEntryRepository,
         source_repository: SourceRepository | None = None,
-        profile_repository: ProfileItemRepository | None = None,
+        profile_repository: ProfileRepositoryPort | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:

@@ -45,6 +45,7 @@ from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryEntryRepository,
 )
+from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import report_corrupt_record
@@ -202,7 +203,7 @@ class MemoryCurator:
         thread_store: ThreadStore | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
-        profile_repository: ProfileItemRepository | None = None,
+        profile_repository: ProfileRepositoryPort | None = None,
         registry: MemoryTypeRegistry | None = None,
         trace_recorder: TraceRecorder | None = None,
         plan_store: MemoryCuratorPlanStore | None = None,

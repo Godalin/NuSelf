@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.config import runtime_paths
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
+from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import get_default_backend
 
@@ -51,7 +52,7 @@ class MemoryIntakeAgent:
         project_root: Path | None = None,
         *,
         agent: StructuredAgent[IntakeResultOutput] | None = None,
-        profile_repository: ProfileItemRepository | None = None,
+        profile_repository: ProfileRepositoryPort | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._profile_repository = (

@@ -219,3 +219,18 @@ def test_remaining_persistence_stores_do_not_resolve_authority() -> None:
 
 def test_memory_domain_does_not_import_application_composition() -> None:
     assert _violations(("memory",), ("nuself.application",)) == ()
+
+
+def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:
+    paths = (
+        _SOURCE_ROOT / "memory" / "repository.py",
+        _SOURCE_ROOT / "memory" / "source_repository.py",
+        _SOURCE_ROOT / "memory" / "query.py",
+    )
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in paths
+        if "nuself.profile.repository" in _imports(path)
+    ]
+
+    assert violations == []
