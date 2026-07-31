@@ -779,30 +779,19 @@ def test_export_worker_initialization_fails_before_thread_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.daemon import reason_export
-
-    state = DaemonState(tmp_path)
+    from nuself.daemon import state as daemon_state
 
     def fail_store(*args: object, **kwargs: object) -> object:
         raise OSError("workspace unavailable")
 
     monkeypatch.setattr(
-        reason_export,
+        daemon_state,
         "PrivateWorkspaceStore",
         fail_store,
     )
 
     with pytest.raises(OSError, match="workspace unavailable"):
-        state.start_background_export_worker()
-
-    health = next(
-        item
-        for item in state.worker_health()
-        if item.name == "export_worker"
-    )
-    assert health.alive is False
-    assert health.last_success_at is None
-    assert health.last_error is None
+        DaemonState(tmp_path)
 
 
 def test_daemon_worker_join_timeout_is_logged_and_remains_live(

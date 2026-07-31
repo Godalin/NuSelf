@@ -69,7 +69,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   reason scheduling no longer builds an advancer from a project root. Agent
   reason-export tools also receive their reason workspace explicitly instead
   of resolving runtime paths, and the output service no longer constructs a
-  fallback workspace authority.
+  fallback workspace authority. Workspace storage itself now receives resolved
+  runtime paths, and the daemon export worker borrows that store from process
+  composition instead of creating it during startup.
   Notification delivery orchestration is now
   separated from outbox persistence and consumes an injected delivery plan.
   Memory persistence and query components now

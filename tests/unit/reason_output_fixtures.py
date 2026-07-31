@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.config import runtime_paths
 from nuself.reason.output import (
     ReasonOutputService as _ReasonOutputService,
     SectionPlanner,
@@ -30,7 +31,7 @@ class ReasonOutputService(_ReasonOutputService):
             project_root,
             reason_service,
             workspace_store=PrivateWorkspaceStore(
-                project_root,
+                runtime_paths(project_root),
                 scope="reason",
             ),
             job_sink=job_sink,

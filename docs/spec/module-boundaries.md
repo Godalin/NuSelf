@@ -49,6 +49,9 @@ opened once for that authority. Domain repositories receive both the selected
 dependencies; accepting a project root and resolving either dependency inside
 the repository is forbidden. Services receive repositories, clocks, sinks,
 and cross-domain capabilities explicitly.
+Authority-scoped workspace storage follows the same rule: it receives resolved
+`RuntimePaths`. Daemon workers borrow that store from process composition and
+must not create it lazily during worker startup.
 
 `ApplicationRuntime` is the shared authority-lifetime owner. Its public
 factory resolves paths without opening storage; the first graph access selects

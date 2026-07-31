@@ -10,6 +10,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import ValidationError
 
+from nuself.config import runtime_paths
 from nuself.daemon.reason_export import (
     ReasonExportWorker,
     ReasonSectionOutput,
@@ -104,7 +105,10 @@ def _job_paths(
     thread_id: str = "thread_1",
 ) -> tuple[Path, Path]:
     job_root = (
-        PrivateWorkspaceStore(root, scope="reason").paths(thread_id).artifacts
+        PrivateWorkspaceStore(
+            runtime_paths(root),
+            scope="reason",
+        ).paths(thread_id).artifacts
         / "jobs"
         / job_id
     )
@@ -400,6 +404,9 @@ def test_reason_export_worker_composes_with_injected_text_agent(
         shutdown,
         _export_supervisor(tmp_path, shutdown),
         reason_service=ReasonService(tmp_path),
+        workspace_store=PrivateWorkspaceStore(
+            runtime_paths(tmp_path), scope="reason"
+        ),
         text_agent=agent,
     )
     steps = _reason_steps()
@@ -444,6 +451,9 @@ def test_reason_export_worker_propagates_text_agent_failure(
         shutdown,
         _export_supervisor(tmp_path, shutdown),
         reason_service=ReasonService(tmp_path),
+        workspace_store=PrivateWorkspaceStore(
+            runtime_paths(tmp_path), scope="reason"
+        ),
         text_agent=_FailingTextAgent(),
     )
     steps = _reason_steps()
@@ -717,6 +727,9 @@ def test_full_export_admission_recovers_from_durable_manifests_online(
         shutdown,
         _export_supervisor(tmp_path, shutdown),
         reason_service=ReasonService(tmp_path),
+        workspace_store=PrivateWorkspaceStore(
+            runtime_paths(tmp_path), scope="reason"
+        ),
         text_agent=_TextAgent(),
         queue_capacity=1,
     )
@@ -745,7 +758,7 @@ def test_full_export_admission_recovers_from_durable_manifests_online(
         _manifest(job_id="a_first", status="complete").to_wire(),
     )
     worker._queue.complete(first)
-    store = PrivateWorkspaceStore(tmp_path, scope="reason")
+    store = PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
     worker._run_requested_reconciliation(store)
 
     recovered = worker._queue.get_nowait()
@@ -764,6 +777,9 @@ def test_reconciliation_does_not_bypass_live_retry_timer(
         shutdown,
         _export_supervisor(tmp_path, shutdown),
         reason_service=ReasonService(tmp_path),
+        workspace_store=PrivateWorkspaceStore(
+            runtime_paths(tmp_path), scope="reason"
+        ),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -773,7 +789,9 @@ def test_reconciliation_does_not_bypass_live_retry_timer(
         lambda: None,
     )
 
-    worker._reconcile(PrivateWorkspaceStore(tmp_path, scope="reason"))
+    worker._reconcile(
+        PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
+    )
 
     assert worker._queue.empty()
     worker.stop()
@@ -1007,6 +1025,9 @@ def test_retry_callback_failure_requests_delayed_reconciliation(
         shutdown,
         _export_supervisor(tmp_path, shutdown),
         reason_service=ReasonService(tmp_path),
+        workspace_store=PrivateWorkspaceStore(
+            runtime_paths(tmp_path), scope="reason"
+        ),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -1041,7 +1062,7 @@ def test_retry_callback_failure_requests_delayed_reconciliation(
 
     _ManualTimer.instances[1].fire()
     worker._run_requested_reconciliation(
-        PrivateWorkspaceStore(tmp_path, scope="reason")
+        PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
     )
     replayed = worker._queue.get_nowait()
     assert replayed.job_id == "job_1"
@@ -1141,7 +1162,7 @@ def test_reconciliation_diagnostic_failure_does_not_truncate_scan(
     state = DaemonState(tmp_path)
     worker = state.reason_export_worker
     worker.prepare()
-    store = PrivateWorkspaceStore(tmp_path, scope="reason")
+    store = PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
 
     with pytest.warns(RuntimeWarning) as captured:
         worker._reconcile(store)
@@ -1399,6 +1420,9 @@ def test_worker_recovers_state_persistence_failure_online(
         shutdown,
         _export_supervisor(tmp_path, shutdown),
         reason_service=ReasonService(tmp_path),
+        workspace_store=PrivateWorkspaceStore(
+            runtime_paths(tmp_path), scope="reason"
+        ),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -1421,7 +1445,7 @@ def test_worker_recovers_state_persistence_failure_online(
     _ManualTimer.instances[0].fire()
     assert worker._reconciliation_requested.is_set()
     worker._run_requested_reconciliation(
-        PrivateWorkspaceStore(tmp_path, scope="reason")
+        PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
     )
     replayed = worker._queue.get_nowait()
     assert replayed.job_id == "job_1"

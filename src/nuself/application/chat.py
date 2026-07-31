@@ -39,7 +39,7 @@ def compose_conversation_runtime(
         trace_recorder=application.trace.recorder,
         reason_service=compose_reason_service(application),
         reason_workspace_store=PrivateWorkspaceStore(
-            paths.project_root,
+            paths,
             scope="reason",
         ),
         trace_query_service=application.trace.query,

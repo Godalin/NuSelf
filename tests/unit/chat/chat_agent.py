@@ -80,7 +80,7 @@ def _chat_tool(
         persona_tools=(),
         project_root=tmp_path,
         reason_workspace_store=PrivateWorkspaceStore(
-            tmp_path,
+            runtime_paths(tmp_path),
             scope="reason",
         ),
     )

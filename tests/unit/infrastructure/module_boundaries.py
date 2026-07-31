@@ -117,6 +117,29 @@ def test_thread_store_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_workspace_store_and_export_worker_do_not_resolve_authority() -> None:
+    workspace_path = _SOURCE_ROOT / "workspace.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(workspace_path)
+        if imported in forbidden
+    } == set()
+
+    worker_path = _SOURCE_ROOT / "daemon" / "reason_export.py"
+    tree = ast.parse(worker_path.read_text(encoding="utf-8"))
+    assert [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "PrivateWorkspaceStore"
+    ] == []
+
+
 def test_persona_definition_loader_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "persona" / "definition.py"
     forbidden = {

@@ -93,7 +93,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             reason_service=reason_service
             or compose_reason_service(application),
             reason_workspace_store=PrivateWorkspaceStore(
-                project_root,
+                runtime_paths(project_root),
                 scope="reason",
             ),
             trace_query_service=trace_query_service

@@ -32,6 +32,7 @@ from nuself.notification import (
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.runtime.events import EventPublisher
+from nuself.workspace import PrivateWorkspaceStore
 
 
 class DaemonState:
@@ -68,6 +69,10 @@ class DaemonState:
             self.shutdown_requested,
             self._worker_supervisor,
             reason_service=compose_reason_service(self.application),
+            workspace_store=PrivateWorkspaceStore(
+                paths,
+                scope="reason",
+            ),
         )
         self.conversation_runtime = compose_conversation_runtime(
             self.application,

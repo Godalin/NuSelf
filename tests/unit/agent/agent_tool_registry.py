@@ -64,7 +64,7 @@ def test_subsystem_tool_builders_own_their_registries(
             service=ReasonService(tmp_path),
             project_root=tmp_path,
             workspace_store=PrivateWorkspaceStore(
-                tmp_path,
+                runtime_paths(tmp_path),
                 scope="reason",
             ),
         )

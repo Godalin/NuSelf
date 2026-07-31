@@ -44,7 +44,7 @@ class ReasonService(_ReasonService):
             backend=backend,
         )
         selected_workspace = workspace_store or PrivateWorkspaceStore(
-            root,
+            runtime_paths(root),
             scope="reason",
         )
         selected_trace = trace_recorder or compose_trace_services(

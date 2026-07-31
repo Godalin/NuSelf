@@ -41,7 +41,7 @@ def compose_reason_service(
         application.paths.project_root,
         repository=application.reason,
         workspace_store=PrivateWorkspaceStore(
-            application.paths.project_root,
+            application.paths,
             scope="reason",
         ),
         trace_recorder=application.trace.recorder,
@@ -64,7 +64,7 @@ def compose_reason_advancer(
     return default_reason_advancer(
         paths=application.paths,
         workspace_store=PrivateWorkspaceStore(
-            application.paths.project_root,
+            application.paths,
             scope="reason",
         ),
         persona_repository=application.persona_prompts,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 @dataclass(frozen=True)
 class PrivateWorkspacePaths:
     root: Path
@@ -17,10 +17,8 @@ class PrivateWorkspacePaths:
 class PrivateWorkspaceStore:
     """Manage isolated scratch workspaces under one authority."""
 
-    def __init__(self, project_root: Path | None = None, *, scope: str) -> None:
+    def __init__(self, paths: RuntimePaths, *, scope: str) -> None:
         _validate_segment(scope, "workspace scope")
-        paths = runtime_paths(project_root)
-        self._project_root = project_root
         self._scope = scope
         self._root = paths.exports_dir / scope
         self._db_path = paths.authority_root / "nuself.sqlite"

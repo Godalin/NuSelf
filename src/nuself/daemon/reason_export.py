@@ -269,6 +269,7 @@ class ReasonExportWorker:
         supervisor: DaemonWorkerSupervisor,
         *,
         reason_service: ReasonService,
+        workspace_store: PrivateWorkspaceStore,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
         queue_capacity: int = EXPORT_QUEUE_CAPACITY,
@@ -277,6 +278,7 @@ class ReasonExportWorker:
         self._shutdown_requested = shutdown_requested
         self._supervisor = supervisor
         self._reason_service = reason_service
+        self._workspace_store = workspace_store
         self._text_agent = (
             text_agent
             if text_agent is not None
@@ -321,7 +323,7 @@ class ReasonExportWorker:
 
         if self._store is not None or self._service is not None:
             return
-        store = PrivateWorkspaceStore(self._project_root, scope="reason")
+        store = self._workspace_store
         service = ReasonOutputService(
             self._project_root,
             reason_service=self._reason_service,

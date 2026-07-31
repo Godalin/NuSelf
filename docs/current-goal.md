@@ -3,31 +3,50 @@
 NuSelf's short-lived execution board. Completed history belongs in Git and
 `CHANGELOG.md`; deferred work belongs in [`TODOs.md`](TODOs.md).
 
-## Status
-
-Idle.
-
 ## Objective
 
-No active development objective.
+Complete NuSelf's module decoupling and shared-infrastructure extraction so
+the project has explicit dependency direction, centralized composition, and
+stable boundaries for long-term development.
 
-## Completed Goal
+## Active Branch
 
-The v0.3.1 module-decoupling and shared-infrastructure goal is complete.
-Executable architecture tests enforce dependency direction; process surfaces
-share application-owned composition; domain services and repositories receive
-explicit authority resources; and handler, event, job, audit, notification,
-cleanup, logging, persona, reason, thread, and workspace boundaries now have
-clear owners.
+Current working branch for v0.3.1.
 
-Final verification:
+## Ordered Work
 
-- `uv run --locked pytest -q`: 2491 passed;
-- `uv run --locked pyright`: 0 errors, 0 warnings;
-- `uv build`: sdist and wheel built successfully;
-- clean Python 3.13 wheel install/import/CLI smoke: `nuself 0.3.1`.
+1. Define and enforce package dependency rules. Complete.
+2. Establish one runtime composition root shared by daemon and direct mode.
+   In progress: the final workspace path-resolution fallback is being removed.
+3. Remove hidden backend/path resolution from domain repositories. Complete.
+4. Extract narrow cross-domain ports and shared contracts. In progress.
+5. Remove agent/domain dependencies on CLI/TUI presentation. Complete.
+6. Split oversized cross-cutting modules along actual ownership. In progress;
+   final audit pending.
+7. Run complete gates and close the goal with requirement-by-requirement
+   dependency evidence.
 
-## Next Goal
+## Out Of Scope
 
-Define a new objective, ordered steps, exclusions, and completion evidence
-before beginning the next non-trivial change.
+- Changing the software version beyond v0.3.1.
+- Release publication.
+- New end-user features unrelated to architecture boundaries.
+
+## Current Evidence
+
+- Application-owned persona, reason, chat, thread, reflection, curator,
+  notification, trace, and memory composition is committed through `8d97935`.
+- Persona tools, reason advancers, schedulers, output services, conversation
+  runtime, and thread storage no longer resolve storage authority.
+- The committed reason-export phase passed 270 focused tests and Pyright with
+  0 errors and 0 warnings.
+- `PrivateWorkspaceStore` now receives `RuntimePaths`, and daemon export
+  composition injects it before worker startup. Its focused workspace/export
+  slice passed 80 tests and Pyright clean.
+
+## Completion Standard
+
+The goal remains active until final hidden-composition and oversized-module
+audits are complete, architecture gates cover the resulting boundaries, full
+tests/type/build/clean-wheel gates pass on final code, commits are pushed, and
+the final CI matrix is green.

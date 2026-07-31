@@ -46,7 +46,7 @@ def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
     return {
         "paths": application.paths,
         "workspace_store": PrivateWorkspaceStore(
-            project_root,
+            runtime_paths(project_root),
             scope="reason",
         ),
         "persona_repository": application.persona_prompts,
