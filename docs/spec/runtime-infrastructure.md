@@ -45,6 +45,45 @@ Every internal exchange belongs to exactly one of these categories:
 Code must not use an audit record as a command, a notification as a general
 event, or an ephemeral event as the only record of retryable work.
 
+## Frontend Event Boundary
+
+Backend execution publishes typed frontend events for presentation-worthy
+activity. A frontend event is an ephemeral projection, not an audit record or
+business command. Terminal, daemon-stream, test, and future web adapters
+consume the same event objects and decide how to render or transport them.
+
+Backend features, services, repositories, agents, and workers must not import
+`nuself.tui`, call `input()`, print presentation text, or depend on ANSI
+rendering. They request interaction through typed ports and publish typed
+events. The terminal adapter owns prompting and rendering; a web adapter may
+translate the same requests and events to its own protocol.
+
+Events cover operation lifecycle, model/tool activity, approval
+requested/decided, warnings, recoverable degradation, and user-facing
+progress. They contain stable identity, component, status, correlation
+context, and payload-safe fields. Raw prompts, memories, credentials,
+arbitrary arguments, and arbitrary return values are excluded by default.
+
+Frontend publication is synchronous and best effort unless a caller explicitly
+requires delivery. Durable audit projection subscribes separately; the
+frontend feed must not tail log files.
+
+## Decorated Execution Policies
+
+Cross-cutting behavior is declared through independent immutable function
+policies and interpreted by middleware. Identity, component, effects,
+confirmation, observation, and audit are separate policies. Adding one policy
+must not require a wrapper function or change a domain signature.
+
+Policy decorators are inert declarations. Middleware owns ordering:
+authorization and confirmation precede the operation; observation surrounds
+it; audit projection follows the actual outcome. Approval port, event
+publisher, clock, and audit sink are injected at composition. No policy may
+discover a terminal or global runtime implicitly.
+
+The decorated function remains directly callable in domain tests. Only an
+application or tool adapter applies policies, preventing hidden business logic.
+
 ## Handler Registry
 
 `nuself.runtime.handlers.HandlerRegistry` is the shared in-process

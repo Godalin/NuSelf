@@ -7,16 +7,16 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.tools.common import (
-    json_string_tuple_filter,
-    structured_tool_factory,
-)
+from nuself.agent.tools.common import json_string_tuple_filter
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryEntryRepository,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.feature_execution import FeatureExecutor
 
 
 @dataclass(frozen=True)
@@ -49,8 +49,18 @@ def build_memory_tool_set(
     project_root: Path | None,
 ) -> MemoryToolSet:
     """Build memory tools grouped for the public chat composition order."""
-    tool_from_function = structured_tool_factory()
-
+    executor = FeatureExecutor()
+    @tool(
+        name="memory_search",
+        description=(
+            "Search durable memory (entries, derived profiles, and source chunks) for relevant context. "
+            "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
+            "Returns formatted memory context with matches, scores, and match reasons."
+        ),
+    )
+    @component("memory")
+    @readonly
+    @observed
     def search_memory(
         query: str,
         limit: int = 8,
@@ -84,6 +94,17 @@ def build_memory_tool_set(
             )
         return packed.text
 
+    @tool(
+        name="memory_count",
+        description=(
+            "Count durable memory entries with optional type or tag filters. "
+            "Use when the user asks how many memories exist, or to get a quick count "
+            "before deciding whether to search more deeply. Returns a simple count."
+        ),
+    )
+    @component("memory")
+    @readonly
+    @observed
     def count_memory(
         types: list[str] | str | None = None,
         tags: list[str] | str | None = None,
@@ -105,6 +126,17 @@ def build_memory_tool_set(
         )
         return f"Memory entries: {len(entries)} total{suffix}"
 
+    @tool(
+        name="memory_archive",
+        description=(
+            "Archive a memory entry so it is excluded from default search and chat context. "
+            "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
+            "Requires the memory entry_id."
+        ),
+    )
+    @component("memory")
+    @mutating
+    @observed
     def archive_memory_by_id(entry_id: str) -> str:
         """Archive a memory entry so it is excluded from default search."""
         if project_root is None:
@@ -121,6 +153,17 @@ def build_memory_tool_set(
         repository.reindex()
         return f'Archived "{updated.title}".'
 
+    @tool(
+        name="memory_update_importance",
+        description=(
+            "Adjust the importance score (0.0-1.0) of a memory entry. "
+            "Use when the user emphasizes or downplays the significance of a memory. "
+            "Requires the memory entry_id and a new importance value."
+        ),
+    )
+    @component("memory")
+    @mutating
+    @observed
     def update_memory_importance_by_id(
         entry_id: str,
         importance: float,
@@ -151,51 +194,14 @@ def build_memory_tool_set(
 
     return MemoryToolSet(
         readonly=(
-            tool_from_function(
-                search_memory,
-                name="memory_search",
-                description=(
-                    "Search durable memory (entries, derived profiles, and source chunks) for relevant context. "
-                    "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
-                    "Returns formatted memory context with matches, scores, and match reasons."
-                ),
-                tags=("readonly",),
-                metadata={"service_component": "memory"},
-            ),
-            tool_from_function(
-                count_memory,
-                name="memory_count",
-                description=(
-                    "Count durable memory entries with optional type or tag filters. "
-                    "Use when the user asks how many memories exist, or to get a quick count "
-                    "before deciding whether to search more deeply. Returns a simple count."
-                ),
-                tags=("readonly",),
-                metadata={"service_component": "memory"},
-            ),
+            materialize_tool(search_memory, executor=executor),
+            materialize_tool(count_memory, executor=executor),
         ),
         write=(
-            tool_from_function(
-                archive_memory_by_id,
-                name="memory_archive",
-                description=(
-                    "Archive a memory entry so it is excluded from default search and chat context. "
-                    "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
-                    "Requires the memory entry_id."
-                ),
-                tags=("write",),
-                metadata={"service_component": "memory"},
-            ),
-            tool_from_function(
+            materialize_tool(archive_memory_by_id, executor=executor),
+            materialize_tool(
                 update_memory_importance_by_id,
-                name="memory_update_importance",
-                description=(
-                    "Adjust the importance score (0.0-1.0) of a memory entry. "
-                    "Use when the user emphasizes or downplays the significance of a memory. "
-                    "Requires the memory entry_id and a new importance value."
-                ),
-                tags=("write",),
-                metadata={"service_component": "memory"},
+                executor=executor,
             ),
         ),
     )

@@ -40,6 +40,11 @@ session orchestration. The daemon owns long-lived local processes, JSONL
 transport, background workers, and live activity subscriptions. Both
 boundaries call typed services rather than embedding domain behavior.
 
+Interactive presentation is replaceable. Backend operations publish typed
+frontend events and request confirmation through injected ports. Terminal
+rendering, daemon activity transport, tests, and a future web frontend are
+adapters over those contracts; backend modules do not import terminal UI code.
+
 Conversation execution lives under `nuself.agent.chat`. LangGraph coordinates
 stateful turns and LangChain supplies model and tool abstractions. NuSelf-owned
 code adds domain semantics such as personal-memory retrieval, evidence
@@ -83,6 +88,11 @@ Typed models describe domain state. Services own user-intent operations and
 policy. Repositories own persistence and indexes. Renderers keep terminal and
 transcript output consistent. Agent tools expose narrow service capabilities;
 agent skills describe when those capabilities should be used.
+
+Feature functions declare cross-cutting behavior through orthogonal decorators
+for tool identity, component ownership, effects, confirmation, observation,
+and audit. Decorators attach immutable policy only. Shared middleware executes
+those policies while domain functions remain directly testable callables.
 
 Major domains are:
 

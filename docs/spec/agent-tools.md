@@ -8,11 +8,51 @@ Enable the chat agent to perform user-facing actions *during conversation*, turn
 
 ### LangChain Tool Boundary
 
-Chat tools are registered as LangChain tools, following the current LangChain Python tool interface. Tool definitions must be `BaseTool` / `StructuredTool` objects, usually built from typed Python functions via `StructuredTool.from_function(...)` or an equivalent LangChain-supported decorator/factory.
+Chat tools are registered as LangChain tools, following the current LangChain
+Python tool interface. Tool definitions become `BaseTool` / `StructuredTool`
+objects at that boundary. NuSelf feature functions use orthogonal declarative
+decorators and one adapter materializes them through the official LangChain
+tool API; the decorators are metadata, not a parallel dispatch protocol.
 
 NuSelf must not keep a parallel chat-tool protocol, class hierarchy, or registry. Service modules may expose normal Python APIs, but anything visible to the chat runtime must enter through the LangChain tool boundary.
 
 Tools are **stateless callables** at the LangChain boundary. They receive structured primitive arguments and return a string result that is injected back into the conversation context.
+
+### Orthogonal Tool Policies
+
+A feature function composes one-purpose decorators:
+
+```python
+@tool
+@component("memory")
+@mutating
+@requires_confirmation(action="archive", resource="memory")
+@observed
+@audited("memory_archived")
+def archive_memory(entry_id: str) -> str: ...
+```
+
+Each decorator adds one immutable policy and returns a normal callable.
+Decorators never read terminal input, render output, write logs, open storage,
+dispatch work, or translate results. Composition rejects conflicts such as
+simultaneous `readonly` and `mutating` policies.
+
+The initial dimensions are tool identity, component, effect classification,
+confirmation, observation, and domain audit. Retry, idempotency, timeout, and
+capability may be added independently when their execution contracts exist;
+they must not enlarge one catch-all decorator.
+
+One LangChain adapter reads the composed specification and produces the
+framework tool. Shared execution middleware interprets policies. Confirmation
+uses an injected approval port; terminal, daemon, test, and future web
+frontends provide different adapters without changing feature functions.
+Observation publishes safe lifecycle events. Audit writes durable records
+through an injected sink. Arguments and results are private by default.
+
+An approval decorator that calls `input()`, imports terminal rendering, writes
+audit records, or JSON-wraps the domain result is forbidden. Type-checking
+shims around `StructuredTool.from_function()` are not an application
+abstraction and must not remain as feature factories.
 
 Subagents that are visible to the chat supervisor use the same boundary. A subagent is exposed as a tool whose implementation may run an internal LangGraph or LangChain agent and then return a compact result to the supervisor.
 

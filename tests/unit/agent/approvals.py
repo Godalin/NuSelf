@@ -8,7 +8,9 @@ from nuself.runtime.messages import RuntimeEnvelope
 
 
 def test_decorator_package_has_no_pending_callable_registry() -> None:
-    assert decorators.__all__ == ["approval_required"]
+    assert "tool" in decorators.__all__
+    assert "requires_confirmation" in decorators.__all__
+    assert not hasattr(decorators, "pending_approvals")
     assert not hasattr(decorators, "ApprovalManager")
 
 

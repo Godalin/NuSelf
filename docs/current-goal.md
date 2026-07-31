@@ -5,31 +5,69 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle.
+Active.
 
 ## Objective
 
-No active development objective.
+Simplify the runtime kernel while preserving feature depth: make feature
+modules independently composable, express cross-cutting tool behavior through
+orthogonal decorators, and separate interactive frontends from backend
+execution through typed events so terminal, daemon, and future web adapters can
+present the same activity without backend presentation dependencies.
 
-## Completed Goal
+## Ordered Steps
 
-The v0.3.1 module-decoupling and shared-infrastructure goal is complete.
-Dependency direction is enforced by executable architecture tests; process
-surfaces share application-owned composition; domain services, repositories,
-agent tools, thread storage, and workspaces receive explicit authority
-resources; and mixed notification, reflection, curator, conversation, persona,
-reason-output, logging, and persistence responsibilities have clear owners.
+1. Specify compact module, decorator, execution-policy, and frontend-event
+   contracts.
+2. Implement immutable orthogonal feature metadata and decorators without
+   introducing a parallel agent-tool protocol.
+3. Execute confirmation, observation, and audit policies through shared
+   middleware with injected ports rather than terminal I/O in tool functions.
+4. Project backend activity into typed frontend events and adapt the existing
+   terminal UI to those events.
+5. Migrate existing tools and remove superseded factories, decorators, and
+   presentation imports.
+6. Collapse redundant application composition wrappers and prove that a new
+   module needs one local implementation plus one composition registration.
+7. Run architecture tests, unit tests, Pyright, build, clean-wheel smoke, and
+   the final six-platform CI.
 
-Final evidence:
+## Progress
 
-- local `uv run --locked pytest -q`: 2494 passed;
-- local Pyright: 0 errors, 0 warnings;
-- sdist and wheel build succeeded;
-- clean Python 3.14 wheel install/import/CLI smoke succeeded;
-- GitHub Actions run `30606211009` passed Ubuntu/macOS × Python
-  3.12/3.13/3.14, including Pyright, tests, build, and clean-wheel smoke.
+- Steps 1–2 complete: the governing contracts now define inert orthogonal
+  declarations, and the immutable tool specification plus LangChain registrar
+  are implemented with focused tests.
+- Step 3 in progress: confirmation, observation, and audit execution ports are
+  implemented and tested; production adapters and existing tools remain to be
+  migrated.
 
-## Next Goal
+## Exclusions
 
-Define a new objective, ordered steps, exclusions, and completion evidence
-before beginning the next non-trivial change.
+- No dynamic third-party plugin loading in this goal.
+- No replacement for LangChain/LangGraph tool dispatch.
+- No generic bus merging requests, events, jobs, audits, and notifications.
+- No compatibility layer for superseded internal composition APIs.
+
+## Completion Evidence
+
+- Tool functions compose independent decorators for identity, component,
+  effects, confirmation, observation, and audit.
+- Decorators contain no terminal input, rendering, persistence, or transport.
+- CLI and daemon presentation consume typed frontend events through adapters;
+  backend modules do not import `nuself.tui`.
+- Existing chat tools use the new path and old approval/factory wrappers are
+  absent.
+- Architecture tests enforce frontend/backend direction and module-local
+  extension.
+- Full local and six-platform release gates pass.
+
+## Progress
+
+- Steps 1-2 foundation complete: governing specs now define the compact
+  module, frontend-event, and orthogonal policy contracts; immutable tool,
+  component, effect, confirmation, observation, and audit decorators plus the
+  LangChain materializer have focused tests and pass Pyright.
+- Step 3 in progress: shared execution already consumes injected approval,
+  frontend-event, clock, and audit ports; existing tools and terminal/daemon
+  adapters still need migration before the legacy approval implementation can
+  be removed.
