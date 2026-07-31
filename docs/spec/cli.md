@@ -593,12 +593,11 @@ Discussion traces rendered by `render_discussion_trace()` must:
 
 ## Approval And Event Boundaries
 
-User confirmation is a synchronous request boundary, not a post-turn log
-consumer. Approval-gated agent tools prompt through the interactive tool
-wrapper before executing a durable or destructive action. A declined request
-does not execute the action. The interactive activity stream presents
-`approval_prompted`; `approval_decided` is durable audit state and is not
-replayed as a prompt or command.
+User confirmation is a synchronous typed port, not a post-turn log consumer.
+Approval-gated agent tools request the active frontend before executing a
+durable or destructive action. A declined request does not execute the action.
+Request and decision activity use the shared `chat/tool.activity` runtime event;
+events are presentation and audit projections, never executable commands.
 
 `proposal_created` and similar structured log entries are append-only audit
 records. The CLI may render them as activity, but it must never replay a log

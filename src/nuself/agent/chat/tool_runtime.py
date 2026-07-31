@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
-from pathlib import Path
+from collections.abc import Callable, Iterable
 from typing import cast
 
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools import BaseTool
 
 from nuself.agent.skills import (
     AgentSkill,
@@ -19,17 +18,15 @@ from nuself.agent.tool_utils import (
     tool_service_component,
 )
 from nuself.agent.tools import build_langchain_chat_tools
-from nuself.memory.query import MemoryQueryService
-from nuself.memory.repository import MemoryEntryRepository
-from nuself.reflection.repository import ReflectionRepository
-from nuself.reason.output_contracts import SectionPlanner
-from nuself.reason.service import ReasonService
-from nuself.runtime.jobs import JobSink
-from nuself.trace.service import TraceQueryService
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.agent.tools.resources import ToolResources
+from nuself.decorators import component, observed, readonly, tool
+from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.runtime.observability import (
     report_observability_projection_failure,
 )
+from nuself.runtime.events import EventPublisher
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
 
 
 class ConversationToolRuntime:
@@ -38,31 +35,18 @@ class ConversationToolRuntime:
     def __init__(
         self,
         *,
-        project_root: Path,
-        query_service: MemoryQueryService,
-        memory_repository: MemoryEntryRepository,
-        reflection_repository: ReflectionRepository,
-        reason_service: ReasonService,
-        reason_workspace_store: PrivateWorkspaceStore,
-        trace_query_service: TraceQueryService,
-        persona_tools: Sequence[BaseTool],
+        resources: ToolResources,
         selves_consult: Callable[..., str],
-        job_sink: JobSink | None = None,
-        section_planner: SectionPlanner | None = None,
+        feature_executor: FeatureExecutor | None = None,
+        event_publisher: EventPublisher | None = None,
     ) -> None:
-        self._project_root = project_root
+        self._project_root = resources.project_root
+        self._feature_executor = feature_executor or FeatureExecutor()
+        self._event_publisher = event_publisher
         tools = build_langchain_chat_tools(
-            query_service=query_service,
-            memory_repository=memory_repository,
-            reflection_repository=reflection_repository,
-            reason_service=reason_service,
-            reason_workspace_store=reason_workspace_store,
-            trace_query_service=trace_query_service,
-            persona_tools=persona_tools,
-            project_root=project_root,
+            resources=resources,
             selves_consult=selves_consult,
-            job_sink=job_sink,
-            section_planner=section_planner,
+            feature_executor=self._feature_executor,
         )
         self._tools = {tool.name: tool for tool in tools}
         self._skills = load_agent_skills()
@@ -87,6 +71,33 @@ class ConversationToolRuntime:
 
         tool = self._tools.get(outcome.name)
         if tool is None:
+            return
+        metadata = tool.metadata or {}
+        if metadata.get("observed") is True:
+            if self._event_publisher is not None:
+                self._event_publisher.publish(
+                    producer="chat",
+                    name="tool.activity",
+                    payload=RuntimeLogEventPayload(
+                        message="Tool outcome observed",
+                        level=(
+                            "error"
+                            if outcome.error is not None
+                            else "info"
+                        ),
+                        status=(
+                            "failed"
+                            if outcome.error is not None
+                            else "completed"
+                        ),
+                        metadata={
+                            "service_component": metadata.get(
+                                "service_component"
+                            ),
+                            "operation": outcome.name,
+                        },
+                    ).to_mapping(),
+                )
             return
         service_component = tool_service_component(tool)
         if service_component is None:
@@ -113,6 +124,17 @@ class ConversationToolRuntime:
             for skill in self._skills
         )
 
+        @tool(
+            name="load_skill",
+            description=(
+                "Load a service skill's behavioral policy. Skills "
+                "define when and how the agent should use service "
+                f"tools.\n\nAvailable skills:\n{skill_lines}"
+            ),
+        )
+        @component("skill")
+        @readonly
+        @observed
         def load_skill(skill_name: str) -> str:
             for skill in self._skills:
                 if skill.name == skill_name:
@@ -131,16 +153,9 @@ class ConversationToolRuntime:
                 f"Available skills:\n{skill_lines}"
             )
 
-        return StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
-            name="load_skill",
-            description=(
-                "Load a service skill's behavioral policy. Skills "
-                "define when and how the agent should use service "
-                f"tools.\n\nAvailable skills:\n{skill_lines}"
-            ),
-            func=load_skill,
-            tags=("readonly",),
-            metadata={"service_component": "skill"},
+        return materialize_tool(
+            load_skill,
+            executor=self._feature_executor,
         )
 
 

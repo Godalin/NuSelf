@@ -34,15 +34,20 @@ present the same activity without backend presentation dependencies.
 
 ## Progress
 
-- Steps 1–2 complete: the governing contracts now define inert orthogonal
-  declarations, and the immutable tool specification plus LangChain registrar
-  are implemented with focused tests.
-- Step 3 in progress: confirmation, observation, and audit execution ports are
-  implemented and tested; production adapters and existing tools remain to be
-  migrated.
-- Step 5 partial: memory, trace, selves, and workspace tools use declarative
-  registration. Approval-gated reflection/reason tools and persona remain on
-  the legacy path until the frontend approval adapter is connected.
+- Steps 1–6 implemented locally. All framework tools now use the single
+  declarative materializer; confirmation uses an injected frontend port;
+  observation and approval activity project through the existing typed
+  `chat/tool.activity` event; terminal input lives only in the TUI adapter; and
+  the old factories, effectful approval wrapper, and parallel approval-audit
+  path are removed.
+- Conversation composition now passes two ownership-specific inert resource
+  snapshots (`ConversationResources` and nested `ToolResources`). Executable
+  architecture tests enforce the only LangChain materializer, backend/TUI
+  direction, and bounded runtime constructor fan-in.
+- Step 7 in progress: Pyright reports 0 errors and 0 warnings; all 2487 tests
+  pass; sdist and wheel builds succeed; and a clean Python 3.12 environment
+  imports the wheel and runs `nuself --version`. Commit, push, and final
+  six-platform CI remain.
 
 ## Exclusions
 

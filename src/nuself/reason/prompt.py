@@ -9,9 +9,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
+from nuself.agent.tools.decorated import materialize_tool
 from nuself.agent.structured import StructuredAgent, default_structured_agent
+from nuself.decorators import component, observed, readonly, tool
 from nuself.reason.errors import ReasonPromptError
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.feature_execution import FeatureExecutor
 
 
 class ReasonPromptOutput(BaseModel):
@@ -136,6 +139,16 @@ Do NOT include field type/format descriptions — only explain meaning.
 def build_reasoning_prompt_tools(project_root: Path | None) -> tuple[StructuredTool, ...]:
     """Build tools for generating custom reasoning prompts."""
 
+    @tool(
+        name="reasoning_prompt_gen",
+        description=(
+            "Generate a custom reasoning system prompt for a topic. "
+            "The prompt explains topic-specific reasoning output fields."
+        ),
+    )
+    @component("reasoning")
+    @readonly
+    @observed
     def _run(topic: str, context: str = "") -> str:
         """Generate a custom reasoning system prompt for a given topic.
 
@@ -146,9 +159,5 @@ def build_reasoning_prompt_tools(project_root: Path | None) -> tuple[StructuredT
         return generate_reasoning_prompt(topic, project_root=project_root)
 
     return (
-        StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
-            func=_run,
-            name="reasoning_prompt_gen",
-            description="Generate a custom reasoning system prompt for a topic. The prompt explains what output, active_items, pending_items, new_findings, and delta mean in the context of this specific topic.",
-        ),
+        materialize_tool(_run, executor=FeatureExecutor()),
     )

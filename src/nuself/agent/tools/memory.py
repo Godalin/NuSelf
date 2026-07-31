@@ -7,7 +7,6 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.tools.common import json_string_tuple_filter
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.memory.query import MemoryQuery, MemoryQueryService
@@ -17,6 +16,16 @@ from nuself.memory.repository import (
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature_execution import FeatureExecutor
+
+
+def _string_tuple_filter(
+    value: list[str] | str | None,
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,) if value else ()
+    return tuple(str(item) for item in value if str(item))
 
 
 @dataclass(frozen=True)
@@ -32,12 +41,14 @@ def build_memory_tools(
     query_service: MemoryQueryService,
     repository: MemoryEntryRepository,
     project_root: Path | None,
+    executor: FeatureExecutor | None = None,
 ) -> tuple[BaseTool, ...]:
     """Build the memory service's chat tools."""
     tools = build_memory_tool_set(
         query_service=query_service,
         repository=repository,
         project_root=project_root,
+        executor=executor,
     )
     return tools.readonly + tools.write
 
@@ -47,9 +58,10 @@ def build_memory_tool_set(
     query_service: MemoryQueryService,
     repository: MemoryEntryRepository,
     project_root: Path | None,
+    executor: FeatureExecutor | None = None,
 ) -> MemoryToolSet:
     """Build memory tools grouped for the public chat composition order."""
-    executor = FeatureExecutor()
+    execution = executor or FeatureExecutor()
     @tool(
         name="memory_search",
         description=(
@@ -81,8 +93,8 @@ def build_memory_tool_set(
             MemoryQuery(
                 text=query_str.strip(),
                 limit=limit_int,
-                memory_types=json_string_tuple_filter(types),
-                tags=json_string_tuple_filter(tags),
+                memory_types=_string_tuple_filter(types),
+                tags=_string_tuple_filter(tags),
             )
         )
         if not packed.text:
@@ -112,10 +124,10 @@ def build_memory_tool_set(
         """Count durable memory entries, optionally filtered by type or tag."""
         entries = repository.list()
         if types:
-            type_set = set(json_string_tuple_filter(types))
+            type_set = set(_string_tuple_filter(types))
             entries = [entry for entry in entries if entry.type in type_set]
         if tags:
-            tag_set = set(json_string_tuple_filter(tags))
+            tag_set = set(_string_tuple_filter(tags))
             entries = [
                 entry for entry in entries if tag_set.intersection(entry.tags)
             ]
@@ -194,14 +206,14 @@ def build_memory_tool_set(
 
     return MemoryToolSet(
         readonly=(
-            materialize_tool(search_memory, executor=executor),
-            materialize_tool(count_memory, executor=executor),
+            materialize_tool(search_memory, executor=execution),
+            materialize_tool(count_memory, executor=execution),
         ),
         write=(
-            materialize_tool(archive_memory_by_id, executor=executor),
+            materialize_tool(archive_memory_by_id, executor=execution),
             materialize_tool(
                 update_memory_importance_by_id,
-                executor=executor,
+                executor=execution,
             ),
         ),
     )

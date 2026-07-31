@@ -50,6 +50,12 @@ stateful turns and LangChain supplies model and tool abstractions. NuSelf-owned
 code adds domain semantics such as personal-memory retrieval, evidence
 handling, persona discussion, and response presentation.
 
+Application composition supplies two immutable, ownership-specific resource
+snapshots: `ConversationResources` for a turn and its nested `ToolResources`
+for tools. They are plain typed data, not managers: neither performs dispatch
+or owns lifecycle. This keeps constructors small without hiding dependency
+authority.
+
 ## Shared Infrastructure
 
 Cross-cutting communication is classified by delivery semantics instead of

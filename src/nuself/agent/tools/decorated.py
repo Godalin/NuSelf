@@ -8,7 +8,10 @@ from typing import ParamSpec, TypeVar, cast
 
 from langchain_core.tools import StructuredTool
 
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature_execution import (
+    FeatureConfirmationDeclined,
+    FeatureExecutor,
+)
 from nuself.runtime.features import require_tool_spec
 
 P = ParamSpec("P")
@@ -29,7 +32,13 @@ def materialize_tool(
 
     @wraps(function)
     def invoke(*args: P.args, **kwargs: P.kwargs) -> R:
-        return executor.invoke(function, *args, **kwargs)
+        try:
+            return executor.invoke(function, *args, **kwargs)
+        except FeatureConfirmationDeclined:
+            return cast(
+                R,
+                "Action was not approved; no changes were made.",
+            )
 
     name = spec.tool.name or function.__name__
     description = spec.tool.description or function.__doc__
@@ -38,6 +47,10 @@ def materialize_tool(
         "service_component": spec.component,
         "effect": spec.effect,
         "confirmation_required": spec.confirmation is not None,
+        "observed": spec.observation is not None,
+        "audit_event": (
+            spec.audit.event if spec.audit is not None else None
+        ),
     }
     factory = cast(Callable[..., StructuredTool], StructuredTool.from_function)
     return factory(
@@ -46,4 +59,5 @@ def materialize_tool(
         description=description,
         tags=tags,
         metadata=metadata,
+        handle_tool_error=spec.confirmation is not None,
     )

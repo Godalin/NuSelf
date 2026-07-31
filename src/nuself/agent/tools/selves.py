@@ -13,6 +13,8 @@ from nuself.runtime.feature_execution import FeatureExecutor
 
 def build_selves_tools(
     consult: Callable[[str, str, str | None], str] | None,
+    *,
+    executor: FeatureExecutor | None = None,
 ) -> tuple[BaseTool, ...]:
     """Build the optional selves consultation tool."""
     if consult is None:
@@ -50,6 +52,6 @@ def build_selves_tools(
     return (
         materialize_tool(
             consult_selves,
-            executor=FeatureExecutor(),
+            executor=executor or FeatureExecutor(),
         ),
     )

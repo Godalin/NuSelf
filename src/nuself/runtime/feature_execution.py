@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from time import monotonic
 from typing import ParamSpec, Protocol, TypeVar
+
+from langchain_core.tools import ToolException
 
 from nuself.runtime.features import FeatureSpec, feature_spec
 from nuself.runtime.frontend import (
@@ -43,7 +44,7 @@ class NullFeatureAuditSink:
         del record
 
 
-class FeatureConfirmationDeclined(RuntimeError):
+class FeatureConfirmationDeclined(ToolException):
     """A frontend did not approve a declared operation."""
 
 
@@ -56,12 +57,10 @@ class FeatureExecutor:
         approvals: ApprovalPort | None = None,
         events: FrontendEventSink | None = None,
         audits: FeatureAuditSink | None = None,
-        clock: Callable[[], float] = monotonic,
     ) -> None:
         self._approvals = approvals or RejectUnavailableApprovalPort()
         self._events = events or NullFrontendEventSink()
         self._audits = audits or NullFeatureAuditSink()
-        self._clock = clock
 
     def invoke(
         self,
@@ -77,50 +76,11 @@ class FeatureExecutor:
             else function.__name__
         )
         self._confirm(spec, component, operation, args, kwargs)
-        started = self._clock()
-        self._publish(
-            spec,
-            FrontendEvent("operation_started", component, operation),
-        )
         try:
             result = function(*args, **kwargs)
         except Exception as exc:
-            fields: dict[str, object] = {"error_type": type(exc).__name__}
-            if (
-                spec.observation is not None
-                and spec.observation.include_duration
-            ):
-                fields["duration_seconds"] = max(
-                    0.0, self._clock() - started
-                )
-            self._publish(
-                spec,
-                FrontendEvent(
-                    "operation_failed",
-                    component,
-                    operation,
-                    fields,
-                ),
-            )
             self._audit(spec, component, operation, "failed", exc)
             raise
-        fields = {}
-        if (
-            spec.observation is not None
-            and spec.observation.include_duration
-        ):
-            fields["duration_seconds"] = max(
-                0.0, self._clock() - started
-            )
-        self._publish(
-            spec,
-            FrontendEvent(
-                "operation_completed",
-                component,
-                operation,
-                fields,
-            ),
-        )
         self._audit(spec, component, operation, "completed", None)
         return result
 
@@ -148,7 +108,7 @@ class FeatureExecutor:
             risk=policy.risk,
             summary=summary,
         )
-        self._events.publish(
+        self._publish_secondary(
             FrontendEvent(
                 "approval_requested",
                 component,
@@ -162,13 +122,14 @@ class FeatureExecutor:
             )
         )
         decision = self._approvals.request(request)
-        self._events.publish(
+        self._publish_secondary(
             FrontendEvent(
                 "approval_decided",
                 component,
                 operation,
                 {
                     "approved": decision.approved,
+                    "approver": decision.approver,
                     "input_kind": decision.input_kind,
                 },
             )
@@ -178,13 +139,12 @@ class FeatureExecutor:
                 f"{operation} was not approved"
             )
 
-    def _publish(
-        self,
-        spec: FeatureSpec,
-        event: FrontendEvent,
-    ) -> None:
-        if spec.observation is not None:
+    def _publish_secondary(self, event: FrontendEvent) -> None:
+        try:
             self._events.publish(event)
+        except Exception:
+            # Frontend observation is never authority for the operation.
+            return
 
     def _audit(
         self,
@@ -196,12 +156,16 @@ class FeatureExecutor:
     ) -> None:
         if spec.audit is None:
             return
-        self._audits.write(
-            FeatureAuditRecord(
-                component=component,
-                event=spec.audit.event,
-                operation=operation,
-                outcome=outcome,
-                error_type=type(error).__name__ if error else None,
+        try:
+            self._audits.write(
+                FeatureAuditRecord(
+                    component=component,
+                    event=spec.audit.event,
+                    operation=operation,
+                    outcome=outcome,
+                    error_type=type(error).__name__ if error else None,
+                )
             )
-        )
+        except Exception:
+            # Durable audit projection is secondary to the declared operation.
+            return

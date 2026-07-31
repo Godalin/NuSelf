@@ -8,9 +8,6 @@ from types import MappingProxyType
 from typing import Literal, Protocol
 
 FrontendEventKind = Literal[
-    "operation_started",
-    "operation_completed",
-    "operation_failed",
     "approval_requested",
     "approval_decided",
 ]

@@ -46,9 +46,7 @@ class ConfirmationPolicy:
 
 @dataclass(frozen=True)
 class ObservationPolicy:
-    """Safe operation lifecycle projection policy."""
-
-    include_duration: bool = True
+    """Marker for privacy-safe outcome observation."""
 
 
 @dataclass(frozen=True)
@@ -211,15 +209,11 @@ def observed(function: FeatureCallable[P, R]) -> FeatureCallable[P, R]: ...
 @overload
 def observed(
     function: None = None,
-    *,
-    include_duration: bool = True,
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]: ...
 
 
 def observed(
     function: FeatureCallable[P, R] | None = None,
-    *,
-    include_duration: bool = True,
 ) -> (
     FeatureCallable[P, R]
     | Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]
@@ -229,9 +223,7 @@ def observed(
     def decorate(target: FeatureCallable[P, R]) -> FeatureCallable[P, R]:
         return _attach(
             target,
-            observation=ObservationPolicy(
-                include_duration=include_duration
-            ),
+            observation=ObservationPolicy(),
         )
 
     return decorate(function) if function is not None else decorate

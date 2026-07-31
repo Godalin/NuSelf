@@ -15,9 +15,11 @@ from nuself.trace.service import TraceQueryService
 
 def build_trace_tools(
     service: TraceQueryService,
+    *,
+    executor: FeatureExecutor | None = None,
 ) -> tuple[BaseTool, ...]:
     """Build the trace service's chat tools."""
-    executor = FeatureExecutor()
+    execution = executor or FeatureExecutor()
 
     @tool(
         name="trace_search",
@@ -136,8 +138,8 @@ def build_trace_tools(
         )
 
     return (
-        materialize_tool(search_trace, executor=executor),
-        materialize_tool(count_traces, executor=executor),
-        materialize_tool(show_trace, executor=executor),
-        materialize_tool(related_traces, executor=executor),
+        materialize_tool(search_trace, executor=execution),
+        materialize_tool(count_traces, executor=execution),
+        materialize_tool(show_trace, executor=execution),
+        materialize_tool(related_traces, executor=execution),
     )

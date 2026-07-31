@@ -44,6 +44,22 @@ def _package_files(package: str) -> tuple[Path, ...]:
     return tuple(sorted((_SOURCE_ROOT / package).rglob("*.py")))
 
 
+def _class_method(
+    tree: ast.Module,
+    class_name: str,
+    method_name: str,
+) -> ast.FunctionDef:
+    return next(
+        node
+        for class_node in tree.body
+        if isinstance(class_node, ast.ClassDef)
+        and class_node.name == class_name
+        for node in class_node.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == method_name
+    )
+
+
 def _violations(
     packages: tuple[str, ...],
     forbidden: tuple[str, ...],
@@ -76,6 +92,61 @@ def test_domains_do_not_depend_on_outer_adapters() -> None:
 
 def test_agent_does_not_depend_on_process_or_terminal_adapters() -> None:
     assert _violations(("agent",), _OUTER_ADAPTERS) == ()
+
+
+def test_application_does_not_depend_on_terminal_adapter() -> None:
+    assert _violations(("application",), ("nuself.tui",)) == ()
+
+
+def test_langchain_tool_materialization_has_one_owner() -> None:
+    owners: list[str] = []
+    for path in _SOURCE_ROOT.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        if any(
+            isinstance(node, ast.Attribute)
+            and node.attr == "from_function"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "StructuredTool"
+            for node in ast.walk(tree)
+        ):
+            owners.append(str(path.relative_to(_SOURCE_ROOT)))
+
+    assert owners == ["agent/tools/decorated.py"]
+
+
+def test_conversation_composition_has_bounded_public_fan_in() -> None:
+    runtime_tree = ast.parse(
+        (_SOURCE_ROOT / "agent" / "chat" / "runtime.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    tool_runtime_tree = ast.parse(
+        (_SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    runtime_init = _class_method(
+        runtime_tree,
+        "ConversationGraphRuntime",
+        "__init__",
+    )
+    tool_runtime_init = _class_method(
+        tool_runtime_tree,
+        "ConversationToolRuntime",
+        "__init__",
+    )
+
+    def collaborator_count(node: ast.FunctionDef) -> int:
+        return (
+            len(node.args.posonlyargs)
+            + len(node.args.args)
+            + len(node.args.kwonlyargs)
+            - 1
+        )
+
+    assert collaborator_count(runtime_init) <= 7
+    assert collaborator_count(tool_runtime_init) <= 4
 
 
 def test_chat_tool_runtime_does_not_compose_persistence() -> None:

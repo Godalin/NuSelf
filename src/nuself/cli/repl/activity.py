@@ -373,15 +373,12 @@ def captured_interactive_activity_events(
         event
         for event in events
         if event.component in {"chat", "daemon", "persona"}
-        or event.event == "approval_prompted"
     ]
 
 
 def is_interactive_activity_log(event: LogEvent) -> bool:
     """Return whether one event is visible while an interactive turn runs."""
 
-    if event.event == "approval_prompted":
-        return True
     if event.component == "persona":
         return event.event in {
             "persona_summary",
@@ -394,6 +391,13 @@ def is_interactive_activity_log(event: LogEvent) -> bool:
             "persona_think_failed",
         }
     if event.component == "chat":
+        if event.event == "tool.activity":
+            return event.status in {
+                "pending",
+                "decided",
+                "completed",
+                "failed",
+            }
         if event.event == "service_tool_called":
             return True
         if event.event in {

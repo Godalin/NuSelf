@@ -13,6 +13,8 @@ from nuself.agent.chat import (
 )
 from thread_fixtures import ThreadStore
 from nuself.agent.chat.response import ConversationResponseService
+from nuself.agent.chat.resources import ConversationResources
+from nuself.agent.tools.resources import ToolResources
 from nuself.agent.text import TextAgent
 from nuself.application.composition import compose_application
 from nuself.application.reason import compose_reason_service
@@ -32,6 +34,7 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
+from nuself.runtime.frontend import ApprovalPort
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
@@ -62,6 +65,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         trace_query_service: TraceQueryService | None = None,
         persona_tools: Sequence[BaseTool] | None = None,
         persona_definitions: tuple[PersonaDefinition, ...] | None = None,
+        approval_port: ApprovalPort | None = None,
     ) -> None:
         application = compose_application(
             runtime_paths(project_root),
@@ -70,43 +74,52 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         entries = memory_repository or application.memory.entries
         sources = source_repository or application.memory.sources
         profile = profile_repository or application.memory.profile
-        super().__init__(
-            project_root,
-            langchain_models=langchain_models,
-            settings=settings,
-            memory_query_service=memory_query_service
-            or MemoryQueryService(entries, sources, profile),
+        resources = ConversationResources(
+            tools=ToolResources(
+                project_root=project_root,
+                memory_query=memory_query_service
+                or MemoryQueryService(entries, sources, profile),
+                memory=entries,
+                reflections=reflection_repository
+                or application.reflection,
+                reasons=reason_service
+                or compose_reason_service(application),
+                reason_workspace=PrivateWorkspaceStore(
+                    runtime_paths(project_root),
+                    scope="reason",
+                ),
+                traces=trace_query_service
+                or application.trace.query,
+                persona_tools=tuple(
+                    persona_tools
+                    or build_persona_tools(
+                        project_root,
+                        repository=application.persona_prompts,
+                        trace_recorder=application.trace.recorder,
+                    )
+                ),
+                job_sink=job_sink,
+                section_planner=section_planner,
+            ),
+            trace_recorder=trace_recorder
+            or application.trace.recorder,
+            personas=persona_definitions
+            or load_persona_definitions(
+                application.memory.entries,
+                project_root=project_root,
+            ),
             thread_store=thread_store
             or ThreadStore(
                 project_root,
                 backend=application.backend,
             ),
-            job_sink=job_sink,
-            section_planner=section_planner,
+        )
+        super().__init__(
+            resources,
+            langchain_models=langchain_models,
+            settings=settings,
             event_publisher=event_publisher,
             response_service=response_service,
             compression_agent=compression_agent,
-            memory_repository=entries,
-            reflection_repository=reflection_repository
-            or application.reflection,
-            trace_recorder=trace_recorder or application.trace.recorder,
-            reason_service=reason_service
-            or compose_reason_service(application),
-            reason_workspace_store=PrivateWorkspaceStore(
-                runtime_paths(project_root),
-                scope="reason",
-            ),
-            trace_query_service=trace_query_service
-            or application.trace.query,
-            persona_tools=persona_tools
-            or build_persona_tools(
-                project_root,
-                repository=application.persona_prompts,
-                trace_recorder=application.trace.recorder,
-            ),
-            persona_definitions=persona_definitions
-            or load_persona_definitions(
-                application.memory.entries,
-                project_root=project_root,
-            ),
+            approval_port=approval_port,
         )

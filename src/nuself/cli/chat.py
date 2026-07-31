@@ -23,6 +23,7 @@ from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
+from nuself.tui.approval import TerminalApprovalPort
 
 ReplyPrinter = Callable[[str], None]
 
@@ -228,7 +229,8 @@ def one_shot_reply(
 
     return (
         compose_conversation_runtime(
-            compose_cli_application(project_root)
+            compose_cli_application(project_root),
+            approval_port=TerminalApprovalPort(),
         )
         .respond(message, thread_id=thread_id, turn_id=turn_id)
         .reply

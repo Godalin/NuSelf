@@ -63,6 +63,7 @@ from nuself.logs import (
     InteractiveLogCursor,
     LogEvent,
     read_log_events,
+    runtime_event_log_sink,
     write_log_event,
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
@@ -70,6 +71,8 @@ from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.events import EventPublisher
 from nuself.runtime.execution import current_cancellation
 from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
@@ -604,6 +607,8 @@ def test_interactive_turn_prints_activity_events_while_waiting(
 ) -> None:
     ThreadStore(_authority(tmp_path)).save(ThreadState.empty("default"))
     printed = threading.Event()
+    publisher = EventPublisher()
+    publisher.attach_projection(runtime_event_log_sink(_authority(tmp_path)))
     original_print_events = cast(
         Callable[[list[LogEvent]], None],
         cli._print_interactive_activity_events,  # pyright: ignore[reportPrivateUsage]
@@ -617,17 +622,19 @@ def test_interactive_turn_prints_activity_events_while_waiting(
         message: str, thread_id: str, turn_id: str | None
     ) -> cli.InteractiveChatResult:
         assert turn_id is not None
-        write_log_event(
-            "reasoning",
-            "approval_prompted",
-            "Confirm execute reasoning: reason_propose(topic=demo) ? (y/n): ",
-            project_root=_authority(tmp_path),
-            thread_id=thread_id,
-            turn_id=turn_id,
-            metadata={
-                "tool": "reason_propose",
-                "summary": "reason_propose(topic=demo)",
-            },
+        publisher.publish(
+            producer="chat",
+            name="tool.activity",
+            payload=RuntimeLogEventPayload(
+                message="Approval requested for reason_propose",
+                status="pending",
+                metadata={
+                    "frontend_event": "approval_requested",
+                    "service_component": "reasoning",
+                    "operation": "reason_propose",
+                    "summary": "reason_propose(topic=demo)",
+                },
+            ).to_mapping(),
         )
         write_log_event(
             "chat",
@@ -668,14 +675,14 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "[reasoning] approval_prompted" in captured.out
+    assert "[chat] [reasoning] tool.activity" in captured.out
     assert "Logs:" in captured.out
     assert "[chat] [memory] service_tool_called" in captured.out
     assert "NuSelf:\n\nfinal reply" in captured.out
-    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index(
+    assert captured.out.index("[chat] [reasoning] tool.activity") < captured.out.index(
         "NuSelf:\n\nfinal reply"
     )
-    assert captured.out.index("[reasoning] approval_prompted") < captured.out.index(
+    assert captured.out.index("[chat] [reasoning] tool.activity") < captured.out.index(
         "[chat] [memory] service_tool_called"
     )
     assert captured.out.index(

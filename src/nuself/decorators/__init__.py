@@ -1,6 +1,5 @@
 """Public spelling for inert, orthogonal feature declarations."""
 
-from .approval import approval_required
 from nuself.runtime.features import (
     AuditPolicy,
     ConfirmationPolicy,

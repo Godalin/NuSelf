@@ -6,6 +6,7 @@ from nuself.agent.chat.runtime import (
 )
 from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat.response import ConversationResponseService
+from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.thread import (
     ThreadMessage,
     ThreadState,
@@ -31,6 +32,7 @@ __all__ = [
     "ConversationNodeName",
     "ConversationNodeResult",
     "ConversationResponseService",
+    "ConversationResources",
     "ConversationTurnState",
     "ThreadMessage",
     "ThreadState",

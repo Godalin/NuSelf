@@ -133,12 +133,13 @@ Interrupt and exceptional exits follow the same outer cleanup path as normal
 completion.
 
 Daemon chat receives its memory, profile, reflection, trace, and thread-storage
-collaborators from that graph. Nested chat/tool constructors may accept those
-narrow collaborators, but must not resolve a backend or compose a second
-repository graph. `ConversationGraphRuntime` requires its query service,
-thread store, memory and reflection repositories, reason service, trace
-services, and persona tools; only `application.chat` assembles production
-instances.
+collaborators from that graph. `application.chat` resolves them once into an
+immutable `ConversationResources` snapshot, with a nested `ToolResources`
+snapshot for the narrower tool boundary. Neither owns lifecycle, dispatch,
+storage selection, or business behavior; they prevent the same resources from
+being forwarded independently through every nested constructor. Conversation
+and tool runtimes borrow only their respective snapshot and must not resolve a
+backend or compose a second repository graph.
 Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
 memory/profile/reflection/trace repositories and thread storage always come

@@ -8,30 +8,17 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.agent.errors import AgentError
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.config import RuntimePaths
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.persona.audit import run_persona_observed
 from nuself.store import ScopedWorkspace, WorkspaceCollection
 from nuself.trace.service import TraceRecorder
-
-
-def _persona_tool(
-    func: Callable[..., str],
-    *,
-    name: str,
-    description: str,
-    readonly: bool = False,
-) -> StructuredTool:
-    return StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
-        func=func,
-        name=name,
-        description=description,
-        tags=("readonly",) if readonly else None,
-        metadata={"service_component": "persona"},
-    )
 
 
 def build_persona_tools(
@@ -53,6 +40,15 @@ def build_persona_tools(
         )
     )
 
+    executor = FeatureExecutor()
+
+    @tool(
+        name="persona_craft",
+        description="Create or update a reusable thinking persona with a name and custom prompt.",
+    )
+    @component("persona")
+    @mutating
+    @observed
     def persona_craft(name: str, prompt: str) -> str:
         """Create or update a reusable thinking persona.
 
@@ -89,6 +85,13 @@ def build_persona_tools(
         result = f"Created thinking persona '{name}' (id={persona.id}). Use persona_think to consult it."
         return result
 
+    @tool(
+        name="persona_list",
+        description="List available thinking personas with id and name. Pass include_disabled=True to show disabled ones.",
+    )
+    @component("persona")
+    @readonly
+    @observed
     def persona_list(include_disabled: bool = False) -> str:
         """List available thinking personas with id and name. Pass include_disabled=True to show disabled ones."""
         all_prompts = repo.list()
@@ -106,6 +109,13 @@ def build_persona_tools(
             result = "\n".join(lines)
         return result
 
+    @tool(
+        name="persona_think",
+        description="Consult a thinking persona by name or id and get its response to a question.",
+    )
+    @component("persona")
+    @readonly
+    @observed
     def persona_think(persona: str, question: str) -> str:
         """Consult a thinking persona by name or id and get its response.
 
@@ -144,6 +154,13 @@ def build_persona_tools(
 
         return response
 
+    @tool(
+        name="persona_disable",
+        description="Disable a thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted.",
+    )
+    @component("persona")
+    @mutating
+    @observed
     def persona_disable(persona: str) -> str:
         """Disable a thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted."""
         persona = persona.strip()
@@ -162,6 +179,13 @@ def build_persona_tools(
         )
         return f"Disabled persona: {prompt.name}"
 
+    @tool(
+        name="persona_enable",
+        description="Enable a thinking persona by name or id. Enabled personas appear in persona_list and can be consulted.",
+    )
+    @component("persona")
+    @mutating
+    @observed
     def persona_enable(persona: str) -> str:
         """Enable a thinking persona by name or id. Enabled personas appear in persona_list and can be consulted."""
         persona = persona.strip()
@@ -181,33 +205,11 @@ def build_persona_tools(
         return f"Enabled persona: {prompt.name}"
 
     return (
-        _persona_tool(
-            func=persona_craft,
-            name="persona_craft",
-            description="Create or update a reusable thinking persona with a name and custom prompt.",
-        ),
-        _persona_tool(
-            func=persona_list,
-            name="persona_list",
-            description="List available thinking personas with id and name. Pass include_disabled=True to show disabled ones.",
-            readonly=True,
-        ),
-        _persona_tool(
-            func=persona_think,
-            name="persona_think",
-            description="Consult a thinking persona by name or id and get its response to a question.",
-            readonly=True,
-        ),
-        _persona_tool(
-            func=persona_disable,
-            name="persona_disable",
-            description="Disable a thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted.",
-        ),
-        _persona_tool(
-            func=persona_enable,
-            name="persona_enable",
-            description="Enable a thinking persona by name or id. Enabled personas appear in persona_list and can be consulted.",
-        ),
+        materialize_tool(persona_craft, executor=executor),
+        materialize_tool(persona_list, executor=executor),
+        materialize_tool(persona_think, executor=executor),
+        materialize_tool(persona_disable, executor=executor),
+        materialize_tool(persona_enable, executor=executor),
     )
 
 
@@ -310,7 +312,15 @@ def build_reason_persona_tools(
             component="persona",
         )
     )
+    executor = FeatureExecutor()
 
+    @tool(
+        name="persona_craft",
+        description="Create or update a thinking persona scoped to the current reason thread.",
+    )
+    @component("persona")
+    @mutating
+    @observed
     def _craft(name: str, prompt: str) -> str:
         name = name.strip()
         prompt = prompt.strip()
@@ -341,6 +351,13 @@ def build_reason_persona_tools(
         result = f"Created thinking persona '{name}' (id={persona.id}, scoped to this reason thread)."
         return result
 
+    @tool(
+        name="persona_list",
+        description="List global and current reason-thread thinking personas, optionally filtered by scope.",
+    )
+    @component("persona")
+    @readonly
+    @observed
     def _list(scope: str = "", include_disabled: bool = False) -> str:
         repo = _thread_repo()
         thread_prompts = repo.list()
@@ -363,6 +380,13 @@ def build_reason_persona_tools(
             result = "\n".join(lines)
         return result
 
+    @tool(
+        name="persona_think",
+        description="Consult a thinking persona, resolving thread-local before global by default.",
+    )
+    @component("persona")
+    @readonly
+    @observed
     def _think(persona: str, question: str, scope: str = "") -> str:
         persona = persona.strip()
         question = question.strip()
@@ -400,6 +424,13 @@ def build_reason_persona_tools(
             )
         return result
 
+    @tool(
+        name="persona_disable",
+        description="Disable a global thinking persona by name or id.",
+    )
+    @component("persona")
+    @mutating
+    @observed
     def _disable(persona: str) -> str:
         """Disable a global thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted."""
         persona = persona.strip()
@@ -418,6 +449,13 @@ def build_reason_persona_tools(
         )
         return f"Disabled persona: {prompt.name}"
 
+    @tool(
+        name="persona_enable",
+        description="Enable a global thinking persona by name or id.",
+    )
+    @component("persona")
+    @mutating
+    @observed
     def _enable(persona: str) -> str:
         """Enable a global thinking persona by name or id. Enabled personas appear in persona_list and can be consulted."""
         persona = persona.strip()
@@ -437,9 +475,9 @@ def build_reason_persona_tools(
         return f"Enabled persona: {prompt.name}"
 
     return (
-        _persona_tool(func=_craft, name="persona_craft", description="Create or update a thinking persona scoped to the current reason thread. Also consults global personas when listing and thinking."),
-        _persona_tool(func=_list, name="persona_list", description="List available thinking personas (global + current reason thread). Pass scope='local' for only thread-scoped personas, scope='global' for only global ones.", readonly=True),
-        _persona_tool(func=_think, name="persona_think", description="Consult a thinking persona by name or id. Searches local (thread-scoped) first then global by default. Pass scope='local' to search only local, scope='global' to search only global.", readonly=True),
-        _persona_tool(func=_disable, name="persona_disable", description="Disable a global thinking persona by name or id. Disabled personas are hidden from persona_list and cannot be consulted."),
-        _persona_tool(func=_enable, name="persona_enable", description="Enable a global thinking persona by name or id. Enabled personas appear in persona_list and can be consulted."),
+        materialize_tool(_craft, executor=executor),
+        materialize_tool(_list, executor=executor),
+        materialize_tool(_think, executor=executor),
+        materialize_tool(_disable, executor=executor),
+        materialize_tool(_enable, executor=executor),
     )

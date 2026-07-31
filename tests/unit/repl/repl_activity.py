@@ -63,7 +63,7 @@ def _mark_presented(
 def test_activity_projection_keeps_capture_and_visibility_distinct() -> None:
     tool = _event("chat", "service_tool_called")
     background_chat = _event("chat", "one_shot_chat_completed")
-    approval = _event("reasoning", "approval_prompted")
+    approval = _event("chat", "tool.activity", status="pending")
     background_reason = _event("reasoning", "advance_completed")
 
     events = [tool, background_chat, approval, background_reason]

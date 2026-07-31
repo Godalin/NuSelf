@@ -6,6 +6,15 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Agent tools now use one orthogonal declarative policy path for identity,
+  ownership, effects, confirmation, observation, and audit. The old
+  effectful approval wrapper and ad-hoc StructuredTool factories are removed.
+  Approval is supplied by a replaceable frontend port, while privacy-safe tool
+  and approval activity uses the existing typed `chat/tool.activity` event for
+  terminal, daemon, durable-log, and future web projections. Conversation
+  composition now passes small, ownership-specific conversation and tool
+  resource snapshots instead of forwarding a dozen repositories and services
+  through nested constructors.
 - Module dependency rules are now executable architecture gates. Agent tools
   return model-facing structured data without importing terminal renderers,
   establishing the first enforced adapter boundary for the v0.3.1 decoupling.

@@ -40,6 +40,8 @@ locks and Unix-domain sockets.
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
 - Structured diagnostics with credential redaction
+- Typed activity and approval events shared by terminal, daemon, and future
+  frontends
 
 ## Quick Start
 
@@ -243,8 +245,6 @@ See the [memory guide](docs/memory.md) and
 - [Test suite](tests/README.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
-- [Current development goal](docs/current-goal.md)
-- [TODOs](docs/TODOs.md)
 
 Behavioral contracts belong in `docs/spec/`; completed release history belongs
 in `CHANGELOG.md`. This README intentionally stays a concise project entry point.

@@ -124,11 +124,16 @@ service boundary rather than emulate a model protocol.
 
 ### Tool Registry
 
-`ConversationGraphRuntime` owns a `dict[str, BaseTool]` registry. Adding a tool requires three steps:
+`ConversationToolRuntime` owns the final `dict[str, BaseTool]` collection.
+Adding a tool requires three local steps:
 
-1. Implement a small typed Python function that closes over the relevant service.
-2. Wrap it as a LangChain `StructuredTool`.
-3. Register it in `ConversationGraphRuntime.__init__`.
+1. implement a typed function in the owning subsystem tool module;
+2. apply orthogonal policy decorators;
+3. include `materialize_tool(...)` in that module's returned tuple.
+
+The top-level conversation runtime does not register individual tool names.
+`build_langchain_chat_tools(...)` only concatenates subsystem tuples using one
+resolved `ToolResources` snapshot.
 
 Cross-subsystem reuse does not read this registry or configured endpoints
 through private runtime fields. `ConversationGraphRuntime` exposes an
@@ -141,6 +146,17 @@ Daemon reason-scheduler composition consumes this public snapshot. It must not
 use `getattr` against `_tools` or `_langchain_models`, silently treat missing
 private fields as empty capabilities, or repeat tag filtering outside the
 conversation runtime.
+
+### Complexity Budget
+
+Production conversation composition passes immutable `ConversationResources`
+and nested `ToolResources` snapshots rather than forwarding repositories and
+services through a long constructor chain. Each snapshot follows one ownership
+boundary, owns no lifecycle, and performs no dispatch; it only makes
+already-resolved authority explicit.
+`ConversationGraphRuntime` has at most seven direct constructor inputs and
+`ConversationToolRuntime` at most four. Adding a feature must not add a
+pass-through manager, facade, or another event bus.
 
 The snapshot-to-scheduler-to-advancer tool pipeline is typed as LangChain
 `BaseTool` throughout. Reason workspace and persona tool builders also return
@@ -557,19 +573,13 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 #### `reason_propose`
 
 - **Args**: `topic: str`, `working_summary: str`, `active_items: list[dict]`, `mandates: list[str]`
-- **Behavior**: Proposes a reasoning thread through the approval-decorator path. The decorated tool emits the proposal record, awaits approval, and then creates the reasoning thread.
-- **Returns**: The composed tool returns a structured JSON string to chat agents. On approval it includes the original result and approver metadata, for example:
-
-```
-{"approved": true, "component": "reasoning", "approver": "<user>", "result": "<thread_id>"}
-```
-
-On cancellation it returns:
-
-```
-{"approved": false, "component": "reasoning", "result": null}
-```
-- **When to use**: When the user wants NuSelf to start a reason thread. The agent must provide initial tracked items and mandates, even if either list is empty. The tool wrapper handles the confirmation prompt.
+- **Behavior**: Requests confirmation through the injected approval port and
+  creates the reasoning thread only after an affirmative decision.
+- **Returns**: The thread id. Confirmation policy does not wrap or change the
+  domain result.
+- **When to use**: When the user wants NuSelf to start a reason thread. The
+  agent must provide initial tracked items and mandates, even if either list is
+  empty.
 - **Evidence**: The tool does not accept arbitrary `evidence_refs`; durable evidence refs must be added through explicit service paths.
 
 ### New: Trace Awareness Tools (Read-Only)
@@ -607,80 +617,14 @@ The detailed tool catalog above should be read as grouped capability blocks, not
 | Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | sometimes `approval` |
 | Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `approval`           |
 
-Approval-gated tools return structured JSON that records whether the user approved the action and, if approved, the underlying result payload.
 | Internal synthesis      | `selves_consult`                                                                                                                                                                                  | `log` only                   |
 
 This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.
 
-### Tool Composition Contract
-
-Tool definitions should stay as plain Python functions first, then be assembled into `StructuredTool` instances through a small composition pipeline. The preferred order is:
-
-1. define the underlying function
-2. apply one or more decorators from the shared tool-decorator model
-3. pass the composed callable into `StructuredTool.from_function(...)`
-
-### Decorator Categories
-
-Tool decorators are categorized by intent so the agent builder can combine them without hard-coding control flow into the graph runtime.
-
-Standard categories:
-
-- `approval` — gates user-confirmed or otherwise durable actions. It may return a pending result, request confirmation, or resume the original callable after approval.
-
-Future categories may exist, such as rate limiting, metrics, caching, or tracing, but they must follow the same composable decorator contract.
-
-Completed tool execution is captured once by framework middleware and projected
-through the shared `service_tool_called` outcome contract. It is not a
-decorator category. Approval decorators are intended for tools that change
-durable state or trigger expensive, user-visible actions; read-only tools
-remain undecorated. Approval decorators accept a declared `LogComponent`, not
-an arbitrary string.
-
-The current approval decorator is a synchronous request boundary. It owns the
-wrapped callable only through normal decorator composition, prompts and decides
-within the same invocation, and never places the callable or its arguments in a
-process-global pending registry. Decline returns without executing the callable;
-approval executes it exactly once in that invocation. A future deferred
-approval flow would require a durable typed request/job contract with explicit
-project, identity, expiry, and idempotency semantics; retaining arbitrary
-Python callables is not such a contract.
-
-The prompt interaction, approval decision, wrapped callable, original callable
-exception, and structured approval result are primary effects.
-`approval_prompted` and `approval_decided` are secondary observations and use
-one sealed shared approval-audit contract. `approval_prompted` has fixed
-message/status policy and exact `tool`/`summary` metadata.
-`approval_decided` has fixed message/status policy and exact `tool`,
-`approved`, nullable `approver`, and `input_kind` metadata. `input_kind` is one
-of `affirmative`, `declined`, or `eof`; EOF is recorded as a negative decision
-without pretending that a user explicitly rejected the action.
-
-The decision record is written before an approved callable executes or a
-declined call returns. The middleware-owned tool outcome records subsequent
-execution success or failure:
-
-- prompt rendering and stdout failures propagate unchanged rather than being
-  represented as a user decline;
-- stdin EOF means no affirmative approval was received and therefore follows
-  the safe-default decline path and records `input_kind="eof"`;
-- unexpected input failures propagate unchanged; they are not user decisions;
-- every render, output, EOF, input-failure, and explicit-decline path leaves
-  the wrapped callable unexecuted;
-
-- audit persistence failure never skips the prompt, changes a decline, replaces
-  an approved result, or masks the wrapped callable's exception;
-- invalid event names, missing or extra fields, wrong types, and invalid
-  `input_kind` values are programming errors rejected before the best-effort
-  sink;
-- each failed audit write emits a structured degraded diagnostic containing
-  the failed event and tool name;
-- if that diagnostic cannot be persisted, a `RuntimeWarning` is emitted while
-  the primary approval flow continues;
-- neither an audit failure nor its diagnostic triggers a prompt, callable, or
-  audit retry.
-
-Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
+The orthogonal tool-policy contract near the start of this specification is
+authoritative for composition, confirmation, observation, and audit. Feature
+functions keep their natural result schema; adapters own presentation of
+approval decisions.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 

@@ -119,15 +119,12 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
         approvals=Approve(),
         events=events,
         audits=audits,
-        clock=iter((1.0, 1.5)).__next__,
     ).invoke(archive, "private-value")
 
     assert result == "archived private-value"
     assert [event.kind for event in events.values] == [
         "approval_requested",
         "approval_decided",
-        "operation_started",
-        "operation_completed",
     ]
     assert "private-value" not in repr(events.values)
     assert audits.values == [
@@ -176,4 +173,31 @@ def test_materialized_tool_preserves_framework_boundary() -> None:
         "service_component": "memory",
         "effect": "readonly",
         "confirmation_required": False,
+        "observed": False,
+        "audit_event": None,
     }
+
+
+def test_secondary_event_and_audit_failures_do_not_replace_result() -> None:
+    class BrokenEvents:
+        def publish(self, event: FrontendEvent) -> None:
+            del event
+            raise OSError("event unavailable")
+
+    class BrokenAudits:
+        def write(self, record: FeatureAuditRecord) -> None:
+            del record
+            raise OSError("audit unavailable")
+
+    @tool
+    @component("memory")
+    @mutating
+    @observed
+    @audited("memory_updated")
+    def update() -> str:
+        return "primary"
+
+    assert FeatureExecutor(
+        events=BrokenEvents(),
+        audits=BrokenAudits(),
+    ).invoke(update) == "primary"

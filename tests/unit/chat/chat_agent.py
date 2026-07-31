@@ -45,6 +45,9 @@ from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
+from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.tui.approval import TerminalApprovalPort
+from nuself.agent.tools.resources import ToolResources
 
 
 def _trace_repository(root: Path) -> TraceRepository:
@@ -68,20 +71,28 @@ def _chat_tool(
     if not isinstance(repo, ReflectionRepository):
         raise TypeError("reflection_repository must be a ReflectionRepository")
     memory_repository = memory_entry_repository(tmp_path)
-    tools = build_langchain_chat_tools(
-        query_service=query_service or MemoryQueryService(memory_repository),
-        memory_repository=memory_repository,
-        reflection_repository=repo,
-        reason_service=ReasonService(tmp_path),
-        trace_query_service=compose_trace_services(
-            runtime_paths(tmp_path),
-            get_default_backend(tmp_path),
-        ).query,
-        persona_tools=(),
+    trace = compose_trace_services(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    )
+    resources = ToolResources(
         project_root=tmp_path,
-        reason_workspace_store=PrivateWorkspaceStore(
+        memory_query=query_service
+        or MemoryQueryService(memory_repository),
+        memory=memory_repository,
+        reflections=repo,
+        reasons=ReasonService(tmp_path),
+        reason_workspace=PrivateWorkspaceStore(
             runtime_paths(tmp_path),
             scope="reason",
+        ),
+        traces=trace.query,
+        persona_tools=(),
+    )
+    tools = build_langchain_chat_tools(
+        resources=resources,
+        feature_executor=FeatureExecutor(
+            approvals=TerminalApprovalPort(),
         ),
     )
     return {tool.name: tool for tool in tools}[name]
@@ -1331,11 +1342,7 @@ def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkey
     )
 
     events = read_log_events(project_root=tmp_path, component="reasoning")
-    # The composed approval wrapper now returns a structured JSON string.
-    parsed = json.loads(result)
-    assert parsed.get("approved") is True
-    assert parsed.get("component") == "reasoning"
-    assert parsed.get("result") is not None
+    assert result.startswith("reason-")
     proposal = next(
         event for event in events if event.event == "proposal_created"
     )
@@ -1386,10 +1393,8 @@ def test_reason_propose_creates_thread_when_proposal_audit_is_unavailable(
         },
     )
 
-    parsed = json.loads(result)
-    assert parsed.get("approved") is True
-    thread_id = parsed.get("result")
-    assert isinstance(thread_id, str)
+    thread_id = result
+    assert thread_id.startswith("reason-")
     events = read_log_events(project_root=tmp_path, component="reasoning")
     assert all(event.event != "proposal_created" for event in events)
     assert events[-1].event == "thread_started"
@@ -1423,11 +1428,8 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
     monkeypatch.setattr("builtins.input", _input)
     tool = _chat_tool(tmp_path, "reason_export")
     result = _invoke_chat_tool(tool, {"thread_id": thread.id, "segment_size": 1})
-    parsed = json.loads(result)
-    inner = json.loads(parsed["result"])
+    inner = json.loads(result)
 
-    assert parsed.get("approved") is True
-    assert parsed.get("component") == "reasoning"
     assert inner.get("queued") is True
     assert inner.get("job", {}).get("thread_id") == thread.id
     # No file-based queue — the event went to the in-memory callback.

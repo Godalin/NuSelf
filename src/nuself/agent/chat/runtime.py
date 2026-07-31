@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import replace
 import logging
 import time
@@ -34,9 +34,10 @@ from nuself.agent.chat.response import (
     ConversationResponseService,
     ConversationResponseSynthesizer,
 )
+from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
-from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
+from nuself.agent.chat.thread import ThreadMessage, ThreadState
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
 from nuself.llm import (
@@ -45,26 +46,21 @@ from nuself.llm import (
 )
 from nuself.logs import runtime_event_log_sink
 from nuself.memory.audit import run_memory_observed
-from nuself.memory.query import MemoryQueryService
-from nuself.memory.repository import MemoryEntryRepository
-from nuself.reason.output_contracts import SectionPlanner
-from nuself.reason.service import ReasonService
-from nuself.reflection.repository import ReflectionRepository
-from nuself.persona.definition import PersonaDefinition
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
     RuntimeLogEventPayload,
     RuntimeLogLevel,
 )
 from nuself.runtime.events import EventPublisher
-from nuself.runtime.jobs import JobSink
+from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.frontend import ApprovalPort
+from nuself.runtime.frontend_adapter import (
+    RuntimeFrontendEventSink,
+)
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
 )
-from nuself.trace.service import TraceRecorder
-from nuself.trace.service import TraceQueryService
-from nuself.workspace import PrivateWorkspaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -99,26 +95,16 @@ class ConversationGraphRuntime:
 
     def __init__(
         self,
-        project_root: Path,
+        resources: ConversationResources,
         *,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
-        memory_query_service: MemoryQueryService,
-        thread_store: ThreadStore,
-        job_sink: JobSink | None = None,
-        section_planner: SectionPlanner | None = None,
         event_publisher: EventPublisher | None = None,
         response_service: ConversationResponseService | None = None,
         compression_agent: TextAgent | None = None,
-        memory_repository: MemoryEntryRepository,
-        reflection_repository: ReflectionRepository,
-        trace_recorder: TraceRecorder,
-        reason_service: ReasonService,
-        reason_workspace_store: PrivateWorkspaceStore,
-        trace_query_service: TraceQueryService,
-        persona_tools: Sequence[BaseTool],
-        persona_definitions: tuple[PersonaDefinition, ...],
+        approval_port: ApprovalPort | None = None,
     ) -> None:
+        project_root = resources.tools.project_root
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
             langchain_models
             if langchain_models is not None
@@ -131,11 +117,11 @@ class ConversationGraphRuntime:
             if event_publisher is not None
             else self._build_event_publisher(project_root)
         )
-        self._thread_store = thread_store
+        self._thread_store = resources.thread_store
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
-        self._trace_recorder = trace_recorder
-        self._memory_query_service = memory_query_service
+        self._trace_recorder = resources.trace_recorder
+        self._memory_query_service = resources.tools.memory_query
         self._context_preparer = ConversationContextPreparer(
             self._memory_query_service
         )
@@ -165,20 +151,18 @@ class ConversationGraphRuntime:
             langchain_models=self._langchain_models,
             language_preference=self._language_preference,
             memory_query_service=self._memory_query_service,
-            persona_definitions=persona_definitions,
+            persona_definitions=resources.personas,
         )
         self._tool_runtime = ConversationToolRuntime(
-            project_root=project_root,
-            query_service=self._memory_query_service,
-            memory_repository=memory_repository,
-            reflection_repository=reflection_repository,
-            reason_service=reason_service,
-            reason_workspace_store=reason_workspace_store,
-            trace_query_service=trace_query_service,
-            persona_tools=persona_tools,
+            resources=resources.tools,
             selves_consult=self._consult_selves_tool,
-            job_sink=job_sink,
-            section_planner=section_planner,
+            feature_executor=FeatureExecutor(
+                approvals=approval_port,
+                events=RuntimeFrontendEventSink(
+                    self._event_publisher
+                ),
+            ),
+            event_publisher=self._event_publisher,
         )
         self._tools: dict[str, BaseTool] = self._tool_runtime.tools
         self._response_synthesizer = (
