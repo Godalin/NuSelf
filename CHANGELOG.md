@@ -23,7 +23,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   before the agent layer. Reflection schedule-state persistence is separated
   from orchestration into its own strict codec module, and model-backed
   relevance evaluation and candidate generation now have dedicated modules
-  with injected gate and thread-context boundaries. Trace
+  with injected gate and thread-context boundaries. Reflection promotion
+  operations require explicitly composed repository, reason, and trace ports.
+  Memory intake now receives
+  its profile context explicitly instead of opening storage. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

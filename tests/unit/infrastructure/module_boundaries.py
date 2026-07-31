@@ -202,6 +202,7 @@ def test_reflection_orchestration_does_not_resolve_authority() -> None:
     paths = (
         _SOURCE_ROOT / "reflection" / "scheduler.py",
         _SOURCE_ROOT / "reflection" / "organizer.py",
+        _SOURCE_ROOT / "reflection" / "service.py",
     )
     violations = [
         f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
@@ -260,6 +261,21 @@ def test_reflection_candidates_depend_on_thread_context_port() -> None:
         if imported == "nuself.agent.chat"
         or imported.startswith("nuself.agent.chat.")
     }
+
+
+def test_reflection_service_does_not_compose_infrastructure() -> None:
+    path = _SOURCE_ROOT / "reflection" / "service.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.reason.service", "ReasonService"),
+        ("nuself.trace.repository", "TraceRepository"),
+    }
+    assert [
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ] == []
 
 
 def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
@@ -349,6 +365,20 @@ def test_remaining_persistence_stores_do_not_resolve_authority() -> None:
 
 def test_memory_domain_does_not_import_application_composition() -> None:
     assert _violations(("memory",), ("nuself.application",)) == ()
+
+
+def test_memory_intake_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "memory" / "intake.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
 
 
 def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:

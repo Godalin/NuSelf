@@ -145,6 +145,9 @@ define storage records inline.
 Model-backed relevance evaluation belongs to `reflection.relevance`.
 Scheduling receives the gate as a collaborator and must not own its structured
 output schema, prompt construction, failure policy, or cooldown-state decode.
+Reflection user-intent operations receive repository, reason-start, and
+promotion-recording ports as required constructor dependencies. They must not
+resolve authority or construct concrete reason and trace services.
 Proactive context collection and candidate generation belong to
 `reflection.candidates`. Conversation history is supplied through its
 consumer-owned `ThreadContextProvider`; the reflection domain must not import
@@ -171,11 +174,16 @@ Profile consumers use the stable `ProfileRepositoryPort` contract rather than
 the concrete storage adapter. The contract exposes only list/search and the
 mutations required by memory candidate workflows; authority paths, collections,
 reindexing, and storage implementation remain private to profile composition.
+Memory intake receives that port explicitly; it is classification policy and
+must not open storage when a caller omits profile context.
 
 Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require
 the complete reason service or trace recorder contract merely to start one
 thread and record one promotion.
+The reflection repository and both capabilities are mandatory constructor
+dependencies; CLI and REPL obtain the complete service from application
+composition rather than allowing the domain service to resolve authority.
 
 ## Shared Infrastructure Extraction
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from nuself.config import ReflectionSettings
 from nuself.config import RuntimePaths
 from nuself.memory.repository import MemoryEntryRepository
@@ -13,8 +14,13 @@ from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.scheduler import ReflectionScheduler
+from nuself.reflection.service import ReflectionService
+from nuself.reason.service import ReasonService
 from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
+
+if TYPE_CHECKING:
+    from nuself.application.composition import ApplicationGraph
 
 
 def compose_reflection_repository(
@@ -24,6 +30,22 @@ def compose_reflection_repository(
     """Compose reflection persistence from already-owned resources."""
 
     return ReflectionRepository(paths, backend=backend)
+
+
+def compose_reflection_service(
+    application: "ApplicationGraph",
+) -> ReflectionService:
+    """Compose reflection user operations from one application graph."""
+
+    return ReflectionService(
+        application.reflection,
+        ReasonService(
+            application.paths.project_root,
+            repository=application.reason,
+            trace_recorder=application.trace.recorder,
+        ),
+        application.trace.recorder,
+    )
 
 
 def compose_reflection_scheduler(

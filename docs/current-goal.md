@@ -42,6 +42,11 @@ Current working branch for v0.3.1.
 - Reflection repositories, scheduling collaborators, notification outbox,
   persona prompts, memory/source/profile/reason/trace persistence, and agent
   tool services receive explicit resources at their migrated boundaries.
+- Memory intake now requires an explicit profile port; CLI composition supplies
+  the graph-owned profile repository and the agent cannot resolve authority.
+- Reflection promotion service now requires repository, reason-thread starter,
+  and promotion recorder ports; CLI/REPL compose them from the application
+  graph instead of letting the domain service open storage.
 - AST gates enforce dependency direction, presentation isolation, authority
   lookup restrictions, and application-owned process composition.
 - The combined composition phase passed 2473 locked tests; Pyright analyzed
@@ -56,6 +61,9 @@ Current working branch for v0.3.1.
   cross-process storage imports pass without a reflection/chat cycle. The
   focused split/cold-start slice passed 133 tests and the complete suite passed
   2476 tests with Pyright clean.
+- `ReflectionService` now accepts only required repository, reason-start, and
+  promotion-recording ports; application composition owns its concrete graph
+  and CLI/REPL reuse the invocation-scoped authority.
 
 ## Completion Standard
 

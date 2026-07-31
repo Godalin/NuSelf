@@ -6,7 +6,11 @@ import argparse
 import json
 import sys
 
-from nuself.application.reflection import compose_reflection_repository
+from nuself.application.reflection import (
+    compose_reflection_repository,
+    compose_reflection_service,
+)
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.config import runtime_paths
 from nuself.reflection.organizer import ReflectionOrganizer
@@ -14,7 +18,6 @@ from nuself.reflection.repository import (
     ReflectionEntryNotFound,
     ReflectionRepository,
 )
-from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import get_default_backend
 from nuself.tui.reason import render_reason_detail
@@ -112,8 +115,8 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        thread = ReflectionService(
-            args.project_root
+        thread = compose_reflection_service(
+            compose_cli_application(args.project_root)
         ).promote_to_reason(entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
         print(

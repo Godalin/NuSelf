@@ -580,10 +580,12 @@ def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: 
         repo.archive(entry_id)
         return f"Archived: {entry_id}"
     if subcmd == "promote":
-        from nuself.reflection.service import ReflectionService
+        from nuself.application.reflection import compose_reflection_service
 
         try:
-            thread = ReflectionService(project_root, repository=repo).promote_to_reason(entry_id)
+            thread = compose_reflection_service(
+                compose_cli_application(project_root)
+            ).promote_to_reason(entry_id)
         except RuntimeError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"

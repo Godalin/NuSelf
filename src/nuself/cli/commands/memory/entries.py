@@ -206,7 +206,11 @@ def handle_memory_show(args: argparse.Namespace) -> int:
 
 def handle_memory_add(args: argparse.Namespace) -> int:
     try:
-        inferred = MemoryIntakeAgent(args.project_root).infer(
+        application = compose_cli_application(args.project_root)
+        inferred = MemoryIntakeAgent(
+            args.project_root,
+            profile_repository=application.memory.profile,
+        ).infer(
             body=args.body,
             title=args.title,
             memory_type=args.type,

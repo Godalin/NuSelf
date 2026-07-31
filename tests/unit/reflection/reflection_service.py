@@ -21,6 +21,21 @@ def _test_prompt_generator(*args: object, **kwargs: object) -> str:
     return "Test-generated reasoning prompt."
 
 
+def _service(
+    project_root: Path,
+    repository: ReflectionRepository,
+) -> ReflectionService:
+    trace = compose_trace_services(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    ).recorder
+    return ReflectionService(
+        repository,
+        _reason_service(project_root),
+        trace,
+    )
+
+
 def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
     now = datetime.now(UTC).isoformat()
     return ReflectionEntry(
@@ -45,7 +60,7 @@ def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
 def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     entry = repo.add(_reflection_entry())
-    service = ReflectionService(tmp_path, repository=repo, reason_service=_reason_service(tmp_path))
+    service = _service(tmp_path, repo)
 
     thread = service.promote_to_reason(entry.id)
 
@@ -74,7 +89,7 @@ def test_promote_rejects_non_pending_reflection(tmp_path: Path) -> None:
     entry = repo.add(_reflection_entry()).with_status("archived")
     repo.update(entry)
 
-    service = ReflectionService(tmp_path, repository=repo, reason_service=_reason_service(tmp_path))
+    service = _service(tmp_path, repo)
 
     try:
         service.promote_to_reason(entry.id)
