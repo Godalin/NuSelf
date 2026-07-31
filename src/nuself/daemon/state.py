@@ -13,6 +13,7 @@ from nuself.application.runtime import (
     open_application_runtime,
 )
 from nuself.application.reflection import compose_reflection_scheduler
+from nuself.application.reason import compose_reason_service
 from nuself.config import ConfigSystem
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
@@ -26,7 +27,7 @@ from nuself.notification import (
     NotificationDeliveryLoop,
 )
 from nuself.notification.composition import build_notification_adapters
-from nuself.reason import ReasonScheduler, ReasonService
+from nuself.reason import ReasonScheduler
 from nuself.runtime.events import EventPublisher
 
 
@@ -152,11 +153,7 @@ class DaemonState:
                 readonly_tools=capabilities.readonly_tools,
                 langchain_models=capabilities.endpoints,
                 repository=self.application.reason,
-                service=ReasonService(
-                    self.project_root,
-                    repository=self.application.reason,
-                    trace_recorder=self.application.trace.recorder,
-                ),
+                service=compose_reason_service(self.application),
             )
             self._worker_supervisor.start("reason_scheduler")
 

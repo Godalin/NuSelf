@@ -176,6 +176,20 @@ mutations required by memory candidate workflows; authority paths, collections,
 reindexing, and storage implementation remain private to profile composition.
 Memory intake receives that port explicitly; it is classification policy and
 must not open storage when a caller omits profile context.
+Memory optimization likewise receives resolved paths plus entry, candidate,
+and profile repositories. CLI composition supplies the authority-scoped graph;
+the optimizer never selects storage.
+
+Reason operations used by CLI, REPL, chat, reflection, and daemon workers are
+constructed by `application.reason`. Process adapters do not instantiate a
+root-based reason service independently.
+Memory optimization likewise receives paths, entry/candidate repositories, and
+the profile port explicitly; CLI and daemon composition must reuse the active
+application graph rather than create a second authority graph.
+
+Reason operations are composed by `application.reason`. Process surfaces must
+reuse that factory so repository, workspace, trace, prompt, and optional
+advancer dependencies originate at one application boundary.
 
 Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require

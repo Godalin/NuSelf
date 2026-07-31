@@ -11,15 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.memory.audit import write_optimizer_audit
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.contracts import ProfileRepositoryPort
-from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import get_default_backend
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
 OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
@@ -105,16 +103,15 @@ class MemoryOptimizer:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
         agent: StructuredAgent[OptimizeActionsOutput] | None = None,
         settings: MemoryOptimizerSettings | None = None,
-        repository: MemoryEntryRepository | None = None,
-        candidate_repository: MemoryCandidateRepository | None = None,
-        profile_repository: ProfileRepositoryPort | None = None,
+        repository: MemoryEntryRepository,
+        candidate_repository: MemoryCandidateRepository,
+        profile_repository: ProfileRepositoryPort,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
-        paths = runtime_paths(project_root)
         self._paths = paths
         self._agent = agent or default_structured_agent(
             OptimizeActionsOutput,
@@ -122,24 +119,9 @@ class MemoryOptimizer:
             component="memory",
         )
         self._settings = settings or MemoryOptimizerSettings()
-        backend = get_default_backend(paths.project_root)
-        self._repository = repository or MemoryEntryRepository(
-            paths,
-            backend=backend,
-        )
-        self._profile_repository = (
-            profile_repository
-            or ProfileItemRepository(
-                paths,
-                backend=backend,
-            )
-        )
-        self._candidate_repository = candidate_repository or MemoryCandidateRepository(
-            paths,
-            backend=backend,
-            entry_repository=self._repository,
-            profile_repository=self._profile_repository,
-        )
+        self._repository = repository
+        self._profile_repository = profile_repository
+        self._candidate_repository = candidate_repository
         self._registry = registry or default_memory_type_registry()
 
     def run_once(self) -> MemoryOptimizerResult:

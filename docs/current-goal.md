@@ -47,6 +47,11 @@ Current working branch for v0.3.1.
 - Reflection promotion service now requires repository, reason-thread starter,
   and promotion recorder ports; CLI/REPL compose them from the application
   graph instead of letting the domain service open storage.
+- Memory optimization now requires explicit paths and graph-owned entry,
+  candidate, and profile repositories; CLI maintenance uses application
+  composition for both curator and optimizer.
+- Reason services used by process surfaces now come from one application
+  factory shared by CLI, REPL, chat, reflection, and daemon scheduling.
 - AST gates enforce dependency direction, presentation isolation, authority
   lookup restrictions, and application-owned process composition.
 - The combined composition phase passed 2473 locked tests; Pyright analyzed
@@ -64,6 +69,9 @@ Current working branch for v0.3.1.
 - `ReflectionService` now accepts only required repository, reason-start, and
   promotion-recording ports; application composition owns its concrete graph
   and CLI/REPL reuse the invocation-scoped authority.
+- CLI, REPL, chat, reflection, and daemon reason operations now use
+  `application.reason.compose_reason_service`; MemoryOptimizer also requires
+  graph-owned entry, candidate, and profile repositories.
 
 ## Completion Standard
 

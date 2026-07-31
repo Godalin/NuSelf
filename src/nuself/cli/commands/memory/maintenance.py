@@ -8,17 +8,21 @@ import sys
 from typing import cast
 
 from nuself.cli.composition import compose_cli_application
+from nuself.application.curator import (
+    compose_memory_curator,
+    compose_memory_optimizer,
+)
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.domain.memory import MemoryEntry
-from nuself.memory.curator import MemoryCurator
 from nuself.memory.optimizer import (
-    MemoryOptimizer,
     MemoryOptimizerSettings,
 )
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
-    result = MemoryCurator(args.project_root).run_once()
+    result = compose_memory_curator(
+        compose_cli_application(args.project_root)
+    ).run_once()
     print(
         f"Memory curator: {result.summary()} "
         f"log={result.log_path}"
@@ -28,8 +32,9 @@ def handle_memory_update(args: argparse.Namespace) -> int:
 
 def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
-    result = MemoryOptimizer(
-        args.project_root, settings=settings
+    result = compose_memory_optimizer(
+        compose_cli_application(args.project_root),
+        settings=settings,
     ).run_once()
     print(
         f"Memory optimizer: {result.summary()} "

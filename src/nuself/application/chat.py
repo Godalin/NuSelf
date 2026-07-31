@@ -7,7 +7,7 @@ from nuself.application.composition import ApplicationGraph
 from nuself.memory.query import MemoryQueryService
 from nuself.persona.tools import build_persona_tools
 from nuself.reason.output import SectionPlanner
-from nuself.reason.service import ReasonService
+from nuself.application.reason import compose_reason_service
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
 
@@ -34,11 +34,7 @@ def compose_conversation_runtime(
         profile_repository=application.memory.profile,
         reflection_repository=application.reflection,
         trace_recorder=application.trace.recorder,
-        reason_service=ReasonService(
-            paths.project_root,
-            repository=application.reason,
-            trace_recorder=application.trace.recorder,
-        ),
+        reason_service=compose_reason_service(application),
         trace_query_service=application.trace.query,
         persona_tools=build_persona_tools(
             paths.project_root,

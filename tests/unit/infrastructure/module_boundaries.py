@@ -381,6 +381,33 @@ def test_memory_intake_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_memory_optimizer_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "memory" / "optimizer.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
+
+
+def test_memory_optimizer_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "memory" / "optimizer.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
+
+
 def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:
     paths = (
         _SOURCE_ROOT / "memory" / "repository.py",

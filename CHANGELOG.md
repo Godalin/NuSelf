@@ -26,7 +26,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   with injected gate and thread-context boundaries. Reflection promotion
   operations require explicitly composed repository, reason, and trace ports.
   Memory intake now receives
-  its profile context explicitly instead of opening storage. Trace
+  its profile context explicitly instead of opening storage, and memory
+  optimization receives the graph-owned entry, candidate, and profile
+  repositories. Reason operations used by CLI, REPL, chat, reflection, and
+  daemon workers now share application-owned composition. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

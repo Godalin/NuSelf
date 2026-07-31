@@ -39,7 +39,8 @@ from nuself.memory.source_repository import (
 )
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.reason.service import ReasonService
+from nuself.application.reason import compose_reason_service
+from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
 from nuself.reflection.repository import (
     ReflectionEntryNotFound,
     ReflectionRepository,
@@ -72,6 +73,17 @@ def _reflection_repository(
     return compose_reflection_repository(
         runtime_paths(project_root),
         get_default_backend(project_root),
+    )
+
+
+def _reason_service(
+    project_root: Path | None,
+    *,
+    advancer: ReasonAdvancerProtocol | None = None,
+) -> ReasonService:
+    return compose_reason_service(
+        compose_cli_application(project_root),
+        advancer=advancer,
     )
 
 
@@ -156,7 +168,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
 
 
 def handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
-    service = ReasonService(project_root)
+    service = _reason_service(project_root)
     if command == "":
         return interactive_reason_help()
     if command == "list":
@@ -186,7 +198,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         advancer = default_reason_advancer(
             project_root=project_root,
         )
-        service = ReasonService(project_root, advancer=advancer)
+        service = _reason_service(project_root, advancer=advancer)
         try:
             thread = service.advance_thread(thread_id)
         except ReasonError as exc:
@@ -260,10 +272,9 @@ def handle_interactive_reason_watch(project_root: Path | None, interval: int = 2
     """
     import time
 
-    from nuself.reason.service import ReasonService
     from nuself.tui.reason import render_reason_detail, render_step_watch_entry
 
-    service = ReasonService(project_root)
+    service = _reason_service(project_root)
     threads = service.list_threads(status="all")
     if thread_ref is not None:
         try:

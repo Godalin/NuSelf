@@ -16,6 +16,7 @@ from langchain_core.messages import BaseMessage
 
 import nuself.runtime.observability as observability
 from nuself.agent.errors import AgentModelUnavailableError
+from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.logs import read_log_events
@@ -46,6 +47,32 @@ class FakeOptimizerAgent:
 def _optimizer_agent(response: str) -> FakeOptimizerAgent:
     return FakeOptimizerAgent(
         OptimizeActionsOutput.model_validate_json(response)
+    )
+
+
+def _optimizer(
+    project_root: Path,
+    *,
+    agent: object,
+    repository: MemoryEntryRepository,
+    profile_repository: ProfileItemRepository | None = None,
+    settings: MemoryOptimizerSettings | None = None,
+) -> MemoryOptimizer:
+    profile = profile_repository or ProfileItemRepository(
+        runtime_paths(project_root),
+        backend=get_default_backend(project_root),
+    )
+    return MemoryOptimizer(
+        runtime_paths(project_root),
+        agent=agent,  # type: ignore[arg-type]
+        settings=settings,
+        repository=repository,
+        candidate_repository=memory_candidate_repository(
+            project_root,
+            entry_repository=repository,
+            profile_repository=profile,
+        ),
+        profile_repository=profile,
     )
 
 
@@ -81,7 +108,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
         + keeper.id
         + '"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+    optimizer = _optimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
     entries = repo.list()
@@ -135,7 +162,12 @@ def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> 
         )
     )
     agent = _optimizer_agent('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo, profile_repository=profile_repo)
+    optimizer = _optimizer(
+        tmp_path,
+        agent=agent,
+        repository=repo,
+        profile_repository=profile_repo,
+    )
 
     optimizer.run_once()
 
@@ -161,7 +193,11 @@ def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
         ) -> OptimizeActionsOutput:
             raise AgentModelUnavailableError("LLM unavailable")
 
-    optimizer = MemoryOptimizer(tmp_path, agent=FailingOptimizerAgent(), repository=repo)
+    optimizer = _optimizer(
+        tmp_path,
+        agent=FailingOptimizerAgent(),
+        repository=repo,
+    )
 
     result = optimizer.run_once()
 
@@ -203,7 +239,7 @@ def test_memory_optimizer_propagates_untyped_agent_errors(
             del messages
             raise failure
 
-    optimizer = MemoryOptimizer(
+    optimizer = _optimizer(
         tmp_path,
         agent=BrokenOptimizerAgent(),
         repository=repo,
@@ -233,7 +269,7 @@ def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(
         + '","title":"Improved","body":"Improved durable memory.",'
         '"reason":"clearer"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+    optimizer = _optimizer(tmp_path, agent=agent, repository=repo)
 
     def fail_log_write(*args: object, **kwargs: object) -> object:
         raise OSError("log unavailable")
@@ -269,7 +305,7 @@ def test_memory_optimizer_rejects_raw_transcript_body(tmp_path: Path) -> None:
         + '","title":"Raw transcript","body":"user: hello assistant: hi",'
         '"reason":"bad transcript"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+    optimizer = _optimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
 
@@ -293,7 +329,7 @@ def test_memory_optimizer_uses_registry_memory_types(tmp_path: Path) -> None:
         '"body":"Use persona instructions as durable behavior guidance.",'
         '"tags":["persona"],"confidence":0.8,"reason":"new typed memory type"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+    optimizer = _optimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
     candidates = memory_candidate_repository(tmp_path).list()
@@ -318,7 +354,7 @@ def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
         '"body":"Unknown memory types should not be silently accepted.",'
         '"tags":["memory"],"confidence":0.8,"reason":"bad type"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+    optimizer = _optimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
 
@@ -363,7 +399,7 @@ def test_memory_optimizer_rejects_complete_mixed_valid_invalid_batch(tmp_path: P
         + '","title":"Concise memory","body":"Keep durable memories concise.",'
         '"reason":"compress"},{"action":"delete","entry_id":"","reason":"invalid sibling"}]}'
     )
-    optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
+    optimizer = _optimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
 
@@ -378,7 +414,7 @@ def test_memory_optimizer_respects_limit(tmp_path: Path) -> None:
     for title in ["First", "Second"]:
         repo.save(MemoryEntry(type="belief", title=title, body=f"{title} body."))
     agent = _optimizer_agent('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')
-    optimizer = MemoryOptimizer(
+    optimizer = _optimizer(
         tmp_path,
         agent=agent,
         repository=repo,

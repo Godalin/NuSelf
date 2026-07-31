@@ -6,9 +6,11 @@ import argparse
 import json
 import sys
 
+from nuself.application.reason import compose_reason_service
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.reason.service import ReasonService
+from nuself.reason.service import ReasonAdvancerProtocol
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail, render_reason_row
 
@@ -21,13 +23,24 @@ REASON_VERBS: dict[str, tuple[str, str]] = {
 }
 
 
+def _service(
+    args: argparse.Namespace,
+    *,
+    advancer: ReasonAdvancerProtocol | None = None,
+):
+    return compose_reason_service(
+        compose_cli_application(args.project_root),
+        advancer=advancer,
+    )
+
+
 def _print_json(*entities: object) -> None:
     for entity in entities:
         print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
 def handle_reason_list(args: argparse.Namespace) -> int:
-    threads = ReasonService(args.project_root).list_threads(
+    threads = _service(args).list_threads(
         status=args.status
     )
     if not threads:
@@ -42,7 +55,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
 
 
 def handle_reason_show(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
+    service = _service(args)
     try:
         thread = service.show_thread(args.thread_id)
     except ReasonNotFound:
@@ -66,7 +79,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
 
 
 def handle_reason_start(args: argparse.Namespace) -> int:
-    service = ReasonService(args.project_root)
+    service = _service(args)
     mandates = tuple(getattr(args, "mandate", None) or [])
     try:
         thread = service.start_thread(
@@ -85,14 +98,14 @@ def handle_reason_start(args: argparse.Namespace) -> int:
 
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
-    service = ReasonService(args.project_root)
+    service = _service(args)
     if args.action == "advance":
         from nuself.reason.advancer import default_reason_advancer
 
         advancer = default_reason_advancer(
             project_root=args.project_root,
         )
-        service = ReasonService(args.project_root, advancer=advancer)
+        service = _service(args, advancer=advancer)
     method = getattr(service, method_name)
     try:
         thread = method(args.thread_id)
@@ -114,7 +127,7 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         print("Use --yes to confirm deletion.", file=sys.stderr)
         return 1
     try:
-        thread_id = ReasonService(args.project_root).delete_thread(
+        thread_id = _service(args).delete_thread(
             args.thread_id
         )
     except ReasonError as exc:

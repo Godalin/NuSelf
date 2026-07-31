@@ -15,7 +15,7 @@ from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.service import ReflectionService
-from nuself.reason.service import ReasonService
+from nuself.application.reason import compose_reason_service
 from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 
@@ -39,11 +39,7 @@ def compose_reflection_service(
 
     return ReflectionService(
         application.reflection,
-        ReasonService(
-            application.paths.project_root,
-            repository=application.reason,
-            trace_recorder=application.trace.recorder,
-        ),
+        compose_reason_service(application),
         application.trace.recorder,
     )
 
