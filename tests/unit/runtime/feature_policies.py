@@ -10,6 +10,9 @@ from nuself.runtime.feature_execution import (
     FeatureConfirmationDeclined,
     FeatureExecutor,
 )
+from nuself.runtime.events import EventPublisher
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.messages import RuntimeEnvelope
 from nuself.runtime.features import (
     FeaturePolicyConflictError,
     audited,
@@ -24,18 +27,7 @@ from nuself.runtime.features import (
 from nuself.runtime.frontend import (
     ApprovalDecision,
     ApprovalRequest,
-    FrontendEvent,
 )
-
-
-@dataclass
-class Events:
-    values: list[FrontendEvent] = field(
-        default_factory=lambda: list[FrontendEvent]()
-    )
-
-    def publish(self, event: FrontendEvent) -> None:
-        self.values.append(event)
 
 
 @dataclass
@@ -103,7 +95,9 @@ def test_conflicting_effect_declarations_fail_at_composition() -> None:
 
 
 def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
-    events = Events()
+    events = EventPublisher()
+    captured: list[RuntimeEnvelope] = []
+    events.attach_projection(captured.append)
     audits = Audits()
 
     @tool(name="memory_archive")
@@ -122,11 +116,20 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
     ).invoke(archive, "private-value")
 
     assert result == "archived private-value"
-    assert [event.kind for event in events.values] == [
+    payloads = [
+        RuntimeLogEventPayload.from_mapping(event.payload)
+        for event in captured
+    ]
+    assert all(payload.metadata is not None for payload in payloads)
+    assert [
+        payload.metadata["frontend_event"]
+        for payload in payloads
+        if payload.metadata is not None
+    ] == [
         "approval_requested",
         "approval_decided",
     ]
-    assert "private-value" not in repr(events.values)
+    assert "private-value" not in repr(captured)
     assert audits.values == [
         FeatureAuditRecord(
             component="memory",
@@ -179,11 +182,6 @@ def test_materialized_tool_preserves_framework_boundary() -> None:
 
 
 def test_secondary_event_and_audit_failures_do_not_replace_result() -> None:
-    class BrokenEvents:
-        def publish(self, event: FrontendEvent) -> None:
-            del event
-            raise OSError("event unavailable")
-
     class BrokenAudits:
         def write(self, record: FeatureAuditRecord) -> None:
             del record
@@ -197,7 +195,13 @@ def test_secondary_event_and_audit_failures_do_not_replace_result() -> None:
     def update() -> str:
         return "primary"
 
+    broken_events = EventPublisher()
+    def fail_projection(event: RuntimeEnvelope) -> None:
+        del event
+        raise OSError("event unavailable")
+
+    broken_events.attach_projection(fail_projection)
     assert FeatureExecutor(
-        events=BrokenEvents(),
+        events=broken_events,
         audits=BrokenAudits(),
     ).invoke(update) == "primary"

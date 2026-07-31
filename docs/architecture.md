@@ -41,7 +41,7 @@ transport, background workers, and live activity subscriptions. Both
 boundaries call typed services rather than embedding domain behavior.
 
 Interactive presentation is replaceable. Backend operations publish typed
-frontend events and request confirmation through injected ports. Terminal
+runtime events and request confirmation through injected ports. Terminal
 rendering, daemon activity transport, tests, and a future web frontend are
 adapters over those contracts; backend modules do not import terminal UI code.
 

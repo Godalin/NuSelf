@@ -14,7 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   terminal, daemon, durable-log, and future web projections. Conversation
   composition now passes small, ownership-specific conversation and tool
   resource snapshots instead of forwarding a dozen repositories and services
-  through nested constructors.
+  through nested constructors. Presentation activity now publishes directly
+  through the existing runtime event publisher; the redundant frontend-event
+  wrapper, sink, and adapter layer has been removed.
 - Module dependency rules are now executable architecture gates. Agent tools
   return model-facing structured data without importing terminal renderers,
   establishing the first enforced adapter boundary for the v0.3.1 decoupling.

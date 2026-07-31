@@ -47,10 +47,10 @@ event, or an ephemeral event as the only record of retryable work.
 
 ## Frontend Event Boundary
 
-Backend execution publishes typed frontend events for presentation-worthy
-activity. A frontend event is an ephemeral projection, not an audit record or
-business command. Terminal, daemon-stream, test, and future web adapters
-consume the same event objects and decide how to render or transport them.
+Backend execution publishes presentation-worthy activity directly through the
+existing typed `EventPublisher`. There is no parallel frontend-event model or
+adapter bus. Terminal, daemon-stream, test, and future web adapters consume
+runtime envelopes and decide how to render or transport them.
 
 Backend features, services, repositories, agents, and workers must not import
 `nuself.tui`, call `input()`, print presentation text, or depend on ANSI
@@ -78,7 +78,9 @@ must not require a wrapper function or change a domain signature.
 Policy decorators are inert declarations. Middleware owns ordering:
 authorization and confirmation precede the operation; observation surrounds
 it; audit projection follows the actual outcome. Approval port, event
-publisher, clock, and audit sink are injected at composition. No policy may
+publisher, clock, and audit sink are injected at composition. Feature policy
+execution publishes its small typed payload directly; it must not create a
+second frontend event wrapper around a runtime envelope. No policy may
 discover a terminal or global runtime implicitly.
 
 The decorated function remains directly callable in domain tests. Only an

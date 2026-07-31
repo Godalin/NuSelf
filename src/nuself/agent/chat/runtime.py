@@ -54,9 +54,6 @@ from nuself.runtime.event_payloads import (
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.runtime.frontend import ApprovalPort
-from nuself.runtime.frontend_adapter import (
-    RuntimeFrontendEventSink,
-)
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
@@ -158,9 +155,7 @@ class ConversationGraphRuntime:
             selves_consult=self._consult_selves_tool,
             feature_executor=FeatureExecutor(
                 approvals=approval_port,
-                events=RuntimeFrontendEventSink(
-                    self._event_publisher
-                ),
+                events=self._event_publisher,
             ),
             event_publisher=self._event_publisher,
         )

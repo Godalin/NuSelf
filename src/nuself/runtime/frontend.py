@@ -2,51 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from types import MappingProxyType
+from dataclasses import dataclass
 from typing import Literal, Protocol
-
-FrontendEventKind = Literal[
-    "approval_requested",
-    "approval_decided",
-]
-
-
-@dataclass(frozen=True)
-class FrontendEvent:
-    """One payload-safe presentation event."""
-
-    kind: FrontendEventKind
-    component: str
-    operation: str
-    fields: Mapping[str, object] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
-
-    def __post_init__(self) -> None:
-        if not self.component.strip():
-            raise ValueError("frontend event component must not be blank")
-        if not self.operation.strip():
-            raise ValueError("frontend event operation must not be blank")
-        object.__setattr__(
-            self,
-            "fields",
-            MappingProxyType(dict(self.fields)),
-        )
-
-
-class FrontendEventSink(Protocol):
-    """Presentation adapter boundary."""
-
-    def publish(self, event: FrontendEvent) -> None: ...
-
-
-class NullFrontendEventSink:
-    """Frontend sink for non-interactive execution."""
-
-    def publish(self, event: FrontendEvent) -> None:
-        del event
 
 
 @dataclass(frozen=True)

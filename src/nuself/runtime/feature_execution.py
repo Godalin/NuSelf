@@ -9,12 +9,11 @@ from typing import ParamSpec, Protocol, TypeVar
 from langchain_core.tools import ToolException
 
 from nuself.runtime.features import FeatureSpec, feature_spec
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import (
     ApprovalPort,
     ApprovalRequest,
-    FrontendEvent,
-    FrontendEventSink,
-    NullFrontendEventSink,
     RejectUnavailableApprovalPort,
 )
 
@@ -39,11 +38,6 @@ class FeatureAuditSink(Protocol):
     def write(self, record: FeatureAuditRecord) -> None: ...
 
 
-class NullFeatureAuditSink:
-    def write(self, record: FeatureAuditRecord) -> None:
-        del record
-
-
 class FeatureConfirmationDeclined(ToolException):
     """A frontend did not approve a declared operation."""
 
@@ -55,12 +49,12 @@ class FeatureExecutor:
         self,
         *,
         approvals: ApprovalPort | None = None,
-        events: FrontendEventSink | None = None,
+        events: EventPublisher | None = None,
         audits: FeatureAuditSink | None = None,
     ) -> None:
         self._approvals = approvals or RejectUnavailableApprovalPort()
-        self._events = events or NullFrontendEventSink()
-        self._audits = audits or NullFeatureAuditSink()
+        self._events = events
+        self._audits = audits
 
     def invoke(
         self,
@@ -109,39 +103,66 @@ class FeatureExecutor:
             summary=summary,
         )
         self._publish_secondary(
-            FrontendEvent(
-                "approval_requested",
-                component,
-                operation,
-                {
-                    "action": policy.action,
-                    "resource": policy.resource,
-                    "risk": policy.risk,
-                    "summary": summary,
-                },
-            )
+            "approval_requested",
+            component,
+            operation,
+            {
+                "action": policy.action,
+                "resource": policy.resource,
+                "risk": policy.risk,
+                "summary": summary,
+            },
         )
         decision = self._approvals.request(request)
         self._publish_secondary(
-            FrontendEvent(
-                "approval_decided",
-                component,
-                operation,
-                {
-                    "approved": decision.approved,
-                    "approver": decision.approver,
-                    "input_kind": decision.input_kind,
-                },
-            )
+            "approval_decided",
+            component,
+            operation,
+            {
+                "approved": decision.approved,
+                "approver": decision.approver,
+                "input_kind": decision.input_kind,
+            },
         )
         if not decision.approved:
             raise FeatureConfirmationDeclined(
                 f"{operation} was not approved"
             )
 
-    def _publish_secondary(self, event: FrontendEvent) -> None:
+    def _publish_secondary(
+        self,
+        kind: str,
+        component: str,
+        operation: str,
+        fields: dict[str, object],
+    ) -> None:
+        if self._events is None:
+            return
         try:
-            self._events.publish(event)
+            self._events.publish(
+                producer="chat",
+                name="tool.activity",
+                payload=RuntimeLogEventPayload(
+                    message=(
+                        "Approval requested"
+                        if kind == "approval_requested"
+                        else "Approval decided"
+                    )
+                    + f" for {operation}",
+                    level="info",
+                    status=(
+                        "pending"
+                        if kind == "approval_requested"
+                        else "decided"
+                    ),
+                    metadata={
+                        "frontend_event": kind,
+                        "service_component": component,
+                        "operation": operation,
+                        **fields,
+                    },
+                ).to_mapping(),
+            )
         except Exception:
             # Frontend observation is never authority for the operation.
             return
@@ -154,7 +175,7 @@ class FeatureExecutor:
         outcome: str,
         error: Exception | None,
     ) -> None:
-        if spec.audit is None:
+        if spec.audit is None or self._audits is None:
             return
         try:
             self._audits.write(
