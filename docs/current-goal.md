@@ -9,9 +9,11 @@ Active — decouple conversation from the knowledge domains for v0.3.1.
 
 ## Objective
 
-Make conversation an optional producer at the application boundary rather than
-an authority read by memory or reflection. Memory and reflection must remain
-fully usable when no conversation store or chat runtime is composed.
+Expose conversation and memory as separate domain APIs rather than shared
+storage. Conversation pushes selected completed-turn evidence through the
+generic memory observation API; reasoning or reflection may explicitly query
+conversation history through its read-only API without seeing storage or
+lifecycle internals.
 
 ## Ordered Steps
 
@@ -19,8 +21,9 @@ fully usable when no conversation store or chat runtime is composed.
    memory-owned durable observation.
 2. Replace conversation-backed memory scanning, cursors, plans, and locks with
    observation-owned ingestion and recovery state.
-3. Remove recent conversation text from reflection candidate generation; use
-   only memory, profile, and imported source knowledge.
+3. Replace reflection's storage-shaped conversation collaborator with the
+   read-only conversation history API; keep conversation input explicit and
+   bounded.
 4. Reduce daemon/application composition to publish and schedule observations
    without memory or reflection reading conversation state.
 5. Migrate existing SQLite state without losing unprocessed durable chat input,
@@ -31,13 +34,14 @@ fully usable when no conversation store or chat runtime is composed.
 - Conversation may call memory/reflection tools; this consumer direction is
   intentional and does not grant either domain access to conversation state.
 - Provenance may retain an opaque source reference created by the application
-  projection, but knowledge-domain records must not require a conversation ID.
+  projection, but memory records must not require a conversation ID.
 - This goal does not redesign the model provider or interactive presentation.
 
 ## Completion Evidence
 
-- No production module below `nuself.memory` or `nuself.reflection` imports,
-  stores, or queries conversation state, messages, stores, or IDs.
+- No production module below `nuself.memory`, `nuself.reflection`, or
+  `nuself.reason` imports or queries conversation state or storage. Explicit
+  history consumers use only the read-only conversation API.
 - Memory curation can recover from a process restart using only memory-owned
   storage, and reflection can run without a conversation collaborator.
 - Migration, focused boundary tests, full pytest, Pyright, build, clean-wheel

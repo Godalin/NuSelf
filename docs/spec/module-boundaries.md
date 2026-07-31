@@ -148,10 +148,12 @@ from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
 Conversation state and persistence are isolated domain infrastructure under
 `nuself.conversation`, not shared knowledge infrastructure. `ConversationStore`
 receives resolved runtime paths and the selected backend as required resources
-and is constructed exactly once in `ApplicationGraph`; only chat and explicit
-conversation-management surfaces may borrow it. Memory, reflection, reason,
-persona, notification, and trace code must not import, query, or retain
-conversation state, messages, stores, or identifiers.
+and is constructed exactly once in `ApplicationGraph`; only the conversation
+API implementation, chat, and explicit conversation-management surfaces may
+borrow it. Memory, reflection, reason, persona, notification, and trace code
+must not import or query conversation state or storage. A domain that needs
+chat evidence uses the read-only conversation history API and receives bounded,
+immutable DTOs; this explicit API dependency is allowed.
 
 A completed turn may cross into the knowledge system only through an
 application-owned projector. The projector converts the committed turn into a
@@ -164,10 +166,10 @@ This establishes the dependency direction `conversation -> application event
 projection -> memory`; there is no reverse edge.
 
 Reflection candidate generation consumes durable memory entries, profile
-items, and imported sources only. It must neither accept a conversation context
-provider nor include recent conversation text in its prompt. Conversation may
-consume reflection through user-facing tools, but reflection remains runnable
-when the conversation domain is absent.
+items, imported sources, and optionally bounded excerpts supplied through the
+read-only conversation API. It must not accept a `ConversationStore` or decode
+conversation records. Conversation may consume reflection through user-facing
+tools; the two directions meet only at their public APIs.
 
 Daemon curation, reflection, reasoning, and notification workers follow the
 same rule: process composition supplies their backend, repositories, outbox,
