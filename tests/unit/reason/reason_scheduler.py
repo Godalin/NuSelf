@@ -13,7 +13,7 @@ from nuself.logs import read_log_events
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
-from nuself.reason.scheduler import ReasonScheduler
+from reason_fixtures import ReasonScheduler
 from reason_fixtures import ReasonService
 from nuself.storage import auto_backend, get_default_backend
 

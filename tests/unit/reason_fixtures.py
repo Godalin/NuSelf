@@ -8,6 +8,11 @@ from pathlib import Path
 from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.reason.repository import ReasonRepository
+from nuself.reason.advancer import ReasonAdvancer
+from nuself.reason.scheduler import ReasonScheduler as _ReasonScheduler
+from nuself.llm import LangChainLLMEndpoint
+from langchain_core.tools import BaseTool
+from collections.abc import Sequence
 from nuself.reason.service import (
     ReasonAdvancerProtocol,
     ReasonService as _ReasonService,
@@ -56,4 +61,29 @@ class ReasonService(_ReasonService):
             trace_recorder=selected_trace,
             advancer=advancer,
             prompt_generator=prompt_generator,
+        )
+
+
+class ReasonScheduler(_ReasonScheduler):
+    """Test wrapper that supplies the service-owned repository explicitly."""
+
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        advancer: ReasonAdvancer | None = None,
+        interval_seconds: int = 600,
+        *,
+        service: _ReasonService,
+        readonly_tools: Sequence[BaseTool] | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+        repository: ReasonRepository | None = None,
+    ) -> None:
+        super().__init__(
+            project_root,
+            advancer,
+            interval_seconds,
+            service=service,
+            readonly_tools=readonly_tools,
+            langchain_models=langchain_models,
+            repository=repository or service.repository,
         )

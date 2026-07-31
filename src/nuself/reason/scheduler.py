@@ -33,12 +33,12 @@ class ReasonScheduler:
         service: ReasonService,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
-        repository: ReasonRepository | None = None,
+        repository: ReasonRepository,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
         self._service = service
-        self._repository = repository or service.repository
+        self._repository = repository
         self._interval_seconds = interval_seconds
 
         if advancer is None and project_root is not None:

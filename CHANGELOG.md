@@ -36,7 +36,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   used by CLI, REPL, chat, reflection, and
   daemon workers now share application-owned composition; the core reason
   service requires explicit repository, workspace, and trace dependencies,
-  while schedulers and export workers receive that existing service. The
+  while schedulers and export workers receive that existing service and
+  schedulers receive the repository explicitly. The
   conversation graph runtime now requires its complete memory, thread,
   reflection, reason, trace, and persona capability set instead of rebuilding
   authority resources inside the agent layer. Trace
