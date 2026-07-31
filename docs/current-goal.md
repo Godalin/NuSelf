@@ -5,47 +5,22 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — renaming persistent chat threads to conversations and tightening the
-conversation critical path for v0.3.1.
+Idle — no active implementation goal.
 
-## Objective
+## Completed Evidence
 
-Make `conversation` the single name for a persistent, branchable discussion;
-reserve `session` for one client runtime and `turn` for one interaction. Safely
-migrate existing SQLite data, expose the terminology consistently, make
-context-stage cost observable, and move compression after reply persistence
-without weakening same-conversation ordering or crash safety.
+The v0.3.1 persistent-conversation refactor is complete in `e656b19`:
 
-## Ordered Steps
-
-1. Define the conversation/session/turn boundary, storage migration, runtime
-   correlation, compression, and observability contracts.
-2. Update governing specifications before behavioral implementation.
-3. Rename domain types, repositories, CLI, daemon protocol, scheduler resource
-   keys, runtime context, records, tests, and documentation.
-   Keep conversation state/storage outside the agent package and construct one
-   shared store in `ApplicationGraph` so cross-domain readers do not depend on
-   chat implementation details.
-4. Add a schema migration that preserves existing conversation data.
-5. Commit the completed reply before returning it; schedule compression on the
-   same conversation resource and tolerate an uncompressed next turn.
-6. Record bounded per-stage duration and context composition metadata without
-   logging private content.
-7. Run the full release gate, push once, and track final six-platform CI.
-
-## Exclusions
-
-- `session` remains the transient interactive-client concept.
-- Reasoning work keeps its separate reason-domain identity in this goal.
-- No provider-specific server-side session dependency or general context cache.
-- No raw prompt, message, memory, or summary content in timing metadata.
-
-## Completion Evidence
-
-- Existing v0.3.1 conversation records survive migration byte-for-content.
-- Public and internal persistent-chat terminology no longer uses `thread`.
-- Same-conversation turns remain serialized and immediately durable on success.
-- Compression no longer delays delivery of an already committed reply.
-- Timing/context metadata is bounded, structured, and payload-safe.
-- Focused concurrency, migration, interruption, and recovery tests pass along
-  with the full local and six-platform CI gates.
+- `conversation`, `session`, and `turn` now have distinct contracts; reason
+  threads retain their separate `reason_id` identity.
+- Neutral conversation state/storage is owned once by `ApplicationGraph`, so
+  memory and reflection no longer import the chat agent implementation.
+- Reversible schema v6 migration preserves records and rejects collection
+  collisions atomically. The project authority migrated from v5 to v6 with a
+  retained pre-migration backup and `PRAGMA quick_check = ok`.
+- Replies commit and render before compression; daemon memory curation and
+  compression share the conversation resource with curation ordered first.
+- Turn completion records bounded stage durations and context counts without
+  prompt, message, memory, or summary content.
+- Pyright completed with 0 errors and 0 warnings; 2439 tests and both sdist and
+  wheel builds passed. Final remote CI remains the release-branch push gate.
