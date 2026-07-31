@@ -7,6 +7,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | Spec | Scope |
 |---|---|
 | [`development.md`](development.md) | Code standards, commit policy, development workflow |
+| [`module-boundaries.md`](module-boundaries.md) | Package dependency direction, composition ownership, and shared-code extraction |
 | [`runtime-infrastructure.md`](runtime-infrastructure.md) | Shared handlers, envelopes, events, jobs, daemon payloads, and activity transport |
 | [`cli.md`](cli.md) | CLI commands, REPL commands, output formats, color conventions |
 | [`agent-tools.md`](agent-tools.md) | Agent-facing tool contracts, approval boundaries, and capability groups |

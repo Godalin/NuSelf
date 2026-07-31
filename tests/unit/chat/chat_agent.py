@@ -1689,8 +1689,8 @@ def test_trace_search_tool(tmp_path: Path) -> None:
 
     result = _invoke_chat_tool(tool, {"query": "searchable"})
 
-    assert "Matching trace records:" in result
-    assert trace.title in result
+    data = json.loads(result)
+    assert data["traces"][0]["title"] == trace.title
 
 
 def test_trace_count_tool(tmp_path: Path) -> None:
@@ -1720,8 +1720,9 @@ def test_trace_show_tool(tmp_path: Path) -> None:
 
     result = _invoke_chat_tool(tool, {"trace_id": trace.id})
 
-    assert "[trace] Trace detail target" in result
-    assert "A detailed provenance item." in result
+    data = json.loads(result)
+    assert data["trace"]["title"] == "Trace detail target"
+    assert data["trace"]["summary"] == "A detailed provenance item."
 
 
 def test_chat_trace_diagnostics_cannot_replace_completed_answer(

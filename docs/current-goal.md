@@ -5,35 +5,38 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Objective
 
-No active implementation goal.
+Complete NuSelf's module decoupling and shared-infrastructure extraction so
+the project has explicit dependency direction, centralized composition, and
+stable boundaries for long-term development.
 
 ## Active Branch
 
-None.
+Current working branch for v0.3.1.
 
 ## Ordered Work
 
-None.
+1. Define and enforce package dependency rules. Complete: AST gates now reject
+   runtime/domain/agent imports that point back to outer adapters.
+2. Establish one runtime composition root shared by daemon and direct mode.
+3. Remove hidden backend/path resolution from domain repositories.
+4. Extract narrow cross-domain ports and shared contracts.
+5. Remove agent/domain dependencies on CLI/TUI presentation.
+6. Split oversized cross-cutting modules along their actual ownership.
+7. Run complete gates and close the goal with dependency evidence.
 
 ## Out Of Scope
 
-None.
+- Changing the software version beyond v0.3.1.
+- Release publication.
+- New end-user features unrelated to architecture boundaries.
 
 ## Completion Evidence
 
-The compact schema-v5 authority is complete:
+In progress:
 
-- v4 remains a frozen, valid historical identity with its two prefix indexes;
-- reversible `v004_to_v005` removes those indexes, while v4→v3 now requires
-  exported workspace state and removes both compact tables;
-- runtime and migration validation enforce exact table, column, primary-key,
-  strict-JSON, `WITHOUT ROWID`, and version-specific index identity;
-- malformed-schema, rollback, size, workspace, and v3↔v5 round-trip
-  regressions pass;
-- the repository-local authority reports versions 1–5, 3654 domain records,
-  93 workspace rows, no explicit secondary indexes, and `quick_check=ok`;
-- its retained pre-v4 and pre-v5 backups remain at schema v3 and v4
-  respectively and pass `quick_check`; all 89 memory records remain valid;
-- focused tests passed 112 cases, the full suite passed 2449 tests, Pyright
-  reported 0 errors and 0 warnings, and the sdist/wheel plus clean Python 3.14
-  wheel smoke test passed.
+- authoritative module-boundary and shared-extraction rules are documented;
+- AST dependency gates cover runtime, business domains, and agent adapters;
+- agent trace tools no longer import terminal renderers and instead return
+  model-facing structured JSON;
+- the first focused boundary gate passed 74 tests and Pyright reported
+  0 errors and 0 warnings.

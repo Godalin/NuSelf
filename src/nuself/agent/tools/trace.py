@@ -5,10 +5,10 @@ from __future__ import annotations
 from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.common import structured_tool_factory
+from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService
-from nuself.tui.trace import render_trace_detail, render_trace_row
 
 
 def build_trace_tools(
@@ -31,12 +31,11 @@ def build_trace_tools(
         traces = service.search_traces(query_str.strip())[:limit_int]
         if not traces:
             return f"No trace records matched: {query_str}"
-        lines = ["Matching trace records:"]
-        lines.extend(
-            render_trace_row(trace, index=index, color=False)
-            for index, trace in enumerate(traces)
+        return encode_json_value(
+            {"traces": [trace.to_wire() for trace in traces]},
+            ensure_ascii=False,
+            indent=2,
         )
-        return "\n".join(lines)
 
     def count_traces(query: str | None = None) -> str:
         """Count thought provenance trace records, optionally matching a query."""
@@ -57,7 +56,17 @@ def build_trace_tools(
             trace = service.show_trace(trace_id.strip())
         except TraceNotFound as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
-        return render_trace_detail(trace, service.links_for(trace.id))
+        return encode_json_value(
+            {
+                "trace": trace.to_wire(),
+                "links": [
+                    link.to_wire()
+                    for link in service.links_for(trace.id)
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
     def related_traces(artifact_ref: str, limit: int = 5) -> str:
         """List thought provenance records related to an artifact reference."""
@@ -74,19 +83,15 @@ def build_trace_tools(
         links = service.links_for_artifact(artifact)
         if not traces and not links:
             return f"No trace records or links related to: {artifact}"
-        lines = [f"Trace records related to {artifact}:"]
-        lines.extend(
-            render_trace_row(trace, index=index, color=False)
-            for index, trace in enumerate(traces)
+        return encode_json_value(
+            {
+                "artifact_ref": artifact,
+                "traces": [trace.to_wire() for trace in traces],
+                "links": [link.to_wire() for link in links],
+            },
+            ensure_ascii=False,
+            indent=2,
         )
-        if links:
-            lines.append("Related links:")
-            lines.extend(
-                f"  {link.relation}: {link.source_id} -> "
-                f"{link.target_id} ({link.summary})"
-                for link in links
-            )
-        return "\n".join(lines)
 
     return (
         tool_from_function(
