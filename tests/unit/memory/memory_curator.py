@@ -3,6 +3,7 @@ from __future__ import annotations
 # pyright: reportUnusedImport=false
 
 from memory_fixtures import (
+    MemoryCurator,
     memory_candidate_repository,
     memory_curator_plan_store,
     memory_entry_repository,
@@ -31,7 +32,6 @@ from nuself.domain.profile import ProfileItem
 from nuself.logs import read_log_events
 from nuself.memory.curator import (
     CuratorActionsOutput,
-    MemoryCurator,
     MemoryCuratorSettings,
     _actions_from_output,  # pyright: ignore[reportPrivateUsage]
 )

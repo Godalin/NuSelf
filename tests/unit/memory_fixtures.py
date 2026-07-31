@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.agent.chat import ThreadStore
+from nuself.agent.structured import StructuredAgent
+from nuself.application import compose_trace_services
 from nuself.config import RuntimePaths, runtime_paths
 from nuself.domain.memory import (
     MemoryTypeRegistry,
@@ -14,9 +17,15 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.memory.curator_plan import MemoryCuratorPlanStore
+from nuself.memory.curator import (
+    CuratorActionsOutput,
+    MemoryCurator as _MemoryCurator,
+    MemoryCuratorSettings,
+)
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import StorageBackend, get_default_backend
+from nuself.trace.service import TraceRecorder
 
 
 def _resources(
@@ -108,3 +117,59 @@ def source_repository(
         candidate_repository=candidates,
         profile_repository=profile,
     )
+
+
+class MemoryCurator(_MemoryCurator):
+    """Test convenience wrapper with explicit authority resources."""
+
+    def __init__(
+        self,
+        project_root: Path,
+        *,
+        agent: StructuredAgent[CuratorActionsOutput] | None = None,
+        settings: MemoryCuratorSettings | None = None,
+        thread_store: ThreadStore | None = None,
+        repository: MemoryEntryRepository | None = None,
+        candidate_repository: MemoryCandidateRepository | None = None,
+        profile_repository: ProfileItemRepository | None = None,
+        registry: MemoryTypeRegistry | None = None,
+        trace_recorder: TraceRecorder | None = None,
+        plan_store: MemoryCuratorPlanStore | None = None,
+        backend: StorageBackend | None = None,
+    ) -> None:
+        paths, selected_backend = _resources(project_root, backend)
+        entries = repository or memory_entry_repository(
+            paths,
+            backend=selected_backend,
+            registry=registry,
+        )
+        profile = profile_repository or ProfileItemRepository(
+            paths,
+            backend=selected_backend,
+        )
+        candidates = candidate_repository or memory_candidate_repository(
+            paths,
+            backend=selected_backend,
+            entry_repository=entries,
+            profile_repository=profile,
+        )
+        super().__init__(
+            paths,
+            agent=agent,
+            settings=settings,
+            thread_store=thread_store
+            or ThreadStore(paths.project_root, backend=selected_backend),
+            repository=entries,
+            candidate_repository=candidates,
+            profile_repository=profile,
+            registry=registry,
+            trace_recorder=trace_recorder
+            or compose_trace_services(paths, selected_backend).recorder,
+            plan_store=plan_store
+            or memory_curator_plan_store(
+                paths,
+                backend=selected_backend,
+                registry=registry,
+            ),
+            backend=selected_backend,
+        )

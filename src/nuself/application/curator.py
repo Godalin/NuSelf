@@ -18,7 +18,7 @@ def compose_memory_curator(
 
     paths = application.paths
     return MemoryCurator(
-        paths.project_root,
+        paths,
         thread_store=ThreadStore(
             paths.project_root,
             backend=application.backend,

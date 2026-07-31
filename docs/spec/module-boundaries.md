@@ -186,6 +186,10 @@ root-based reason service independently.
 Memory optimization likewise receives paths, entry/candidate repositories, and
 the profile port explicitly; CLI and daemon composition must reuse the active
 application graph rather than create a second authority graph.
+Memory curation receives the complete authority resource set explicitly:
+runtime paths, backend, thread store, entry/candidate/profile repositories,
+recovery-plan store, and trace recorder. Defaults are limited to curation
+policy and model adapters, never persistence or authority selection.
 
 Reason operations are composed by `application.reason`. Process surfaces must
 reuse that factory so repository, workspace, trace, prompt, and optional

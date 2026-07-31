@@ -394,6 +394,19 @@ def test_memory_optimizer_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_memory_curator_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "memory" / "curator.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
+
+
 def test_reason_service_does_not_compose_infrastructure() -> None:
     path = _SOURCE_ROOT / "reason" / "service.py"
     forbidden = {

@@ -28,7 +28,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   Memory intake now receives
   its profile context explicitly instead of opening storage, and memory
   optimization receives the graph-owned entry, candidate, and profile
-  repositories. Reason operations used by CLI, REPL, chat, reflection, and
+  repositories. Memory curation likewise requires the graph-owned backend,
+  stores, repositories, recovery plans, and trace recorder. Reason operations
+  used by CLI, REPL, chat, reflection, and
   daemon workers now share application-owned composition; the core reason
   service requires explicit repository, workspace, and trace dependencies,
   while schedulers and export workers receive that existing service. Trace

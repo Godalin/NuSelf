@@ -75,6 +75,9 @@ Current working branch for v0.3.1.
 - `ReasonService` now requires repository, workspace, and trace dependencies;
   ReasonScheduler, ReasonOutputService, and the daemon export worker receive an
   existing service instead of constructing a fallback service graph.
+- `MemoryCurator` now requires paths, backend, thread store, repositories,
+  recovery-plan store, and trace recorder; only application composition creates
+  its concrete authority graph.
 
 ## Completion Standard
 

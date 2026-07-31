@@ -12,7 +12,7 @@ from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.domain.memory import (
     MemoryCandidate,
     MemoryEntry,
@@ -46,10 +46,9 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.profile.contracts import ProfileRepositoryPort
-from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 
 DURABLE_SIGNAL_MARKERS: tuple[str, ...] = (
@@ -196,20 +195,19 @@ class MemoryCurator:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
         agent: StructuredAgent[CuratorActionsOutput] | None = None,
         settings: MemoryCuratorSettings | None = None,
-        thread_store: ThreadStore | None = None,
-        repository: MemoryEntryRepository | None = None,
-        candidate_repository: MemoryCandidateRepository | None = None,
-        profile_repository: ProfileRepositoryPort | None = None,
+        thread_store: ThreadStore,
+        repository: MemoryEntryRepository,
+        candidate_repository: MemoryCandidateRepository,
+        profile_repository: ProfileRepositoryPort,
         registry: MemoryTypeRegistry | None = None,
-        trace_recorder: TraceRecorder | None = None,
-        plan_store: MemoryCuratorPlanStore | None = None,
-        backend: StorageBackend | None = None,
+        trace_recorder: TraceRecorder,
+        plan_store: MemoryCuratorPlanStore,
+        backend: StorageBackend,
     ) -> None:
-        paths = runtime_paths(project_root)
         self._paths = paths
         self._agent = agent or default_structured_agent(
             CuratorActionsOutput,
@@ -217,32 +215,17 @@ class MemoryCurator:
             component="memory",
         )
         self._settings = settings or MemoryCuratorSettings()
-        self._backend = backend or get_default_backend(paths.project_root)
+        self._backend = backend
         self._cursor_collection = self._backend.collection(
             "memory_curator_cursors"
         )
-        self._thread_store = thread_store or ThreadStore(paths.project_root)
-        self._repository = repository or MemoryEntryRepository(
-            paths,
-            backend=self._backend,
-        )
-        self._profile_repository = (
-            profile_repository
-            or ProfileItemRepository(paths, backend=self._backend)
-        )
-        self._candidate_repository = candidate_repository or MemoryCandidateRepository(
-            paths,
-            backend=self._backend,
-            entry_repository=self._repository,
-            profile_repository=self._profile_repository,
-        )
+        self._thread_store = thread_store
+        self._repository = repository
+        self._profile_repository = profile_repository
+        self._candidate_repository = candidate_repository
         self._registry = registry or default_memory_type_registry()
-        self._plan_store = plan_store or MemoryCuratorPlanStore(
-            paths,
-            self._backend,
-            registry=self._registry,
-        )
-        self._trace_recorder = trace_recorder
+        self._plan_store = plan_store
+        self._trace_recorder: TraceRecorder | None = trace_recorder
 
     def run_once(
         self,
