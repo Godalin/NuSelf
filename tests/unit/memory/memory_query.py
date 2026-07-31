@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from pathlib import Path
 
 from nuself.config import runtime_paths
@@ -13,7 +21,7 @@ from nuself.storage import get_default_backend
 
 
 def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     relevant = repo.save(
         MemoryEntry(
             type="belief",
@@ -42,7 +50,7 @@ def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> Non
 
 
 def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="style_trait",
@@ -84,8 +92,8 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
         ),
         encoding="utf-8",
     )
-    entry_repo = MemoryEntryRepository(tmp_path)
-    source_repo = SourceRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
+    source_repo = source_repository(tmp_path)
     source_repo.ingest_path(source_path)
     service = MemoryQueryService(entry_repo, source_repo)
 
@@ -102,7 +110,7 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
 
 
 def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
@@ -127,7 +135,7 @@ def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> Non
 
 
 def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -155,7 +163,7 @@ def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: P
             source_refs=["source:profile:0"],
         )
     )
-    service = MemoryQueryService(MemoryEntryRepository(tmp_path), profile_repository=profile_repo)
+    service = MemoryQueryService(memory_entry_repository(tmp_path), profile_repository=profile_repo)
 
     packed = service.pack(MemoryQuery(text="direct answers"))
 
@@ -165,7 +173,7 @@ def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: P
 
 
 def test_memory_query_uses_type_descriptor_affinity(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     style = repo.save(
         MemoryEntry(
             type="style_trait",
@@ -193,7 +201,7 @@ def test_memory_query_uses_type_descriptor_affinity(tmp_path: Path) -> None:
 
 
 def test_memory_query_filters_by_type_and_tag(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -221,7 +229,7 @@ def test_memory_query_filters_by_type_and_tag(tmp_path: Path) -> None:
 
 
 def test_memory_query_expands_related_entries(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     related = repo.save(
         MemoryEntry(
             type="concept",
@@ -250,7 +258,7 @@ def test_memory_query_expands_related_entries(tmp_path: Path) -> None:
 
 
 def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     old = repo.save(
         MemoryEntry(
             type="belief",
@@ -279,7 +287,7 @@ def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
 
 
 def test_memory_query_respects_retrieval_rule_score_penalty(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     superseded = repo.save(
         MemoryEntry(
             type="belief",
@@ -316,7 +324,7 @@ def test_memory_query_respects_retrieval_rule_score_penalty(tmp_path: Path) -> N
 
 
 def test_memory_query_expands_transitive_relation_closure(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     root = repo.save(
         MemoryEntry(
             type="goal",
@@ -413,7 +421,7 @@ def test_memory_query_uses_registry_retrieve_to_filter_types(tmp_path: Path) -> 
         def example(self) -> MemoryObject:
             return MemoryObject(type=self.type, payload={"title": "Example", "body": "B"})
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     belief = repo.save(
         MemoryEntry(
             type="belief",
@@ -442,7 +450,7 @@ def test_memory_query_uses_registry_retrieve_to_filter_types(tmp_path: Path) -> 
 
 
 def test_query_uses_importance_in_scoring(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     low = repo.save(
         MemoryEntry(
             type="episode",
@@ -471,7 +479,7 @@ def test_query_uses_importance_in_scoring(tmp_path: Path) -> None:
 
 
 def test_query_filters_by_min_importance(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     low = repo.save(
         MemoryEntry(
             type="episode",

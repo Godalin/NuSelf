@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.commands.output import (
     print_ansi,
@@ -15,7 +16,6 @@ from nuself.cli.commands.output import (
 from nuself.domain.memory import MemoryCandidate
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
-    MemoryCandidateRepository,
     MemoryEntryNotFound,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -32,7 +32,9 @@ def _candidates_for_list(
     review_state: str | None = None,
     sort_by: str = "updated_at",
 ) -> list[MemoryCandidate]:
-    candidates = MemoryCandidateRepository(project_root).list(
+    candidates = compose_cli_application(
+        project_root
+    ).memory.candidates.list(
         include_reviewed=include_reviewed
     )
     if review_state is not None:
@@ -121,9 +123,9 @@ def handle_memory_candidate_show(
     if candidate_id is None:
         return 1
     try:
-        candidate = MemoryCandidateRepository(
+        candidate = compose_cli_application(
             args.project_root
-        ).get(candidate_id)
+        ).memory.candidates.get(candidate_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",
@@ -140,7 +142,7 @@ def handle_memory_candidate_accept(
     candidate_ids = _resolve_candidate_ids(args)
     if candidate_ids is None:
         return 1
-    repository = MemoryCandidateRepository(args.project_root)
+    repository = compose_cli_application(args.project_root).memory.candidates
     for candidate_id in candidate_ids:
         try:
             entry = repository.accept(candidate_id)
@@ -167,7 +169,7 @@ def handle_memory_candidate_reject(
     candidate_ids = _resolve_candidate_ids(args)
     if candidate_ids is None:
         return 1
-    repository = MemoryCandidateRepository(args.project_root)
+    repository = compose_cli_application(args.project_root).memory.candidates
     for candidate_id in candidate_ids:
         try:
             repository.reject(candidate_id)
@@ -188,7 +190,7 @@ def handle_memory_candidate_edit(
     if candidate_id is None:
         return 1
     try:
-        updated = MemoryCandidateRepository(args.project_root).edit(
+        updated = compose_cli_application(args.project_root).memory.candidates.edit(
             candidate_id,
             title=args.title,
             body=args.body,
@@ -216,9 +218,9 @@ def handle_memory_candidate_merge(
     if candidate_id is None:
         return 1
     try:
-        entry = MemoryCandidateRepository(
+        entry = compose_cli_application(
             args.project_root
-        ).merge(candidate_id, args.entry_id)
+        ).memory.candidates.merge(candidate_id, args.entry_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",

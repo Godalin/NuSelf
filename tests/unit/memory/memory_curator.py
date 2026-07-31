@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from collections.abc import Sequence
 import json
 from pathlib import Path
@@ -131,7 +139,7 @@ def test_curator_rejects_complete_batch_when_one_action_is_invalid(
     result = curator.run_once()
 
     assert result.processed_messages == 0
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
 
 
 def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> None:
@@ -150,12 +158,12 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         '"body":"The user decided that terminals attached to one NuSelf mind should share short-term memory.",'
         '"tags":["memory"],"confidence":0.8,"reason":"important memory model decision"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.processed_messages == 2
     assert result.created == 1
@@ -241,7 +249,7 @@ def test_memory_curator_rejects_corrupt_cursor_without_replay(
         curator.run_once()
 
     assert agent.calls == []
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
     event = read_log_events(
         project_root=tmp_path,
         component="memory",
@@ -309,7 +317,7 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
     with pytest.raises(OSError, match="cursor store unavailable"):
         curator.run_once()
 
-    candidate_repo = MemoryCandidateRepository(tmp_path)
+    candidate_repo = memory_candidate_repository(tmp_path)
     [first_candidate] = candidate_repo.list(include_reviewed=True)
     thread_store.save(
         ThreadState(
@@ -336,7 +344,7 @@ def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
     assert resumed_candidate == first_candidate
     assert resumed_candidate.review_state == candidate_state
     assert resumed_candidate.source_refs == ("thread:default:0-1",)
-    assert len(MemoryEntryRepository(tmp_path).list()) == int(auto_accept)
+    assert len(memory_entry_repository(tmp_path).list()) == int(auto_accept)
     assert _stored_record(
         tmp_path, "memory_curator_cursors", "default"
     ) == {
@@ -416,7 +424,7 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
         curator.run_once()
 
     assert len(agent.calls) == 1
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
     assert (
         get_default_backend(tmp_path)
         .collection("memory_curator_cursors")
@@ -478,7 +486,7 @@ def test_memory_curator_rejects_incompatible_plan_without_model_replay(
         curator.run_once()
 
     assert agent.calls == []
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
     event = read_log_events(
         project_root=tmp_path,
         component="memory",
@@ -501,7 +509,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
             ],
         )
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     existing = repo.save(
         MemoryEntry(
             type="style_trait",
@@ -519,7 +527,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.updated == 1
     assert candidates[0].body == "The user prefers concise memory previews."
@@ -581,7 +589,7 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
         ) -> CuratorActionsOutput:
             raise AgentModelUnavailableError("LLM unavailable")
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=FailingCuratorAgent(), thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
@@ -627,7 +635,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     assert result.updated == 0
     assert result.ignored == 0
     assert agent.calls == []
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
     assert _stored_record(
         tmp_path, "memory_curator_cursors", "default"
     ) is None
@@ -704,7 +712,7 @@ def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Pa
         )
     )
     agent = _curator_agent('{"actions":[{"action":"ignore","reason":"trivial name ping"}]}')
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
@@ -755,7 +763,7 @@ def test_memory_curator_fast_gate_accepts_multilingual_durable_signal(
     assert result.processed_messages == 1
     assert result.created == 1
     assert len(agent.calls) == 1
-    assert len(MemoryCandidateRepository(tmp_path).list()) == 1
+    assert len(memory_candidate_repository(tmp_path).list()) == 1
 
 
 def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> None:
@@ -779,11 +787,11 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
         '"body":"The user wants memory curation to depend on discussion depth and quality, not turn count.",'
         '"tags":["memory"],"confidence":0.85,"reason":"explicit memory-system decision"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.processed_messages == 1
     assert result.created == 1
@@ -822,12 +830,12 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
         '"body":"Memory curation should continue after thread compression by using absolute message indexes.",'
         '"tags":["memory"],"confidence":0.8,"reason":"cursor correctness"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.processed_messages == 2
     assert result.created == 1
@@ -851,7 +859,7 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
         '"body":"user: We need conservative memory updates. assistant: I will avoid raw transcript memory.",'
         '"tags":["memory"],"confidence":0.9,"reason":"bad raw transcript"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
@@ -876,13 +884,13 @@ def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
         '"body":"Curated memory candidates should include tags.",'
         '"confidence":0.9,"reason":"bad missing tags"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
     assert result.processed_messages == 0
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
     assert repo.list() == []
 
 
@@ -902,7 +910,7 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
         '"body":"Unknown memory types should not be silently coerced.",'
         '"tags":["memory"],"confidence":0.9,"reason":"bad unknown type"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
@@ -914,7 +922,7 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
     result = curator.run_once()
 
     assert result.processed_messages == 0
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
     assert repo.list() == []
 
 
@@ -936,13 +944,13 @@ def test_memory_curator_accepts_typed_structured_output(
         '"body":"The user wants memory updates to be decided by an agent and dispatched as structured actions.",'
         '"tags":["memory"],"confidence":0.82,"reason":"durable memory-system decision"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
     assert result.created == 1
-    assert MemoryCandidateRepository(tmp_path).list()[0].title == "Structured memory decisions"
+    assert memory_candidate_repository(tmp_path).list()[0].title == "Structured memory decisions"
 
 
 class RejectingEpisodeDescriptor:
@@ -998,7 +1006,7 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
         '"body":"Curator writes should pass descriptor validation before persistence.",'
         '"tags":["memory"],"confidence":0.8,"reason":"typed memory pipeline"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
+    repo = memory_entry_repository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
@@ -1006,7 +1014,7 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
     assert result.created == 1
     assert result.ignored == 0
     assert repo.list() == []
-    assert MemoryCandidateRepository(tmp_path).list()[0].title == "Descriptor validation"
+    assert memory_candidate_repository(tmp_path).list()[0].title == "Descriptor validation"
 
 
 def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> None:
@@ -1026,7 +1034,7 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
             ],
         )
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     existing = repo.save(
         MemoryEntry(
             type="episode",
@@ -1043,7 +1051,7 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.updated == 1
     assert result.created == 0
@@ -1073,7 +1081,7 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
         '"body":"The user wants to learn Rust for systems programming.",'
         '"tags":["rust"],"confidence":0.85,"reason":"explicit learning goal"}]}'
     )
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo)
 
     result = curator.run_once()
@@ -1087,7 +1095,7 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     assert result.created == 1
 
     # Candidate exists but is marked accepted
-    candidates = MemoryCandidateRepository(tmp_path).list(include_reviewed=True)
+    candidates = memory_candidate_repository(tmp_path).list(include_reviewed=True)
     assert len(candidates) == 1
     assert candidates[0].review_state == "accepted"
 
@@ -1141,7 +1149,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
         result = curator.run_once()
 
     assert result.created == 1
-    assert len(MemoryCandidateRepository(tmp_path).list()) == 1
+    assert len(memory_candidate_repository(tmp_path).list()) == 1
     assert curator.run_once().processed_messages == 0
     assert len(agent.calls) == 1
     assert any(
@@ -1197,7 +1205,7 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
         "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
-    repository = MemoryEntryRepository(tmp_path)
+    repository = memory_entry_repository(tmp_path)
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
@@ -1244,7 +1252,7 @@ def test_auto_accept_update_trace_retains_update_action(
             ],
         )
     )
-    repository = MemoryEntryRepository(tmp_path)
+    repository = memory_entry_repository(tmp_path)
     existing = repository.save(
         MemoryEntry(
             type="episode",
@@ -1308,7 +1316,7 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
         '"tags":["memory"],"confidence":0.8,'
         '"reason":"explicit durability requirement"}]}'
     )
-    repo = MemoryEntryRepository(
+    repo = memory_entry_repository(
         tmp_path,
         registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]),
     )
@@ -1326,7 +1334,7 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
     assert second.processed_messages == 0
     assert len(agent.calls) == 1
     assert repo.list() == []
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
     assert len(candidates) == 1
     assert candidates[0].review_state == "pending"
     event = [
@@ -1384,7 +1392,7 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
         '"tags":["memory"],"confidence":0.8,'
         '"reason":"source replay safety"}]}'
     )
-    candidate_repo = MemoryCandidateRepository(tmp_path)
+    candidate_repo = memory_candidate_repository(tmp_path)
 
     def fail_accept(
         candidate_id: str,

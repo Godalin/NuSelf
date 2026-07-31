@@ -9,13 +9,15 @@ import re
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.derived import write_derived_index
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
+from nuself.memory.repository import MemoryCandidateRepository
+from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
 DEFAULT_CHUNK_TARGET_CHARS = 1200
@@ -49,19 +51,17 @@ class SourceRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
+        candidate_repository: MemoryCandidateRepository,
+        profile_repository: ProfileItemRepository,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._backend = be
-        self._documents = be.collection("source_documents")
-        self._chunks = be.collection("source_chunks")
-        self._paths = runtime_paths(project_root)
+        self._documents = backend.collection("source_documents")
+        self._chunks = backend.collection("source_chunks")
+        self._paths = paths
+        self._candidate_repository = candidate_repository
+        self._profile_repository = profile_repository
 
     def ingest_path(self, path: Path, *, tags: list[str] | None = None, privacy: PrivacyLevel = "private") -> SourceIngestResult:
         paths = _source_paths(path)
@@ -175,23 +175,16 @@ class SourceRepository:
         )
 
     def _delete_derived_candidates(self, source_prefix: str) -> None:
-        from nuself.memory.repository import MemoryCandidateRepository
-
-        candidate_repo = MemoryCandidateRepository(self._paths.project_root)
-        for candidate in candidate_repo.list(include_reviewed=True):
+        for candidate in self._candidate_repository.list(
+            include_reviewed=True
+        ):
             if _has_source_prefix(candidate.source_refs, source_prefix):
-                candidate_repo.delete(candidate.id)
+                self._candidate_repository.delete(candidate.id)
 
     def _delete_derived_profile_items(self, source_prefix: str) -> None:
-        from nuself.profile.repository import ProfileItemRepository
-
-        profile_repo = ProfileItemRepository(
-            self._paths,
-            backend=self._backend,
-        )
-        for item in profile_repo.list():
+        for item in self._profile_repository.list():
             if _has_source_prefix(item.source_refs, source_prefix):
-                profile_repo.delete(item.id)
+                self._profile_repository.delete(item.id)
 
     def _candidate_for_chunk(self, document: SourceDocument, chunk: SourceChunk) -> MemoryCandidate:
         source_ref = chunk.source_ref

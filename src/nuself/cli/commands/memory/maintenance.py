@@ -7,6 +7,7 @@ import json
 import sys
 from typing import cast
 
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.domain.memory import MemoryEntry
 from nuself.memory.curator import MemoryCurator
@@ -14,7 +15,6 @@ from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
 )
-from nuself.memory.repository import MemoryEntryRepository
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
@@ -39,7 +39,7 @@ def handle_memory_optimize(args: argparse.Namespace) -> int:
 
 
 def handle_memory_export(args: argparse.Namespace) -> int:
-    entries = MemoryEntryRepository(args.project_root).list()
+    entries = compose_cli_application(args.project_root).memory.entries.list()
     data = [entry.to_wire() for entry in entries]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
@@ -67,7 +67,7 @@ def handle_memory_import(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    repository = MemoryEntryRepository(args.project_root)
+    repository = compose_cli_application(args.project_root).memory.entries
     data = cast(list[object], raw)
     imported = 0
     for item in data:

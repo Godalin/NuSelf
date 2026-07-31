@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 
+from nuself.cli.composition import compose_cli_application
 from nuself.memory.repository import (
-    MemoryEntryRepository,
     SymbolicGraphEdge,
     SymbolicGraphEdgeFilters,
     SymbolicGraphNode,
@@ -25,9 +25,11 @@ def _format_edge(edge: SymbolicGraphEdge) -> str:
 
 
 def handle_memory_graph_nodes(args: argparse.Namespace) -> int:
-    nodes = MemoryEntryRepository(
+    nodes = compose_cli_application(
         args.project_root
-    ).list_graph_nodes(SymbolicGraphNodeFilters(type=args.type))
+    ).memory.entries.list_graph_nodes(
+        SymbolicGraphNodeFilters(type=args.type)
+    )
     if not nodes:
         print("No symbolic graph nodes.")
         return 0
@@ -37,9 +39,9 @@ def handle_memory_graph_nodes(args: argparse.Namespace) -> int:
 
 
 def handle_memory_graph_edges(args: argparse.Namespace) -> int:
-    edges = MemoryEntryRepository(
+    edges = compose_cli_application(
         args.project_root
-    ).list_graph_edges(
+    ).memory.entries.list_graph_edges(
         SymbolicGraphEdgeFilters(
             relation=args.relation,
             source_id=args.source_id,
@@ -55,7 +57,7 @@ def handle_memory_graph_edges(args: argparse.Namespace) -> int:
 
 
 def handle_memory_graph_search(args: argparse.Namespace) -> int:
-    result = MemoryEntryRepository(args.project_root).search_graph(
+    result = compose_cli_application(args.project_root).memory.entries.search_graph(
         args.query,
         node_type=args.type,
         limit=args.limit,
@@ -75,7 +77,7 @@ def handle_memory_graph_search(args: argparse.Namespace) -> int:
 
 
 def handle_memory_graph_path(args: argparse.Namespace) -> int:
-    path = MemoryEntryRepository(args.project_root).find_path(
+    path = compose_cli_application(args.project_root).memory.entries.find_path(
         args.from_id, args.to_id
     )
     if not path:
@@ -93,9 +95,11 @@ def handle_memory_graph_closure(
     if args.relation is None:
         print("--relation is required for closure.")
         return 1
-    result = MemoryEntryRepository(
+    result = compose_cli_application(
         args.project_root
-    ).transitive_closure(args.node_id, args.relation)
+    ).memory.entries.transitive_closure(
+        args.node_id, args.relation
+    )
     if not result.nodes:
         print("No closure nodes.")
         return 0

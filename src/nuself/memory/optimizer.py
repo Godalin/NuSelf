@@ -121,17 +121,23 @@ class MemoryOptimizer:
             component="memory",
         )
         self._settings = settings or MemoryOptimizerSettings()
-        self._repository = repository or MemoryEntryRepository(paths.project_root)
+        backend = get_default_backend(paths.project_root)
+        self._repository = repository or MemoryEntryRepository(
+            paths,
+            backend=backend,
+        )
         self._profile_repository = (
             profile_repository
             or ProfileItemRepository(
                 paths,
-                backend=get_default_backend(paths.project_root),
+                backend=backend,
             )
         )
         self._candidate_repository = candidate_repository or MemoryCandidateRepository(
-            paths.project_root,
+            paths,
+            backend=backend,
             entry_repository=self._repository,
+            profile_repository=self._profile_repository,
         )
         self._registry = registry or default_memory_type_registry()
 

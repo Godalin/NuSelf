@@ -22,6 +22,7 @@ from nuself.agent.tool_utils import (
 from nuself.agent.tools import build_langchain_chat_tools
 from nuself.config import runtime_paths
 from nuself.memory.query import MemoryQueryService
+from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.output import SectionPlanner
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.observability import (
@@ -38,6 +39,7 @@ class ConversationToolRuntime:
         *,
         project_root: Path | None,
         query_service: MemoryQueryService,
+        memory_repository: MemoryEntryRepository,
         selves_consult: Callable[..., str],
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
@@ -45,6 +47,7 @@ class ConversationToolRuntime:
         self._project_root = project_root
         tools = build_langchain_chat_tools(
             query_service=query_service,
+            memory_repository=memory_repository,
             reflection_repository=compose_reflection_repository(
                 runtime_paths(project_root),
                 get_default_backend(project_root),

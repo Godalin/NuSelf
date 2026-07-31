@@ -37,6 +37,7 @@ __all__ = [
 def build_langchain_chat_tools(
     *,
     query_service: MemoryQueryService,
+    memory_repository: MemoryEntryRepository,
     reflection_repository: ReflectionRepository,
     project_root: Path | None,
     selves_consult: Callable[[str, str, str | None], str] | None = None,
@@ -44,7 +45,6 @@ def build_langchain_chat_tools(
     section_planner: SectionPlanner | None = None,
 ) -> tuple[BaseTool, ...]:
     """Compose subsystem-owned tools for the chat runtime."""
-    memory_repository = MemoryEntryRepository(project_root)
     memory_tools = build_memory_tool_set(
         query_service=query_service,
         repository=memory_repository,

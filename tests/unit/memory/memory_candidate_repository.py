@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from pathlib import Path
 from typing import cast
 
@@ -26,7 +34,7 @@ from nuself.storage import (
 
 
 def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="belief",
@@ -66,7 +74,7 @@ def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_pa
 
 
 def test_accept_can_commit_reviewed_entry_with_candidate(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="belief",
@@ -79,14 +87,14 @@ def test_accept_can_commit_reviewed_entry_with_candidate(tmp_path: Path) -> None
 
     assert isinstance(entry, MemoryEntry)
     assert entry.review_state == "reviewed"
-    assert MemoryEntryRepository(tmp_path).get(entry.id) == entry
+    assert memory_entry_repository(tmp_path).get(entry.id) == entry
     assert repo.get(candidate.id).review_state == "accepted"
 
 
 def test_accept_keeps_unknown_type_quarantined_when_reviewed_requested(
     tmp_path: Path,
 ) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type=cast(MemoryEntryType, "future_memory_type"),
@@ -103,7 +111,7 @@ def test_accept_keeps_unknown_type_quarantined_when_reviewed_requested(
 
 
 def test_memory_candidate_repository_rejects_candidate(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="episode",
@@ -119,7 +127,7 @@ def test_memory_candidate_repository_rejects_candidate(tmp_path: Path) -> None:
 
 
 def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     existing = entry_repo.save(
         MemoryEntry(
             type="belief",
@@ -128,7 +136,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
             source_refs=["thread:default:0-2"],
         )
     )
-    candidate_repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    candidate_repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = candidate_repo.save(
         MemoryCandidate(
             type="belief",
@@ -156,7 +164,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
 
 
 def test_memory_candidate_repository_accepts_profile_fact_into_profile_repository(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="profile_fact",
@@ -183,7 +191,7 @@ def test_accept_create_rolls_back_target_when_candidate_commit_fails(
     monkeypatch: pytest.MonkeyPatch,
     target_type: str,
 ) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="profile_fact" if target_type == "profile" else "belief",
@@ -205,7 +213,7 @@ def test_accept_create_rolls_back_target_when_candidate_commit_fails(
 
     assert captured.value is operation_error
     assert repo.get(candidate.id).review_state == "pending"
-    assert MemoryEntryRepository(tmp_path).list() == []
+    assert memory_entry_repository(tmp_path).list() == []
     assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list() == []
 
 
@@ -213,8 +221,8 @@ def test_accept_create_rolls_back_when_review_promotion_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = repo.save(
         MemoryCandidate(
             type="belief",
@@ -244,7 +252,7 @@ def test_accept_merge_restores_target_when_candidate_commit_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     original = entry_repo.save(
         MemoryEntry(
             type="belief",
@@ -253,7 +261,7 @@ def test_accept_merge_restores_target_when_candidate_commit_fails(
             source_refs=["source:original"],
         )
     )
-    repo = MemoryCandidateRepository(
+    repo = memory_candidate_repository(
         tmp_path,
         entry_repository=entry_repo,
     )
@@ -288,7 +296,7 @@ def test_accept_merge_restores_target_when_review_promotion_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     original = entry_repo.save(
         MemoryEntry(
             type="belief",
@@ -296,7 +304,7 @@ def test_accept_merge_restores_target_when_review_promotion_fails(
             body="The exact target must survive a promotion failure.",
         )
     )
-    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = repo.save(
         MemoryCandidate(
             action="update",
@@ -328,7 +336,7 @@ def test_accept_delete_restores_target_when_candidate_commit_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     original = entry_repo.save(
         MemoryEntry(
             type="belief",
@@ -336,7 +344,7 @@ def test_accept_delete_restores_target_when_candidate_commit_fails(
             body="Deletion must roll back.",
         )
     )
-    repo = MemoryCandidateRepository(
+    repo = memory_candidate_repository(
         tmp_path,
         entry_repository=entry_repo,
     )
@@ -370,8 +378,8 @@ def test_accept_rolls_back_when_candidate_write_reports_durability_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = repo.save(
         MemoryCandidate(type="belief", title="Visible", body="Keep both records.")
     )
@@ -404,8 +412,8 @@ def test_accept_rolls_back_without_candidate_readback_reconciliation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(
         tmp_path,
         entry_repository=entry_repo,
     )
@@ -458,8 +466,8 @@ def test_accept_rolls_back_without_target_readback_reconciliation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(
         tmp_path,
         entry_repository=entry_repo,
     )
@@ -515,8 +523,8 @@ def test_accept_rolls_back_concurrent_target_change_in_same_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(
         tmp_path,
         entry_repository=entry_repo,
     )
@@ -558,8 +566,8 @@ def test_accept_rolls_back_new_target_when_target_write_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = repo.save(
         MemoryCandidate(type="belief", title="Rollback", body="Remove target.")
     )
@@ -588,11 +596,11 @@ def test_merge_rolls_back_previous_target_when_target_write_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     original = entry_repo.save(
         MemoryEntry(type="belief", title="Before", body="Original body.")
     )
-    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = repo.save(
         MemoryCandidate(
             action="update",
@@ -627,11 +635,11 @@ def test_delete_rolls_back_target_when_delete_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
+    entry_repo = memory_entry_repository(tmp_path)
     original = entry_repo.save(
         MemoryEntry(type="belief", title="Restore", body="Deletion is uncertain.")
     )
-    repo = MemoryCandidateRepository(tmp_path, entry_repository=entry_repo)
+    repo = memory_candidate_repository(tmp_path, entry_repository=entry_repo)
     candidate = repo.save(
         MemoryCandidate(
             action="delete",
@@ -666,8 +674,8 @@ def test_accept_propagates_commit_failure_after_transaction_rollback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    entry_repo = MemoryEntryRepository(tmp_path)
-    repo = MemoryCandidateRepository(
+    entry_repo = memory_entry_repository(tmp_path)
+    repo = memory_candidate_repository(
         tmp_path,
         entry_repository=entry_repo,
     )
@@ -696,7 +704,7 @@ def test_accept_propagates_commit_failure_after_transaction_rollback(
 
 
 def test_memory_candidate_repository_missing_candidate(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
 
     try:
         repo.get("missing")
@@ -706,7 +714,7 @@ def test_memory_candidate_repository_missing_candidate(tmp_path: Path) -> None:
 
 
 def test_memory_candidate_repository_edit_updates_fields(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(type="belief", title="Old", body="Old body.")
     )
@@ -721,7 +729,7 @@ def test_memory_candidate_repository_edit_updates_fields(tmp_path: Path) -> None
 
 
 def test_memory_candidate_repository_reject_missing_raises(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     try:
         repo.reject("missing-id")
     except MemoryCandidateNotFound:
@@ -730,7 +738,7 @@ def test_memory_candidate_repository_reject_missing_raises(tmp_path: Path) -> No
 
 
 def test_memory_candidate_repository_merge_missing_raises(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     try:
         repo.merge("missing-id", "entry-id")
     except MemoryCandidateNotFound:
@@ -739,7 +747,7 @@ def test_memory_candidate_repository_merge_missing_raises(tmp_path: Path) -> Non
 
 
 def test_memory_candidate_repository_list_excludes_reviewed_by_default(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(MemoryCandidate(type="belief", title="Test", body="Body."))
     repo.accept(candidate.id)
 
@@ -770,7 +778,7 @@ def test_memory_candidate_to_memory_object_round_trip() -> None:
 
 
 def test_memory_candidate_repository_edit_missing_raises(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     try:
         repo.edit("missing-id", title="New")
     except MemoryCandidateNotFound:
@@ -783,7 +791,7 @@ def test_memory_candidate_importance_roundtrip_and_accept(
     tmp_path: Path,
     importance: float,
 ) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="belief",
@@ -838,7 +846,7 @@ def test_memory_candidate_rejects_obsolete_relation_fields(
 
 
 def test_memory_candidate_edit_importance(tmp_path: Path) -> None:
-    repo = MemoryCandidateRepository(tmp_path)
+    repo = memory_candidate_repository(tmp_path)
     candidate = repo.save(
         MemoryCandidate(
             type="belief",

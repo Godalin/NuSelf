@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -42,7 +50,7 @@ def _optimizer_agent(response: str) -> FakeOptimizerAgent:
 
 
 def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     keeper = repo.save(
         MemoryEntry(
             type="belief",
@@ -77,7 +85,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
 
     result = optimizer.run_once()
     entries = repo.list()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.reviewed == 2
     assert result.updated == 1
@@ -114,7 +122,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
 
 
 def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Keep memory concise", body="The user wants concise memory entries."))
     profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
@@ -138,7 +146,7 @@ def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> 
 
 
 def test_memory_optimizer_defers_without_agent_decision(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -178,7 +186,7 @@ def test_memory_optimizer_propagates_untyped_agent_errors(
     tmp_path: Path,
     failure: Exception,
 ) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -211,7 +219,7 @@ def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -240,14 +248,14 @@ def test_memory_optimizer_audit_failure_cannot_replace_persisted_candidate(
         result = optimizer.run_once()
 
     assert result.updated == 1
-    [candidate] = MemoryCandidateRepository(tmp_path).list()
+    [candidate] = memory_candidate_repository(tmp_path).list()
     assert candidate.action == "update"
     assert candidate.target_entry_id == entry.id
     assert read_log_events(project_root=tmp_path, component="memory") == []
 
 
 def test_memory_optimizer_rejects_raw_transcript_body(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="episode",
@@ -270,7 +278,7 @@ def test_memory_optimizer_rejects_raw_transcript_body(tmp_path: Path) -> None:
 
 
 def test_memory_optimizer_uses_registry_memory_types(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="instruction",
@@ -288,14 +296,14 @@ def test_memory_optimizer_uses_registry_memory_types(tmp_path: Path) -> None:
     optimizer = MemoryOptimizer(tmp_path, agent=agent, repository=repo)
 
     result = optimizer.run_once()
-    candidates = MemoryCandidateRepository(tmp_path).list()
+    candidates = memory_candidate_repository(tmp_path).list()
 
     assert result.updated == 1
     assert candidates[0].type == "persona_instruction"
 
 
 def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -315,7 +323,7 @@ def test_memory_optimizer_rejects_unknown_memory_type(tmp_path: Path) -> None:
     result = optimizer.run_once()
 
     assert result.reviewed == 0
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
 
 
 @pytest.mark.parametrize(
@@ -341,7 +349,7 @@ def test_parse_optimizer_actions_rejects_invalid_schema(response: str) -> None:
 
 
 def test_memory_optimizer_rejects_complete_mixed_valid_invalid_batch(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -362,11 +370,11 @@ def test_memory_optimizer_rejects_complete_mixed_valid_invalid_batch(tmp_path: P
     assert result.reviewed == 0
     assert result.updated == 0
     assert result.deleted == 0
-    assert MemoryCandidateRepository(tmp_path).list() == []
+    assert memory_candidate_repository(tmp_path).list() == []
 
 
 def test_memory_optimizer_respects_limit(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     for title in ["First", "Second"]:
         repo.save(MemoryEntry(type="belief", title=title, body=f"{title} body."))
     agent = _optimizer_agent('{"actions":[{"action":"ignore","entry_id":"unused","reason":"no changes"}]}')

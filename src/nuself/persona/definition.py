@@ -212,7 +212,10 @@ def load_persona_definitions(project_root: Path | None = None) -> tuple[PersonaD
     from nuself.memory.repository import MemoryEntryRepository, MemorySearchFilters
 
     try:
-        repo = MemoryEntryRepository(project_root)
+        repo = MemoryEntryRepository(
+            runtime_paths(project_root),
+            backend=get_default_backend(project_root),
+        )
         entries = repo.search("", filters=MemorySearchFilters(type="persona_instruction"))
     except RuntimeError as exc:
         from nuself.persona.audit import report_persona_failure
@@ -235,3 +238,5 @@ def load_persona_definitions(project_root: Path | None = None) -> tuple[PersonaD
     if not definitions:
         return BUILTIN_PERSONAS
     return tuple(definitions)
+from nuself.config import runtime_paths
+from nuself.storage import get_default_backend

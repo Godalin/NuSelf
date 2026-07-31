@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -56,8 +64,10 @@ def _chat_tool(
     repo = reflection_repository if reflection_repository is not None else ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     if not isinstance(repo, ReflectionRepository):
         raise TypeError("reflection_repository must be a ReflectionRepository")
+    memory_repository = memory_entry_repository(tmp_path)
     tools = build_langchain_chat_tools(
-        query_service=query_service or MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        query_service=query_service or MemoryQueryService(memory_repository),
+        memory_repository=memory_repository,
         reflection_repository=repo,
         project_root=tmp_path,
     )
@@ -125,7 +135,7 @@ class FailingResponseService:
 
 
 def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -146,7 +156,7 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
 
 
 def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -179,7 +189,7 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    SourceRepository(tmp_path).ingest_path(source_path)
+    source_repository(tmp_path).ingest_path(source_path)
     llm = FakeResponseService()
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
@@ -204,7 +214,7 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
         )
     )
     llm = FakeResponseService()
-    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path), profile_repository=profile_repo))
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path), profile_repository=profile_repo))
 
     agent.respond("direct answers")
 
@@ -227,7 +237,7 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
         tmp_path,
         response_service=response_service,
         memory_query_service=MemoryQueryService(
-            MemoryEntryRepository(tmp_path)
+            memory_entry_repository(tmp_path)
         ),
     )
 
@@ -373,7 +383,7 @@ def test_selves_consult_writes_host_discussion_decision_log(tmp_path: Path, caps
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=llm,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     runtime._consult_selves_tool("compare the tradeoffs and debate the options", mode="discussion")  # type: ignore[reportPrivateUsage]
@@ -428,7 +438,7 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
                 confidence=0.8,
             )
         ),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
     turn_state = ConversationTurnState.start(ThreadState.empty("default"), "node contracts", "default")
 
@@ -455,7 +465,7 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Trivial reply.", confidence=0.4)
         ),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     _, result, node_trace = runtime.run_turn(ThreadState.empty("trivial"), "hello", "trivial")
@@ -541,7 +551,7 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Persona reply.", confidence=0.4)
         ),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool("Should I split this project?")  # type: ignore[reportPrivateUsage]
@@ -581,7 +591,7 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     state, chat_result, node_trace = runtime.run_turn(ThreadState.empty("graph"), "graph runtime", "graph")
@@ -629,7 +639,7 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
         tmp_path,
         response_service=FailingResponseService(),
         thread_store=thread_store,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     with pytest.raises(ConversationGraphRuntimeError, match="conversation graph node 'respond' failed") as exc_info:
@@ -860,7 +870,7 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
     tools = getattr(runtime, "_tools")
 
@@ -932,7 +942,7 @@ def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:
 
 
 def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     for i in range(5):
         repo.save(
             MemoryEntry(
@@ -952,7 +962,7 @@ def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
 
 
 def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -978,7 +988,7 @@ def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None
 
 
 def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
 
     # Empty query
@@ -993,7 +1003,7 @@ def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
 def test_empty_memory_search_requests_one_broader_query(
     tmp_path: Path,
 ) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     tool = _chat_tool(
         tmp_path,
         "memory_search",
@@ -1267,7 +1277,7 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
     tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
 
@@ -1420,7 +1430,7 @@ def test_memory_archive_tool_success(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Old belief", body="..."))
     tool = _chat_tool(tmp_path, "memory_archive")
     result = _invoke_chat_tool(tool, {"entry_id": "m1"})
@@ -1440,7 +1450,7 @@ def test_memory_update_importance_tool_success(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Key belief", body="...", importance=0.3))
     tool = _chat_tool(tmp_path, "memory_update_importance")
     result = _invoke_chat_tool(tool, {"entry_id": "m1", "importance": 0.9})
@@ -1502,7 +1512,7 @@ def test_memory_count_tool_with_entries(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["tag1"]))
     repo.save(MemoryEntry(type="goal", title="B", body="...", tags=["tag2"]))
     repo.save(MemoryEntry(type="belief", title="C", body="...", tags=["tag1", "tag2"]))
@@ -1515,7 +1525,7 @@ def test_memory_count_tool_with_type_filter(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="A", body="..."))
     repo.save(MemoryEntry(type="goal", title="B", body="..."))
     repo.save(MemoryEntry(type="belief", title="C", body="..."))
@@ -1530,7 +1540,7 @@ def test_memory_count_tool_with_tag_filter(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["important"]))
     repo.save(MemoryEntry(type="goal", title="B", body="...", tags=["archived"]))
     repo.save(MemoryEntry(type="belief", title="C", body="...", tags=["important"]))

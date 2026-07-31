@@ -91,6 +91,21 @@ owned by the application layer. Reflection workflow constructors remain
 migration scope until the shared service graph owns their complete lifecycle;
 they may not move authority lookup back into the repository.
 
+Memory persistence is composed as one authority-scoped graph.
+`MemoryEntryRepository`, `MemoryCandidateRepository`, and `SourceRepository`
+all require resolved paths and the selected backend. Candidate and source
+repositories receive the concrete entry/profile/candidate collaborators they
+mutate instead of constructing them during an operation. Aggregate functions
+such as memory statistics receive repositories rather than resolving an
+authority. The application layer owns the immutable repository bundle and
+must reuse its instances for one authority.
+
+`ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
+one selected `StorageBackend`. It retains those exact resources and the shared
+memory, reason, reflection, and trace graph. Process adapters may choose
+transport and lifecycle, but must not rebuild domain dependencies after a
+graph has been supplied.
+
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.

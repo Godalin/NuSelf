@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 # pyright: reportPrivateUsage=false
 
 import io
@@ -359,7 +367,7 @@ def test_interactive_memory_command_shows_preview(
 def test_interactive_memory_search_uses_readable_rows(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    MemoryEntryRepository(_authority(tmp_path)).save(
+    memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="belief",
             title="Readable memory",
@@ -383,7 +391,7 @@ def test_interactive_memory_search_uses_readable_rows(
 def test_interactive_memory_show_uses_readable_detail(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    entry = MemoryEntryRepository(_authority(tmp_path)).save(
+    entry = memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="belief",
             title="Readable detail",
@@ -413,7 +421,7 @@ def test_interactive_memory_show_uses_readable_detail(
 def test_interactive_memory_candidates_profile_and_sources(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    MemoryCandidateRepository(_authority(tmp_path)).save(
+    memory_candidate_repository(_authority(tmp_path)).save(
         MemoryCandidate(
             type="belief",
             title="Candidate display",
@@ -2000,7 +2008,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
             "processed_message_count": 3,
         },
     )
-    candidate_repo = MemoryCandidateRepository(_authority(tmp_path))
+    candidate_repo = memory_candidate_repository(_authority(tmp_path))
     candidate = candidate_repo.save(
         MemoryCandidate(
             type="episode",
@@ -2048,7 +2056,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
         "thread_id": "default",
         "processed_message_count": 3,
     }
-    assert MemoryCandidateRepository(_authority(tmp_path)).get(candidate.id) == candidate
+    assert memory_candidate_repository(_authority(tmp_path)).get(candidate.id) == candidate
 
 
 def test_memory_plan_discard_requires_force() -> None:
@@ -2229,7 +2237,7 @@ def test_memory_preview_limits_entries(tmp_path: Path, capsys: CaptureFixture) -
 def test_memory_preview_uses_list_record_style_without_indexes(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    MemoryEntryRepository(_authority(tmp_path)).save(
+    memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="belief",
             title="Preview style",
@@ -2282,7 +2290,7 @@ def test_memory_update_defers_without_agent_decision(
 def test_memory_optimize_defers_without_agent_decision(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    MemoryEntryRepository(_authority(tmp_path)).save(
+    memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="belief",
             title="Messy memory",
@@ -2380,7 +2388,7 @@ def test_memory_add_infers_type_without_manual_type(
     add_output = capsys.readouterr().out
     entry_id = add_output.split()[3].removeprefix("id=")
 
-    entry = MemoryEntryRepository(_authority(tmp_path)).get(entry_id)
+    entry = memory_entry_repository(_authority(tmp_path)).get(entry_id)
 
     assert add_result == 0
     assert entry.type == "preference"
@@ -2423,7 +2431,7 @@ def test_memory_add_supports_goal_and_concept_types(
     )
     capsys.readouterr()
 
-    entries = MemoryEntryRepository(_authority(tmp_path)).list()
+    entries = memory_entry_repository(_authority(tmp_path)).list()
     types = {entry.type for entry in entries}
 
     assert goal_result == 0
@@ -2434,7 +2442,7 @@ def test_memory_add_supports_goal_and_concept_types(
 def test_memory_candidate_review_flow_accepts_temporal_candidate(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    candidate = MemoryCandidateRepository(_authority(tmp_path)).save(
+    candidate = memory_candidate_repository(_authority(tmp_path)).save(
         MemoryCandidate(
             type="belief",
             title="Temporal memory",
@@ -2463,7 +2471,7 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(
     )
     accept_output = capsys.readouterr().out
 
-    entries = MemoryEntryRepository(_authority(tmp_path)).list()
+    entries = memory_entry_repository(_authority(tmp_path)).list()
 
     assert list_result == 0
     assert show_result == 0
@@ -2481,7 +2489,7 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(
 def test_memory_candidate_accepts_batch_index_selection(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     created = [
         repo.save(
             MemoryCandidate(type="belief", title=f"Candidate {i}", body=f"Body {i}.")
@@ -2496,10 +2504,10 @@ def test_memory_candidate_accepts_batch_index_selection(
     )
     output = capsys.readouterr().out
 
-    accepted_ids = {entry.id for entry in MemoryEntryRepository(_authority(tmp_path)).list()}
+    accepted_ids = {entry.id for entry in memory_entry_repository(_authority(tmp_path)).list()}
     remaining_ids = {
         candidate.id
-        for candidate in MemoryCandidateRepository(_authority(tmp_path)).list()
+        for candidate in memory_candidate_repository(_authority(tmp_path)).list()
     }
     assert result == 0
     assert output.count("Accepted memory candidate:") == 3
@@ -2511,7 +2519,7 @@ def test_memory_candidate_accepts_batch_index_selection(
 def test_memory_candidate_rejects_batch_index_selection(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     created = [
         repo.save(
             MemoryCandidate(type="belief", title=f"Candidate {i}", body=f"Body {i}.")
@@ -2529,7 +2537,7 @@ def test_memory_candidate_rejects_batch_index_selection(
 
     assert result == 0
     assert output.count("Rejected memory candidate:") == 3
-    reopened = MemoryCandidateRepository(_authority(tmp_path))
+    reopened = memory_candidate_repository(_authority(tmp_path))
     assert reopened.get(pending_id).review_state == "pending"
     assert {candidate.id for candidate in created}.issuperset(rejected_ids)
     for candidate_id in rejected_ids:
@@ -2539,7 +2547,7 @@ def test_memory_candidate_rejects_batch_index_selection(
 def test_memory_candidate_batch_index_selection_rejects_whitespace(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     repo.save(MemoryCandidate(type="belief", title="Candidate", body="Body."))
 
     result = main(
@@ -2554,12 +2562,12 @@ def test_memory_candidate_batch_index_selection_rejects_whitespace(
 def test_memory_candidate_edit_merge_and_reject(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    entry = MemoryEntryRepository(_authority(tmp_path)).save(
+    entry = memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="belief", title="Old timing idea", body="Memory has timestamps."
         )
     )
-    candidate_repo = MemoryCandidateRepository(_authority(tmp_path))
+    candidate_repo = memory_candidate_repository(_authority(tmp_path))
     merge_candidate = candidate_repo.save(
         MemoryCandidate(
             type="belief",
@@ -2612,7 +2620,7 @@ def test_memory_candidate_edit_merge_and_reject(
     )
     reject_output = capsys.readouterr().out
 
-    merged = MemoryEntryRepository(_authority(tmp_path)).get(entry.id)
+    merged = memory_entry_repository(_authority(tmp_path)).get(entry.id)
 
     assert edit_result == 0
     assert merge_result == 0
@@ -2623,7 +2631,7 @@ def test_memory_candidate_edit_merge_and_reject(
     assert merged.title == "Thought timeline"
     assert merged.observed_at == "2026-05-07"
     assert (
-        MemoryCandidateRepository(_authority(tmp_path))
+        memory_candidate_repository(_authority(tmp_path))
         .get(reject_candidate.id)
         .review_state
         == "rejected"
@@ -2633,7 +2641,7 @@ def test_memory_candidate_edit_merge_and_reject(
 def test_memory_stats_and_filtered_search(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    MemoryEntryRepository(_authority(tmp_path)).save(
+    memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="belief",
             title="Temporal belief",
@@ -2643,7 +2651,7 @@ def test_memory_stats_and_filtered_search(
             observed_at="2026-05-07",
         )
     )
-    MemoryEntryRepository(_authority(tmp_path)).save(
+    memory_entry_repository(_authority(tmp_path)).save(
         MemoryEntry(
             type="episode",
             title="Unrelated episode",
@@ -2651,7 +2659,7 @@ def test_memory_stats_and_filtered_search(
             tags=["event"],
         )
     )
-    MemoryCandidateRepository(_authority(tmp_path)).save(
+    memory_candidate_repository(_authority(tmp_path)).save(
         MemoryCandidate(type="belief", title="Pending belief", body="Candidate body.")
     )
 
@@ -2691,7 +2699,7 @@ def test_memory_stats_and_filtered_search(
 def test_memory_relations_lists_and_filters_derived_index(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     old = repo.save(
         MemoryEntry(type="belief", title="Old model", body="Closed categories.")
     )
@@ -2736,7 +2744,7 @@ def test_memory_relations_lists_and_filters_derived_index(
 def test_memory_graph_lists_nodes_and_edges(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     target = repo.save(
         MemoryEntry(type="concept", title="Graph node", body="A graph target.")
     )
@@ -3041,7 +3049,7 @@ def test_memory_profile_delete_removes_item_and_reindexes(
     source_id = list_output.split()[2].removeprefix("id=")
     main(["--workspace", str(tmp_path), "memory", "source", "extract", source_id])
     capsys.readouterr()
-    candidate_repo = MemoryCandidateRepository(_authority(tmp_path))
+    candidate_repo = memory_candidate_repository(_authority(tmp_path))
     candidate_id = candidate_repo.list()[0].id
     main(["--workspace", str(tmp_path), "memory", "review", "accept", candidate_id])
     capsys.readouterr()
@@ -3129,7 +3137,7 @@ def main_memory_preview(project_root: Path) -> str:
     from nuself.memory.repository import MemoryEntryRepository
 
     return "\n".join(
-        entry.title for entry in MemoryEntryRepository(project_root).list()
+        entry.title for entry in memory_entry_repository(project_root).list()
     )
 
 
@@ -4592,7 +4600,7 @@ def test_interactive_sources_lists_documents(
     from nuself.domain.source import SourceDocument
     from nuself.memory.source_repository import SourceRepository
 
-    repo = SourceRepository(_authority(tmp_path))
+    repo = source_repository(_authority(tmp_path))
     repo.save_document(
         SourceDocument(id="doc-001", title="Notes", path="notes.txt", kind="text")
     )
@@ -4755,7 +4763,7 @@ def test_interactive_search_finds_memory(
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     repo.save(
         MemoryEntry(
             type="belief", title="Focus", body="Deep work requires long blocks."
@@ -4848,7 +4856,7 @@ def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> No
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
 
     result = main(["--workspace", str(tmp_path), "memory", "list"])
@@ -4873,7 +4881,7 @@ def test_memory_list_sorts_by_importance(
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     low = repo.save(
         MemoryEntry(type="belief", title="Low", body="Low importance.", importance=0.2)
     )
@@ -4901,7 +4909,7 @@ def test_memory_list_filters_by_review_state(
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     draft = repo.save(MemoryEntry(type="belief", title="Draft", body="Draft entry."))
     reviewed = repo.save(
         MemoryEntry(
@@ -4934,7 +4942,7 @@ def test_memory_show_displays_entry(tmp_path: Path, capsys: CaptureFixture) -> N
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
     repo.save(entry)
 
@@ -4956,7 +4964,7 @@ def test_memory_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> No
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
     repo.save(MemoryEntry(type="belief", title="Relax", body="Take breaks."))
 
@@ -4974,7 +4982,7 @@ def test_memory_search_uses_ranked_tokens_not_whole_query_substring(
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     repo.save(
         MemoryEntry(
             type="episode",
@@ -5013,7 +5021,7 @@ def test_memory_source_list_shows_documents(
     from nuself.domain.source import SourceDocument
     from nuself.memory.source_repository import SourceRepository
 
-    repo = SourceRepository(_authority(tmp_path))
+    repo = source_repository(_authority(tmp_path))
     repo.save_document(
         SourceDocument(
             id="src-001", path="/tmp/test.txt", title="Test Source", kind="text"
@@ -5042,7 +5050,7 @@ def test_memory_source_show_displays_document(
     from nuself.domain.source import SourceDocument
     from nuself.memory.source_repository import SourceRepository
 
-    repo = SourceRepository(_authority(tmp_path))
+    repo = source_repository(_authority(tmp_path))
     doc = SourceDocument(
         id="src-002", path="/tmp/test.txt", title="Test Source", kind="text"
     )
@@ -5071,7 +5079,7 @@ def test_memory_source_delete_removes_document(
     from nuself.domain.source import SourceDocument
     from nuself.memory.source_repository import SourceRepository
 
-    repo = SourceRepository(_authority(tmp_path))
+    repo = source_repository(_authority(tmp_path))
     doc = SourceDocument(
         id="src-003", path="/tmp/test.txt", title="Test Source", kind="text"
     )
@@ -5081,7 +5089,7 @@ def test_memory_source_delete_removes_document(
         ["--workspace", str(tmp_path), "memory", "source", "delete", doc.id]
     )
     assert result == 0
-    assert len(SourceRepository(_authority(tmp_path)).list_documents()) == 0
+    assert len(source_repository(_authority(tmp_path)).list_documents()) == 0
 
 
 def test_memory_source_chunks_empty_shows_message(
@@ -5129,7 +5137,7 @@ def test_memory_unquarantine_restores_draft(
 ) -> None:
     from nuself.domain.memory import MemoryEntryType
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     entry = repo.save(
         MemoryEntry(
             type=cast(MemoryEntryType, "truly_unknown_type"),
@@ -5144,7 +5152,7 @@ def test_memory_unquarantine_restores_draft(
     assert result == 0
     assert f"Unquarantined memory entry: {entry.id}" in captured.out
     assert (
-        MemoryEntryRepository(_authority(tmp_path)).get(entry.id).review_state
+        memory_entry_repository(_authority(tmp_path)).get(entry.id).review_state
         == "draft"
     )
 
@@ -5355,7 +5363,7 @@ def test_memory_candidate_list_filters_by_review_state(
     from nuself.domain.memory import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     pending = repo.save(
         MemoryCandidate(type="belief", title="Pending", body="Pending candidate.")
     )
@@ -5395,7 +5403,7 @@ def test_memory_candidate_list_sorts_by_importance(
     from nuself.domain.memory import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     low = repo.save(
         MemoryCandidate(
             type="belief", title="Low", body="Low importance.", importance=0.2
@@ -5433,7 +5441,7 @@ def test_memory_candidate_show_displays_candidate(
     from nuself.domain.memory import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     candidate = MemoryCandidate(
         action="create", type="belief", title="Focus", body="Deep work."
     )
@@ -5463,7 +5471,7 @@ def test_memory_candidate_accept_creates_entry(
     from nuself.domain.memory import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     candidate = MemoryCandidate(
         action="create", type="belief", title="Focus", body="Deep work."
     )
@@ -5483,7 +5491,7 @@ def test_memory_candidate_reject_pending(
     from nuself.domain.memory import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     candidate = MemoryCandidate(
         action="create", type="belief", title="Focus", body="Deep work."
     )
@@ -5503,7 +5511,7 @@ def test_memory_candidate_edit_updates_fields(
     from nuself.domain.memory import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
-    repo = MemoryCandidateRepository(_authority(tmp_path))
+    repo = memory_candidate_repository(_authority(tmp_path))
     candidate = MemoryCandidate(
         action="create", type="belief", title="Focus", body="Deep work."
     )
@@ -5524,7 +5532,7 @@ def test_memory_candidate_edit_updates_fields(
         ]
     )
     assert result == 0
-    updated = MemoryCandidateRepository(_authority(tmp_path)).get(candidate.id)
+    updated = memory_candidate_repository(_authority(tmp_path)).get(candidate.id)
     assert updated.title == "Concentration"
     assert updated.body == "Focus deeply."
 
@@ -5538,11 +5546,11 @@ def test_memory_candidate_merge_updates_entry(
         MemoryEntryRepository,
     )
 
-    entry_repo = MemoryEntryRepository(_authority(tmp_path))
+    entry_repo = memory_entry_repository(_authority(tmp_path))
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
     entry_repo.save(entry)
 
-    cand_repo = MemoryCandidateRepository(_authority(tmp_path))
+    cand_repo = memory_candidate_repository(_authority(tmp_path))
     candidate = MemoryCandidate(
         action="update",
         type="belief",
@@ -5588,20 +5596,20 @@ def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> Non
     captured = capsys.readouterr()
     assert result == 0
     assert "Focus" in captured.out
-    assert len(MemoryEntryRepository(_authority(tmp_path)).list()) == 1
+    assert len(memory_entry_repository(_authority(tmp_path)).list()) == 1
 
 
 def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
     repo.save(entry)
 
     result = main(["--workspace", str(tmp_path), "memory", "delete", entry.id])
     assert result == 0
-    assert len(MemoryEntryRepository(_authority(tmp_path)).list()) == 0
+    assert len(memory_entry_repository(_authority(tmp_path)).list()) == 0
 
 
 def test_memory_delete_accepts_batch_index_selection(
@@ -5610,7 +5618,7 @@ def test_memory_delete_accepts_batch_index_selection(
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     for i in range(4):
         repo.save(MemoryEntry(type="belief", title=f"Entry {i}", body=f"Body {i}."))
     listed = repo.list()
@@ -5623,7 +5631,7 @@ def test_memory_delete_accepts_batch_index_selection(
     assert result == 0
     assert output.count("Deleted memory entry:") == 3
     remaining = {
-        entry.id for entry in MemoryEntryRepository(_authority(tmp_path)).list()
+        entry.id for entry in memory_entry_repository(_authority(tmp_path)).list()
     }
     assert remaining == {remaining_id}
     assert deleted_ids.isdisjoint(remaining)
@@ -5633,7 +5641,7 @@ def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     entry = MemoryEntry(type="belief", title="Focus", body="Deep work.")
     repo.save(entry)
 
@@ -5653,7 +5661,7 @@ def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     captured = capsys.readouterr()
     assert result == 0
     assert "Concentration" in captured.out
-    updated = MemoryEntryRepository(_authority(tmp_path)).get(entry.id)
+    updated = memory_entry_repository(_authority(tmp_path)).get(entry.id)
     assert updated.title == "Concentration"
     assert updated.body == "Focus deeply."
 
@@ -5706,7 +5714,7 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
     from nuself.domain.memory import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
     external = tmp_path / "external"
     external.mkdir(mode=0o755)
@@ -5738,7 +5746,7 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     from nuself.memory.repository import MemoryEntryRepository
 
     # Export first
-    repo = MemoryEntryRepository(_authority(tmp_path))
+    repo = memory_entry_repository(_authority(tmp_path))
     repo.save(MemoryEntry(type="belief", title="Focus", body="Deep work."))
     export_path = tmp_path / "export.json"
     entries = repo.list()
@@ -5748,10 +5756,10 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     )
 
     # Clear and import
-    for entry in MemoryEntryRepository(_authority(tmp_path)).list():
+    for entry in memory_entry_repository(_authority(tmp_path)).list():
         repo.delete(entry.id)
     repo.reindex()
-    assert len(MemoryEntryRepository(_authority(tmp_path)).list()) == 0
+    assert len(memory_entry_repository(_authority(tmp_path)).list()) == 0
 
     result = main(
         ["--workspace", str(tmp_path), "memory", "import", str(export_path)]
@@ -5759,7 +5767,7 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     captured = capsys.readouterr()
     assert result == 0
     assert "Imported 1 memory entries" in captured.out
-    assert len(MemoryEntryRepository(_authority(tmp_path)).list()) == 1
+    assert len(memory_entry_repository(_authority(tmp_path)).list()) == 1
 
 
 @pytest.mark.parametrize(

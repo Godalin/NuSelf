@@ -16,6 +16,11 @@ from nuself.config import runtime_paths
 from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
+from nuself.memory.repository import (
+    MemoryCandidateRepository,
+    MemoryEntryRepository,
+)
+from nuself.memory.source_repository import SourceRepository
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.audit import (
@@ -650,6 +655,27 @@ class IdeaCandidateGenerator:
     ) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
+        backend = get_default_backend(self._project_root)
+        self._memory_repository = MemoryEntryRepository(
+            paths,
+            backend=backend,
+        )
+        self._profile_repository = ProfileItemRepository(
+            paths,
+            backend=backend,
+        )
+        candidate_repository = MemoryCandidateRepository(
+            paths,
+            backend=backend,
+            entry_repository=self._memory_repository,
+            profile_repository=self._profile_repository,
+        )
+        self._source_repository = SourceRepository(
+            paths,
+            backend=backend,
+            candidate_repository=candidate_repository,
+            profile_repository=self._profile_repository,
+        )
         self._agent = agent or default_structured_agent(
             CandidateListOutput,
             project_root=self._project_root,
@@ -788,32 +814,21 @@ class IdeaCandidateGenerator:
         return "\n".join(lines)
 
     def _recent_memory_context(self, max_entries: int = 8) -> str:
-        from nuself.memory.repository import MemoryEntryRepository
-
-        repo = MemoryEntryRepository(self._project_root)
         lines: list[str] = []
-        for entry in repo.list()[-max_entries:]:
+        for entry in self._memory_repository.list()[-max_entries:]:
             lines.append(f"- [{entry.type}] {entry.title}: {entry.body[:120]}")
         return "\n".join(lines)
 
     def _profile_context(self, max_items: int = 10) -> str:
-        paths = runtime_paths(self._project_root)
-        repo = ProfileItemRepository(
-            paths,
-            backend=get_default_backend(self._project_root),
-        )
         lines: list[str] = []
-        for item in repo.list()[:max_items]:
+        for item in self._profile_repository.list()[:max_items]:
             tags = f" (tags: {', '.join(item.tags)})" if item.tags else ""
             lines.append(f"- [{item.type}] {item.title}{tags}: {item.body[:120]}")
         return "\n".join(lines)
 
     def _new_source_context(self, max_sources: int = 5) -> str:
-        from nuself.memory.source_repository import SourceRepository
-
-        repo = SourceRepository(self._project_root)
         lines: list[str] = []
-        for doc in repo.list_documents()[-max_sources:]:
+        for doc in self._source_repository.list_documents()[-max_sources:]:
             lines.append(f"- {doc.title or doc.id}")
         return "\n".join(lines)
 

@@ -220,14 +220,19 @@ class MemoryCurator:
             "memory_curator_cursors"
         )
         self._thread_store = thread_store or ThreadStore(paths.project_root)
-        self._repository = repository or MemoryEntryRepository(paths.project_root)
+        self._repository = repository or MemoryEntryRepository(
+            paths,
+            backend=self._backend,
+        )
         self._profile_repository = (
             profile_repository
             or ProfileItemRepository(paths, backend=self._backend)
         )
         self._candidate_repository = candidate_repository or MemoryCandidateRepository(
-            paths.project_root,
+            paths,
+            backend=self._backend,
             entry_repository=self._repository,
+            profile_repository=self._profile_repository,
         )
         self._registry = registry or default_memory_type_registry()
         self._plan_store = plan_store or MemoryCuratorPlanStore(

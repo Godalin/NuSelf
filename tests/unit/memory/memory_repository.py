@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from pathlib import Path
 from typing import cast
 
@@ -19,7 +27,7 @@ from nuself.storage import auto_backend
 
 
 def test_memory_repository_crud(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -45,7 +53,7 @@ def test_memory_repository_isolates_and_reports_corrupt_neighbor(
     tmp_path: Path,
 ) -> None:
     backend = auto_backend(tmp_path / "private")
-    repo = MemoryEntryRepository(tmp_path, backend=backend)
+    repo = memory_entry_repository(tmp_path, backend=backend)
     healthy = repo.save(
         MemoryEntry(type="concept", title="Healthy", body="Readable")
     )
@@ -67,7 +75,7 @@ def test_memory_repository_isolates_and_reports_corrupt_neighbor(
 
 
 def test_memory_repository_lists_relations(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     old = repo.save(
         MemoryEntry(
             type="belief",
@@ -105,7 +113,7 @@ def test_memory_repository_lists_relations(tmp_path: Path) -> None:
 
 
 def test_memory_repository_graph_nodes_and_edges(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     target = repo.save(
         MemoryEntry(
             type="concept",
@@ -138,7 +146,7 @@ def test_memory_repository_graph_nodes_and_edges(tmp_path: Path) -> None:
 
 
 def test_memory_repository_search_graph_supports_depth(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     a = repo.save(MemoryEntry(type="belief", title="Start node", body="Beginning."))
     b = repo.save(MemoryEntry(type="belief", title="Middle node", body="Connected."))
     c = repo.save(MemoryEntry(type="belief", title="End node", body="Distant."))
@@ -157,7 +165,7 @@ def test_memory_repository_search_graph_supports_depth(tmp_path: Path) -> None:
 
 
 def test_memory_repository_find_path(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     a = repo.save(MemoryEntry(type="belief", title="A", body="Node A."))
     b = repo.save(MemoryEntry(type="belief", title="B", body="Node B."))
     c = repo.save(MemoryEntry(type="belief", title="C", body="Node C."))
@@ -177,7 +185,7 @@ def test_memory_repository_find_path(tmp_path: Path) -> None:
 
 
 def test_memory_repository_transitive_closure(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     a = repo.save(MemoryEntry(type="goal", title="A", body="Goal A."))
     b = repo.save(MemoryEntry(type="goal", title="B", body="Goal B."))
     c = repo.save(MemoryEntry(type="goal", title="C", body="Goal C."))
@@ -208,7 +216,7 @@ def test_default_relation_descriptor_registry_exposes_built_ins() -> None:
 
 
 def test_memory_repository_missing_entry(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
 
     try:
         repo.get("missing")
@@ -282,7 +290,7 @@ def test_memory_entry_importance_roundtrip(
     tmp_path: Path,
     importance: float,
 ) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -405,7 +413,7 @@ def test_default_registry_validates_goal_and_concept_memory_objects() -> None:
 
 
 def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     invalid = MemoryEntry(type="belief", title="", body="Missing title.")
 
     try:
@@ -419,7 +427,7 @@ def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
 
 def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
     from nuself.domain.memory import MemoryEntryType
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     entry = repo.save(MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact."))
 
     assert repo.get(entry.id).title == "Concise style"
@@ -428,7 +436,7 @@ def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
 
 def test_repository_rejects_unknown_non_draft_type(tmp_path: Path) -> None:
     from nuself.domain.memory import MemoryEntryType
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     invalid = MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact.", review_state="reviewed")
 
     try:
@@ -440,7 +448,7 @@ def test_repository_rejects_unknown_non_draft_type(tmp_path: Path) -> None:
 
 
 def test_memory_repository_search_filters_and_stats(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -464,7 +472,10 @@ def test_memory_repository_search_filters_and_stats(tmp_path: Path) -> None:
         "memory",
         MemorySearchFilters(type="belief", tag="memory", review_state="reviewed", observed_from="2026-05-01"),
     )
-    stats = memory_stats(tmp_path)
+    stats = memory_stats(
+        repo,
+        memory_candidate_repository(tmp_path),
+    )
 
     assert [entry.title for entry in filtered] == ["Temporal memory"]
     assert stats.entries_total == 2

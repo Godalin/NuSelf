@@ -19,6 +19,7 @@ from nuself.cli.daemon_lifecycle import (
     restart_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.commands.persona import (
     handle_persona_create,
@@ -31,13 +32,10 @@ from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
-    MemoryCandidateRepository,
     MemoryEntryNotFound,
-    MemoryEntryRepository,
 )
 from nuself.memory.source_repository import (
     SourceDocumentNotFound,
-    SourceRepository,
 )
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.audit import report_persona_failure
@@ -83,7 +81,7 @@ def indent_lines(lines: list[str], prefix: str) -> list[str]:
 
 
 def handle_interactive_memory_search(query: str, project_root: Path | None) -> str:
-    entries = MemoryEntryRepository(project_root).search(query)
+    entries = compose_cli_application(project_root).memory.entries.search(query)
     if not entries:
         return "No matching memory entries."
     return "\n".join(render_memory_entry_row(entry) for entry in entries)
@@ -98,29 +96,29 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
         if entry_id.isdigit():
-            entries = MemoryEntryRepository(project_root).list()
+            entries = compose_cli_application(project_root).memory.entries.list()
             index = int(entry_id)
             if 0 <= index < len(entries):
                 entry_id = entries[index].id
         try:
-            entry = MemoryEntryRepository(project_root).get(entry_id)
+            entry = compose_cli_application(project_root).memory.entries.get(entry_id)
         except MemoryEntryNotFound:
             return f"Memory entry not found: {entry_id}"
         return render_memory_entry_detail(entry)
     if command == "review":
-        candidates = MemoryCandidateRepository(project_root).list()
+        candidates = compose_cli_application(project_root).memory.candidates.list()
         if not candidates:
             return "No memory candidates."
         return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
     if command.startswith("review "):
         candidate_id = command.removeprefix("review ").strip()
         if candidate_id.isdigit():
-            candidates = MemoryCandidateRepository(project_root).list()
+            candidates = compose_cli_application(project_root).memory.candidates.list()
             index = int(candidate_id)
             if 0 <= index < len(candidates):
                 candidate_id = candidates[index].id
         try:
-            candidate = MemoryCandidateRepository(project_root).get(candidate_id)
+            candidate = compose_cli_application(project_root).memory.candidates.get(candidate_id)
         except MemoryCandidateNotFound:
             return f"Memory candidate not found: {candidate_id}"
         return render_candidate_detail(candidate)
@@ -134,7 +132,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
     if command == "sources":
-        repo = SourceRepository(project_root)
+        repo = compose_cli_application(project_root).memory.sources
         documents = repo.list_documents()
         if not documents:
             return "No source documents."
@@ -144,7 +142,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         )
     if command.startswith("source "):
         source_id = command.removeprefix("source ").strip()
-        repo = SourceRepository(project_root)
+        repo = compose_cli_application(project_root).memory.sources
         if source_id.isdigit():
             documents = repo.list_documents()
             index = int(source_id)

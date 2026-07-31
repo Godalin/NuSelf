@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 # pyright: reportPrivateUsage=false
 
 from pathlib import Path
@@ -28,7 +36,7 @@ def _names(tools: tuple[object, ...]) -> set[str]:
 def test_subsystem_tool_builders_own_their_registries(
     tmp_path: Path,
 ) -> None:
-    memory_repository = MemoryEntryRepository(tmp_path)
+    memory_repository = memory_entry_repository(tmp_path)
 
     assert _names(
         build_memory_tools(

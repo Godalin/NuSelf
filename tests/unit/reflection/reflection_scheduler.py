@@ -3,6 +3,14 @@
 
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -160,7 +168,7 @@ def _seed_memory(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
     from nuself.domain.memory import MemoryEntry
 
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(
         id="m1", type="belief", title="Test belief",
         body="A test entry for proactive generation.",

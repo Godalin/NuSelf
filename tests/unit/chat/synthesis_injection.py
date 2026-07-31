@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from pathlib import Path
 from typing import Any, cast
 
@@ -144,7 +152,7 @@ def test_selves_consult_returns_internal_synthesis(
         tmp_path,
         response_service=llm,
         langchain_models=cast(Any, models),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
@@ -163,7 +171,7 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Final answer.", confidence=0.5)
         ),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     _, result, _ = runtime.run_turn(
@@ -194,7 +202,7 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="No synthesis reply.", confidence=0.5)
         ),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
@@ -237,7 +245,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
         tmp_path,
         response_service=llm,
         langchain_models=cast(Any, models),
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
@@ -255,7 +263,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     """Verify that the normal respond path preserves essential system prompt sections."""
     from nuself.domain.memory import MemoryEntry
     
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="belief",
@@ -303,7 +311,7 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
@@ -338,7 +346,7 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(MemoryEntryRepository(tmp_path)),
+        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(

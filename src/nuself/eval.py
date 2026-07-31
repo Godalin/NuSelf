@@ -148,9 +148,14 @@ class FixtureResponseService:
 
 def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     """Run one golden fixture and return the eval result."""
-    from nuself.memory.repository import MemoryEntryRepository
+    from nuself.application.composition import compose_application
+    from nuself.config import runtime_paths
+    from nuself.storage import get_default_backend
 
-    repo = MemoryEntryRepository(project_root)
+    repo = compose_application(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    ).memory.entries
     for entry in fixture.memory_entries:
         repo.save(entry.to_domain())
 

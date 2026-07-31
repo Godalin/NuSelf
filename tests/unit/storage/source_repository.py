@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from pathlib import Path
 
 from nuself.config import runtime_paths
@@ -73,7 +81,7 @@ def test_load_markdown_source_extracts_metadata_and_chunks(tmp_path: Path) -> No
 def test_source_repository_ingests_file_and_replaces_chunks(tmp_path: Path) -> None:
     source_path = tmp_path / "note.txt"
     source_path.write_text("Local note title\n\nBody text for ingestion.", encoding="utf-8")
-    repo = SourceRepository(tmp_path)
+    repo = source_repository(tmp_path)
 
     result = repo.ingest_path(source_path, tags=["notes"])
     document = repo.list_documents()[0]
@@ -112,7 +120,7 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     )
     second_path = tmp_path / "other.txt"
     second_path.write_text("Cooking note\n\nUnrelated text.", encoding="utf-8")
-    repo = SourceRepository(tmp_path)
+    repo = source_repository(tmp_path)
     repo.ingest_path(tmp_path)
 
     matches = repo.search("stable memory references")
@@ -139,7 +147,7 @@ def test_source_repository_reindex(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    repo = SourceRepository(tmp_path)
+    repo = source_repository(tmp_path)
     repo.ingest_path(source_path)
 
     repo.reindex()
@@ -160,7 +168,7 @@ def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    repo = SourceRepository(tmp_path)
+    repo = source_repository(tmp_path)
     repo.ingest_path(source_path)
     document = repo.list_documents()[0]
 
@@ -188,10 +196,10 @@ def test_source_repository_delete_cascades_derived_candidates_and_profile_items(
         ),
         encoding="utf-8",
     )
-    source_repo = SourceRepository(tmp_path)
+    source_repo = source_repository(tmp_path)
     source_repo.ingest_path(source_path)
     document = source_repo.list_documents()[0]
-    candidate_repo = MemoryCandidateRepository(tmp_path)
+    candidate_repo = memory_candidate_repository(tmp_path)
     candidate = source_repo.extract_candidates(document.id)[0]
     candidate_repo.save(candidate)
     candidate_repo.accept(candidate.id)

@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 import json
 from pathlib import Path
 
@@ -33,7 +41,7 @@ def test_data_lists_and_shows_public_memory(
         title="Visible memory",
         body="Authoritative data is inspectable.",
     )
-    MemoryEntryRepository(authority).save(entry)
+    memory_entry_repository(authority).save(entry)
     reset_default_backend(authority)
 
     assert main(["data", "list", "memory", "--json"]) == 0
@@ -52,7 +60,7 @@ def test_data_edit_validates_and_audits_memory(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     authority = _set_home(tmp_path, monkeypatch)
-    repo = MemoryEntryRepository(authority)
+    repo = memory_entry_repository(authority)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -81,7 +89,7 @@ def test_data_edit_validates_and_audits_memory(
         == 0
     )
     assert "Updated memory/" in capsys.readouterr().out
-    assert MemoryEntryRepository(authority).get(entry.id).title == "After"
+    assert memory_entry_repository(authority).get(entry.id).title == "After"
     event = read_log_events(
         project_root=authority,
         component="daemon",
@@ -99,7 +107,7 @@ def test_data_check_reports_unique_invalid_records_and_repair_commands(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     authority = _set_home(tmp_path, monkeypatch)
-    backend = MemoryEntryRepository(authority)
+    backend = memory_entry_repository(authority)
     healthy = backend.save(
         MemoryEntry(type="belief", title="Healthy", body="Keep this.")
     )
@@ -126,7 +134,7 @@ def test_data_check_succeeds_for_valid_collection(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     authority = _set_home(tmp_path, monkeypatch)
-    MemoryEntryRepository(authority).save(
+    memory_entry_repository(authority).save(
         MemoryEntry(type="belief", title="Healthy", body="All good.")
     )
     reset_default_backend(authority)
@@ -141,7 +149,7 @@ def test_data_edit_rejects_identity_change(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     authority = _set_home(tmp_path, monkeypatch)
-    entry = MemoryEntryRepository(authority).save(
+    entry = memory_entry_repository(authority).save(
         MemoryEntry(type="belief", title="Stable", body="Keep the id.")
     )
     edited = entry.to_wire()
@@ -165,7 +173,7 @@ def test_data_edit_rejects_identity_change(
         == 1
     )
     assert "cannot change its stable identity" in capsys.readouterr().err
-    assert MemoryEntryRepository(authority).get(entry.id).title == "Stable"
+    assert memory_entry_repository(authority).get(entry.id).title == "Stable"
 
 
 def test_data_internal_collections_are_hidden_by_default(
@@ -189,7 +197,7 @@ def test_data_delete_control_cancels_without_mutation(
     control: BaseException,
 ) -> None:
     authority = _set_home(tmp_path, monkeypatch)
-    repo = MemoryEntryRepository(authority)
+    repo = memory_entry_repository(authority)
     entry = repo.save(
         MemoryEntry(
             type="belief",
@@ -208,5 +216,5 @@ def test_data_delete_control_cancels_without_mutation(
         main(["data", "delete", "memory", entry.id])
         is CliExitCode.INTERRUPTED
     )
-    assert MemoryEntryRepository(authority).get(entry.id) is not None
+    assert memory_entry_repository(authority).get(entry.id) is not None
     assert "Cancelled." in capsys.readouterr().out

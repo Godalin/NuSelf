@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -100,7 +108,7 @@ def test_load_persona_definitions_falls_back_to_defaults(tmp_path: Path) -> None
 
 
 def test_load_persona_definitions_from_memory(tmp_path: Path) -> None:
-    repo = MemoryEntryRepository(tmp_path)
+    repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
             type="persona_instruction",

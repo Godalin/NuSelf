@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from nuself.clock import utc_now_iso
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.derived import write_derived_index
 from nuself.domain.memory import (
     MemoryCandidate,
@@ -26,7 +26,7 @@ from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.observability import decode_observed_record
 from nuself.runtime import freeze_json_value
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -197,19 +197,14 @@ class MemoryEntryRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
         registry: MemoryTypeRegistry | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._col = be.collection("memory_entries")
-        self._paths = runtime_paths(project_root)
+        self._col = backend.collection("memory_entries")
+        self._paths = paths
         self._registry = registry or default_memory_type_registry()
         self._relation_registry = relation_registry or default_relation_descriptor_registry()
 
@@ -455,28 +450,17 @@ class MemoryCandidateRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
-        entry_repository: MemoryEntryRepository | None = None,
-        profile_repository: ProfileItemRepository | None = None,
+        backend: StorageBackend,
+        entry_repository: MemoryEntryRepository,
+        profile_repository: ProfileItemRepository,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._backend = be
-        self._col = be.collection("memory_candidates")
-        self._paths = runtime_paths(project_root)
-        self._entry_repository = entry_repository or MemoryEntryRepository(
-            project_root,
-            backend=be,
-        )
-        self._profile_repository = profile_repository or ProfileItemRepository(
-            self._paths,
-            backend=be,
-        )
+        self._backend = backend
+        self._col = backend.collection("memory_candidates")
+        self._paths = paths
+        self._entry_repository = entry_repository
+        self._profile_repository = profile_repository
 
     def list(self, *, include_reviewed: bool = False) -> list[MemoryCandidate]:
         candidates: list[MemoryCandidate] = []
@@ -678,11 +662,14 @@ class MemoryCandidateRepository:
             return self._profile_repository.get(target_id)
         return self._entry_repository.get(target_id)
 
-def memory_stats(project_root: Path | None = None) -> MemoryStats:
+def memory_stats(
+    entry_repository: MemoryEntryRepository,
+    candidate_repository: MemoryCandidateRepository,
+) -> MemoryStats:
     """Return compact stats across durable entries and review candidates."""
 
-    entries = MemoryEntryRepository(project_root).list()
-    candidates = MemoryCandidateRepository(project_root).list(include_reviewed=True)
+    entries = entry_repository.list()
+    candidates = candidate_repository.list(include_reviewed=True)
     importances = [entry.importance for entry in entries]
     by_type: dict[str, list[float]] = {}
     for entry in entries:

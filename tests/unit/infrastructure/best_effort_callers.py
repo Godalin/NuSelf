@@ -29,7 +29,7 @@ def test_memory_trace_failure_is_observed_without_failing_command(
         raise OSError("trace store unavailable")
 
     monkeypatch.setattr(
-        "nuself.cli.commands.memory.common.TraceRecorder.record_memory_update",
+        "nuself.trace.service.TraceRecorder.record_memory_update",
         fail,
     )
 

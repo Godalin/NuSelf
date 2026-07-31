@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+# pyright: reportUnusedImport=false
+
+from memory_fixtures import (
+    memory_candidate_repository,
+    memory_entry_repository,
+    source_repository,
+)
+
 # pyright: reportPrivateUsage=false
 
 import json
@@ -617,7 +625,7 @@ def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
         reset_default_backend()
 
 
-def test_unmigrated_repositories_share_the_project_default_backend(
+def test_unmigrated_notification_uses_the_project_default_backend(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -628,26 +636,14 @@ def test_unmigrated_repositories_share_the_project_default_backend(
         calls.append(project_root)
         return backend
 
-    for module in (
-        "nuself.memory.repository",
-        "nuself.memory.source_repository",
-        "nuself.notification",
-    ):
-        monkeypatch.setattr(
-            f"{module}.get_default_backend",
-            default_backend,
-        )
+    monkeypatch.setattr(
+        "nuself.notification.get_default_backend",
+        default_backend,
+    )
 
-    MemoryEntryRepository(tmp_path)
-    MemoryCandidateRepository(tmp_path)
-    SourceRepository(tmp_path)
     NotificationOutbox(tmp_path)
-    ProfileItemRepository(runtime_paths(tmp_path), backend=backend)
-    ReasonRepository(runtime_paths(tmp_path), backend=backend)
-    ReflectionRepository(runtime_paths(tmp_path), backend=backend)
-    compose_trace_services(runtime_paths(tmp_path), backend)
 
-    assert calls == [tmp_path] * 4
+    assert calls == [tmp_path]
 
 
 def test_reset_closes_backend_used_by_default_repository(
@@ -658,7 +654,7 @@ def test_reset_closes_backend_used_by_default_repository(
         db_path=tmp_path / "nuself.sqlite",
     )
     set_default_backend(backend, tmp_path)
-    repository = MemoryEntryRepository(tmp_path)
+    repository = memory_entry_repository(tmp_path)
     backend.collection("memory_entries").put(
         "lifecycle-probe",
         {"id": "lifecycle-probe", "title": "probe"},
@@ -671,23 +667,10 @@ def test_reset_closes_backend_used_by_default_repository(
         repository.list()
 
 
-def test_explicit_candidate_backend_isolated_from_default_registry(
+def test_candidate_repository_uses_explicit_backend(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def unexpected_default(
-        project_root: Path | None = None,
-    ) -> StorageBackend:
-        raise AssertionError(
-            f"default backend consulted for explicit root {project_root}"
-        )
-
-    monkeypatch.setattr(
-        "nuself.memory.repository.get_default_backend",
-        unexpected_default,
-    )
-
-    repository = MemoryCandidateRepository(
+    repository = memory_candidate_repository(
         tmp_path,
         backend=auto_backend(tmp_path / "isolated"),
     )

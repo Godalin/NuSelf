@@ -146,3 +146,26 @@ def test_migrated_reflection_repository_does_not_resolve_authority() -> None:
 
 def test_reflection_domain_does_not_import_application_composition() -> None:
     assert _violations(("reflection",), ("nuself.application",)) == ()
+
+
+def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    paths = (
+        _SOURCE_ROOT / "memory" / "repository.py",
+        _SOURCE_ROOT / "memory" / "source_repository.py",
+    )
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for path in paths
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []
+
+
+def test_memory_domain_does_not_import_application_composition() -> None:
+    assert _violations(("memory",), ("nuself.application",)) == ()

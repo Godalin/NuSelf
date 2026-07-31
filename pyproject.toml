@@ -35,6 +35,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
+pythonpath = ["tests/unit"]
 python_files = ["*.py"]
 filterwarnings = [
     "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
