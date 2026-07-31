@@ -9,6 +9,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Module dependency rules are now executable architecture gates. Agent tools
   return model-facing structured data without importing terminal renderers,
   establishing the first enforced adapter boundary for the v0.3.1 decoupling.
+  A shared `AuthorityRuntime` now owns resolved paths and storage lifetime for
+  composition roots without exposing domain services through a locator.
 - Schema v4 replaces per-collection dynamic-column tables with one compact
   strict-JSON `records` table and makes namespaced workspace state part of the
   main authority. Its v3↔v4 migration is reversible. Reason exports now live

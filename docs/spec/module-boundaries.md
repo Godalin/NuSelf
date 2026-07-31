@@ -48,6 +48,15 @@ opened once for that authority. Domain repositories and services receive the
 backend, collections, paths, clocks, sinks, and cross-domain capabilities they
 use as explicit constructor dependencies.
 
+`AuthorityRuntime` is the shared authority-lifetime owner. Construction takes
+already-resolved `RuntimePaths` and one closeable `StorageBackend`; the public
+factory performs scope-derived path resolution and opens storage. The owner is
+not a service locator: it exposes only those two neutral resources and does
+not construct or cache domain services. It is context-manageable, closes its
+backend exactly once, and rejects resource access after close. A backend close
+failure propagates from the first close while the owner still remains closed;
+cleanup code must not invoke the backend again.
+
 `get_default_backend()` and `runtime_paths()` are compatibility-free
 composition helpers, not domain service locators. Domain repositories must not
 call them. Direct CLI mode and daemon mode must construct the same service

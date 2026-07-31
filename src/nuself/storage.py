@@ -47,6 +47,13 @@ class StorageBackend(Protocol):
     def transaction(self) -> AbstractContextManager[None]: ...
 
 
+@runtime_checkable
+class ClosableStorageBackend(StorageBackend, Protocol):
+    """Storage backend whose lifetime is owned by a composition root."""
+
+    def close(self) -> None: ...
+
+
 # ── Known collection names ──────────────────────────────────────────────
 
 COLLECTION_NAMES: tuple[str, ...] = (
@@ -279,7 +286,7 @@ def _create_sqlite_backend(
     )
 
 
-def auto_backend(project_root: Path | None = None) -> StorageBackend:
+def auto_backend(project_root: Path | None = None) -> ClosableStorageBackend:
     """Open or atomically initialize the selected SQLite authority."""
     paths = runtime_paths(project_root)
     db_path = paths.authority_root / "nuself.sqlite"

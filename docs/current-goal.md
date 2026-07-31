@@ -38,5 +38,8 @@ In progress:
 - AST dependency gates cover runtime, business domains, and agent adapters;
 - agent trace tools no longer import terminal renderers and instead return
   model-facing structured JSON;
+- `AuthorityRuntime` now provides one explicit, idempotently closed owner for
+  resolved paths and a closeable authority backend; process adapters can share
+  this primitive without turning it into a domain service locator;
 - the first focused boundary gate passed 74 tests and Pyright reported
   0 errors and 0 warnings.
