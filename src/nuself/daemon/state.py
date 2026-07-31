@@ -6,9 +6,12 @@ import threading
 from pathlib import Path
 
 from nuself.agent.chat import ConversationGraphRuntime
-from nuself.application.composition import compose_application
+from nuself.application.runtime import (
+    ApplicationRuntime,
+    current_application_runtime,
+    open_application_runtime,
+)
 from nuself.config import ConfigSystem
-from nuself.config import runtime_paths
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
     ReasonExportWorker,
@@ -25,20 +28,26 @@ from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.events import EventPublisher
-from nuself.storage import get_default_backend
 
 
 class DaemonState:
     """Own request-facing services and concrete daemon worker targets."""
 
-    def __init__(self, project_root: Path) -> None:
+    def __init__(
+        self,
+        project_root: Path,
+        *,
+        application_runtime: ApplicationRuntime | None = None,
+    ) -> None:
         self.project_root = project_root
-        paths = runtime_paths(project_root)
-        self.authority_id = paths.scope.authority_id
-        self.application = compose_application(
-            paths,
-            get_default_backend(project_root),
+        self.application_runtime = (
+            application_runtime
+            or current_application_runtime()
+            or open_application_runtime(project_root)
         )
+        paths = self.application_runtime.paths
+        self.authority_id = paths.scope.authority_id
+        self.application = self.application_runtime.application
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()

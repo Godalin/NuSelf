@@ -487,7 +487,11 @@ def test_pid_is_published_only_after_successful_bind(
         def handle_request(self) -> None:
             self.state.shutdown_requested.set()
 
-    def make_state(project_root: Path) -> ExitingState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> ExitingState:
         return ExitingState(project_root)
 
     def ignore_signal(
@@ -549,7 +553,11 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
             transitions.append("request")
             self.state.shutdown_requested.set()
 
-    def make_state(project_root: Path) -> OrderedState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> OrderedState:
         state = OrderedState(project_root)
         states.append(state)
         return state
@@ -627,7 +635,11 @@ def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
         ) -> None:
             return None
 
-    def make_state(project_root: Path) -> FailingState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> FailingState:
         state = FailingState(project_root)
         states.append(state)
         return state
@@ -716,7 +728,11 @@ def test_worker_readiness_failure_never_publishes_ready_lifecycle(
         ) -> None:
             return None
 
-    def make_state(project_root: Path) -> UnreadyState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> UnreadyState:
         state = UnreadyState(project_root)
         states.append(state)
         return state
@@ -779,7 +795,11 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
     paths.socket_path.write_text("stale", encoding="utf-8")
     states: list[_UnstartedDaemonState] = []
 
-    def make_state(project_root: Path) -> _UnstartedDaemonState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> _UnstartedDaemonState:
         state = _UnstartedDaemonState(project_root)
         states.append(state)
         return state
@@ -851,7 +871,11 @@ def test_pid_publication_failure_cleans_bound_socket_without_starting_workers(
         ) -> None:
             return None
 
-    def make_state(project_root: Path) -> _UnstartedDaemonState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> _UnstartedDaemonState:
         state = _UnstartedDaemonState(project_root)
         states.append(state)
         return state
@@ -915,7 +939,11 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
             super().stop_background_reason_scheduler()
             raise RuntimeError("reason stop failed")
 
-    def make_state(project_root: Path) -> FailingCleanupState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> FailingCleanupState:
         state = FailingCleanupState(project_root)
         states.append(state)
         return state
@@ -955,7 +983,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert [failure.step for failure in captured.value.failures] == [
         "worker.memory_curator.stop",
         "worker.reason_scheduler.stop",
-        "storage.default_backend.reset",
+        "application_runtime.close",
     ]
     assert states[0].stop_calls == [
         "memory",
@@ -983,7 +1011,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
                 "error": "reason stop failed",
             },
             {
-                "step": "storage.default_backend.reset",
+                "step": "application_runtime.close",
                 "error": "storage reset failed",
             },
         ),
@@ -1000,7 +1028,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
                 "error": "reason stop failed",
             },
             {
-                "step": "storage.default_backend.reset",
+                "step": "application_runtime.close",
                 "error": "storage reset failed",
             },
         ],
@@ -1097,7 +1125,11 @@ def test_stopped_event_is_written_after_owned_cleanup(
         def handle_request(self) -> None:
             self.state.shutdown_requested.set()
 
-    def make_state(project_root: Path) -> ExitingState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> ExitingState:
         state = ExitingState(project_root)
         states.append(state)
         return state
@@ -1172,7 +1204,11 @@ def test_signal_restore_failure_joins_daemon_cleanup_failures(
         def restore(self) -> bool:
             raise OSError("signal restore failed")
 
-    def make_state(project_root: Path) -> _UnstartedDaemonState:
+    def make_state(
+        project_root: Path,
+        *,
+        application_runtime: object,
+    ) -> _UnstartedDaemonState:
         return _UnstartedDaemonState(project_root)
 
     def fail_bind(

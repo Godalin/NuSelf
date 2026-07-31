@@ -21,7 +21,26 @@ class _Parser:
         return argparse.Namespace(local=False, workspace=self._workspace)
 
 
-def test_cli_resets_default_backend_after_success(
+class _Runtime:
+    def __init__(
+        self,
+        project_root: Path,
+        *,
+        events: list[object] | None = None,
+        close_error: BaseException | None = None,
+    ) -> None:
+        self.project_root = project_root
+        self._events = events
+        self._close_error = close_error
+
+    def close(self) -> None:
+        if self._events is not None:
+            self._events.append(("close", self.project_root))
+        if self._close_error is not None:
+            raise self._close_error
+
+
+def test_cli_closes_application_runtime_after_success(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -37,8 +56,8 @@ def test_cli_resets_default_backend_after_success(
         )
         return 7
 
-    def reset_success(project_root: Path | None) -> None:
-        events.append(("reset", project_root))
+    def open_runtime(project_root: Path) -> _Runtime:
+        return _Runtime(project_root, events=events)
 
     monkeypatch.setattr("nuself.cli.build_parser", lambda: parser)
     monkeypatch.setattr(
@@ -46,23 +65,23 @@ def test_cli_resets_default_backend_after_success(
         dispatch_success,
     )
     monkeypatch.setattr(
-        "nuself.cli.reset_default_backend",
-        reset_success,
+        "nuself.cli.open_application_runtime",
+        open_runtime,
     )
 
     assert main(["status"]) == 7
     assert events == [
         ("dispatch", tmp_path / ".nuself", parser),
-        ("reset", tmp_path / ".nuself"),
+        ("close", tmp_path / ".nuself"),
     ]
 
 
-def test_cli_resets_backend_then_reraises_same_control_exception(
+def test_cli_closes_runtime_then_reraises_same_control_exception(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     primary = SystemExit(23)
-    resets: list[Path | None] = []
+    events: list[object] = []
     monkeypatch.setattr(
         "nuself.cli.build_parser",
         lambda: _Parser(tmp_path),
@@ -75,28 +94,28 @@ def test_cli_resets_backend_then_reraises_same_control_exception(
         del args, parser
         raise primary
 
-    def reset_success(project_root: Path | None) -> None:
-        resets.append(project_root)
+    def open_runtime(project_root: Path) -> _Runtime:
+        return _Runtime(project_root, events=events)
 
     monkeypatch.setattr("nuself.cli.dispatch_cli", fail_dispatch)
     monkeypatch.setattr(
-        "nuself.cli.reset_default_backend",
-        reset_success,
+        "nuself.cli.open_application_runtime",
+        open_runtime,
     )
 
     with pytest.raises(SystemExit) as captured:
         main(["status"])
 
     assert captured.value is primary
-    assert resets == [tmp_path / ".nuself"]
+    assert events == [("close", tmp_path / ".nuself")]
 
 
-def test_cli_interrupt_resets_backend_without_traceback(
+def test_cli_interrupt_closes_runtime_without_traceback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    resets: list[Path | None] = []
+    events: list[object] = []
     monkeypatch.setattr(
         "nuself.cli.build_parser",
         lambda: _Parser(tmp_path),
@@ -109,14 +128,17 @@ def test_cli_interrupt_resets_backend_without_traceback(
         del args, parser
         raise KeyboardInterrupt
 
+    def open_runtime(project_root: Path) -> _Runtime:
+        return _Runtime(project_root, events=events)
+
     monkeypatch.setattr("nuself.cli.dispatch_cli", interrupt_dispatch)
     monkeypatch.setattr(
-        "nuself.cli.reset_default_backend",
-        resets.append,
+        "nuself.cli.open_application_runtime",
+        open_runtime,
     )
 
     assert main(["status"]) is CliExitCode.INTERRUPTED
-    assert resets == [tmp_path / ".nuself"]
+    assert events == [("close", tmp_path / ".nuself")]
     assert capsys.readouterr().err == "Interrupted.\n"
 
 
@@ -152,10 +174,6 @@ def test_cli_cleanup_failure_retains_primary_as_cause(
         del args, parser
         raise primary
 
-    def fail_reset(project_root: Path | None) -> None:
-        assert project_root == tmp_path / ".nuself"
-        raise cleanup_error
-
     def record_failure(
         error: Exception,
         **kwargs: object,
@@ -163,10 +181,16 @@ def test_cli_cleanup_failure_retains_primary_as_cause(
         del kwargs
         reports.append(error)
 
+    def open_runtime(project_root: Path) -> _Runtime:
+        return _Runtime(
+            project_root,
+            close_error=cleanup_error,
+        )
+
     monkeypatch.setattr("nuself.cli.dispatch_cli", fail_dispatch)
     monkeypatch.setattr(
-        "nuself.cli.reset_default_backend",
-        fail_reset,
+        "nuself.cli.open_application_runtime",
+        open_runtime,
     )
     monkeypatch.setattr(
         "nuself.cli.report_cli_cleanup_failure",
@@ -179,7 +203,7 @@ def test_cli_cleanup_failure_retains_primary_as_cause(
     assert captured.value.primary_error is primary
     assert captured.value.__cause__ is primary
     assert captured.value.failures[0].step == (
-        "storage.default_backend.reset"
+        "application_runtime.close"
     )
     assert captured.value.failures[0].error is cleanup_error
     assert reports == [captured.value]

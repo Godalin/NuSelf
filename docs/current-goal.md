@@ -18,6 +18,8 @@ Current working branch for v0.3.1.
 1. Define and enforce package dependency rules. Complete: AST gates now reject
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
+   Complete: CLI and daemon entrypoints borrow one lazy `ApplicationRuntime`
+   and close it once at their outer lifecycle boundary.
 3. Remove hidden backend/path resolution from domain repositories. Complete:
    trace, profile, reason, reflection, memory, source, notification, persona
    prompt, and curator-plan persistence require explicit authority resources
@@ -41,9 +43,12 @@ In progress:
 - AST dependency gates cover runtime, business domains, and agent adapters;
 - agent trace tools no longer import terminal renderers and instead return
   model-facing structured JSON;
-- `AuthorityRuntime` now provides one explicit, idempotently closed owner for
-  resolved paths and a closeable authority backend; process adapters can share
-  this primitive without turning it into a domain service locator;
+- `ApplicationRuntime` is now the sole explicit, idempotently closed owner for
+  resolved paths, the selected authority backend, and its application graph;
+  the superseded parallel authority-runtime abstraction was removed;
+- CLI handlers reuse the invocation-scoped graph, while daemon state receives
+  the process-owned runtime explicitly; normal, interrupt, startup-failure, and
+  cleanup-failure paths converge on the same idempotent close operation;
 - trace repositories and services no longer resolve a default backend;
   application-owned composition receives resolved paths and the selected
   authority backend explicitly, and an AST gate prevents the repository from
@@ -79,5 +84,7 @@ In progress:
   passed 1280 tests, followed by the complete 2464-test suite; Pyright reported
   0 errors and 0 warnings. The notification cross-module slice passed 1117
   tests, followed by the complete 2465-test suite, with Pyright still at 0
-  errors and 0 warnings. The persona/curator/CLI slice passed 675 tests and its
+  errors and 0 warnings. The persona/curator/CLI slice passed 908 tests and its
   focused persistence slice passed 56 tests; Pyright remained clean.
+  The shared CLI/daemon runtime integration slice passed 533 tests, and its
+  focused lifecycle slice passed 27 tests.

@@ -50,14 +50,13 @@ dependencies; accepting a project root and resolving either dependency inside
 the repository is forbidden. Services receive repositories, clocks, sinks,
 and cross-domain capabilities explicitly.
 
-`AuthorityRuntime` is the shared authority-lifetime owner. Construction takes
-already-resolved `RuntimePaths` and one closeable `StorageBackend`; the public
-factory performs scope-derived path resolution and opens storage. The owner is
-not a service locator: it exposes only those two neutral resources and does
-not construct or cache domain services. It is context-manageable, closes its
-backend exactly once, and rejects resource access after close. A backend close
-failure propagates from the first close while the owner still remains closed;
-cleanup code must not invoke the backend again.
+`ApplicationRuntime` is the shared authority-lifetime owner. Its public
+factory resolves paths without opening storage; the first graph access selects
+one backend and constructs the complete authority-scoped `ApplicationGraph`.
+It is context-manageable, closes idempotently, and rejects graph access after
+close. It is only created by an outer process adapter; domain code receives
+the graph's narrow repositories and services rather than looking up the
+runtime.
 
 `get_default_backend()` and `runtime_paths()` are compatibility-free
 composition helpers, not domain service locators. Domain repositories must not
@@ -112,6 +111,18 @@ one selected `StorageBackend`. It retains those exact resources and the shared
 memory, notification, persona, reason, reflection, and trace graph. Process
 adapters may choose transport and lifecycle, but must not rebuild domain
 dependencies after a graph has been supplied.
+
+Each CLI invocation and each daemon process owns exactly one
+`ApplicationRuntime`. That runtime resolves the authority once, selects one
+backend, constructs one `ApplicationGraph`, and closes the owned backend
+idempotently at the outer lifecycle boundary. Command handlers and daemon
+workers borrow the graph; they neither rebuild it nor close its resources.
+Interrupt and exceptional exits follow the same outer cleanup path as normal
+completion.
+
+`ApplicationRuntime` is the only public authority lifecycle abstraction.
+Parallel path/backend owners with narrower names are prohibited because they
+make teardown responsibility ambiguous.
 
 `NotificationOutbox` is persistence and follows the same rule: it receives
 resolved paths and the selected backend, derives its entry-lock directory only

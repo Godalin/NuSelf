@@ -61,6 +61,7 @@ from nuself.cli.entrypoints import (
     EntrypointController,
 )
 from nuself.cli.handlers import dispatch_cli
+from nuself.cli.composition import use_cli_application_runtime
 from nuself.cli.parser import (
     EntrypointHandlers,
 )
@@ -103,7 +104,7 @@ from nuself.cli.repl.turns import (
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.scope import resolve_scope
-from nuself.storage import reset_default_backend
+from nuself.application.runtime import open_application_runtime
 from nuself.storage_audit import report_cli_cleanup_failure
 
 __all__ = [
@@ -151,15 +152,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     project_root = scope.root
     primary_error: BaseException | None = None
     result: int = CliExitCode.SUCCESS
+    application_runtime = open_application_runtime(project_root)
     try:
-        result = dispatch_cli(args, parser)
+        with use_cli_application_runtime(application_runtime):
+            result = dispatch_cli(args, parser)
     except BaseException as exc:
         primary_error = exc
     cleanup_failures = run_cleanup_steps(
         (
             (
-                "storage.default_backend.reset",
-                lambda: reset_default_backend(project_root),
+                "application_runtime.close",
+                application_runtime.close,
             ),
         )
     )

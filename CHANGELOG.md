@@ -9,8 +9,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Module dependency rules are now executable architecture gates. Agent tools
   return model-facing structured data without importing terminal renderers,
   establishing the first enforced adapter boundary for the v0.3.1 decoupling.
-  A shared `AuthorityRuntime` now owns resolved paths and storage lifetime for
-  composition roots without exposing domain services through a locator. Trace
+  A shared, lazy `ApplicationRuntime` now owns resolved paths, storage lifetime,
+  and one application graph for both CLI and daemon process surfaces, including
+  normal, interrupted, and exceptional teardown. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

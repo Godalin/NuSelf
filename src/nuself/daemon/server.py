@@ -118,12 +118,22 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     """Run the daemon while the caller holds project instance ownership."""
 
     state: DaemonState | None = None
+    from nuself.application.runtime import (
+        open_application_runtime,
+        use_application_runtime,
+    )
+
+    application_runtime = open_application_runtime(paths.project_root)
     signal_owner: DaemonSignalOwner | None = None
     ready = False
     primary_error: BaseException | None = None
     try:
         _reconcile_stale_runtime_metadata(paths)
-        state = DaemonState(paths.project_root)
+        with use_application_runtime(application_runtime):
+            state = DaemonState(
+                paths.project_root,
+                application_runtime=application_runtime,
+            )
         signal_owner = DaemonSignalOwner(state.shutdown_requested)
         signal_owner.install()
 
@@ -181,13 +191,11 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         cleanup_steps.append(
             ("signal_handlers.restore", signal_owner.restore)
         )
-    from nuself.storage import reset_default_backend
-
     cleanup_steps.extend(
         (
             (
-                "storage.default_backend.reset",
-                lambda: reset_default_backend(paths.project_root),
+                "application_runtime.close",
+                application_runtime.close,
             ),
             ("socket.unlink", lambda: paths.socket_path.unlink(missing_ok=True)),
             ("pid.unlink", lambda: paths.pid_path.unlink(missing_ok=True)),
