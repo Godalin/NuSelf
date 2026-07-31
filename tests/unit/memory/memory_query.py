@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import get_default_backend
 
 
 def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> None:
@@ -101,7 +103,7 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
 
 def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> None:
     entry_repo = MemoryEntryRepository(tmp_path)
-    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
@@ -143,7 +145,7 @@ def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path)
 
 
 def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: Path) -> None:
-    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",

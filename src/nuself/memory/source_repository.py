@@ -58,6 +58,7 @@ class SourceRepository:
             if backend is not None
             else get_default_backend(project_root)
         )
+        self._backend = be
         self._documents = be.collection("source_documents")
         self._chunks = be.collection("source_chunks")
         self._paths = runtime_paths(project_root)
@@ -184,7 +185,10 @@ class SourceRepository:
     def _delete_derived_profile_items(self, source_prefix: str) -> None:
         from nuself.profile.repository import ProfileItemRepository
 
-        profile_repo = ProfileItemRepository(self._paths.project_root)
+        profile_repo = ProfileItemRepository(
+            self._paths,
+            backend=self._backend,
+        )
         for item in profile_repo.list():
             if _has_source_prefix(item.source_refs, source_prefix):
                 profile_repo.delete(item.id)

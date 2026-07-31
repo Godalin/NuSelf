@@ -221,7 +221,10 @@ class MemoryCurator:
         )
         self._thread_store = thread_store or ThreadStore(paths.project_root)
         self._repository = repository or MemoryEntryRepository(paths.project_root)
-        self._profile_repository = profile_repository or ProfileItemRepository(paths.project_root)
+        self._profile_repository = (
+            profile_repository
+            or ProfileItemRepository(paths, backend=self._backend)
+        )
         self._candidate_repository = candidate_repository or MemoryCandidateRepository(
             paths.project_root,
             entry_repository=self._repository,

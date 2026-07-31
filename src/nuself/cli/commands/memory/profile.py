@@ -6,14 +6,24 @@ import argparse
 import sys
 from pathlib import Path
 
+from nuself.application import compose_profile_repository
 from nuself.cli.commands.output import print_ansi, resolve_handle
+from nuself.config import runtime_paths
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,
     ProfileItemRepository,
     ProfileSearchFilters,
 )
+from nuself.storage import get_default_backend
 from nuself.tui.memory import render_profile_detail, render_profile_row
+
+
+def _repository(project_root: Path | None) -> ProfileItemRepository:
+    return compose_profile_repository(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    )
 
 
 def _items_for_list(
@@ -21,7 +31,7 @@ def _items_for_list(
     *,
     sort_by: str = "updated_at",
 ) -> list[ProfileItem]:
-    items = ProfileItemRepository(project_root).list()
+    items = _repository(project_root).list()
     if sort_by == "importance":
         return sorted(
             items,
@@ -71,7 +81,7 @@ def handle_memory_profile_list(
 def handle_memory_profile_search(
     args: argparse.Namespace,
 ) -> int:
-    items = ProfileItemRepository(args.project_root).search(
+    items = _repository(args.project_root).search(
         args.query,
         ProfileSearchFilters(
             type=args.type,
@@ -96,7 +106,7 @@ def handle_memory_profile_show(
     if profile_id is None:
         return 1
     try:
-        item = ProfileItemRepository(args.project_root).get(
+        item = _repository(args.project_root).get(
             profile_id
         )
     except ProfileItemNotFound:
@@ -112,7 +122,7 @@ def handle_memory_profile_show(
 def handle_memory_profile_delete(
     args: argparse.Namespace,
 ) -> int:
-    repository = ProfileItemRepository(args.project_root)
+    repository = _repository(args.project_root)
     profile_id = _resolve_profile_id(args)
     if profile_id is None:
         return 1
@@ -132,6 +142,6 @@ def handle_memory_profile_delete(
 def handle_memory_profile_reindex(
     args: argparse.Namespace,
 ) -> int:
-    path = ProfileItemRepository(args.project_root).reindex()
+    path = _repository(args.project_root).reindex()
     print(f"Rebuilt profile index: {path}")
     return 0

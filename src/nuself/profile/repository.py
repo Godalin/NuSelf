@@ -6,13 +6,13 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from nuself.clock import utc_now_iso
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.runtime.observability import decode_observed_record
 from nuself.runtime import freeze_json_value
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 
 def empty_str_counts() -> dict[str, int]:
@@ -54,17 +54,12 @@ class ProfileItemRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._col = be.collection("profile_items")
-        self._paths = runtime_paths(project_root)
+        self._col = backend.collection("profile_items")
+        self._paths = paths
 
     def list(self) -> list[ProfileItem]:
         items: list[ProfileItem] = []
@@ -136,8 +131,8 @@ class ProfileItemRepository:
         )
 
 
-def profile_stats(project_root: Path | None = None) -> ProfileStats:
-    items = ProfileItemRepository(project_root).list()
+def profile_stats(repository: ProfileItemRepository) -> ProfileStats:
+    items = repository.list()
     return ProfileStats(
         items_total=len(items),
         items_by_type=_counts(item.type for item in items),

@@ -18,6 +18,7 @@ from nuself.memory.audit import write_optimizer_audit
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import get_default_backend
 
 MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
 OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
@@ -121,7 +122,13 @@ class MemoryOptimizer:
         )
         self._settings = settings or MemoryOptimizerSettings()
         self._repository = repository or MemoryEntryRepository(paths.project_root)
-        self._profile_repository = profile_repository or ProfileItemRepository(paths.project_root)
+        self._profile_repository = (
+            profile_repository
+            or ProfileItemRepository(
+                paths,
+                backend=get_default_backend(paths.project_root),
+            )
+        )
         self._candidate_repository = candidate_repository or MemoryCandidateRepository(
             paths.project_root,
             entry_repository=self._repository,

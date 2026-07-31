@@ -617,7 +617,7 @@ def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
         reset_default_backend()
 
 
-def test_repositories_share_the_project_default_backend(
+def test_unmigrated_repositories_share_the_project_default_backend(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -632,7 +632,6 @@ def test_repositories_share_the_project_default_backend(
         "nuself.memory.repository",
         "nuself.memory.source_repository",
         "nuself.notification",
-        "nuself.profile.repository",
         "nuself.reason.repository",
         "nuself.reflection.repository",
     ):
@@ -645,12 +644,12 @@ def test_repositories_share_the_project_default_backend(
     MemoryCandidateRepository(tmp_path)
     SourceRepository(tmp_path)
     NotificationOutbox(tmp_path)
-    ProfileItemRepository(tmp_path)
+    ProfileItemRepository(runtime_paths(tmp_path), backend=backend)
     ReasonRepository(tmp_path)
     ReflectionRepository(tmp_path)
     compose_trace_services(runtime_paths(tmp_path), backend)
 
-    assert calls == [tmp_path] * 7
+    assert calls == [tmp_path] * 6
 
 
 def test_reset_closes_backend_used_by_default_repository(

@@ -72,6 +72,11 @@ owns the factory that assembles those concrete objects into immutable
 factory. Reintroducing backend or path resolution in the trace package is
 forbidden and covered by executable architecture tests.
 
+Profile follows the same boundary: `ProfileItemRepository` receives resolved
+paths and storage, profile aggregation receives a repository, and the
+application layer owns concrete profile construction. Neither domain may
+recover authority resources from a project root.
+
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.

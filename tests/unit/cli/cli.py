@@ -45,6 +45,7 @@ def _mock_status(project_root: Path) -> DaemonStatus:
     )
 
 
+from nuself.application import compose_profile_repository
 from nuself.domain.profile import ProfileItem
 from nuself.logs import (
     InteractiveLogCursor,
@@ -72,6 +73,14 @@ def _trace_repository(workspace: Path) -> TraceRepository:
     return TraceRepository(
         runtime_paths(root),
         backend=get_default_backend(root),
+    )
+
+
+def _profile_repository(workspace: Path) -> ProfileItemRepository:
+    root = _authority(workspace)
+    return compose_profile_repository(
+        runtime_paths(root),
+        get_default_backend(root),
     )
 
 
@@ -412,7 +421,7 @@ def test_interactive_memory_candidates_profile_and_sources(
             reason="inspect",
         )
     )
-    ProfileItemRepository(_authority(tmp_path)).save(
+    _profile_repository(tmp_path).save(
         ProfileItem(
             type="profile_fact",
             title="Profile display",
@@ -3036,7 +3045,7 @@ def test_memory_profile_delete_removes_item_and_reindexes(
     candidate_id = candidate_repo.list()[0].id
     main(["--workspace", str(tmp_path), "memory", "review", "accept", candidate_id])
     capsys.readouterr()
-    profile_repo = ProfileItemRepository(_authority(tmp_path))
+    profile_repo = _profile_repository(tmp_path)
     assert profile_repo.list()
 
     delete_result = main(
@@ -3058,7 +3067,7 @@ def test_memory_profile_delete_removes_item_and_reindexes(
 def test_memory_profile_search_filters_and_query(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     repo.save(
         ProfileItem(
             type="profile_fact",
@@ -3815,9 +3824,8 @@ def test_interactive_whoami_shows_profile_items(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     from nuself.domain.profile import ProfileItem
-    from nuself.profile.repository import ProfileItemRepository
 
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     repo.save(
         ProfileItem(type="preference", title="Style", body="I prefer concise answers.")
     )
@@ -5145,9 +5153,8 @@ def test_memory_profile_list_shows_items(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     from nuself.domain.profile import ProfileItem
-    from nuself.profile.repository import ProfileItemRepository
 
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
 
     result = main(["--workspace", str(tmp_path), "memory", "profile", "list"])
@@ -5170,9 +5177,8 @@ def test_memory_profile_list_sorts_by_importance(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     from nuself.domain.profile import ProfileItem
-    from nuself.profile.repository import ProfileItemRepository
 
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     low = repo.save(
         ProfileItem(
             type="preference", title="Low", body="Low importance.", importance=0.2
@@ -5208,9 +5214,8 @@ def test_memory_profile_show_displays_item(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     from nuself.domain.profile import ProfileItem
-    from nuself.profile.repository import ProfileItemRepository
 
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     item = ProfileItem(type="preference", title="Style", body="Concise.")
     repo.save(item)
 
@@ -5238,9 +5243,8 @@ def test_memory_profile_search_finds_match(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     from nuself.domain.profile import ProfileItem
-    from nuself.profile.repository import ProfileItemRepository
 
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
     repo.save(ProfileItem(type="fact", title="Work", body="Software."))
 
@@ -5257,9 +5261,8 @@ def test_memory_profile_delete_removes_item(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     from nuself.domain.profile import ProfileItem
-    from nuself.profile.repository import ProfileItemRepository
 
-    repo = ProfileItemRepository(_authority(tmp_path))
+    repo = _profile_repository(tmp_path)
     item = ProfileItem(type="preference", title="Style", body="Concise.")
     repo.save(item)
 
@@ -5267,7 +5270,7 @@ def test_memory_profile_delete_removes_item(
         ["--workspace", str(tmp_path), "memory", "profile", "delete", item.id]
     )
     assert result == 0
-    assert len(ProfileItemRepository(_authority(tmp_path)).list()) == 0
+    assert len(_profile_repository(tmp_path).list()) == 0
 
 
 def test_memory_profile_reindex_rebuilds_index(

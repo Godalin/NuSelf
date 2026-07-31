@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEvidence
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import (
@@ -14,10 +15,18 @@ from nuself.profile.repository import (
     ProfileStats,
     profile_stats,
 )
+from nuself.storage import get_default_backend
+
+
+def _repository(root: Path) -> ProfileItemRepository:
+    return ProfileItemRepository(
+        runtime_paths(root),
+        backend=get_default_backend(root),
+    )
 
 
 def test_profile_repository_crud(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     item = repo.save(
         ProfileItem(
             type="profile_fact",
@@ -50,7 +59,7 @@ def test_profile_repository_crud(tmp_path: Path) -> None:
 
 
 def test_profile_repository_missing_item(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
 
     try:
         repo.get("missing")
@@ -60,7 +69,7 @@ def test_profile_repository_missing_item(tmp_path: Path) -> None:
 
 
 def test_profile_repository_search_filters_and_text_match(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     repo.save(
         ProfileItem(
             type="profile_fact",
@@ -92,7 +101,7 @@ def test_profile_repository_search_filters_and_text_match(tmp_path: Path) -> Non
 
 
 def test_profile_repository_delete_missing_raises(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     try:
         repo.delete("missing-id")
     except ProfileItemNotFound:
@@ -101,12 +110,12 @@ def test_profile_repository_delete_missing_raises(tmp_path: Path) -> None:
 
 
 def test_profile_repository_reindex_on_empty_repo(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     repo.reindex()
 
 
 def test_profile_repository_search_no_matches_returns_empty(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     repo.save(ProfileItem(type="profile_fact", title="Style", body="Concise."))
 
     results = repo.search("xyz")
@@ -114,7 +123,7 @@ def test_profile_repository_search_no_matches_returns_empty(tmp_path: Path) -> N
 
 
 def test_profile_item_with_updates_preserves_unmodified_fields(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     original = ProfileItem(
         type="profile_fact",
         title="Original",
@@ -139,7 +148,7 @@ def test_profile_item_importance_roundtrip(
     tmp_path: Path,
     importance: float,
 ) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     item = repo.save(
         ProfileItem(
             type="profile_fact",
@@ -188,7 +197,7 @@ def test_profile_item_rejects_obsolete_relation_fields(
 
 
 def test_profile_item_with_updates_importance(tmp_path: Path) -> None:
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     original = ProfileItem(
         type="profile_fact",
         title="Original",
@@ -216,9 +225,9 @@ def test_profile_stats_detaches_and_freezes_mapping_inputs(
     with pytest.raises(TypeError):
         cast(dict[str, int], snapshot.items_by_type)["goal"] = 1
 
-    repo = ProfileItemRepository(tmp_path)
+    repo = _repository(tmp_path)
     repo.save(
         ProfileItem(type="profile_fact", title="Style", body="Concise.")
     )
-    produced = profile_stats(tmp_path)
+    produced = profile_stats(_repository(tmp_path))
     assert produced.items_by_type == {"profile_fact": 1}

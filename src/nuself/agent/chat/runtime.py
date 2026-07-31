@@ -38,7 +38,10 @@ from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.text import LangChainTextAgent, TextAgent
-from nuself.application import compose_trace_services
+from nuself.application import (
+    compose_profile_repository,
+    compose_trace_services,
+)
 from nuself.config import ConfigSystem, runtime_paths
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -49,7 +52,6 @@ from nuself.memory.audit import run_memory_observed
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
-from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output import SectionPlanner
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
@@ -131,7 +133,10 @@ class ConversationGraphRuntime:
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),
-            ProfileItemRepository(project_root),
+            compose_profile_repository(
+                runtime_paths(project_root),
+                get_default_backend(project_root),
+            ),
         )
         self._context_preparer = ConversationContextPreparer(
             self._memory_query_service

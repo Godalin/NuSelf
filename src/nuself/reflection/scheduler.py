@@ -10,7 +10,10 @@ from typing import Literal, cast
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from nuself.application import compose_trace_services
+from nuself.application import (
+    compose_profile_repository,
+    compose_trace_services,
+)
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import runtime_paths
@@ -790,9 +793,10 @@ class IdeaCandidateGenerator:
         return "\n".join(lines)
 
     def _profile_context(self, max_items: int = 10) -> str:
-        from nuself.profile.repository import ProfileItemRepository
-
-        repo = ProfileItemRepository(self._project_root)
+        repo = compose_profile_repository(
+            runtime_paths(self._project_root),
+            get_default_backend(self._project_root),
+        )
         lines: list[str] = []
         for item in repo.list()[:max_items]:
             tags = f" (tags: {', '.join(item.tags)})" if item.tags else ""

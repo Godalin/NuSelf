@@ -31,7 +31,7 @@ from nuself.memory.repository import (
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.memory.source_repository import SourceRepository
-from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import get_default_backend
 from nuself.tui.memory import (
     render_memory_entry_detail,
     render_memory_entry_row,
@@ -393,7 +393,10 @@ def handle_memory_reindex(args: argparse.Namespace) -> int:
     relation_path = repository.reindex_relations()
     graph_path = repository.reindex_symbolic_graph()
     source_path = SourceRepository(args.project_root).reindex()
-    profile_path = ProfileItemRepository(args.project_root).reindex()
+    profile_path = compose_profile_repository(
+        runtime_paths(args.project_root),
+        get_default_backend(args.project_root),
+    ).reindex()
     print(f"Rebuilt memory index: {memory_path}")
     print(f"Rebuilt relation index: {relation_path}")
     print(f"Rebuilt symbolic graph: {graph_path}")
@@ -420,3 +423,5 @@ def handle_memory_unquarantine(
         return 1
     print(f"Unquarantined memory entry: {args.entry_id}")
     return 0
+from nuself.application import compose_profile_repository
+from nuself.config import runtime_paths

@@ -92,3 +92,19 @@ def test_migrated_trace_package_does_not_resolve_authority() -> None:
                 )
 
     assert violations == []
+
+
+def test_migrated_profile_package_does_not_resolve_authority() -> None:
+    violations: list[str] = []
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    for path in _package_files("profile"):
+        for imported in _from_imports(path):
+            if imported in forbidden:
+                violations.append(
+                    f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+                )
+
+    assert violations == []

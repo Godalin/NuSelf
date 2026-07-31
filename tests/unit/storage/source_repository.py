@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nuself.config import runtime_paths
 from nuself.memory.repository import MemoryCandidateRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.domain.source import SourceChunk, SourceDocument
 from nuself.memory.source_repository import SourceRepository, load_source_file
+from nuself.storage import get_default_backend
 
 
 def test_source_document_and_chunk_round_trip() -> None:
@@ -195,11 +197,11 @@ def test_source_repository_delete_cascades_derived_candidates_and_profile_items(
     candidate_repo.accept(candidate.id)
 
     assert candidate_repo.list(include_reviewed=True)
-    assert ProfileItemRepository(tmp_path).list()
+    assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list()
 
     source_repo.delete_document(document.id)
 
     assert source_repo.list_documents() == []
     assert source_repo.list_chunks(document.id) == []
     assert candidate_repo.list(include_reviewed=True) == []
-    assert ProfileItemRepository(tmp_path).list() == []
+    assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list() == []

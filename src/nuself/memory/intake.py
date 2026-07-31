@@ -10,9 +10,11 @@ from typing import cast
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
+from nuself.config import runtime_paths
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
 from nuself.profile.repository import ProfileItemRepository
+from nuself.storage import get_default_backend
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
 
@@ -52,7 +54,13 @@ class MemoryIntakeAgent:
         profile_repository: ProfileItemRepository | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
-        self._profile_repository = profile_repository or ProfileItemRepository(project_root)
+        self._profile_repository = (
+            profile_repository
+            or ProfileItemRepository(
+                runtime_paths(project_root),
+                backend=get_default_backend(project_root),
+            )
+        )
         self._agent = agent or default_structured_agent(
             IntakeResultOutput,
             project_root=project_root,

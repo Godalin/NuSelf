@@ -47,7 +47,11 @@ In progress:
   application-owned composition receives resolved paths and the selected
   authority backend explicitly, and an AST gate prevents the repository from
   restoring hidden backend or path lookup;
+- profile persistence and aggregation now receive explicit resources and are
+  assembled by the application layer; their domain package has the same
+  authority-resolution gate as trace;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
-  600 tests after moving trace composition into the application layer;
-  Pyright reported 0 errors and 0 warnings.
+  600 tests after moving trace composition into the application layer; the
+  profile integration slice passed 756 tests; Pyright reported 0 errors and
+  0 warnings.

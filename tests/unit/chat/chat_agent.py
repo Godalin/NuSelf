@@ -193,7 +193,7 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
 
 
 def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
-    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",

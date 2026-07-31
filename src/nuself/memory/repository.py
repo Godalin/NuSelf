@@ -474,7 +474,7 @@ class MemoryCandidateRepository:
             backend=be,
         )
         self._profile_repository = profile_repository or ProfileItemRepository(
-            project_root,
+            self._paths,
             backend=be,
         )
 

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from nuself.domain.profile import ProfileItem
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import _create_sqlite_backend
+from nuself.storage import _create_sqlite_backend, get_default_backend
 
 
 class FakeIntakeAgent:
@@ -50,7 +50,7 @@ def _intake(tmp_path: Path, agent: object) -> MemoryIntakeAgent:
     return MemoryIntakeAgent(
         tmp_path,
         agent=agent,  # type: ignore[arg-type]
-        profile_repository=ProfileItemRepository(tmp_path),
+        profile_repository=ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)),
     )
 
 
@@ -196,7 +196,7 @@ def test_memory_intake_rejects_empty_normalized_tags(tmp_path: Path) -> None:
 def test_memory_intake_includes_profile_context_in_prompt(
     tmp_path: Path,
 ) -> None:
-    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
@@ -227,3 +227,4 @@ def test_memory_intake_includes_profile_context_in_prompt(
     assert "Consider existing profile items" in system_content
     assert "Existing profile items:" in user_content
     assert "Concise output" in user_content
+from nuself.config import runtime_paths

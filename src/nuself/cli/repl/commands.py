@@ -6,7 +6,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from nuself.application import compose_trace_services
+from nuself.application import (
+    compose_profile_repository,
+    compose_trace_services,
+)
 from nuself.agent.chat import ThreadStore
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
@@ -37,7 +40,6 @@ from nuself.memory.source_repository import (
 )
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.audit import report_persona_failure
-from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import (
@@ -110,7 +112,10 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         return render_candidate_detail(candidate)
     if command.startswith("profile "):
         query = command.removeprefix("profile ").strip()
-        items = ProfileItemRepository(project_root).search(query)
+        items = compose_profile_repository(
+            runtime_paths(project_root),
+            get_default_backend(project_root),
+        ).search(query)
         if not items:
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
@@ -499,7 +504,10 @@ def handle_interactive_history_command(project_root: Path | None, thread_id: str
 
 
 def handle_interactive_whoami_command(project_root: Path | None) -> str:
-    repo = ProfileItemRepository(project_root)
+    repo = compose_profile_repository(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    )
     items = repo.list()
     if not items:
         return "No profile items yet."

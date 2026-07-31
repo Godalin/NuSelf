@@ -542,7 +542,7 @@ def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> No
             ],
         )
     )
-    profile_repo = ProfileItemRepository(tmp_path)
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
