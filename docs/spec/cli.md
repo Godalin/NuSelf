@@ -241,6 +241,8 @@ interactive input state.
   identities as chat persistence. Rename and branch acquire source and
   destination locks in deterministic lexical order; archive, unarchive, and
   delete hold the active thread lock for their complete mutation. Lifecycle
+  state changes only through those explicit operations; chat state update and
+  compression preserve the existing archived flag.
   operations re-check source and destination state only after acquiring every
   required lock. Lock files are stable coordination inodes and are never
   removed by rename, archive, or delete.

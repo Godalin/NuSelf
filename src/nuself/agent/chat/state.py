@@ -42,6 +42,7 @@ class ConversationStateManager:
                 state.persisted_state.message_start_index
                 + len(state.saved_messages)
             ),
+            archived=state.persisted_state.archived,
         )
         return ConversationNodeResult(
             state=replace(
@@ -90,6 +91,7 @@ class ConversationStateManager:
                 state.next_message_index - len(recent)
             ),
             next_message_index=state.next_message_index,
+            archived=state.archived,
         )
 
     def _summarize(

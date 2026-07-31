@@ -12,6 +12,7 @@ from nuself.application.runtime import (
     current_application_runtime,
     open_application_runtime,
 )
+from nuself.application.thread import compose_thread_store
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import (
     compose_reason_advancer,
@@ -32,6 +33,7 @@ from nuself.notification import (
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.runtime.events import EventPublisher
+from nuself.runtime.context import runtime_context
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -85,6 +87,10 @@ class DaemonState:
 
         config = ConfigSystem.load(project_root=project_root)
         self.memory_curator = compose_memory_curator(self.application)
+        self.thread_store = compose_thread_store(self.application)
+        self._memory_curator_requested = threading.Event()
+        self._memory_curator_pending_lock = threading.Lock()
+        self._memory_curator_pending: set[str] = set()
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
         )
@@ -136,7 +142,15 @@ class DaemonState:
         self._worker_supervisor.start("memory_curator")
 
     def stop_background_memory_curator(self) -> None:
+        self._memory_curator_requested.set()
         self._worker_supervisor.join("memory_curator")
+
+    def request_memory_curation(self, thread_id: str) -> None:
+        """Wake the sole curator worker for one persisted thread."""
+
+        with self._memory_curator_pending_lock:
+            self._memory_curator_pending.add(thread_id)
+        self._memory_curator_requested.set()
 
     def start_background_reflection_scheduler(self) -> None:
         self._worker_supervisor.start("reflection_scheduler")
@@ -228,13 +242,49 @@ class DaemonState:
         self._worker_supervisor.seal()
 
     def _run_background_memory_curator(self) -> None:
-        self._worker_supervisor.run_scheduled(
-            "memory_curator",
-            self.memory_curator.run_once,
-            interval_seconds=self.memory_curator_interval_seconds,
-            error_event="memory_curator_error",
-            error_message="memory curator iteration failed",
-        )
+        while not self.shutdown_requested.is_set():
+            requested = self._memory_curator_requested.wait(
+                self.memory_curator_interval_seconds
+            )
+            if self.shutdown_requested.is_set():
+                return
+            if requested:
+                self._memory_curator_requested.clear()
+                with self._memory_curator_pending_lock:
+                    thread_ids = tuple(self._memory_curator_pending)
+                    self._memory_curator_pending.clear()
+            else:
+                thread_ids: tuple[str, ...] = ()
+
+                def discover_threads() -> None:
+                    nonlocal thread_ids
+                    thread_ids = tuple(
+                        sorted(
+                            {
+                                *self.thread_store.list(),
+                                *self.thread_store.list_archived(),
+                            }
+                        )
+                    )
+
+                if not self._worker_supervisor.run_iteration(
+                    "memory_curator",
+                    discover_threads,
+                    error_event="memory_curator_error",
+                    error_message="memory curator thread discovery failed",
+                ):
+                    continue
+            for thread_id in thread_ids:
+                def curate_thread(thread_id: str = thread_id) -> None:
+                    with runtime_context(thread_id=thread_id):
+                        self.memory_curator.run_once(thread_id)
+
+                self._worker_supervisor.run_iteration(
+                    "memory_curator",
+                    curate_thread,
+                    error_event="memory_curator_error",
+                    error_message="memory curator iteration failed",
+                )
 
     def _run_background_reflection_scheduler(self) -> None:
         def run_once() -> None:

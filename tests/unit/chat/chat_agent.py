@@ -26,7 +26,10 @@ from nuself.agent.chat import (
     ThreadState,
 )
 from thread_fixtures import ThreadStore
-from nuself.agent.chat import ConversationGraphRuntimeError
+from nuself.agent.chat import (
+    ConversationGraphRuntimeError,
+    ConversationTurnConflictError,
+)
 from nuself.agent.tool_utils import tool_service_component
 from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
@@ -483,6 +486,33 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     assert compressed.state.updated_thread_state == updated.state.updated_thread_state
 
 
+def test_conversation_state_transitions_preserve_archived_status(
+    tmp_path: Path,
+) -> None:
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        settings=ChatAgentSettings(
+            summary_trigger_messages=1,
+            recent_messages=1,
+            summary_target_chars=200,
+        ),
+        response_service=FakeResponseService(),
+    )
+    archived = ThreadState(
+        thread_id="archived",
+        messages=[ThreadMessage(role="user", content="earlier")],
+        archived=True,
+    )
+
+    updated, _, _ = runtime.run_turn(
+        archived,
+        "new input",
+        "archived",
+    )
+
+    assert updated.archived is True
+
+
 def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
@@ -796,6 +826,32 @@ def test_chat_reused_event_does_not_rerun_graph(
     assert result.reply == "agent reply"
     assert len(llm.calls) == 1
     assert [event.name for event in observed] == ["turn.reused"]
+
+
+def test_chat_rejects_turn_id_reused_with_different_input(
+    tmp_path: Path,
+) -> None:
+    llm = FakeResponseService()
+    agent = ConversationGraphRuntime(
+        tmp_path,
+        response_service=llm,
+    )
+    agent.respond("original", turn_id="turn-1")
+
+    with pytest.raises(
+        ConversationTurnConflictError,
+        match="already bound to different input",
+    ):
+        agent.respond("different", turn_id="turn-1")
+
+    assert len(llm.calls) == 1
+    assert [
+        message.content
+        for message in ThreadStore(tmp_path).load("default").messages
+    ] == [
+        "original",
+        "agent reply",
+    ]
 
 
 def test_chat_event_subscriber_failure_does_not_replace_original_failure(

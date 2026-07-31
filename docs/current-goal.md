@@ -5,32 +5,58 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle.
+Active.
 
 ## Objective
 
-No active development objective.
+Review the complete chat path for lean module boundaries and verify that
+post-turn memory processing is robust under retries, failures, concurrency,
+and interrupted clients. Fix confirmed issues with the smallest coherent
+design.
 
-## Completed Goal
+## Ordered Steps
 
-The lean replaceable-frontend boundary is complete. Approval remains one small
-injected port, while presentation activity publishes directly through the
-existing typed `EventPublisher`. The duplicate `FrontendEvent`, sink, adapter,
-and null audit sink were removed; no web framework, remote interaction
-protocol, manager, registry, compatibility shim, or second event bus was added.
+1. Map ownership and data flow across the turn graph, model/tool loop, thread
+   persistence, compression, trace recording, and post-turn curation.
+2. Verify dependency direction and identify duplicated orchestration or hidden
+   authority selection.
+3. Verify curator idempotency, transaction boundaries, retry behavior, failure
+   isolation, concurrency control, and recovery evidence.
+4. Reproduce confirmed weaknesses with focused tests.
+5. Update governing specs before behavioral changes, implement minimal fixes,
+   then run full local and six-platform gates.
 
-Final evidence:
+## Confirmed Findings
 
-- the implementation commit is a net deletion: 135 inserted and 218 deleted
-  lines including tests and documentation;
-- local `uv run --locked pytest -q`: 2486 passed;
-- local Pyright: 0 errors, 0 warnings;
-- sdist and wheel build succeeded;
-- clean Python 3.12 wheel install/import/CLI smoke succeeded;
-- GitHub Actions run `30623952709` passed Ubuntu/macOS × Python
-  3.12/3.13/3.14, including Pyright, tests, build, and clean-wheel smoke.
+- Daemon chat synchronously runs a second model-backed curator pass before it
+  returns an already-persisted reply, even though a curator worker already
+  exists. This duplicates scheduling authority and adds avoidable chat latency.
+- Both daemon post-chat curation and the periodic worker omit the active thread
+  ID, so non-default conversations incorrectly curate `default`.
+- The minimal correction is one worker-owned pending-thread set plus periodic
+  enumeration for recovery; no generic queue or new worker framework is needed.
+- Stable `turn_id` reuse accepted different input and reran the model/tool loop;
+  it now fails before execution.
+- Chat state reconstruction dropped the persisted archived flag; update and
+  compression now preserve it.
+- A remaining reliability boundary needs explicit treatment: a mutating tool
+  can commit before the final thread save. If that save fails, no completed
+  turn record exists to prevent a client retry from invoking the mutation
+  again. Endpoint retry suppression only protects the current agent invocation
+  and does not close this cross-request commit gap.
 
-## Next Goal
+## Exclusions
 
-Define a new objective, ordered steps, exclusions, and completion evidence
-before beginning the next non-trivial change.
+- No speculative framework or new generic abstraction.
+- No redesign justified only by naming or file size.
+- No unrelated storage, notification, or UI work.
+
+## Completion Evidence
+
+- Every chat and post-chat stage has an explicit owner and authority source.
+- Retry and concurrent execution cannot duplicate committed turns or memory
+  mutations.
+- Secondary compression, trace, and curator failures have documented and tested
+  effects on the primary reply and persisted state.
+- Architecture and behavior tests cover the conclusions.
+- Full local and six-platform gates pass after any code changes.

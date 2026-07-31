@@ -35,7 +35,7 @@ locks and Unix-domain sockets.
 - Durable memory with review, search, relations, and symbolic graph views
 - Markdown and plain-text source ingestion with cited profile extraction
 - Long-run reasoning threads and traceable thought provenance
-- Background memory curation and proactive reflection
+- Per-thread background memory curation and proactive reflection
 - Durable notification outbox with log, email, and macOS adapters
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
@@ -228,7 +228,7 @@ See the [memory guide](docs/memory.md) and
 
 - NuSelf is an early CLI-first system, not a polished desktop application.
 - Model quality and tool support vary by provider and selected model.
-- Background curation, reflection, and delivery require the daemon.
+- Background curation, reflection, and delivery require the daemon; chat replies do not wait for memory curation.
 - macOS notifications are platform-specific; email requires explicit SMTP
   configuration.
 - Windows is unsupported.

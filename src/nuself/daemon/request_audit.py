@@ -67,16 +67,18 @@ def _request_rejected(metadata: Mapping[str, object]) -> None:
 def _chat_completed(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
-        frozenset({"evidence_references", "memory_changed"}),
+        frozenset(
+            {"evidence_references", "memory_curation_requested"}
+        ),
     )
     evidence_references = metadata["evidence_references"]
     if type(evidence_references) is not int or evidence_references < 0:
         raise AuditSchemaError(
             "daemon request audit evidence_references must be non-negative"
         )
-    if type(metadata["memory_changed"]) is not bool:
+    if type(metadata["memory_curation_requested"]) is not bool:
         raise AuditSchemaError(
-            "daemon request audit memory_changed must be a boolean"
+            "daemon request audit memory_curation_requested must be a boolean"
         )
 
 

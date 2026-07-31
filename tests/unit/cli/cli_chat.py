@@ -232,7 +232,7 @@ def test_one_shot_failure_survives_broken_exception_renderer(
     assert event.error == "BrokenMessageError"
 
 
-def test_daemon_success_projects_reply_and_memory_update(
+def test_daemon_success_projects_reply(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -247,7 +247,6 @@ def test_daemon_success_projects_reply_and_memory_update(
             thread_id="server-thread",
             evidence_references=(),
             epistemic_status=None,
-            memory_update="created=1",
         )
 
     monkeypatch.setattr(chat.client, "chat", succeed_chat)
@@ -266,7 +265,6 @@ def test_daemon_success_projects_reply_and_memory_update(
 
     assert result.code == 0
     assert result.reply == "reply"
-    assert result.memory_update == "created=1"
     assert observed == [
         RuntimeContext(
             thread_id="thread-1",
@@ -298,7 +296,6 @@ def test_daemon_success_survives_uncertain_completion_audit(
             thread_id="thread-1",
             evidence_references=(),
             epistemic_status=None,
-            memory_update="",
         )
 
     monkeypatch.setattr(
@@ -341,8 +338,9 @@ def test_one_shot_success_runs_curator_after_reply(
         calls.append(f"reply:{message}:{thread_id}:{turn_id}")
         return "done"
 
-    def curate(project_root: Path | None) -> None:
+    def curate(project_root: Path | None, thread_id: str) -> None:
         assert project_root == tmp_path
+        assert thread_id == "thread-1"
         contexts.append(current_runtime_context())
         calls.append("curator")
         write_log_event(
@@ -404,7 +402,7 @@ def test_one_shot_success_survives_uncertain_completion_audit(
         del args, kwargs
         return "done"
 
-    def curate(_project_root: Path | None) -> None:
+    def curate(_project_root: Path | None, _thread_id: str) -> None:
         calls.append("curator")
 
     monkeypatch.setattr(

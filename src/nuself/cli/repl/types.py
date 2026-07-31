@@ -9,7 +9,6 @@ from dataclasses import dataclass
 class InteractiveChatResult:
     code: int
     reply: str | None = None
-    memory_update: str | None = None
     retryable: bool = False
     error: str | None = None
     failure_phase: str | None = None

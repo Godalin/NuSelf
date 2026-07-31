@@ -214,7 +214,7 @@ Success response payload field sets are also exact:
 - `health` returns `workers`, a list of complete typed worker-health records;
 - `chat` returns string `answer`, `reply`, and non-blank `thread_id`, a string
   list `evidence_references`, nullable string `epistemic_status`, and optional
-  numeric `confidence` and string `memory_update`;
+  numeric `confidence`;
 - activity open/next/close return, respectively, non-blank
   `subscription_id`, a list of complete log-event records, and boolean
   `closed`.

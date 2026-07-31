@@ -42,9 +42,6 @@ from nuself.daemon.request_audit import (
 )
 from nuself.daemon.types import WorkerHealth
 from nuself.logs import project_log_events
-from nuself.memory.audit import run_memory_observed
-from nuself.memory.curator import MemoryCurator
-from nuself.memory.curator_contract import MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -60,11 +57,11 @@ class DaemonRequestState(Protocol):
     project_root: Path
     authority_id: str
     conversation_runtime: ConversationGraphRuntime
-    memory_curator: MemoryCurator
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
 
     def worker_health(self) -> tuple[WorkerHealth, ...]: ...
+    def request_memory_curation(self, thread_id: str) -> None: ...
 
 
 DaemonRequestRegistry = HandlerRegistry[
@@ -188,11 +185,6 @@ def _handle_chat(
                 thread_id=chat_request.thread_id,
                 turn_id=chat_request.turn_id,
             )
-            memory_update = _run_memory_curator_once(
-                state.memory_curator,
-                project_root=state.project_root,
-                source_trace_id=result.trace_id,
-            )
         except RuntimeError as exc:
             report_daemon_request_failure(
                 exc,
@@ -205,6 +197,7 @@ def _handle_chat(
                 exc,
                 include_chain=True,
             )
+        state.request_memory_curation(result.thread_id)
     duration_ms = int((time.monotonic() - started_at) * 1000)
     payload = ChatResponsePayload(
         answer=result.answer,
@@ -213,11 +206,6 @@ def _handle_chat(
         evidence_references=result.evidence_references,
         epistemic_status=result.epistemic_status,
         confidence=result.confidence,
-        memory_update=(
-            memory_update.summary()
-            if memory_update is not None and memory_update.changed
-            else None
-        ),
     )
     with runtime_context(
         thread_id=result.thread_id,
@@ -230,9 +218,7 @@ def _handle_chat(
             duration_ms=duration_ms,
             metadata={
                 "evidence_references": len(result.evidence_references),
-                "memory_changed": (
-                    memory_update.changed if memory_update is not None else False
-                ),
+                "memory_curation_requested": True,
             },
         )
     return DaemonResponse.ok(request, payload.to_wire())
@@ -308,23 +294,6 @@ def _handle_activity_close(
         ActivityCloseResponsePayload(
             state.activity_broker.close(payload.subscription_id)
         ).to_wire(),
-    )
-
-
-def _run_memory_curator_once(
-    memory_curator: MemoryCurator,
-    *,
-    project_root: Path,
-    source_trace_id: str | None = None,
-) -> MemoryCuratorResult | None:
-    return run_memory_observed(
-        lambda: memory_curator.run_once(
-            source_trace_id=source_trace_id
-        ),
-        event="post_chat_curation_failed",
-        project_root=project_root,
-        metadata={},
-        errors=(RuntimeError,),
     )
 
 

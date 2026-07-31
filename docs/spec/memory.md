@@ -101,17 +101,24 @@ repository while composing that snapshot.
 
 ### Triggers
 
-1. Daemon background thread every `daemon.memory_curator.interval_seconds` (default `300`).
-2. After every daemon chat turn.
-3. Manual CLI: `nuself memory update`.
+1. The daemon chat handler requests curation for the completed thread after
+   the assistant reply has been persisted. It does not execute curation in the
+   request path or delay the reply.
+2. The daemon's single memory-curator worker coalesces requested thread IDs and
+   processes them promptly. Every
+   `daemon.memory_curator.interval_seconds` (default `300`) it also scans all
+   stored thread IDs, so a daemon exit between reply persistence and the
+   in-memory wake-up cannot permanently skip a thread.
+3. Direct local chat runs curation at its owned post-turn/exit lifecycle
+   boundary because no daemon worker exists.
+4. Manual CLI: `nuself memory update`.
 
 Post-chat curation is a secondary effect after the assistant reply has already
-been produced and persisted. A declared recoverable `RuntimeError` must not
-replace that reply: the daemon returns it with no `memory_update` and emits
-`memory/post_chat_curation_failed` through the shared observability boundary.
-The event inherits the chat request, thread, turn, and source context and
-preserves the compact exception chain. Undeclared storage or implementation
-errors are not degraded and continue to the daemon request backstop.
+been produced and persisted. Daemon curation failures belong to the worker
+health and observability boundary and cannot alter the completed chat response.
+Each requested or discovered thread ID must be passed explicitly to
+`MemoryCurator.run_once`; silently falling back to `default` for a non-default
+thread is forbidden.
 
 ### Per-Thread Cursor
 

@@ -46,10 +46,6 @@ def send_daemon_chat(
     )
     if result.reply is not None:
         print_reply(result.reply)
-    if result.memory_update is not None:
-        print_ansi(
-            f"{_theme.tag('[memory]', 'memory')} {result.memory_update}"
-        )
     if result.error is not None:
         print(result.error, file=sys.stderr)
     return result.code
@@ -121,7 +117,6 @@ def send_daemon_chat_interactive(
         return InteractiveChatResult(
             code=CliExitCode.SUCCESS,
             reply=response.reply,
-            memory_update=response.memory_update or None,
         )
 
 
@@ -177,7 +172,7 @@ def send_one_shot_chat_interactive(
                 "one_shot_chat_completed",
                 project_root=project_root,
             )
-            run_memory_curator(project_root)
+            run_memory_curator(project_root, thread_id)
             return InteractiveChatResult(
                 code=CliExitCode.SUCCESS,
                 reply=reply,
@@ -193,13 +188,16 @@ def send_one_shot_chat_interactive(
             return InteractiveChatResult(code=CliExitCode.FAILURE)
 
 
-def run_memory_curator(project_root: Path | None) -> None:
+def run_memory_curator(
+    project_root: Path | None,
+    thread_id: str = "default",
+) -> None:
     """Run post-turn curation and present its optional status."""
 
     try:
         result = compose_memory_curator(
             compose_cli_application(project_root)
-        ).run_once()
+        ).run_once(thread_id)
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
         report_memory_failure(

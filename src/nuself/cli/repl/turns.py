@@ -127,14 +127,6 @@ def send_interactive_chat_turn(
             presented_notice_codes.update(
                 notice.code for notice in notices
             )
-        if result.memory_update is not None:
-            if not printed_logs:
-                print()
-                print_ansi(_theme.paint("Logs:", "93"))
-                printed_logs = True
-            print_ansi(
-                f"{_theme.tag('[memory]', 'memory')} {result.memory_update}"
-            )
         if result.reply is not None:
             print()
             print_ansi(_theme.paint("NuSelf:", "96"))

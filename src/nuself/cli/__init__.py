@@ -231,6 +231,15 @@ def _interactive_loop(
     )
     command_dispatcher = ReplCommandDispatcher()
 
+    def curate_session(
+        root: Path | None,
+        thread_ids: tuple[str, ...],
+    ) -> None:
+        if daemon_activity:
+            return
+        for thread_id in thread_ids:
+            _run_memory_curator(root, thread_id)
+
     def send_turn(
         turn_sender: Callable[
             [str, str, str | None],
@@ -257,7 +266,7 @@ def _interactive_loop(
             handle_command=command_dispatcher.handle,
             send_turn=send_turn,
             auto_save=_auto_save_interactive_transcripts,
-            run_curator=_run_memory_curator,
+            run_curator=curate_session,
             show_session_header=header_presenter.show,
             show_startup_notices=lambda root: print_interactive_notices(
                 startup_interactive_notices(root)

@@ -206,7 +206,11 @@ class FakeChangedCurator:
     def __init__(self, project_root: Path | None = None) -> None:
         self.project_root = project_root
 
-    def run_once(self) -> FakeChangedCuratorResult:
+    def run_once(
+        self,
+        thread_id: str = "default",
+    ) -> FakeChangedCuratorResult:
+        assert thread_id == "default"
         return FakeChangedCuratorResult()
 
 
@@ -1637,52 +1641,6 @@ def test_daemon_chat_uses_configured_request_timeout(
     assert result == 0
     assert "daemon reply" in captured.out
     assert captured_timeout == 600
-
-
-def test_daemon_chat_prints_memory_update(
-    tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
-) -> None:
-    daemon_status = DaemonStatus(
-        phase="ready",
-        pid=123,
-        socket_path=_authority(tmp_path) / "runtime" / "nuself.sock",
-        pid_path=_authority(tmp_path) / "runtime" / "nuself.pid",
-    )
-
-    def fake_request(
-        request_type: object,
-        payload: object | None = None,
-        *,
-        project_root: Path | None = None,
-        timeout: float = 2.0,
-    ) -> DaemonResponse:
-        return DaemonResponse(
-            request_id="r1",
-            status="ok",
-            payload={
-                "answer": "daemon reply",
-                "reply": "daemon reply",
-                "thread_id": "default",
-                "evidence_references": [],
-                "epistemic_status": None,
-                "memory_update": "processed=2 created=1 updated=0 ignored=0",
-            },
-        )
-
-    def fake_status(project_root: Path | None) -> DaemonStatus:
-        return daemon_status
-
-    monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
-
-    result = main(
-        ["--workspace", str(tmp_path), "attach", "--message", "remember this"]
-    )
-    captured = capsys.readouterr()
-
-    assert result == 0
-    assert "daemon reply" in captured.out
-    assert "[memory] processed=2 created=1 updated=0 ignored=0" in captured.out
 
 
 def test_daemon_chat_connection_error_is_reported(

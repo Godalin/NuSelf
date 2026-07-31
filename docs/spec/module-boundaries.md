@@ -218,6 +218,10 @@ Memory curation receives the complete authority resource set explicitly:
 runtime paths, backend, thread store, entry/candidate/profile repositories,
 recovery-plan store, and trace recorder. Defaults are limited to curation
 policy and model adapters, never persistence or authority selection.
+Daemon request handling may only request curation for a completed thread. The
+single daemon curator worker owns execution, retry isolation, and periodic
+recovery across stored thread IDs; request handlers must not invoke the curator
+model loop synchronously.
 Its structured model contract, cursor wire format, settings, and result DTO
 belong to `memory.curator_contract`; `memory.curator` owns only workflow
 orchestration and may re-export nothing merely for legacy import convenience.

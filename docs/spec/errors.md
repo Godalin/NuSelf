@@ -142,7 +142,7 @@ The daemon request layer owns one sealed audit contract:
 |---|---|---|---|---|
 | `request_rejected` | warning | `error` | required error, no duration | `request_type` |
 | `chat_turn_failed` | error | `error` | required error, no duration | none |
-| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references`, boolean `memory_changed` |
+| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references`, boolean `memory_curation_requested` |
 | `shutdown_requested` | info | `accepted` | no error or duration | none |
 
 Messages are fixed by the request audit adapter. Producers supply only event
@@ -781,6 +781,9 @@ For retryable failures, the REPL must:
 Retry idempotency:
 
 - The retry must not persist the same user input twice.
+- A persisted `turn_id` is permanently bound to its original user input. A
+  retry that reuses the ID with different input fails with an explicit turn
+  conflict before model or tool execution.
 - If the daemon completed the first attempt after the client timed out, the retry must return the already-persisted assistant reply for that `turn_id`.
 - Already-produced logs, including persona activation and persona discussion logs, remain the record of the logical turn. A retry that resolves from an already-completed `turn_id` must not rerun persona work just to recreate those logs.
 

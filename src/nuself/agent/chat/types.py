@@ -156,3 +156,7 @@ class ConversationGraphRuntimeError(RuntimeError):
         super().__init__(message)
         self.node = node
         self.node_trace = node_trace
+
+
+class ConversationTurnConflictError(RuntimeError):
+    """A stable turn ID was reused with different user input."""

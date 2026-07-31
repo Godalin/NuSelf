@@ -266,7 +266,6 @@ class ChatResponsePayload:
     evidence_references: tuple[str, ...]
     epistemic_status: str | None
     confidence: float | None = None
-    memory_update: str | None = None
 
     def to_wire(self) -> dict[str, JsonValue]:
         payload: dict[str, JsonValue] = {
@@ -278,8 +277,6 @@ class ChatResponsePayload:
         }
         if self.confidence is not None:
             payload["confidence"] = self.confidence
-        if self.memory_update is not None:
-            payload["memory_update"] = self.memory_update
         return payload
 
     @classmethod
@@ -298,7 +295,7 @@ class ChatResponsePayload:
                     "epistemic_status",
                 }
             ),
-            optional=frozenset({"confidence", "memory_update"}),
+            optional=frozenset({"confidence"}),
         )
         evidence = payload.get("evidence_references")
         if not isinstance(evidence, list) or not all(
@@ -354,11 +351,6 @@ class ChatResponsePayload:
             evidence_references=tuple(evidence_references),
             epistemic_status=epistemic_status,
             confidence=confidence,
-            memory_update=_optional_string(
-                payload,
-                "memory_update",
-                context="chat response",
-            ),
         )
 
 
@@ -654,22 +646,6 @@ def _required_nullable_string(
     if value is not None and not isinstance(value, str):
         raise ProtocolError(
             f"{context} field '{field_name}' must be a string or null"
-        )
-    return value
-
-
-def _optional_string(
-    payload: dict[str, JsonValue],
-    field_name: str,
-    *,
-    context: str,
-) -> str | None:
-    if field_name not in payload:
-        return None
-    value = payload[field_name]
-    if not isinstance(value, str):
-        raise ProtocolError(
-            f"{context} field '{field_name}' must be a string"
         )
     return value
 

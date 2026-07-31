@@ -15,6 +15,7 @@ from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
+    ThreadState,
 )
 from thread_fixtures import ThreadStore
 from nuself.daemon.protocol import DaemonRequest
@@ -25,7 +26,6 @@ from nuself.daemon.workers import (
     DaemonWorkerSupervisor,
 )
 from nuself.logs import read_log_events, runtime_event_log_sink
-from nuself.memory.curator_contract import MemoryCuratorResult
 from nuself.notification import OutboxEntry
 from nuself.runtime.context import (
     RuntimeContext,
@@ -365,46 +365,27 @@ def test_daemon_chat_error_deduplicates_exception_messages(tmp_path: Path) -> No
     assert response.error.count("same") == 1
 
 
-class FakeChangedCurator:
-    def run_once(self, **kwargs: object) -> MemoryCuratorResult:
-        return MemoryCuratorResult(
-            processed_messages=2,
-            created=1,
-            updated=0,
-            ignored=0,
-            log_path=Path("memory.log"),
-        )
-
-
-class RecoverableFailingCurator:
-    def run_once(self, **kwargs: object) -> MemoryCuratorResult:
-        try:
-            raise RuntimeError("curator backend unavailable")
-        except RuntimeError as exc:
-            raise RuntimeError("post-chat curation failed") from exc
-
-
-class UnexpectedFailingCurator:
-    def run_once(self, **kwargs: object) -> MemoryCuratorResult:
-        raise ValueError("curator invariant broken")
-
-
-def test_daemon_chat_runs_memory_curator_after_reply(tmp_path: Path) -> None:
+def test_daemon_chat_requests_curation_without_running_it_inline(
+    tmp_path: Path,
+) -> None:
     state = DaemonState(tmp_path)
-    state.memory_curator = FakeChangedCurator()  # type: ignore[assignment]
+    requested: list[str] = []
+    state.request_memory_curation = requested.append  # type: ignore[method-assign]
     request = DaemonRequest(type="chat", payload={"message": "remember this"}, request_id="chat1")
 
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    assert response.payload["memory_update"] == "processed=2 created=1 updated=0 ignored=0"
+    assert "memory_update" not in response.payload
+    assert requested == ["default"]
 
 
-def test_daemon_chat_observes_recoverable_curator_failure(
+def test_daemon_chat_requests_curation_for_non_default_thread(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    state.memory_curator = RecoverableFailingCurator()  # type: ignore[assignment]
+    requested: list[str] = []
+    state.request_memory_curation = requested.append  # type: ignore[method-assign]
     request = DaemonRequest(
         type="chat",
         payload={
@@ -419,31 +400,52 @@ def test_daemon_chat_observes_recoverable_curator_failure(
 
     assert response.status == "ok"
     assert "memory_update" not in response.payload
-    event = read_log_events(project_root=tmp_path, component="memory")[-1]
-    assert event.event == "post_chat_curation_failed"
-    assert event.status == "degraded"
-    assert event.error == (
-        "post-chat curation failed <- curator backend unavailable"
-    )
-    assert event.request_id == "chat-curator-failure"
-    assert event.thread_id == "project"
-    assert event.turn_id == "turn-curator-failure"
-    assert event.source == "daemon"
+    assert requested == ["project"]
 
 
-def test_daemon_chat_does_not_degrade_unexpected_curator_failure(
+def test_memory_curator_worker_coalesces_requested_thread_ids(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    state.memory_curator = UnexpectedFailingCurator()  # type: ignore[assignment]
-    request = DaemonRequest(
-        type="chat",
-        payload={"message": "remember this"},
-        request_id="chat-curator-invariant",
-    )
+    calls: list[str] = []
 
-    with pytest.raises(ValueError, match="curator invariant broken"):
-        handle_request(request, state)
+    class RecordingCurator:
+        def run_once(self, thread_id: str) -> None:
+            calls.append(thread_id)
+            state.shutdown_requested.set()
+
+    state.memory_curator = RecordingCurator()  # type: ignore[assignment]
+    state.request_memory_curation("project")
+    state.request_memory_curation("project")
+    state.start_background_memory_curator()
+    assert state.shutdown_requested.wait(timeout=1)
+    state.stop_background_memory_curator()
+
+    assert calls == ["project"]
+
+
+def test_memory_curator_periodic_scan_recovers_all_stored_threads(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    state.memory_curator_interval_seconds = 0.01
+    state.thread_store.save(ThreadState(thread_id="active"))
+    state.thread_store.save(ThreadState(thread_id="archived"))
+    state.thread_store.archive("archived")
+    calls: list[str] = []
+
+    class RecordingCurator:
+        def run_once(self, thread_id: str) -> None:
+            calls.append(thread_id)
+            if set(calls) == {"active", "archived"}:
+                state.shutdown_requested.set()
+
+    state.memory_curator = RecordingCurator()  # type: ignore[assignment]
+    state.start_background_memory_curator()
+    assert state.shutdown_requested.wait(timeout=1)
+    state.stop_background_memory_curator()
+
+    assert set(calls) == {"active", "archived"}
 
 
 def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
@@ -551,10 +553,12 @@ def test_memory_curator_worker_survives_unexpected_error(
     state.memory_curator_interval_seconds = 0.01
 
     class BrokenCurator:
-        def run_once(self) -> None:
+        def run_once(self, thread_id: str) -> None:
+            assert thread_id == "project"
             raise ValueError("bad curator data")
 
     state.memory_curator = BrokenCurator()  # type: ignore[assignment]
+    state.request_memory_curation("project")
     state.start_background_memory_curator()
     deadline = time.monotonic() + 1.0
     health = state.worker_health()[0]
@@ -632,14 +636,17 @@ def test_worker_error_log_failure_does_not_stop_scheduled_loop(
     calls = 0
 
     class FailOnceCurator:
-        def run_once(self) -> None:
+        def run_once(self, thread_id: str) -> None:
             nonlocal calls
+            assert thread_id == "default"
             calls += 1
             if calls == 1:
+                state.request_memory_curation("default")
                 raise ValueError("first iteration failed")
             state.shutdown_requested.set()
 
     state.memory_curator = FailOnceCurator()  # type: ignore[assignment]
+    state.request_memory_curation("default")
 
     def fail_error_log(
         *args: object,

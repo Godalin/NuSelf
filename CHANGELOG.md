@@ -6,6 +6,15 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon chat now returns immediately after persisting the reply and requests
+  per-thread memory curation from its single background worker instead of
+  running a second model call in the request path. Requested thread IDs are
+  coalesced, periodic scans recover missed in-memory wake-ups, and non-default
+  daemon and local conversations are curated under their correct thread.
+  Reusing a persisted chat `turn_id` with different input now fails before the
+  model or tools run instead of creating a second conflicting turn. Chat state
+  update and compression also preserve archived thread state instead of
+  implicitly unarchiving it.
 - Agent tools now use one orthogonal declarative policy path for identity,
   ownership, effects, confirmation, observation, and audit. The old
   effectful approval wrapper and ad-hoc StructuredTool factories are removed.

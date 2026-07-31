@@ -45,7 +45,7 @@ def test_chat_completion_contract_is_exact() -> None:
             duration_ms=1,
             metadata={
                 "evidence_references": -1,
-                "memory_changed": False,
+                "memory_curation_requested": False,
             },
         )
 

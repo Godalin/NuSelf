@@ -24,6 +24,7 @@ from nuself.agent.chat.types import (
     ChatResult,
     ChatStructuredOutput,
     ConversationGraphRuntimeError,
+    ConversationTurnConflictError,
     ConversationNodeName,
     ConversationNodeResult,
     ConversationTurnState,
@@ -523,9 +524,6 @@ class ConversationGraphRuntime:
             context=context,
         )
 
-# ======================================================================
-# Module-level helpers
-# ======================================================================
 # Module-level helpers
 # ======================================================================
 
@@ -562,5 +560,7 @@ def _completed_turn_result(
         if item.turn_id == turn_id and item.role == "user":
             if item.content == message:
                 return ChatResult(answer=assistant_message.content, thread_id=thread_id)
-            return None
+            raise ConversationTurnConflictError(
+                f"turn ID {turn_id!r} is already bound to different input"
+            )
     return None
