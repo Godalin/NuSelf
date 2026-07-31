@@ -133,6 +133,10 @@ make teardown responsibility ambiguous.
 resolved paths and the selected backend, derives its entry-lock directory only
 from those paths, and never resolves authority itself. The application graph
 owns the concrete outbox used by outer adapters and notification workflows.
+Notification delivery orchestration is a separate module: it borrows an
+outbox and a frozen adapter plan, but does not own storage selection or
+per-entry locking. The package root may re-export these public types; it may
+not contain both persistence and delivery-loop implementations.
 
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete

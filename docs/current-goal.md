@@ -32,6 +32,9 @@ Current working branch for v0.3.1.
    dependency scan is clean and executable AST gates cover both domains and
    agent adapters.
 6. Split oversized cross-cutting modules along their actual ownership.
+   Complete: the audit identified notification persistence/delivery as the
+   remaining mixed lifecycle owner, and delivery orchestration now has its own
+   module while public package imports remain stable.
 7. Run complete gates and close the goal with dependency evidence.
 
 ## Out Of Scope
@@ -80,6 +83,8 @@ In progress:
 - notification persistence and per-entry lock paths now receive the graph's
   explicit paths/backend, with CLI, daemon, reflection, and delivery workflows
   sharing the injected outbox and an authority-resolution regression gate;
+- notification delivery orchestration is split from outbox persistence into
+  its own module and operates only on an injected outbox and adapter plan;
 - persona prompts and memory curator recovery plans are now graph-owned
   persistence; their repositories receive explicit paths/backend or collection
   resources, and boundary gates cover the complete migrated persistence set;
@@ -90,6 +95,9 @@ In progress:
 - reflection promotion now depends only on `ReasonThreadStarter` and
   `ReflectionPromotionRecorder`, not the full cross-domain service contracts;
   domain and agent presentation boundaries remain clean under AST gates;
+- notification delivery polling and frozen adapter-plan execution moved out of
+  the persistence package root into `notification.delivery`; an AST gate keeps
+  the delivery loop from returning to the outbox owner;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
   600 tests after moving trace composition into the application layer; the
@@ -110,3 +118,5 @@ In progress:
   The profile-port memory slice passed 232 tests with Pyright clean.
   The reflection-port and presentation-boundary slice passed 18 tests with
   Pyright clean.
+  The notification delivery split passed 105 focused tests.
+  The notification module-split slice passed 76 tests with Pyright clean.
