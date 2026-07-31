@@ -137,4 +137,5 @@ In progress:
   0 errors and 0 warnings. The combined changes then passed the complete
   2470-test suite.
   The combined reflection/chat/persona/process-composition slice passed 1159
-  tests; locked Pyright analyzed 376 files with 0 errors and 0 warnings.
+  tests; locked Pyright analyzed 376 files with 0 errors and 0 warnings. The
+  complete suite then passed 2473 tests.
