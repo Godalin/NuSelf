@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — conversation/knowledge API decoupling is complete for v0.3.1.
+Idle — the repository-wide module API boundary audit is complete.
 
 ## Objective
 
@@ -13,13 +13,24 @@ No active implementation objective.
 
 ## Ordered Steps
 
-1. Await the next approved goal.
+1. Await approval to activate one remediation slice from the backlog.
 
 ## Exclusions
 
-- No new work is implied while this board is idle.
+- No audit finding is implicitly authorized for implementation.
 
 ## Completion Evidence
+
+- [`api-boundary-audit.md`](api-boundary-audit.md) inventories every production
+  area and records nine confirmed boundary problems with evidence, risk, and
+  the smallest corrective API.
+- The audit distinguishes valid composition registries and shared
+  infrastructure from runtime hard-coding; the existing handler, event, log,
+  decorator, and single-scheduler foundations are retained.
+- The ordered remediation is recorded once in [`TODOs.md`](TODOs.md); no runtime
+  behavior changed during the audit.
+
+## Previous Completed Evidence
 
 The conversation/knowledge API refactor is complete in `377a65e`:
 
