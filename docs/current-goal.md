@@ -5,39 +5,24 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — implementing the approved v0.3.1 unified daemon scheduler.
+Idle — no active implementation goal.
 
 ## Objective
 
-Replace the daemon's scattered worker-specific wake-up, timer, queue, and lock
-machinery with one small typed task-admission and dispatch model while keeping
-one operating-system daemon process, responsive chat/control requests, durable
-domain recovery, and bounded shutdown.
+None.
 
 ## Ordered Steps
 
-1. [done] Specify the task envelope, stable identity, admission, scheduling,
-   resource serialization, recovery, and shutdown contracts.
-2. [done] Move chat, memory, reflection, reason, notification, and export onto
-   one scheduler and one bounded executor.
-3. [done] Remove worker supervisors, dedicated admission queues, delayed timer
-   schedulers, worker health payloads, and export-worker lifecycle.
-4. [done] Update governing runtime, error, development, reason-output, and
-   architecture documentation.
-5. [in progress] Run full release gates, commit the completed migration, push,
-   and verify final CI.
+None.
 
 ## Exclusions
 
-- Runtime events and audit logs remain observation only, never command input.
-- Storage/repository transaction locks and the single-daemon instance lock.
-- Multiple operating-system daemon processes or an unbounded executor pool.
-- Distributed execution or a general-purpose message-bus framework.
+None.
 
 ## Completion Evidence
 
-- Approved written design with explicit invariants and deletion targets.
-- One typed scheduler replaces worker-specific in-memory coordination.
-- Same-resource operations cannot overlap; unrelated bounded work may proceed.
-- Shutdown, recovery, queue saturation, and duplicate admission are tested.
-- Net daemon infrastructure is smaller and the full gate is green.
+The v0.3.1 daemon scheduler simplification completed in `606e608` and
+`498a1d5`. One bounded scheduler now owns daemon task admission and dispatch;
+legacy worker, queue, and timer infrastructure was removed. The local gate
+passed 2434 tests, Pyright with zero errors/warnings, build, and a clean
+Python 3.12 wheel smoke test.
