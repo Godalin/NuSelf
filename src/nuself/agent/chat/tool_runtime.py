@@ -26,6 +26,7 @@ from nuself.reason.output import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobSink
 from nuself.trace.service import TraceQueryService
+from nuself.workspace import PrivateWorkspaceStore
 from nuself.runtime.observability import (
     report_observability_projection_failure,
 )
@@ -37,11 +38,12 @@ class ConversationToolRuntime:
     def __init__(
         self,
         *,
-        project_root: Path | None,
+        project_root: Path,
         query_service: MemoryQueryService,
         memory_repository: MemoryEntryRepository,
         reflection_repository: ReflectionRepository,
         reason_service: ReasonService,
+        reason_workspace_store: PrivateWorkspaceStore,
         trace_query_service: TraceQueryService,
         persona_tools: Sequence[BaseTool],
         selves_consult: Callable[..., str],
@@ -54,6 +56,7 @@ class ConversationToolRuntime:
             memory_repository=memory_repository,
             reflection_repository=reflection_repository,
             reason_service=reason_service,
+            reason_workspace_store=reason_workspace_store,
             trace_query_service=trace_query_service,
             persona_tools=persona_tools,
             project_root=project_root,

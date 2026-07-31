@@ -371,14 +371,14 @@ class ReasonOutputService:
         self,
         project_root: Path,
         reason_service: ReasonService,
-        workspace_store: PrivateWorkspaceStore | None = None,
+        workspace_store: PrivateWorkspaceStore,
         job_sink: JobSink | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
         section_planner: SectionPlanner | None = None,
     ) -> None:
         self._reason_service = reason_service
-        self._project_root = project_root or self._reason_service._project_root  # pyright: ignore[reportPrivateUsage]
-        self._workspace_store = workspace_store or PrivateWorkspaceStore(self._project_root, scope="reason")
+        self._project_root = project_root
+        self._workspace_store = workspace_store
         self._job_sink = job_sink
         self._job_definitions = (
             job_definitions

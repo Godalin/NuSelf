@@ -12,8 +12,8 @@ from nuself.logs import read_log_events
 from nuself.reason.output import (
     ReasonOutputManifest,
     ReasonOutputPaths,
-    ReasonOutputService,
 )
+from reason_output_fixtures import ReasonOutputService
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService

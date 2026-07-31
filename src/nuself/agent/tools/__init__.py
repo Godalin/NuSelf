@@ -23,6 +23,7 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
 from nuself.trace.service import TraceQueryService
+from nuself.workspace import PrivateWorkspaceStore
 
 __all__ = [
     "build_langchain_chat_tools",
@@ -39,7 +40,8 @@ def build_langchain_chat_tools(
     reason_service: ReasonService,
     trace_query_service: TraceQueryService,
     persona_tools: Sequence[BaseTool],
-    project_root: Path | None,
+    project_root: Path,
+    reason_workspace_store: PrivateWorkspaceStore,
     selves_consult: Callable[[str, str, str | None], str] | None = None,
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,
@@ -57,6 +59,7 @@ def build_langchain_chat_tools(
         + build_reason_tools(
             service=reason_service,
             project_root=project_root,
+            workspace_store=reason_workspace_store,
             job_sink=job_sink,
             section_planner=section_planner,
         )

@@ -44,6 +44,7 @@ from nuself.runtime.messages import RuntimeEnvelope
 from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
+from nuself.workspace import PrivateWorkspaceStore
 
 
 def _trace_repository(root: Path) -> TraceRepository:
@@ -78,6 +79,10 @@ def _chat_tool(
         ).query,
         persona_tools=(),
         project_root=tmp_path,
+        reason_workspace_store=PrivateWorkspaceStore(
+            tmp_path,
+            scope="reason",
+        ),
     )
     return {tool.name: tool for tool in tools}[name]
 

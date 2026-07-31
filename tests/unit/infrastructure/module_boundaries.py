@@ -378,7 +378,9 @@ def test_persona_tools_do_not_resolve_or_compose_authority() -> None:
 
 def test_reason_advancement_does_not_resolve_or_compose_authority() -> None:
     paths = (
+        _SOURCE_ROOT / "agent" / "tools" / "reason.py",
         _SOURCE_ROOT / "reason" / "advancer.py",
+        _SOURCE_ROOT / "reason" / "output.py",
         _SOURCE_ROOT / "reason" / "scheduler.py",
     )
     forbidden = {
@@ -392,6 +394,18 @@ def test_reason_advancement_does_not_resolve_or_compose_authority() -> None:
         for imported in _from_imports(path)
         if imported in forbidden
     } == set()
+
+
+def test_reason_output_does_not_construct_workspace_authority() -> None:
+    path = _SOURCE_ROOT / "reason" / "output.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    assert [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "PrivateWorkspaceStore"
+    ] == []
 
 
 def test_migrated_notification_outbox_does_not_resolve_authority() -> None:

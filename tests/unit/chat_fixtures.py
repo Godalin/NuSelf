@@ -34,6 +34,7 @@ from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
+from nuself.workspace import PrivateWorkspaceStore
 
 
 class ConversationGraphRuntime(_ConversationGraphRuntime):
@@ -91,6 +92,10 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             trace_recorder=trace_recorder or application.trace.recorder,
             reason_service=reason_service
             or compose_reason_service(application),
+            reason_workspace_store=PrivateWorkspaceStore(
+                project_root,
+                scope="reason",
+            ),
             trace_query_service=trace_query_service
             or application.trace.query,
             persona_tools=persona_tools

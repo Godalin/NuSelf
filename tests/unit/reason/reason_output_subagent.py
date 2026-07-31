@@ -12,7 +12,7 @@ from nuself.reason.domain import ReasoningThread
 from nuself.reason.output import ReasonOutputPaths
 from nuself.reason.output import ReasonOutputSection
 from nuself.reason.output import ReasonOutputManifest
-from nuself.reason.output import ReasonOutputService
+from reason_output_fixtures import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
 from nuself.storage import get_default_backend

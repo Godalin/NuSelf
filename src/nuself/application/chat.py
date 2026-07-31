@@ -13,6 +13,7 @@ from nuself.application.reason import compose_reason_service
 from nuself.application.thread import compose_thread_store
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
+from nuself.workspace import PrivateWorkspaceStore
 
 
 def compose_conversation_runtime(
@@ -37,6 +38,10 @@ def compose_conversation_runtime(
         reflection_repository=application.reflection,
         trace_recorder=application.trace.recorder,
         reason_service=compose_reason_service(application),
+        reason_workspace_store=PrivateWorkspaceStore(
+            paths.project_root,
+            scope="reason",
+        ),
         trace_query_service=application.trace.query,
         persona_tools=build_persona_tools(
             paths.project_root,

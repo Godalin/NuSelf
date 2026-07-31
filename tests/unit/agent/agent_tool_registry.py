@@ -27,6 +27,7 @@ from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
+from nuself.workspace import PrivateWorkspaceStore
 
 
 def _names(tools: tuple[object, ...]) -> set[str]:
@@ -62,6 +63,10 @@ def test_subsystem_tool_builders_own_their_registries(
         build_reason_tools(
             service=ReasonService(tmp_path),
             project_root=tmp_path,
+            workspace_store=PrivateWorkspaceStore(
+                tmp_path,
+                scope="reason",
+            ),
         )
     ) == {
         "reason_list_active",

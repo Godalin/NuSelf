@@ -9,7 +9,6 @@ from pathlib import Path
 from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.common import structured_tool_factory
-from nuself.config import runtime_paths
 from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.reason.audit import write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread
@@ -18,12 +17,14 @@ from nuself.reason.output import ReasonOutputService, SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.jobs import JobSink
+from nuself.workspace import PrivateWorkspaceStore
 
 
 def build_reason_tools(
     *,
     service: ReasonService,
-    project_root: Path | None,
+    project_root: Path,
+    workspace_store: PrivateWorkspaceStore,
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,
 ) -> tuple[BaseTool, ...]:
@@ -221,8 +222,9 @@ def build_reason_tools(
             return "Error: thread_id must be a non-empty string"
         try:
             output_service = ReasonOutputService(
-                runtime_paths(project_root).project_root,
+                project_root,
                 reason_service=service,
+                workspace_store=workspace_store,
                 job_sink=job_sink,
                 section_planner=section_planner,
             )

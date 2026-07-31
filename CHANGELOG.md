@@ -66,7 +66,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   receives the graph-owned memory repository instead of selecting storage.
   Persona agent tools and reason advancers now receive prompt, trace,
   workspace, path, and storage capabilities from application composition;
-  reason scheduling no longer builds an advancer from a project root.
+  reason scheduling no longer builds an advancer from a project root. Agent
+  reason-export tools also receive their reason workspace explicitly instead
+  of resolving runtime paths, and the output service no longer constructs a
+  fallback workspace authority.
   Notification delivery orchestration is now
   separated from outbox persistence and consumes an injected delivery plan.
   Memory persistence and query components now

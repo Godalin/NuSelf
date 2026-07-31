@@ -16,8 +16,8 @@ from nuself.reason.output import (
     ReasonOutputManifest,
     ReasonOutputPaths,
     ReasonOutputSection,
-    ReasonOutputService,
 )
+from reason_output_fixtures import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
 from nuself.runtime.jobs import JobMessage

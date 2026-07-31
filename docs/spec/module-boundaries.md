@@ -223,9 +223,11 @@ reuse that factory so repository, workspace, trace, prompt, and optional
 advancer dependencies originate at one application boundary.
 `ReasonService` itself receives repository, workspace store, and trace recorder
 as required dependencies. Reason scheduling and output export must receive an
-existing reason service, and scheduling also receives its repository
-explicitly; daemon workers may own queues and workspace adapters, but must not
-create or infer a second reason persistence graph.
+existing reason service and workspace store, and scheduling also receives its
+repository explicitly; daemon workers may own queues and workspace adapters,
+but must not create or infer a second reason persistence graph. Agent reason
+tools receive the export workspace capability from chat composition and never
+resolve runtime paths to construct it.
 `ReasonAdvancer` receives workspace, persona repository, trace recorder, and
 resolved paths from application composition. `ReasonScheduler` receives an
 advancer explicitly and never constructs one from a project root.

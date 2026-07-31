@@ -64,6 +64,7 @@ from nuself.runtime.observability import (
 )
 from nuself.trace.service import TraceRecorder
 from nuself.trace.service import TraceQueryService
+from nuself.workspace import PrivateWorkspaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -113,6 +114,7 @@ class ConversationGraphRuntime:
         reflection_repository: ReflectionRepository,
         trace_recorder: TraceRecorder,
         reason_service: ReasonService,
+        reason_workspace_store: PrivateWorkspaceStore,
         trace_query_service: TraceQueryService,
         persona_tools: Sequence[BaseTool],
         persona_definitions: tuple[PersonaDefinition, ...],
@@ -171,6 +173,7 @@ class ConversationGraphRuntime:
             memory_repository=memory_repository,
             reflection_repository=reflection_repository,
             reason_service=reason_service,
+            reason_workspace_store=reason_workspace_store,
             trace_query_service=trace_query_service,
             persona_tools=persona_tools,
             selves_consult=self._consult_selves_tool,
