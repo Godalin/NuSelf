@@ -175,6 +175,20 @@ def test_conversation_runtime_does_not_compose_authority() -> None:
     ] == []
 
 
+def test_chat_has_one_framework_native_agent_graph() -> None:
+    runtime = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+    response = _SOURCE_ROOT / "agent" / "chat" / "response.py"
+
+    assert not any(
+        imported == "langgraph.graph"
+        for imported in _imports(runtime)
+    )
+    assert (
+        "langchain.agents",
+        "create_agent",
+    ) in _from_imports(response)
+
+
 def test_thread_store_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "agent" / "chat" / "thread.py"
     forbidden = {
