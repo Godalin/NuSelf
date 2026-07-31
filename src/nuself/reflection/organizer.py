@@ -6,8 +6,10 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 
+from nuself.config import runtime_paths
 from nuself.reflection.audit import write_reflection_audit
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.storage import get_default_backend
 
 SIMILARITY_THRESHOLD = 0.48
 
@@ -25,7 +27,10 @@ class ReflectionOrganizer:
 
     def __init__(self, project_root: Path | None = None, repository: ReflectionRepository | None = None) -> None:
         self._project_root = project_root
-        self._repository = repository or ReflectionRepository(project_root)
+        self._repository = repository or ReflectionRepository(
+            runtime_paths(project_root),
+            backend=get_default_backend(project_root),
+        )
 
     def organize_pending(self) -> ReflectionOrganizationResult:
         pending = self._repository.list(status="pending")

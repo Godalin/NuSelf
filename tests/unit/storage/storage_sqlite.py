@@ -632,7 +632,6 @@ def test_unmigrated_repositories_share_the_project_default_backend(
         "nuself.memory.repository",
         "nuself.memory.source_repository",
         "nuself.notification",
-        "nuself.reflection.repository",
     ):
         monkeypatch.setattr(
             f"{module}.get_default_backend",
@@ -645,10 +644,10 @@ def test_unmigrated_repositories_share_the_project_default_backend(
     NotificationOutbox(tmp_path)
     ProfileItemRepository(runtime_paths(tmp_path), backend=backend)
     ReasonRepository(runtime_paths(tmp_path), backend=backend)
-    ReflectionRepository(tmp_path)
+    ReflectionRepository(runtime_paths(tmp_path), backend=backend)
     compose_trace_services(runtime_paths(tmp_path), backend)
 
-    assert calls == [tmp_path] * 5
+    assert calls == [tmp_path] * 4
 
 
 def test_reset_closes_backend_used_by_default_repository(

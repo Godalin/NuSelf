@@ -6,16 +6,18 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.reflection.repository import (
     ReflectionEntry,
     ReflectionEntryNotFound,
     ReflectionRepository,
 )
+from nuself.storage import get_default_backend
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> ReflectionRepository:
-    return ReflectionRepository(tmp_path)
+    return ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
 
 
 def _sample_entry(index: int = 0) -> ReflectionEntry:

@@ -53,7 +53,7 @@ def _chat_tool(
     from nuself.agent.tools import build_langchain_chat_tools
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = reflection_repository if reflection_repository is not None else ReflectionRepository(tmp_path)
+    repo = reflection_repository if reflection_repository is not None else ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     if not isinstance(repo, ReflectionRepository):
         raise TypeError("reflection_repository must be a ReflectionRepository")
     tools = build_langchain_chat_tools(
@@ -1015,7 +1015,7 @@ def test_empty_memory_search_requests_one_broader_query(
 def test_reflection_list_pending_empty(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool)
     assert "No pending reflection ideas" in result
@@ -1024,7 +1024,7 @@ def test_reflection_list_pending_empty(tmp_path: Path) -> None:
 def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1073,7 +1073,7 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
 def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     for i in range(5):
         repo.add(
             ReflectionEntry(
@@ -1102,7 +1102,7 @@ def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
 def test_reflection_count_tool(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1132,7 +1132,7 @@ def test_reflection_count_tool(tmp_path: Path) -> None:
 def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1164,7 +1164,7 @@ def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_reflection_dismiss_out_of_range(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
@@ -1175,7 +1175,7 @@ def test_reflection_dismiss_out_of_range(tmp_path: Path, monkeypatch: pytest.Mon
 def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
@@ -1185,7 +1185,7 @@ def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.Mo
 def test_reflection_archive_success(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1217,7 +1217,7 @@ def test_reflection_archive_success(tmp_path: Path) -> None:
 def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 0})
     assert "Invalid reflection index" in result
@@ -1226,7 +1226,7 @@ def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
 def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(tmp_path)
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 

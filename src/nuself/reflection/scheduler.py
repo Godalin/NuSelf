@@ -10,10 +10,6 @@ from typing import Literal, cast
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from nuself.application import (
-    compose_profile_repository,
-    compose_trace_services,
-)
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import runtime_paths
@@ -30,9 +26,12 @@ from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
 from nuself.persona.audit import write_persona_audit
+from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import StorageCollection, get_default_backend
+from nuself.trace.repository import TraceRepository
+from nuself.trace.service import TraceRecorder
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
 
@@ -142,6 +141,7 @@ class ReflectionScheduler:
     def __init__(self, project_root: Path | None = None, config: ReflectionSettings | None = None) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
+        backend = get_default_backend(project_root)
 
         if config is not None:
             self._config = config
@@ -149,10 +149,11 @@ class ReflectionScheduler:
             system_config = ConfigSystem.load(project_root=project_root)
             self._config = system_config.reflection
 
-        self._schedule_collection = get_default_backend(
-            project_root
-        ).collection("scheduler_state")
-        self._reflection_repo = ReflectionRepository(project_root)
+        self._schedule_collection = backend.collection("scheduler_state")
+        self._reflection_repo = ReflectionRepository(
+            paths,
+            backend=backend,
+        )
         self._outbox = NotificationOutbox(project_root)
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
@@ -247,10 +248,11 @@ class ReflectionScheduler:
                     f"Below persona discussion threshold ({self._config.gate.persona_discussion_threshold}), no discussion triggered"
                 )
 
-            compose_trace_services(
-                runtime_paths(self._project_root),
-                get_default_backend(self._project_root),
-            ).recorder.record_reflection_created(
+            paths = runtime_paths(self._project_root)
+            backend = get_default_backend(self._project_root)
+            TraceRecorder(
+                TraceRepository(paths, backend=backend)
+            ).record_reflection_created(
                 reflection_id=entry.id,
                 title=entry.title,
                 body=entry.body,
@@ -479,9 +481,8 @@ class LLMRelevanceGate:
     ) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
-        self._schedule_collection = get_default_backend(
-            project_root
-        ).collection("scheduler_state")
+        backend = get_default_backend(project_root)
+        self._schedule_collection = backend.collection("scheduler_state")
 
         if config is not None:
             self._config = config
@@ -494,7 +495,10 @@ class LLMRelevanceGate:
             project_root=self._project_root,
             component="reflection",
         )
-        self._reflection_repo = ReflectionRepository(self._project_root)
+        self._reflection_repo = ReflectionRepository(
+            paths,
+            backend=backend,
+        )
 
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
         cooldown_ok = self._cooldown_ok()
@@ -793,9 +797,10 @@ class IdeaCandidateGenerator:
         return "\n".join(lines)
 
     def _profile_context(self, max_items: int = 10) -> str:
-        repo = compose_profile_repository(
-            runtime_paths(self._project_root),
-            get_default_backend(self._project_root),
+        paths = runtime_paths(self._project_root)
+        repo = ProfileItemRepository(
+            paths,
+            backend=get_default_backend(self._project_root),
         )
         lines: list[str] = []
         for item in repo.list()[:max_items]:

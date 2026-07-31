@@ -85,6 +85,12 @@ authority. Reason domain modules must not import the application package:
 doing so creates an application→reason→application cycle during cold process
 startup.
 
+`ReflectionRepository` follows the same persistence boundary: construction
+requires resolved paths and the selected backend, while concrete assembly is
+owned by the application layer. Reflection workflow constructors remain
+migration scope until the shared service graph owns their complete lifecycle;
+they may not move authority lookup back into the repository.
+
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.

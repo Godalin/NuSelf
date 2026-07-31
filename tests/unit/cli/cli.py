@@ -5860,7 +5860,7 @@ def test_reflection_cli_promote_creates_reason_and_trace(
         created_at="2026-05-19T00:00:00+00:00",
         reviewed_at=None,
     )
-    ReflectionRepository(_authority(tmp_path)).add(entry)
+    ReflectionRepository(runtime_paths(_authority(tmp_path)), backend=get_default_backend(_authority(tmp_path))).add(entry)
 
     result = main(
         ["--workspace", str(tmp_path), "inbox", "reflection", "promote", entry.id]

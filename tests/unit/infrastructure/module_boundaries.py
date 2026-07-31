@@ -127,3 +127,22 @@ def test_migrated_reason_repository_does_not_resolve_authority() -> None:
 
 def test_reason_domain_does_not_import_application_composition() -> None:
     assert _violations(("reason",), ("nuself.application",)) == ()
+
+
+def test_migrated_reflection_repository_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "reflection" / "repository.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []
+
+
+def test_reflection_domain_does_not_import_application_composition() -> None:
+    assert _violations(("reflection",), ("nuself.application",)) == ()

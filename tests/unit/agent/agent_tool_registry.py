@@ -43,7 +43,7 @@ def test_subsystem_tool_builders_own_their_registries(
         "memory_update_importance",
     }
     assert _names(
-        build_reflection_tools(ReflectionRepository(tmp_path))
+        build_reflection_tools(ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
     ) == {
         "reflection_list_pending",
         "reflection_count",

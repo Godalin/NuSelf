@@ -44,7 +44,10 @@ def test_repository_lists_report_corrupt_records(
             backend=backend,
         ).list_threads()
     elif collection == "reflection_entries":
-        result = ReflectionRepository(tmp_path, backend=backend).list()
+        result = ReflectionRepository(
+            runtime_paths(tmp_path),
+            backend=backend,
+        ).list()
     elif collection == "notification_outbox":
         result = NotificationOutbox(tmp_path, backend=backend).list()
     elif collection == "trace_nodes":

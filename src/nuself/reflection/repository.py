@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal, cast
 
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 
 
 @dataclass(frozen=True)
@@ -110,17 +109,12 @@ class ReflectionRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._col = be.collection("reflection_entries")
-        self._paths = runtime_paths(project_root)
+        self._col = backend.collection("reflection_entries")
+        self._paths = paths
 
     def list(self, status: str | None = None) -> list[ReflectionEntry]:
         entries: list[ReflectionEntry] = []

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.reason.domain import ReasoningThread
@@ -12,6 +11,7 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionEntryNotFound, ReflectionRepository
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import get_default_backend
+from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 
 
@@ -26,12 +26,16 @@ class ReflectionService:
         trace_recorder: TraceRecorder | None = None,
     ) -> None:
         self._project_root = project_root
-        self._repository = repository or ReflectionRepository(project_root)
+        paths = runtime_paths(project_root)
+        backend = get_default_backend(project_root)
+        self._repository = repository or ReflectionRepository(
+            paths,
+            backend=backend,
+        )
         self._reason_service = reason_service or ReasonService(project_root)
-        self._trace_recorder = trace_recorder or compose_trace_services(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).recorder
+        self._trace_recorder = trace_recorder or TraceRecorder(
+            TraceRepository(paths, backend=backend)
+        )
 
     def promote_to_reason(self, id_or_index: str) -> ReasoningThread:
         entry = self._resolve_entry(id_or_index)

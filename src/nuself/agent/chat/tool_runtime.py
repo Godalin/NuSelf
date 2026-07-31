@@ -8,6 +8,7 @@ from typing import cast
 
 from langchain_core.tools import BaseTool, StructuredTool
 
+from nuself.application.reflection import compose_reflection_repository
 from nuself.agent.skills import (
     AgentSkill,
     load_agent_skills,
@@ -19,13 +20,14 @@ from nuself.agent.tool_utils import (
     tool_service_component,
 )
 from nuself.agent.tools import build_langchain_chat_tools
+from nuself.config import runtime_paths
 from nuself.memory.query import MemoryQueryService
 from nuself.reason.output import SectionPlanner
-from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.observability import (
     report_observability_projection_failure,
 )
+from nuself.storage import get_default_backend
 
 
 class ConversationToolRuntime:
@@ -43,7 +45,10 @@ class ConversationToolRuntime:
         self._project_root = project_root
         tools = build_langchain_chat_tools(
             query_service=query_service,
-            reflection_repository=ReflectionRepository(project_root),
+            reflection_repository=compose_reflection_repository(
+                runtime_paths(project_root),
+                get_default_backend(project_root),
+            ),
             project_root=project_root,
             selves_consult=selves_consult,
             job_sink=job_sink,

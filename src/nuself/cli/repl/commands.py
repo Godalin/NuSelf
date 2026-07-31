@@ -10,6 +10,7 @@ from nuself.application import (
     compose_profile_repository,
     compose_trace_services,
 )
+from nuself.application.reflection import compose_reflection_repository
 from nuself.agent.chat import ThreadStore
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
@@ -42,6 +43,10 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
+from nuself.reflection.repository import (
+    ReflectionEntryNotFound,
+    ReflectionRepository,
+)
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
@@ -62,6 +67,15 @@ from nuself.tui.render import TerminalTheme
 from nuself.tui.trace import render_trace_detail, render_trace_row
 
 theme = TerminalTheme()
+
+
+def _reflection_repository(
+    project_root: Path | None,
+) -> ReflectionRepository:
+    return compose_reflection_repository(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    )
 
 
 def indent_lines(lines: list[str], prefix: str) -> list[str]:
@@ -520,10 +534,9 @@ def handle_interactive_whoami_command(project_root: Path | None) -> str:
 
 
 def handle_interactive_reflection_command(project_root: Path | None) -> str:
-    from nuself.reflection.repository import ReflectionRepository
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = ReflectionRepository(project_root).list(status="pending")
+    entries = _reflection_repository(project_root).list(status="pending")
     if not entries:
         return "No pending reflection ideas."
     lines = ["Pending reflection ideas:"]
@@ -541,10 +554,9 @@ def handle_interactive_inbox_command(project_root: Path | None) -> str:
 
 
 def handle_interactive_reflection_list_command(project_root: Path | None) -> str:
-    from nuself.reflection.repository import ReflectionRepository
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = ReflectionRepository(project_root).list()
+    entries = _reflection_repository(project_root).list()
     if not entries:
         return "No reflection ideas."
     lines = ["All reflection ideas:"]
@@ -554,20 +566,17 @@ def handle_interactive_reflection_list_command(project_root: Path | None) -> str
 
 
 def handle_interactive_reflection_show_command(project_root: Path | None, entry_id: str) -> str:
-    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
     from nuself.tui.render import render_reflection_entry_detail
 
     try:
-        entry = ReflectionRepository(project_root).get(entry_id)
+        entry = _reflection_repository(project_root).get(entry_id)
     except ReflectionEntryNotFound:
         return f"Reflection entry not found: {entry_id}"
     return render_reflection_entry_detail(entry)
 
 
 def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    from nuself.reflection.repository import ReflectionEntryNotFound, ReflectionRepository
-
-    repo = ReflectionRepository(project_root)
+    repo = _reflection_repository(project_root)
     try:
         repo.get(entry_id)
     except ReflectionEntryNotFound:

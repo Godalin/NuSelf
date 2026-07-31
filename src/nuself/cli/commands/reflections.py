@@ -6,7 +6,9 @@ import argparse
 import json
 import sys
 
+from nuself.application.reflection import compose_reflection_repository
 from nuself.cli.commands.output import print_ansi, resolve_handle
+from nuself.config import runtime_paths
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import (
     ReflectionEntryNotFound,
@@ -14,6 +16,7 @@ from nuself.reflection.repository import (
 )
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.storage import get_default_backend
 from nuself.tui.reason import render_reason_detail
 from nuself.tui.render import (
     render_reflection_entry_detail,
@@ -26,17 +29,24 @@ def _print_json(*entities: object) -> None:
         print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
+def _repository(args: argparse.Namespace) -> ReflectionRepository:
+    return compose_reflection_repository(
+        runtime_paths(args.project_root),
+        get_default_backend(args.project_root),
+    )
+
+
 def _resolve_entry_id(args: argparse.Namespace) -> str | None:
     return resolve_handle(
         args.entry_id,
-        ReflectionRepository(args.project_root).list(),
+        _repository(args).list(),
         label="reflection",
         get_id=lambda entry: entry.id,
     )
 
 
 def handle_reflection_list(args: argparse.Namespace) -> int:
-    entries = ReflectionRepository(args.project_root).list(
+    entries = _repository(args).list(
         status=args.status
     )
     if not entries:
@@ -58,7 +68,7 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        entry = ReflectionRepository(args.project_root).get(entry_id)
+        entry = _repository(args).get(entry_id)
     except ReflectionEntryNotFound:
         print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
         return 1
@@ -75,7 +85,7 @@ def _change_status(
     entry_id = _resolve_entry_id(args)
     if entry_id is None:
         return 1
-    repository = ReflectionRepository(args.project_root)
+    repository = _repository(args)
     try:
         getattr(repository, action)(entry_id)
     except ReflectionEntryNotFound:
