@@ -40,6 +40,9 @@ present the same activity without backend presentation dependencies.
 - Step 3 in progress: confirmation, observation, and audit execution ports are
   implemented and tested; production adapters and existing tools remain to be
   migrated.
+- Step 5 partial: memory, trace, selves, and workspace tools use declarative
+  registration. Approval-gated reflection/reason tools and persona remain on
+  the legacy path until the frontend approval adapter is connected.
 
 ## Exclusions
 
@@ -60,14 +63,3 @@ present the same activity without backend presentation dependencies.
 - Architecture tests enforce frontend/backend direction and module-local
   extension.
 - Full local and six-platform release gates pass.
-
-## Progress
-
-- Steps 1-2 foundation complete: governing specs now define the compact
-  module, frontend-event, and orthogonal policy contracts; immutable tool,
-  component, effect, confirmation, observation, and audit decorators plus the
-  LangChain materializer have focused tests and pass Pyright.
-- Step 3 in progress: shared execution already consumes injected approval,
-  frontend-event, clock, and audit ports; existing tools and terminal/daemon
-  adapters still need migration before the legacy approval implementation can
-  be removed.

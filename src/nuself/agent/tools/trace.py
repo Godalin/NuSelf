@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.tools.common import structured_tool_factory
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import component, observed, readonly, tool
+from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.trace.repository import TraceNotFound
@@ -15,8 +17,18 @@ def build_trace_tools(
     service: TraceQueryService,
 ) -> tuple[BaseTool, ...]:
     """Build the trace service's chat tools."""
-    tool_from_function = structured_tool_factory()
+    executor = FeatureExecutor()
 
+    @tool(
+        name="trace_search",
+        description=(
+            "Search NuSelf thought provenance records. Use when the user asks where an idea came from, "
+            "how a belief or answer formed, or what prior records support a conclusion."
+        ),
+    )
+    @component("trace")
+    @readonly
+    @observed
     def search_trace(query: str, limit: int = 5) -> str:
         """Search thought provenance trace records."""
         query_str = str(query) if query else ""
@@ -37,6 +49,16 @@ def build_trace_tools(
             indent=2,
         )
 
+    @tool(
+        name="trace_count",
+        description=(
+            "Count thought provenance trace records, optionally matching a query. Use when the user asks "
+            "how many provenance records exist or match a topic."
+        ),
+    )
+    @component("trace")
+    @readonly
+    @observed
     def count_traces(query: str | None = None) -> str:
         """Count thought provenance trace records, optionally matching a query."""
         query_str = query.strip() if isinstance(query, str) else ""
@@ -48,6 +70,16 @@ def build_trace_tools(
         suffix = f' matching "{query_str}"' if query_str else ""
         return f"Trace records{suffix}: {len(traces)} total"
 
+    @tool(
+        name="trace_show",
+        description=(
+            "Show a specific thought provenance trace record with related "
+            "links. Requires a trace_id."
+        ),
+    )
+    @component("trace")
+    @readonly
+    @observed
     def show_trace(trace_id: str) -> str:
         """Show one thought provenance trace record."""
         if not trace_id.strip():
@@ -68,6 +100,16 @@ def build_trace_tools(
             indent=2,
         )
 
+    @tool(
+        name="trace_related",
+        description=(
+            "List trace records and links that directly mention an artifact reference such as memory:<id>, "
+            "reflection:<id>, reason:<id>, reason_step:<id>, persona_prompt:<id>, or trace:<id>."
+        ),
+    )
+    @component("trace")
+    @readonly
+    @observed
     def related_traces(artifact_ref: str, limit: int = 5) -> str:
         """List thought provenance records related to an artifact reference."""
         artifact = artifact_ref.strip()
@@ -94,44 +136,8 @@ def build_trace_tools(
         )
 
     return (
-        tool_from_function(
-            search_trace,
-            name="trace_search",
-            description=(
-                "Search NuSelf thought provenance records. Use when the user asks where an idea came from, "
-                "how a belief or answer formed, or what prior records support a conclusion."
-            ),
-            tags=("readonly",),
-            metadata={"service_component": "trace"},
-        ),
-        tool_from_function(
-            count_traces,
-            name="trace_count",
-            description=(
-                "Count thought provenance trace records, optionally matching a query. Use when the user asks "
-                "how many provenance records exist or match a topic."
-            ),
-            tags=("readonly",),
-            metadata={"service_component": "trace"},
-        ),
-        tool_from_function(
-            show_trace,
-            name="trace_show",
-            description=(
-                "Show a specific thought provenance trace record with related "
-                "links. Requires a trace_id."
-            ),
-            tags=("readonly",),
-            metadata={"service_component": "trace"},
-        ),
-        tool_from_function(
-            related_traces,
-            name="trace_related",
-            description=(
-                "List trace records and links that directly mention an artifact reference such as memory:<id>, "
-                "reflection:<id>, reason:<id>, reason_step:<id>, persona_prompt:<id>, or trace:<id>."
-            ),
-            tags=("readonly",),
-            metadata={"service_component": "trace"},
-        ),
+        materialize_tool(search_trace, executor=executor),
+        materialize_tool(count_traces, executor=executor),
+        materialize_tool(show_trace, executor=executor),
+        materialize_tool(related_traces, executor=executor),
     )
