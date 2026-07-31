@@ -124,4 +124,5 @@ In progress:
   The notification delivery split passed 105 focused tests.
   The notification module-split slice passed 76 tests with Pyright clean.
   The daemon worker graph-injection slice passed 793 tests; Pyright reported
-  0 errors and 0 warnings.
+  0 errors and 0 warnings. The combined changes then passed the complete
+  2470-test suite.
