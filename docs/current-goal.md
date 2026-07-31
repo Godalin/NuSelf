@@ -5,47 +5,36 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — decouple conversation from the knowledge domains for v0.3.1.
+Idle — conversation/knowledge API decoupling is complete for v0.3.1.
 
 ## Objective
 
-Expose conversation and memory as separate domain APIs rather than shared
-storage. Conversation pushes selected completed-turn evidence through the
-generic memory observation API; reasoning or reflection may explicitly query
-conversation history through its read-only API without seeing storage or
-lifecycle internals.
+No active implementation objective.
 
 ## Ordered Steps
 
-1. Define a one-way projection from a completed conversation turn into a
-   memory-owned durable observation.
-2. Replace conversation-backed memory scanning, cursors, plans, and locks with
-   observation-owned ingestion and recovery state.
-3. Replace reflection's storage-shaped conversation collaborator with the
-   read-only conversation history API; keep conversation input explicit and
-   bounded.
-4. Reduce daemon/application composition to publish and schedule observations
-   without memory or reflection reading conversation state.
-5. Migrate existing SQLite state without losing unprocessed durable chat input,
-   update user-visible documentation, and verify all supported platforms.
+1. Await the next approved goal.
 
 ## Exclusions
 
-- Conversation may call memory/reflection tools; this consumer direction is
-  intentional and does not grant either domain access to conversation state.
-- Provenance may retain an opaque source reference created by the application
-  projection, but memory records must not require a conversation ID.
-- This goal does not redesign the model provider or interactive presentation.
+- No new work is implied while this board is idle.
 
 ## Completion Evidence
 
-- No production module below `nuself.memory`, `nuself.reflection`, or
-  `nuself.reason` imports or queries conversation state or storage. Explicit
-  history consumers use only the read-only conversation API.
-- Memory curation can recover from a process restart using only memory-owned
-  storage, and reflection can run without a conversation collaborator.
-- Migration, focused boundary tests, full pytest, Pyright, build, clean-wheel
-  smoke, and the final six-platform CI pass.
+The conversation/knowledge API refactor is complete in `377a65e`:
+
+- `ApplicationGraph` owns a bounded, read-only conversation history service;
+  reflection consumes immutable excerpts rather than conversation storage,
+  state, locks, or schema.
+- Completed turns cross into memory only through a generic durable observation
+  API. Curator recovery, plans, locks, daemon scans, and manual updates are all
+  observation-owned and no longer scan conversations.
+- Schema v7 preserves unprocessed v6 evidence. The project-local database was
+  migrated with its pre-v7 backup retained; `PRAGMA quick_check` returned
+  `ok`, conversations remained readable, and old cursors became observations.
+- Pyright completed with 0 errors and 0 warnings; all 2436 tests, lock check,
+  sdist/wheel build, supported-Python clean-wheel install, import, and CLI
+  smoke tests passed. Final remote CI remains the branch push gate.
 
 ## Previous Completed Evidence
 
