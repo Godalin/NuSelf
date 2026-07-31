@@ -7,7 +7,6 @@ from dataclasses import replace
 import logging
 import time
 from pathlib import Path
-from typing import Any, TypedDict, cast
 
 from langchain_core.tools import BaseTool
 from langchain_core.messages import (
@@ -16,7 +15,6 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
 )
-from langgraph.graph import END, START, StateGraph  # type: ignore[reportMissingTypeStubs]
 from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.agent.chat.types import (
@@ -76,10 +74,6 @@ def trace_summary(text: str, limit: int = 240) -> str:
 # ------------------------------------------------------------------
 # LangGraph graph driver
 # ------------------------------------------------------------------
-
-
-class _ConversationGraphState(TypedDict):
-    turn_state: ConversationTurnState
 
 
 class ConversationGraphRuntime:
@@ -172,18 +166,6 @@ class ConversationGraphRuntime:
                 report_tool_log_failure=self._tool_runtime.report_log_failure,
             )
         )
-        graph: Any = StateGraph(_ConversationGraphState)
-        graph.add_node("prepare_context", self._graph_prepare_context)
-        graph.add_node("respond", self._graph_respond)
-        graph.add_node("state_update", self._graph_state_update)
-        graph.add_node("compression", self._graph_compression)
-        graph.add_edge(START, "prepare_context")
-        graph.add_edge("prepare_context", "respond")
-        graph.add_edge("respond", "state_update")
-        graph.add_edge("state_update", "compression")
-        graph.add_edge("compression", END)
-        self._graph = graph.compile()
-
     def capability_snapshot(self) -> AgentCapabilitySnapshot:
         """Return stable endpoint and readonly-tool membership."""
         return AgentCapabilitySnapshot(
@@ -329,19 +311,24 @@ class ConversationGraphRuntime:
         *,
         turn_id: str | None,
     ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
-        try:
-            output: object = self._graph.invoke({"turn_state": ConversationTurnState.start(state, message, thread_id, turn_id=turn_id)})
-        except ConversationGraphRuntimeError:
-            raise
-        except Exception as exc:
-            raise ConversationGraphRuntimeError(
-                f"conversation graph failed while handling thread '{thread_id}'",
-                node_trace=(),
-            ) from exc
-        if not isinstance(output, dict):
-            raise ConversationGraphRuntimeError("conversation graph returned invalid state", node_trace=())
-        graph_state = cast(_ConversationGraphState, output)
-        turn_state = graph_state["turn_state"]
+        turn_state = ConversationTurnState.start(
+            state,
+            message,
+            thread_id,
+            turn_id=turn_id,
+        )
+        turn_state = self._run_node(
+            "prepare_context", turn_state, self.prepare_context_node
+        )
+        turn_state = self._run_node(
+            "respond", turn_state, self.respond_node
+        )
+        turn_state = self._run_node(
+            "state_update", turn_state, self.state_update_node
+        )
+        turn_state = self._run_node(
+            "compression", turn_state, self.compression_node
+        )
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_final_response(turn_state.final_response)
         trace_id = self._record_chat_turn_trace(
@@ -393,30 +380,25 @@ class ConversationGraphRuntime:
     # LangGraph node wrappers
     # ------------------------------------------------------------------
 
-    def _run_graph_node(self, node_name: ConversationNodeName, state: _ConversationGraphState, run: Callable[[ConversationTurnState], ConversationNodeResult]) -> _ConversationGraphState:
-        turn_state = state["turn_state"]
+    def _run_node(
+        self,
+        node_name: ConversationNodeName,
+        state: ConversationTurnState,
+        run: Callable[
+            [ConversationTurnState],
+            ConversationNodeResult,
+        ],
+    ) -> ConversationTurnState:
         try:
-            return {"turn_state": run(turn_state).state}
+            return run(state).state
         except ConversationGraphRuntimeError:
             raise
         except Exception as exc:
             raise ConversationGraphRuntimeError(
-                f"conversation graph node '{node_name}' failed while handling thread '{turn_state.thread_id}'",
+                f"conversation graph node '{node_name}' failed while handling thread '{state.thread_id}'",
                 node=node_name,
-                node_trace=(*turn_state.node_trace, node_name),
+                node_trace=(*state.node_trace, node_name),
             ) from exc
-
-    def _graph_prepare_context(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_graph_node("prepare_context", state, self.prepare_context_node)
-
-    def _graph_respond(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_graph_node("respond", state, self.respond_node)
-
-    def _graph_state_update(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_graph_node("state_update", state, self.state_update_node)
-
-    def _graph_compression(self, state: _ConversationGraphState) -> _ConversationGraphState:
-        return self._run_graph_node("compression", state, self.compression_node)
 
     # ------------------------------------------------------------------
     # Graph node methods

@@ -181,6 +181,11 @@ make teardown responsibility ambiguous.
 composition root. Memory query/repository, thread storage, reflection, reason,
 trace, and persona-tool capabilities are mandatory inputs. Production and
 evaluation surfaces obtain the concrete graph from `application.chat`.
+The model/tool loop remains the framework-native LangChain `create_agent`
+graph. NuSelf's fixed context, response, state-update, and compression stages
+form one direct typed pipeline; wrapping that branch-free sequence in a second
+`StateGraph` is prohibited because it adds no checkpoint, routing, interrupt,
+or recovery boundary.
 Persona definitions are loaded from an explicitly supplied memory repository
 at that application boundary and passed into chat persona orchestration;
 persona policy must not resolve the active authority itself.

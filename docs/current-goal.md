@@ -44,6 +44,10 @@ design.
   turn record exists to prevent a client retry from invoking the mutation
   again. Endpoint retry suppression only protects the current agent invocation
   and does not close this cross-request commit gap.
+- The outer four-node `StateGraph` supplied no routing, checkpoint, interrupt,
+  or recovery behavior and duplicated the real `create_agent` graph. It has
+  been reduced to a direct typed NuSelf pipeline while the framework retains
+  ownership of the model/tool loop.
 
 ## Exclusions
 

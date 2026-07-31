@@ -14,7 +14,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   Reusing a persisted chat `turn_id` with different input now fails before the
   model or tools run instead of creating a second conflicting turn. Chat state
   update and compression also preserve archived thread state instead of
-  implicitly unarchiving it.
+  implicitly unarchiving it. The redundant branch-free outer `StateGraph` was
+  removed; LangChain `create_agent` remains the single framework-native
+  model/tool loop while NuSelf stages run as a direct typed pipeline.
 - Agent tools now use one orthogonal declarative policy path for identity,
   ownership, effects, confirmation, observation, and audit. The old
   effectful approval wrapper and ad-hoc StructuredTool factories are removed.
