@@ -28,7 +28,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   now receive graph-owned authority resources instead of resolving defaults
   inside their repositories. Memory persistence and query components now
   depend on a narrow profile capability contract instead of the concrete
-  profile storage adapter.
+  profile storage adapter. Reflection promotion likewise consumes only narrow
+  reason-thread-start and provenance-recording ports, while executable gates
+  keep domain and agent code independent of CLI/TUI presentation.
 - Schema v4 replaces per-collection dynamic-column tables with one compact
   strict-JSON `records` table and makes namespaced workspace state part of the
   main authority. Its v3↔v4 migration is reversible. Reason exports now live

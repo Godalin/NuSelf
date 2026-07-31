@@ -24,10 +24,13 @@ Current working branch for v0.3.1.
    trace, profile, reason, reflection, memory, source, notification, persona
    prompt, and curator-plan persistence require explicit authority resources
    and application-owned composition.
-4. Extract narrow cross-domain ports and shared contracts. In progress:
-   memory persistence and query services now depend on the stable
-   `ProfileRepositoryPort` rather than the concrete profile adapter.
-5. Remove agent/domain dependencies on CLI/TUI presentation.
+4. Extract narrow cross-domain ports and shared contracts. Complete: profile
+   consumers and reflection promotion depend on narrow capability protocols;
+   shared jobs, events, handlers, storage, and model agents retain their
+   existing neutral contracts.
+5. Remove agent/domain dependencies on CLI/TUI presentation. Complete: the
+   dependency scan is clean and executable AST gates cover both domains and
+   agent adapters.
 6. Split oversized cross-cutting modules along their actual ownership.
 7. Run complete gates and close the goal with dependency evidence.
 
@@ -84,6 +87,9 @@ In progress:
   memory consumers to profile list/search and required candidate mutations;
   an AST gate prevents core memory persistence from importing the concrete
   profile adapter;
+- reflection promotion now depends only on `ReasonThreadStarter` and
+  `ReflectionPromotionRecorder`, not the full cross-domain service contracts;
+  domain and agent presentation boundaries remain clean under AST gates;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
   600 tests after moving trace composition into the application layer; the
@@ -102,3 +108,5 @@ In progress:
   The daemon-to-chat graph injection slice passed 156 tests; Pyright remained
   clean.
   The profile-port memory slice passed 232 tests with Pyright clean.
+  The reflection-port and presentation-boundary slice passed 18 tests with
+  Pyright clean.

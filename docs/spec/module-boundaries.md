@@ -143,6 +143,11 @@ the concrete storage adapter. The contract exposes only list/search and the
 mutations required by memory candidate workflows; authority paths, collections,
 reindexing, and storage implementation remain private to profile composition.
 
+Reflection promotion depends only on two consumer-owned capabilities:
+`ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require
+the complete reason service or trace recorder contract merely to start one
+thread and record one promotion.
+
 ## Shared Infrastructure Extraction
 
 Code becomes shared infrastructure only when all of these are true:
