@@ -70,4 +70,5 @@ In progress:
   profile integration slice passed 756 tests; the reason integration slice
   passed 966 tests including subprocess cold starts; the reflection integration
   slice passed 815 tests and cold imports; the memory/source cross-module slice
-  passed 1280 tests; Pyright reported 0 errors and 0 warnings.
+  passed 1280 tests, followed by the complete 2464-test suite; Pyright reported
+  0 errors and 0 warnings.
