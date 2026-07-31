@@ -60,6 +60,9 @@ In progress:
 - daemon chat now receives the graph-owned memory, profile, reflection, trace,
   and thread-storage collaborators; its tool runtime cannot rebuild reflection
   persistence from a project root;
+- daemon memory curation, reflection scheduling, and reason scheduling now
+  receive the same graph-owned backend, repositories, outbox, plans, and trace
+  recorder instead of rebuilding those persistence collaborators;
 - trace repositories and services no longer resolve a default backend;
   application-owned composition receives resolved paths and the selected
   authority backend explicitly, and an AST gate prevents the repository from
@@ -120,3 +123,5 @@ In progress:
   Pyright clean.
   The notification delivery split passed 105 focused tests.
   The notification module-split slice passed 76 tests with Pyright clean.
+  The daemon worker graph-injection slice passed 793 tests; Pyright reported
+  0 errors and 0 warnings.

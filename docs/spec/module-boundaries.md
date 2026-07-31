@@ -125,6 +125,11 @@ collaborators from that graph. Nested chat/tool constructors may accept those
 narrow collaborators, but must not resolve a backend or compose a second
 repository graph after injection.
 
+Daemon curation, reflection, reasoning, and notification workers follow the
+same rule: process composition supplies their backend, repositories, outbox,
+plans, and trace recorder from the existing graph. A worker must not select a
+second authority after those collaborators have been supplied.
+
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.

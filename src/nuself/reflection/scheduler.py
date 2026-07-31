@@ -34,7 +34,7 @@ from nuself.persona.audit import write_persona_audit
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import StorageCollection, get_default_backend
+from nuself.storage import StorageBackend, StorageCollection, get_default_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 
@@ -143,10 +143,19 @@ class CandidateListOutput(BaseModel):
 class ReflectionScheduler:
     """Decides when the daemon should run a self-reflection cycle."""
 
-    def __init__(self, project_root: Path | None = None, config: ReflectionSettings | None = None) -> None:
+    def __init__(
+        self,
+        project_root: Path | None = None,
+        config: ReflectionSettings | None = None,
+        *,
+        backend: StorageBackend | None = None,
+        repository: ReflectionRepository | None = None,
+        outbox: NotificationOutbox | None = None,
+        trace_recorder: TraceRecorder | None = None,
+    ) -> None:
         paths = runtime_paths(project_root)
         self._project_root = paths.project_root
-        backend = get_default_backend(project_root)
+        selected_backend = backend or get_default_backend(project_root)
 
         if config is not None:
             self._config = config
@@ -154,12 +163,20 @@ class ReflectionScheduler:
             system_config = ConfigSystem.load(project_root=project_root)
             self._config = system_config.reflection
 
-        self._schedule_collection = backend.collection("scheduler_state")
-        self._reflection_repo = ReflectionRepository(
-            paths,
-            backend=backend,
+        self._schedule_collection = selected_backend.collection(
+            "scheduler_state"
         )
-        self._outbox = NotificationOutbox(paths, backend)
+        self._reflection_repo = repository or ReflectionRepository(
+            paths,
+            backend=selected_backend,
+        )
+        self._outbox = outbox or NotificationOutbox(
+            paths,
+            selected_backend,
+        )
+        self._trace_recorder = trace_recorder or TraceRecorder(
+            TraceRepository(paths, backend=selected_backend)
+        )
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
         if now is None:
@@ -253,11 +270,7 @@ class ReflectionScheduler:
                     f"Below persona discussion threshold ({self._config.gate.persona_discussion_threshold}), no discussion triggered"
                 )
 
-            paths = runtime_paths(self._project_root)
-            backend = get_default_backend(self._project_root)
-            TraceRecorder(
-                TraceRepository(paths, backend=backend)
-            ).record_reflection_created(
+            self._trace_recorder.record_reflection_created(
                 reflection_id=entry.id,
                 title=entry.title,
                 body=entry.body,

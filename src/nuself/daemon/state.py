@@ -27,7 +27,7 @@ from nuself.notification import (
     NotificationDeliveryLoop,
 )
 from nuself.notification.composition import build_notification_adapters
-from nuself.reason import ReasonScheduler
+from nuself.reason import ReasonScheduler, ReasonService
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.events import EventPublisher
 
@@ -90,11 +90,29 @@ class DaemonState:
         )
 
         config = ConfigSystem.load(project_root=project_root)
-        self.memory_curator = MemoryCurator(project_root)
+        self.memory_curator = MemoryCurator(
+            project_root,
+            thread_store=ThreadStore(
+                paths.project_root,
+                backend=self.application.backend,
+            ),
+            repository=self.application.memory.entries,
+            candidate_repository=self.application.memory.candidates,
+            profile_repository=self.application.memory.profile,
+            trace_recorder=self.application.trace.recorder,
+            plan_store=self.application.memory.curator_plans,
+            backend=self.application.backend,
+        )
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
         )
-        self.reflection_scheduler = ReflectionScheduler(project_root)
+        self.reflection_scheduler = ReflectionScheduler(
+            project_root,
+            backend=self.application.backend,
+            repository=self.application.reflection,
+            outbox=self.application.notifications,
+            trace_recorder=self.application.trace.recorder,
+        )
         self.reflection_check_interval_seconds: float = (
             config.daemon.reflection_scheduler.check_interval_seconds
         )
@@ -157,6 +175,12 @@ class DaemonState:
                 interval_seconds=self.reason_scheduler_interval_seconds,
                 readonly_tools=capabilities.readonly_tools,
                 langchain_models=capabilities.endpoints,
+                repository=self.application.reason,
+                service=ReasonService(
+                    self.project_root,
+                    repository=self.application.reason,
+                    trace_recorder=self.application.trace.recorder,
+                ),
             )
             self._worker_supervisor.start("reason_scheduler")
 

@@ -13,7 +13,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   and one application graph for both CLI and daemon process surfaces, including
   normal, interrupted, and exceptional teardown. Daemon chat and its tool
   runtime now receive graph-owned memory, profile, reflection, trace, and
-  thread-storage collaborators instead of rebuilding them. Trace
+  thread-storage collaborators instead of rebuilding them. Daemon curation,
+  reflection, and reasoning workers reuse that graph's backend, repositories,
+  outbox, recovery plans, and trace recorder. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

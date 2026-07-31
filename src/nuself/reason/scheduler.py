@@ -35,11 +35,12 @@ class ReasonScheduler:
         *,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+        repository: ReasonRepository | None = None,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
         self._service = service or ReasonService(project_root)
-        self._repository = ReasonRepository(
+        self._repository = repository or ReasonRepository(
             runtime_paths(project_root),
             backend=get_default_backend(project_root),
         )
