@@ -220,6 +220,11 @@ policy and model adapters, never persistence or authority selection.
 Its structured model contract, cursor wire format, settings, and result DTO
 belong to `memory.curator_contract`; `memory.curator` owns only workflow
 orchestration and may re-export nothing merely for legacy import convenience.
+Reason-output section, chunk, manifest, progress, path, and planner contracts
+belong to `reason.output_contracts`, including their strict wire codecs.
+`reason.output` owns export planning, persistence, composition, and rendering
+workflow and imports those contracts; it must not define the durable schemas
+inline.
 
 Reason operations are composed by `application.reason`. Process surfaces must
 reuse that factory so repository, workspace, trace, prompt, and optional

@@ -9,7 +9,7 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.logs import read_log_events
-from nuself.reason.output import (
+from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
 )

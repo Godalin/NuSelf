@@ -27,7 +27,7 @@ from nuself.persona.definition import (
     load_persona_definitions,
 )
 from nuself.profile.repository import ProfileItemRepository
-from nuself.reason.output import SectionPlanner
+from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.events import EventPublisher

@@ -12,7 +12,7 @@ from nuself.config import runtime_paths
 from nuself.logs import read_log_events
 from nuself.storage import get_default_backend
 from nuself.reason.domain import ReasoningStep, ReasoningThread
-from nuself.reason.output import (
+from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
     ReasonOutputSection,

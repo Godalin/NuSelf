@@ -13,7 +13,8 @@ from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.reason.audit import write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
-from nuself.reason.output import ReasonOutputService, SectionPlanner
+from nuself.reason.output import ReasonOutputService
+from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.jobs import JobSink

@@ -29,12 +29,12 @@ from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
     build_reason_job_definition_registry,
 )
-from nuself.reason.output import (
+from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputProgress,
     ReasonOutputSection,
-    ReasonOutputService,
 )
+from nuself.reason.output import ReasonOutputService
 from nuself.reason.service import ReasonService
 from nuself.reason.audit import (
     report_reason_failure,

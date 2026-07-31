@@ -8,7 +8,7 @@ from nuself.application.composition import ApplicationGraph
 from nuself.memory.query import MemoryQueryService
 from nuself.persona.tools import build_persona_tools
 from nuself.persona.definition import load_persona_definitions
-from nuself.reason.output import SectionPlanner
+from nuself.reason.output_contracts import SectionPlanner
 from nuself.application.reason import compose_reason_service
 from nuself.application.thread import compose_thread_store
 from nuself.runtime.events import EventPublisher

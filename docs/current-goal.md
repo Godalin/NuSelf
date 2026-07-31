@@ -22,7 +22,8 @@ Current working branch for v0.3.1.
 4. Extract narrow cross-domain ports and shared contracts. In progress.
 5. Remove agent/domain dependencies on CLI/TUI presentation. Complete.
 6. Split oversized cross-cutting modules along actual ownership. In progress;
-   final audit pending.
+   the final audit found reason-output durable contracts mixed with export
+   workflow; those contracts now live in `reason.output_contracts`.
 7. Run complete gates and close the goal with requirement-by-requirement
    dependency evidence.
 
@@ -43,6 +44,10 @@ Current working branch for v0.3.1.
 - `PrivateWorkspaceStore` now receives `RuntimePaths`, and daemon export
   composition injects it before worker startup. Its focused workspace/export
   slice passed 80 tests and Pyright clean.
+- Reason-output durable DTOs and strict codecs now live in
+  `reason.output_contracts`; `reason.output` contains only workflow and its
+  local rendering/planning helpers. The reason/daemon-export/agent/chat slice
+  passed 639 tests and Pyright clean.
 
 ## Completion Standard
 

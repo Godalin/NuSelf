@@ -47,7 +47,7 @@ from nuself.logs import runtime_event_log_sink
 from nuself.memory.audit import run_memory_observed
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.reason.output import SectionPlanner
+from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.persona.definition import PersonaDefinition

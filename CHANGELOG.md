@@ -72,6 +72,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   fallback workspace authority. Workspace storage itself now receives resolved
   runtime paths, and the daemon export worker borrows that store from process
   composition instead of creating it during startup.
+  Reason-output section, chunk, manifest, progress, path, and planner schemas
+  now live in a dedicated strict contract module, separate from export
+  persistence and composition workflow.
   Notification delivery orchestration is now
   separated from outbox persistence and consumes an injected delivery plan.
   Memory persistence and query components now

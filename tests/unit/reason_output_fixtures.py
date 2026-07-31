@@ -5,10 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.config import runtime_paths
-from nuself.reason.output import (
-    ReasonOutputService as _ReasonOutputService,
-    SectionPlanner,
-)
+from nuself.reason.output import ReasonOutputService as _ReasonOutputService
+from nuself.reason.output_contracts import SectionPlanner
 from nuself.runtime.job_definitions import JobDefinitionRegistry
 from nuself.runtime.jobs import JobSink
 from nuself.reason.service import ReasonService

@@ -431,6 +431,21 @@ def test_reason_output_does_not_construct_workspace_authority() -> None:
     ] == []
 
 
+def test_reason_output_contracts_are_separate_from_workflow() -> None:
+    workflow_path = _SOURCE_ROOT / "reason" / "output.py"
+    workflow = ast.parse(workflow_path.read_text(encoding="utf-8"))
+    workflow_classes = {
+        node.name
+        for node in workflow.body
+        if isinstance(node, ast.ClassDef)
+    }
+    assert workflow_classes == {"ReasonOutputService"}
+    assert (
+        _SOURCE_ROOT / "reason" / "output_contracts.py"
+    ).is_file()
+    assert "nuself.reason.output_contracts" in _imports(workflow_path)
+
+
 def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "notification" / "__init__.py"
     forbidden = {

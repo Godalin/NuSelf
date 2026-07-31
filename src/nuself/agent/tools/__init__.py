@@ -18,7 +18,7 @@ from nuself.agent.tools.workspace import (
 )
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.reason.output import SectionPlanner
+from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
