@@ -45,8 +45,9 @@ runtime events and request confirmation through injected ports. Terminal
 rendering, daemon activity transport, tests, and a future web frontend are
 adapters over those contracts; backend modules do not import terminal UI code.
 
-Conversation execution lives under `nuself.agent.chat`. LangGraph coordinates
-stateful turns and LangChain supplies model and tool abstractions. NuSelf-owned
+Conversation execution lives under `nuself.agent.chat`. A direct typed NuSelf
+pipeline coordinates context, response, state update, and compression;
+LangChain supplies the single framework-native model/tool graph. NuSelf-owned
 code adds domain semantics such as personal-memory retrieval, evidence
 handling, persona discussion, and response presentation.
 

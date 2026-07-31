@@ -41,7 +41,7 @@ from nuself.llm import (
     redacted_llm_diagnostic,
 )
 class ConversationResponseService(Protocol):
-    """Typed response capability consumed by the conversation graph."""
+    """Typed response capability consumed by the conversation pipeline."""
 
     def complete(
         self,

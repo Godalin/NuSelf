@@ -315,7 +315,7 @@ Projection failure remains secondary, but the authoritative agent error is not
 allowed to erase evidence that a tool already ran. Public tool-log snapshots
 retain the existing `metadata.result` / `metadata.error` wire contract.
 
-`ConversationGraphRuntime` runs a small LangGraph workflow with four nodes:
+`ConversationGraphRuntime` runs one direct typed pipeline with four stages:
 
 1. **prepare_context** — assemble durable context (memory, thread state, skills)
 2. **respond** — delegate to `create_agent` with LangChain-native tool calling and structured output
@@ -323,7 +323,7 @@ retain the existing `metadata.result` / `metadata.error` wire contract.
 4. **compression** — summarize when the message window grows past the trigger threshold
 
 The `nuself.agent.chat` package composes focused collaborators rather than
-implementing every node directly:
+implementing every stage directly:
 
 - `ConversationContextPreparer` owns durable-context retrieval and prompt-window
   message filtering for **prepare_context**.
@@ -344,16 +344,18 @@ implementing every node directly:
 - `ConversationToolRuntime` owns tool registration, service-skill loading,
   prompt-facing tool metadata, and service-tool call logging.
 
-`ConversationGraphRuntime` exposes explicit node methods that delegate to these
-collaborators. They are testable graph seams, not compatibility adapters. The
-runtime remains responsible for graph wiring and turn-level error/trace
-boundaries.
+`ConversationGraphRuntime` exposes explicit stage methods that delegate to these
+collaborators. They are testable pipeline seams, not compatibility adapters.
+The runtime remains responsible for stage sequencing and turn-level error
+boundaries. A chat-turn provenance trace is projected only after the thread
+store commits the completed reply; trace projection never runs inside the
+thread update callback or its per-thread lock.
 
 The package root is the stable public import boundary. Runtime implementation,
 context preparation, state management, persona orchestration, conversation
 types, and thread persistence live in separate modules beneath it.
 
-Tool calling is delegated to `create_agent` inside the **respond** node.
+Tool calling is delegated to `create_agent` inside the **respond** stage.
 Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
 
 LangChain agent execution must return `structured_response` produced through

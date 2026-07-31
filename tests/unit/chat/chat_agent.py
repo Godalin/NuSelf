@@ -20,6 +20,7 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.chat import (
     ChatAgentSettings,
+    ChatResult,
     ChatStructuredOutput,
     ConversationTurnState,
     ThreadMessage,
@@ -634,7 +635,7 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
 
 
 
-def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path: Path) -> None:
+def test_conversation_runtime_executes_direct_typed_stages(tmp_path: Path) -> None:
     response_service = StaticResponseService(
         ChatStructuredOutput(
             answer="Graph driver reply.",
@@ -664,12 +665,16 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
     ]
+    assert _trace_repository(tmp_path).list_traces(kind="chat_turn") == []
+
+    chat_result = runtime.respond("committed runtime", thread_id="committed")
     traces = _trace_repository(tmp_path).list_traces(kind="chat_turn")
     assert len(traces) == 1
     trace = traces[0]
-    assert trace.thread_id == "graph"
+    assert chat_result.trace_id == trace.id
+    assert trace.thread_id == "committed"
     assert trace.evidence_refs == ("mem_graph",)
-    assert trace.inputs == ("graph runtime",)
+    assert trace.inputs == ("committed runtime",)
     assert trace.outputs == ("Graph driver reply.",)
     assert trace.participants == ("chat_agent",)
     assert trace.metadata["node_trace"] == tuple(node_trace)
@@ -786,7 +791,12 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
 
     agent = ConversationGraphRuntime(
         tmp_path,
-        response_service=FakeResponseService(),
+        response_service=StaticResponseService(
+            ChatStructuredOutput(
+                answer="uncommitted reply",
+                evidence_references=["memory-1"],
+            )
+        ),
         thread_store=FailingSaveThreadStore(tmp_path),
     )
 
@@ -806,6 +816,7 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
         "turn.failed",
     ]
     assert lifecycle[-1].error == "thread storage unavailable"
+    assert _trace_repository(tmp_path).list_traces(kind="chat_turn") == []
     [pending] = ThreadStore(tmp_path).load("default").pending_turns
     assert pending.turn_id == "turn-1"
 
@@ -1888,9 +1899,10 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
     runtime._trace_recorder = TraceRecorder(  # pyright: ignore[reportPrivateUsage]
         _trace_repository(tmp_path)
     )
-    response = ChatStructuredOutput(
+    result = ChatResult(
         answer="completed answer",
-        evidence_references=["memory-1"],
+        thread_id="thread-1",
+        evidence_references=("memory-1",),
     )
 
     with pytest.warns(
@@ -1899,13 +1911,13 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
     ):
         trace_id = runtime._record_chat_turn_trace(  # pyright: ignore[reportPrivateUsage]
             user_message="hello",
-            final_response=response,
+            result=result,
             thread_id="thread-1",
             node_trace=("prepare_context", "respond"),
         )
 
     assert trace_id is None
-    assert response.answer == "completed answer"
+    assert result.answer == "completed answer"
 
 
 def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> None:

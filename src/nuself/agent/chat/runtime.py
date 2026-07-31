@@ -1,4 +1,4 @@
-"""Memory-aware LangGraph-backed chat agent."""
+"""Memory-aware chat pipeline around a LangChain agent."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def trace_summary(text: str, limit: int = 240) -> str:
 
 
 # ------------------------------------------------------------------
-# LangGraph graph driver
+# Conversation pipeline
 # ------------------------------------------------------------------
 
 
@@ -254,6 +254,13 @@ class ConversationGraphRuntime:
                     duration_ms=duration_ms,
                 )
             else:
+                trace_id = self._record_chat_turn_trace(
+                    user_message=message,
+                    result=result,
+                    thread_id=thread_id,
+                    node_trace=node_trace,
+                )
+                result = replace(result, trace_id=trace_id)
                 self._publish_turn_event(
                     event="turn.completed",
                     message="chat turn completed",
@@ -339,12 +346,6 @@ class ConversationGraphRuntime:
         )
         updated = _require_thread_state(turn_state.updated_thread_state)
         final_response = _require_final_response(turn_state.final_response)
-        trace_id = self._record_chat_turn_trace(
-            user_message=message,
-            final_response=final_response,
-            thread_id=thread_id,
-            node_trace=turn_state.node_trace,
-        )
         state = updated
         return state, ChatResult(
             answer=final_response.answer,
@@ -352,31 +353,30 @@ class ConversationGraphRuntime:
             evidence_references=tuple(final_response.evidence_references),
             confidence=final_response.confidence,
             epistemic_status=final_response.epistemic_status,
-            trace_id=trace_id,
         ), turn_state.node_trace
 
     def _record_chat_turn_trace(
         self,
         *,
         user_message: str,
-        final_response: ChatStructuredOutput,
+        result: ChatResult,
         thread_id: str,
         node_trace: tuple[ConversationNodeName, ...],
     ) -> str | None:
-        if not final_response.evidence_references:
+        if not result.evidence_references:
             return None
-        evidence_refs = list(final_response.evidence_references)
+        evidence_refs = list(result.evidence_references)
         trace = run_memory_observed(
             lambda: self._trace_recorder.record_chat_turn(
                 title=f"Chat turn cited {evidence_refs[0]}",
                 summary="Assistant reply used retrieved context cited by the final response.",
                 user_input=trace_summary(user_message),
-                assistant_output=trace_summary(final_response.answer),
+                assistant_output=trace_summary(result.answer),
                 thread_id=thread_id,
                 evidence_refs=evidence_refs,
                 participants=["chat_agent"],
                 decision_points=["Recorded because the final response cited evidence references."],
-                metadata={"node_trace": list(node_trace), "epistemic_status": final_response.epistemic_status},
+                metadata={"node_trace": list(node_trace), "epistemic_status": result.epistemic_status},
             ),
             event="chat_trace_recording_failed",
             project_root=self._project_root,
@@ -385,7 +385,7 @@ class ConversationGraphRuntime:
         return trace.id if trace is not None else None
 
     # ------------------------------------------------------------------
-    # LangGraph node wrappers
+    # Typed stage wrapper
     # ------------------------------------------------------------------
 
     def _run_node(
@@ -409,7 +409,7 @@ class ConversationGraphRuntime:
             ) from exc
 
     # ------------------------------------------------------------------
-    # Graph node methods
+    # Pipeline stage methods
     # ------------------------------------------------------------------
 
     def prepare_context_node(self, state: ConversationTurnState) -> ConversationNodeResult:

@@ -105,7 +105,7 @@ class ChatResult:
 
 @dataclass(frozen=True)
 class ConversationTurnState:
-    """Typed state passed between conversation runtime nodes."""
+    """Typed state passed between conversation pipeline stages."""
 
     thread_id: str
     persisted_state: ThreadState
@@ -138,13 +138,13 @@ class ConversationTurnState:
 
 @dataclass(frozen=True)
 class ConversationNodeResult:
-    """Result from one graph-ready conversation runtime node."""
+    """Result from one conversation pipeline stage."""
 
     state: ConversationTurnState
 
 
 class ConversationGraphRuntimeError(RuntimeError):
-    """Raised when the conversation graph cannot complete a turn."""
+    """Raised when the conversation pipeline cannot complete a turn."""
 
     def __init__(
         self,

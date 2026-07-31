@@ -19,7 +19,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   model/tool loop while NuSelf stages run as a direct typed pipeline. Stable
   turns now persist an internal pending marker before model/tool execution and
   clear it with the completed reply; interrupted or failed commits fail closed
-  on retry instead of replaying a possibly committed mutation.
+  on retry instead of replaying a possibly committed mutation. Chat-turn trace
+  projection now runs only after the completed thread state commits, outside
+  the per-thread lock, so a failed save cannot leave provenance for a reply
+  that was never persisted.
 - Agent tools now use one orthogonal declarative policy path for identity,
   ownership, effects, confirmation, observation, and audit. The old
   effectful approval wrapper and ad-hoc StructuredTool factories are removed.

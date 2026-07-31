@@ -694,21 +694,22 @@ accepts an instance-scoped publisher; `DaemonState` injects its existing
 publisher, while a standalone agent composes a private publisher with an audit
 subscriber.
 
-- A new logical turn publishes `chat/turn.started` immediately before graph
+- A new logical turn publishes `chat/turn.started` immediately before pipeline
   execution.
 - `chat/turn.completed` is published only after `ThreadStore.update()` has
-  atomically saved the assistant result. Its payload includes duration and
-  node-trace metadata.
+  atomically saved the assistant result. Optional chat-turn trace projection
+  also occurs after that commit and outside the per-thread lock. Its payload
+  includes duration and stage-trace metadata.
 - A completed `turn_id` publishes `chat/turn.reused` after the locked update
-  returns, without publishing started or rerunning graph/tool work.
-- Any exception escaping load, graph execution, validation, or persistence
+  returns, without publishing started or rerunning pipeline/tool work.
+- Any exception escaping load, pipeline execution, validation, or persistence
   publishes `chat/turn.failed` with the compact exception chain, then re-raises
   the original exception unchanged. A failure never publishes completed.
 - All lifecycle envelopes run under one
   `source="chat_runtime"` context containing the thread and optional turn ID.
   Their audit and daemon live-activity projections retain the envelope ID and
   correlation.
-- Event publication is secondary. Projection failure cannot prevent graph
+- Event publication is secondary. Projection failure cannot prevent pipeline
   execution, replace a completed response, mask the original failure, or alter
   thread persistence.
 
