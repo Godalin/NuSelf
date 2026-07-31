@@ -7,6 +7,7 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
+from nuself.application import compose_trace_services
 from nuself.agent.tools.memory import build_memory_tool_set
 from nuself.agent.tools.reason import build_reason_tools
 from nuself.agent.tools.reflection import build_reflection_tools
@@ -16,6 +17,7 @@ from nuself.agent.tools.workspace import (
     build_workspace_tools,
     build_workspace_tools_from_provider,
 )
+from nuself.config import runtime_paths
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.tools import build_persona_tools
@@ -24,7 +26,6 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
 from nuself.storage import get_default_backend
-from nuself.trace.composition import build_trace_query_service
 
 __all__ = [
     "build_langchain_chat_tools",
@@ -60,10 +61,10 @@ def build_langchain_chat_tools(
             section_planner=section_planner,
         )
         + build_trace_tools(
-            build_trace_query_service(
-                project_root,
-                backend=get_default_backend(project_root),
-            )
+            compose_trace_services(
+                runtime_paths(project_root),
+                get_default_backend(project_root),
+            ).query
         )
         + build_selves_tools(selves_consult)
         + build_persona_tools(project_root)

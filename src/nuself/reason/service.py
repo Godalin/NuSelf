@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.clock import utc_now_iso
+from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.reason.audit import run_reason_observed, write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
@@ -19,7 +20,6 @@ from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.trace.composition import build_trace_recorder
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
@@ -83,10 +83,10 @@ class ReasonService:
         self._project_root = effective_root
         self._workspace_store = workspace_store or PrivateWorkspaceStore(effective_root, scope="reason")
         self._trace_recorder: TraceRecorder | None = trace_recorder if trace_recorder is not None else (
-            build_trace_recorder(
-                effective_root,
-                backend=get_default_backend(effective_root),
-            )
+            compose_trace_services(
+                runtime_paths(effective_root),
+                get_default_backend(effective_root),
+            ).recorder
         )
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer

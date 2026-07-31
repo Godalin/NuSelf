@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from nuself.application import compose_trace_services
 from nuself.agent.chat import ThreadStore
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
@@ -22,6 +23,7 @@ from nuself.cli.commands.persona import (
     handle_persona_enable,
     resolve_persona_id,
 )
+from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
@@ -43,7 +45,6 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
 )
 from nuself.storage import get_default_backend
-from nuself.trace.composition import build_trace_query_service
 from nuself.trace.repository import TraceNotFound
 from nuself.tui.memory import (
     render_candidate_detail,
@@ -297,10 +298,10 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 
 
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
-    service = build_trace_query_service(
-        project_root,
-        backend=get_default_backend(project_root),
-    )
+    service = compose_trace_services(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    ).query
     if command in {"", "list"}:
         traces = service.list_traces()
         if not traces:

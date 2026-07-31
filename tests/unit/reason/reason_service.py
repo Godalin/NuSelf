@@ -11,6 +11,8 @@ import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import ValidationError
 
+from nuself.application import compose_trace_services
+from nuself.config import runtime_paths
 from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep
 from nuself.reason.errors import (
@@ -21,7 +23,6 @@ from nuself.reason.errors import (
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.storage import get_default_backend
-from nuself.trace.composition import build_trace_query_service
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -282,10 +283,10 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
     thread = service.start_thread("What should be traced?", evidence_refs=("memory:abc",))
 
-    traces = build_trace_query_service(
-        tmp_path,
-        backend=get_default_backend(tmp_path),
-    ).list_traces(kind="reason_thread")
+    traces = compose_trace_services(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    ).query.list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == (f"reason:{thread.id}",)
     assert traces[0].evidence_refs == ()
@@ -296,10 +297,10 @@ def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) 
 
     thread = service.start_thread("Injected repository should still trace")
 
-    traces = build_trace_query_service(
-        tmp_path,
-        backend=get_default_backend(tmp_path),
-    ).list_traces(kind="reason_thread")
+    traces = compose_trace_services(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    ).query.list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == (f"reason:{thread.id}",)
 
@@ -492,10 +493,10 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
     advanced = service.advance_thread(thread.id, step=step)
 
     steps = service.list_steps(thread.id)
-    traces = build_trace_query_service(
-        tmp_path,
-        backend=get_default_backend(tmp_path),
-    ).list_traces(kind="reason_step")
+    traces = compose_trace_services(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    ).query.list_traces(kind="reason_step")
     assert len(traces) == 1
     assert traces[0].outputs == (
         f"reason:{advanced.id}",

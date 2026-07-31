@@ -44,9 +44,11 @@ unrecorded allowlist is forbidden.
 ## Composition Ownership
 
 Scope and paths are resolved once by an outer composition root. Storage is
-opened once for that authority. Domain repositories and services receive the
-backend, collections, paths, clocks, sinks, and cross-domain capabilities they
-use as explicit constructor dependencies.
+opened once for that authority. Domain repositories receive both the selected
+`StorageBackend` and resolved `RuntimePaths` as explicit constructor
+dependencies; accepting a project root and resolving either dependency inside
+the repository is forbidden. Services receive repositories, clocks, sinks,
+and cross-domain capabilities explicitly.
 
 `AuthorityRuntime` is the shared authority-lifetime owner. Construction takes
 already-resolved `RuntimePaths` and one closeable `StorageBackend`; the public
@@ -63,11 +65,12 @@ call them. Direct CLI mode and daemon mode must construct the same service
 graph; transport and lifecycle ownership are their only differences.
 
 The trace package is the first migrated domain boundary. `TraceRepository`
-requires an explicit `StorageBackend`, and `TraceRecorder` and
-`TraceQueryService` require an explicit repository. Outer composition calls
-the package-owned `build_trace_*` factories with the selected authority's
-backend. Reintroducing implicit backend resolution in the repository is
-forbidden and covered by an executable architecture test.
+requires an explicit `StorageBackend` and `RuntimePaths`, and `TraceRecorder`
+and `TraceQueryService` require an explicit repository. `nuself.application`
+owns the factory that assembles those concrete objects into immutable
+`TraceServices`; the domain package does not own an authority-resolving
+factory. Reintroducing backend or path resolution in the trace package is
+forbidden and covered by executable architecture tests.
 
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete

@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import sys
 from typing import cast
 
+from nuself.application import TraceServices, compose_trace_services
 from nuself.cli.commands.output import print_ansi
+from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
-from nuself.trace.composition import (
-    build_trace_query_service,
-    build_trace_repository,
-)
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import (
     TraceNotFound,
@@ -40,11 +39,15 @@ def _trace_visibility_filter(
     return "default"
 
 
+def _trace_services(project_root: Path | None) -> TraceServices:
+    return compose_trace_services(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    )
+
+
 def handle_trace_list(args: argparse.Namespace) -> int:
-    traces = build_trace_query_service(
-        args.project_root,
-        backend=get_default_backend(args.project_root),
-    ).list_traces(
+    traces = _trace_services(args.project_root).query.list_traces(
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
     )
@@ -60,10 +63,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 
 
 def handle_trace_show(args: argparse.Namespace) -> int:
-    repository = build_trace_repository(
-        args.project_root,
-        backend=get_default_backend(args.project_root),
-    )
+    repository = _trace_services(args.project_root).repository
     try:
         trace = repository.resolve_trace(args.trace_id)
     except TraceNotFound:
@@ -80,10 +80,7 @@ def handle_trace_show(args: argparse.Namespace) -> int:
 
 
 def handle_trace_search(args: argparse.Namespace) -> int:
-    traces = build_trace_query_service(
-        args.project_root,
-        backend=get_default_backend(args.project_root),
-    ).search_traces(
+    traces = _trace_services(args.project_root).query.search_traces(
         args.query,
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
@@ -100,10 +97,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
 
 
 def handle_trace_related(args: argparse.Namespace) -> int:
-    service = build_trace_query_service(
-        args.project_root,
-        backend=get_default_backend(args.project_root),
-    )
+    service = _trace_services(args.project_root).query
     traces = service.traces_for_artifact(
         args.artifact_ref,
         visibility=_trace_visibility_filter(args.visibility),
@@ -139,9 +133,6 @@ def handle_trace_related(args: argparse.Namespace) -> int:
 
 
 def handle_trace_reindex(args: argparse.Namespace) -> int:
-    path = build_trace_repository(
-        args.project_root,
-        backend=get_default_backend(args.project_root),
-    ).reindex()
+    path = _trace_services(args.project_root).repository.reindex()
     print(f"Rebuilt trace index: {path}")
     return 0

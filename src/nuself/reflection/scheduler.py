@@ -10,6 +10,7 @@ from typing import Literal, cast
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from nuself.application import compose_trace_services
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import runtime_paths
@@ -29,7 +30,6 @@ from nuself.persona.audit import write_persona_audit
 from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import StorageCollection, get_default_backend
-from nuself.trace.composition import build_trace_recorder
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
 
@@ -244,10 +244,10 @@ class ReflectionScheduler:
                     f"Below persona discussion threshold ({self._config.gate.persona_discussion_threshold}), no discussion triggered"
                 )
 
-            build_trace_recorder(
-                self._project_root,
-                backend=get_default_backend(self._project_root),
-            ).record_reflection_created(
+            compose_trace_services(
+                runtime_paths(self._project_root),
+                get_default_backend(self._project_root),
+            ).recorder.record_reflection_created(
                 reflection_id=entry.id,
                 title=entry.title,
                 body=entry.body,

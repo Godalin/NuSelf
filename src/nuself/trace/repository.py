@@ -8,7 +8,7 @@ import threading
 from typing import Literal, cast
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.derived import write_derived_index
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
@@ -29,14 +29,14 @@ class TraceRepository:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        paths: RuntimePaths,
         *,
         backend: StorageBackend,
     ) -> None:
         self._traces = backend.collection("trace_nodes")
         self._links = backend.collection("trace_edges")
         self._lock = threading.RLock()
-        self._paths = runtime_paths(project_root)
+        self._paths = paths
 
     def save_trace(self, trace: ThoughtTrace) -> ThoughtTrace:
         with self._lock:

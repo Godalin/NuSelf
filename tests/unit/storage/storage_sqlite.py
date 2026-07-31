@@ -28,6 +28,8 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.memory.source_repository import SourceRepository
+from nuself.application import compose_trace_services
+from nuself.config import runtime_paths
 from nuself.notification import NotificationOutbox
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository
@@ -42,7 +44,6 @@ from nuself.storage import (
     reset_default_backend,
     set_default_backend,
 )
-from nuself.trace.composition import build_trace_repository
 from nuself.storage_sqlite import (
     COLLECTION_NAMES,
     SqliteStorageBackend,
@@ -647,7 +648,7 @@ def test_repositories_share_the_project_default_backend(
     ProfileItemRepository(tmp_path)
     ReasonRepository(tmp_path)
     ReflectionRepository(tmp_path)
-    build_trace_repository(tmp_path, backend=backend)
+    compose_trace_services(runtime_paths(tmp_path), backend)
 
     assert calls == [tmp_path] * 7
 

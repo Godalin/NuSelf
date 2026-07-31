@@ -78,13 +78,17 @@ def test_agent_does_not_depend_on_process_or_terminal_adapters() -> None:
     assert _violations(("agent",), _OUTER_ADAPTERS) == ()
 
 
-def test_migrated_trace_boundary_does_not_resolve_default_storage() -> None:
+def test_migrated_trace_package_does_not_resolve_authority() -> None:
     violations: list[str] = []
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
     for path in _package_files("trace"):
-        if (
-            "nuself.storage",
-            "get_default_backend",
-        ) in _from_imports(path):
-            violations.append(str(path.relative_to(_SOURCE_ROOT)))
+        for imported in _from_imports(path):
+            if imported in forbidden:
+                violations.append(
+                    f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+                )
 
     assert violations == []

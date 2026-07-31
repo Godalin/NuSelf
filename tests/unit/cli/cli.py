@@ -69,7 +69,10 @@ def _authority(workspace: Path) -> Path:
 
 def _trace_repository(workspace: Path) -> TraceRepository:
     root = _authority(workspace)
-    return TraceRepository(root, backend=get_default_backend(root))
+    return TraceRepository(
+        runtime_paths(root),
+        backend=get_default_backend(root),
+    )
 
 
 

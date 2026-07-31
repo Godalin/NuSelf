@@ -38,7 +38,8 @@ from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.agent.chat.thread import ThreadMessage, ThreadState, ThreadStore
 from nuself.agent.text import LangChainTextAgent, TextAgent
-from nuself.config import ConfigSystem
+from nuself.application import compose_trace_services
+from nuself.config import ConfigSystem, runtime_paths
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
@@ -62,7 +63,6 @@ from nuself.runtime.observability import (
     publish_observed_event,
 )
 from nuself.storage import get_default_backend
-from nuself.trace.composition import build_trace_recorder
 
 LOGGER = logging.getLogger(__name__)
 
@@ -124,10 +124,10 @@ class ConversationGraphRuntime:
         self._thread_store = thread_store or ThreadStore(project_root)
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
-        self._trace_recorder = build_trace_recorder(
-            project_root,
-            backend=get_default_backend(project_root),
-        )
+        self._trace_recorder = compose_trace_services(
+            runtime_paths(project_root),
+            get_default_backend(project_root),
+        ).recorder
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),

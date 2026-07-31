@@ -20,6 +20,7 @@ from nuself.agent.chat import (
 )
 from nuself.agent.chat import ConversationGraphRuntimeError
 from nuself.agent.tool_utils import tool_service_component
+from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
@@ -36,7 +37,10 @@ from nuself.trace.service import TraceRecorder
 
 
 def _trace_repository(root: Path) -> TraceRepository:
-    return TraceRepository(root, backend=get_default_backend(root))
+    return TraceRepository(
+        runtime_paths(root),
+        backend=get_default_backend(root),
+    )
 
 
 def _chat_tool(

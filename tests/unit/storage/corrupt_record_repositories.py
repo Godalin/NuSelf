@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.logs import LogComponent, read_log_events
 from nuself.notification import NotificationOutbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
@@ -45,11 +46,14 @@ def test_repository_lists_report_corrupt_records(
         result = NotificationOutbox(tmp_path, backend=backend).list()
     elif collection == "trace_nodes":
         result = TraceRepository(
-            tmp_path,
+            runtime_paths(tmp_path),
             backend=backend,
         ).list_traces()
     else:
-        result = TraceRepository(tmp_path, backend=backend).links_for(
+        result = TraceRepository(
+            runtime_paths(tmp_path),
+            backend=backend,
+        ).links_for(
             "trace_healthy"
         )
 

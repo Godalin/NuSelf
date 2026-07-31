@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from nuself.application import compose_trace_services
 from nuself.cli.commands.output import (
     print_ansi,
     resolve_handle,
@@ -12,6 +13,7 @@ from nuself.cli.commands.output import (
 )
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
+from nuself.config import runtime_paths
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     MODERATOR_PERSONA,
@@ -24,7 +26,6 @@ from nuself.persona.prompt_repo import (
 )
 from nuself.persona.audit import run_persona_observed
 from nuself.storage import get_default_backend
-from nuself.trace.composition import build_trace_recorder
 from nuself.tui.persona import render_persona_detail, render_persona_row
 from nuself.tui.render import TerminalTheme
 
@@ -68,10 +69,10 @@ def _record_lifecycle(
     action: str,
     persona: PersonaPrompt,
 ) -> None:
-    recorder = build_trace_recorder(
-        project_root,
-        backend=get_default_backend(project_root),
-    )
+    recorder = compose_trace_services(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    ).recorder
     method = getattr(recorder, f"record_persona_{action}")
 
     def record() -> object:

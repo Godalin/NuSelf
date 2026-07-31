@@ -5,12 +5,16 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
 from nuself.trace import ThoughtTrace, TraceNotFound, TraceRepository, TraceRecorder
 
 
 def _repository(root: Path) -> TraceRepository:
-    return TraceRepository(root, backend=get_default_backend(root))
+    return TraceRepository(
+        runtime_paths(root),
+        backend=get_default_backend(root),
+    )
 
 
 def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None:

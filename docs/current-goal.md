@@ -44,8 +44,10 @@ In progress:
   resolved paths and a closeable authority backend; process adapters can share
   this primitive without turning it into a domain service locator;
 - trace repositories and services no longer resolve a default backend;
-  package composition receives the selected authority backend explicitly, and
-  an AST gate prevents the repository from restoring hidden backend lookup;
+  application-owned composition receives resolved paths and the selected
+  authority backend explicitly, and an AST gate prevents the repository from
+  restoring hidden backend or path lookup;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
-  596 tests; Pyright reported 0 errors and 0 warnings.
+  600 tests after moving trace composition into the application layer;
+  Pyright reported 0 errors and 0 warnings.

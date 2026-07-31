@@ -8,7 +8,9 @@ from typing import Literal
 import pytest
 from langchain_core.messages import BaseMessage
 
+from nuself.application import compose_trace_services
 from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.config import runtime_paths
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.domain.memory import (
     MemoryEntry,
@@ -31,10 +33,6 @@ from nuself.memory.repository import (
 )
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import get_default_backend
-from nuself.trace.composition import (
-    build_trace_query_service,
-    build_trace_recorder,
-)
 
 
 def _stored_record(
@@ -1205,10 +1203,10 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
         agent=agent,
         thread_store=thread_store,
         repository=repository,
-        trace_recorder=build_trace_recorder(
-            tmp_path,
-            backend=get_default_backend(tmp_path),
-        ),
+        trace_recorder=compose_trace_services(
+            runtime_paths(tmp_path),
+            get_default_backend(tmp_path),
+        ).recorder,
     )
 
     with pytest.warns(RuntimeWarning) as captured:
@@ -1268,19 +1266,19 @@ def test_auto_accept_update_trace_retains_update_action(
         agent=agent,
         thread_store=thread_store,
         repository=repository,
-        trace_recorder=build_trace_recorder(
-            tmp_path,
-            backend=get_default_backend(tmp_path),
-        ),
+        trace_recorder=compose_trace_services(
+            runtime_paths(tmp_path),
+            get_default_backend(tmp_path),
+        ).recorder,
     )
 
     result = curator.run_once()
 
     assert result.updated == 1
-    [trace] = build_trace_query_service(
-        tmp_path,
-        backend=get_default_backend(tmp_path),
-    ).list_traces(
+    [trace] = compose_trace_services(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    ).query.list_traces(
         kind="memory_update"
     )
     assert trace.metadata["action"] == "update"
