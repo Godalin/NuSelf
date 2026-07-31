@@ -83,7 +83,7 @@ Required JSON shape:
   "outputs": [],
   "participants": [],
   "decision_points": [],
-  "thread_id": "default",
+  "conversation_id": "default",
   "visibility": "private",
   "created_at": "2026-05-18T12:34:56.000000+08:00",
   "metadata": {}

@@ -189,8 +189,8 @@ def test_chat_has_one_framework_native_agent_graph() -> None:
     ) in _from_imports(response)
 
 
-def test_thread_store_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "thread.py"
+def test_conversation_store_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "conversation.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
         ("nuself.storage", "get_default_backend"),

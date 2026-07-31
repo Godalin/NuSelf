@@ -91,7 +91,7 @@ Public/domain collections:
 | `source_documents` | ingested source metadata |
 | `source_chunks` | source retrieval chunks |
 | `persona_prompts` | persona definitions |
-| `chat_threads` | conversation state and archive status |
+| `conversations` | conversation state and archive status |
 | `reason_threads` | long-running reason threads |
 | `reason_steps` | reason steps |
 | `trace_nodes` | thought traces |

@@ -1,15 +1,15 @@
-"""Explicit ThreadStore composition helper for tests."""
+"""Explicit ConversationStore composition helper for tests."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.chat.thread import ThreadStore as _ThreadStore
+from nuself.conversation import ConversationStore as _ConversationStore
 from nuself.config import runtime_paths
 from nuself.storage import StorageBackend, get_default_backend
 
 
-class ThreadStore(_ThreadStore):
+class ConversationStore(_ConversationStore):
     """Test convenience wrapper with an isolated authority per project root."""
 
     def __init__(

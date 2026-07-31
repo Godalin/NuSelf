@@ -6,8 +6,8 @@ import stat
 
 from _pytest.monkeypatch import MonkeyPatch
 
-from nuself.agent.chat import ThreadMessage, ThreadState
-from thread_fixtures import ThreadStore
+from nuself.conversation import ConversationMessage, ConversationState
+from conversation_fixtures import ConversationStore
 from nuself.cli.repl import transcript
 from nuself.cli.repl.session import InteractiveSession
 
@@ -16,19 +16,19 @@ def test_transcript_module_owns_export_command_and_progress(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("default"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     assert session.start_index_for(tmp_path, "default") == 0
     store.save(
-        ThreadState(
-            thread_id="default",
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content="preserve literal token=example-value",
                 ),
-                ThreadMessage(role="assistant", content="hi"),
+                ConversationMessage(role="assistant", content="hi"),
             ],
         )
     )
@@ -59,14 +59,14 @@ def test_transcript_module_owns_export_command_and_progress(
         "preserve literal token=example-value"
         in transcript_path.read_text(encoding="utf-8")
     )
-    assert session.thread_ids_with_unexported_messages(tmp_path) == []
+    assert session.conversation_ids_with_unexported_messages(tmp_path) == []
 
 
 def test_invalid_export_option_does_not_create_transcript(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("default"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
 
     result = transcript.handle_interactive_export_command(

@@ -14,7 +14,6 @@ from nuself.application.runtime import (
     current_application_runtime,
     open_application_runtime,
 )
-from nuself.application.thread import compose_thread_store
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import (
     compose_reason_advancer,
@@ -42,7 +41,7 @@ from nuself.workspace import PrivateWorkspaceStore
 @dataclass(frozen=True)
 class _ChatTaskPayload:
     message: str
-    thread_id: str
+    conversation_id: str
     turn_id: str | None
 
 
@@ -89,7 +88,7 @@ class DaemonState:
 
         config = ConfigSystem.load(project_root=project_root)
         self.memory_curator = compose_memory_curator(self.application)
-        self.thread_store = compose_thread_store(self.application)
+        self.conversation_store = self.application.conversations
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
         )
@@ -103,6 +102,7 @@ class DaemonState:
             memory_repository=self.application.memory.entries,
             source_repository=self.application.memory.sources,
             profile_repository=self.application.memory.profile,
+            conversation_store=self.application.conversations,
         )
         self.reflection_check_interval_seconds: float = (
             config.daemon.reflection_scheduler.check_interval_seconds
@@ -136,9 +136,10 @@ class DaemonState:
         )
         self.scheduler = DaemonScheduler(
             {
-                "memory.scan": self._scan_memory_threads,
-                "memory.curate": self._curate_memory_thread,
+                "memory.scan": self._scan_memory_conversations,
+                "memory.curate": self._curate_memory_conversation,
                 "chat.turn": self._run_chat_task,
+                "conversation.compress": self._compress_conversation,
                 "reflection.check": self._check_reflection,
                 "reason.check": self._check_reasons,
                 "notification.deliver": self._deliver_notifications,
@@ -188,15 +189,15 @@ class DaemonState:
     def stop_background_tasks(self) -> None:
         self.scheduler.shutdown()
 
-    def request_memory_curation(self, thread_id: str) -> None:
-        """Admit one coalesced curator task for a persisted thread."""
+    def request_memory_curation(self, conversation_id: str) -> None:
+        """Admit one coalesced curator task for a persisted conversation."""
 
         self.scheduler.submit(
             DaemonTask(
                 "memory.curate",
-                f"memory.curate:{thread_id}",
-                f"thread:{thread_id}",
-                payload=thread_id,
+                f"memory.curate:{conversation_id}",
+                f"conversation:{conversation_id}",
+                payload=conversation_id,
             )
         )
 
@@ -204,30 +205,30 @@ class DaemonState:
         self,
         message: str,
         *,
-        thread_id: str,
+        conversation_id: str,
         turn_id: str | None,
     ) -> ChatResult:
-        """Run chat through its thread resource lane in a live daemon."""
+        """Run chat through its conversation resource lane in a live daemon."""
 
         if not self.scheduler.snapshot().running:
             result = self.conversation_runtime.respond(
                 message,
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 turn_id=turn_id,
             )
-            self.request_memory_curation(result.thread_id)
+            self.request_memory_curation(result.conversation_id)
             return result
         identity = (
-            f"chat.turn:{thread_id}:{turn_id}"
+            f"chat.turn:{conversation_id}:{turn_id}"
             if turn_id is not None
-            else f"chat.turn:{thread_id}:{uuid4().hex}"
+            else f"chat.turn:{conversation_id}:{uuid4().hex}"
         )
         submission = self.scheduler.submit(
             DaemonTask(
                 "chat.turn",
                 identity,
-                f"thread:{thread_id}",
-                payload=_ChatTaskPayload(message, thread_id, turn_id),
+                f"conversation:{conversation_id}",
+                payload=_ChatTaskPayload(message, conversation_id, turn_id),
                 priority=10,
             )
         )
@@ -243,20 +244,20 @@ class DaemonState:
             interval_seconds=interval,
         )
 
-    def _scan_memory_threads(self, task: DaemonTask) -> None:
+    def _scan_memory_conversations(self, task: DaemonTask) -> None:
         del task
-        thread_ids = sorted(
-            {*self.thread_store.list(), *self.thread_store.list_archived()}
+        conversation_ids = sorted(
+            {*self.conversation_store.list(), *self.conversation_store.list_archived()}
         )
-        for thread_id in thread_ids:
-            self.request_memory_curation(thread_id)
+        for conversation_id in conversation_ids:
+            self.request_memory_curation(conversation_id)
 
-    def _curate_memory_thread(self, task: DaemonTask) -> None:
-        thread_id = task.payload
-        if not isinstance(thread_id, str):
-            raise TypeError("memory curator task requires a thread ID")
-        with runtime_context(thread_id=thread_id):
-            self.memory_curator.run_once(thread_id)
+    def _curate_memory_conversation(self, task: DaemonTask) -> None:
+        conversation_id = task.payload
+        if not isinstance(conversation_id, str):
+            raise TypeError("memory curator task requires a conversation ID")
+        with runtime_context(conversation_id=conversation_id):
+            self.memory_curator.run_once(conversation_id)
 
     def _run_chat_task(self, task: DaemonTask) -> ChatResult:
         payload = task.payload
@@ -264,11 +265,27 @@ class DaemonState:
             raise TypeError("chat task requires a typed payload")
         result = self.conversation_runtime.respond(
             payload.message,
-            thread_id=payload.thread_id,
+            conversation_id=payload.conversation_id,
             turn_id=payload.turn_id,
         )
-        self.request_memory_curation(result.thread_id)
+        self.request_memory_curation(result.conversation_id)
+        self.scheduler.submit(
+            DaemonTask(
+                "conversation.compress",
+                f"conversation.compress:{result.conversation_id}",
+                f"conversation:{result.conversation_id}",
+                payload=result.conversation_id,
+                # Preserve raw committed turns for memory curation first.
+                priority=120,
+            )
+        )
         return result
+
+    def _compress_conversation(self, task: DaemonTask) -> None:
+        conversation_id = task.payload
+        if not isinstance(conversation_id, str):
+            raise TypeError("compression task requires a conversation ID")
+        self.conversation_runtime.compress_conversation(conversation_id)
 
     def _check_reflection(self, task: DaemonTask) -> None:
         del task
@@ -298,7 +315,7 @@ class DaemonState:
                 priority=50,
                 context=replace(
                     message.envelope.context,
-                    thread_id=message.resource_id,
+                    reason_id=message.resource_id,
                     job_id=message.job_id,
                 ),
             ),

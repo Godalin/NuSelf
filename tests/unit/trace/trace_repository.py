@@ -26,7 +26,7 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
         summary="NuSelf answered using temporal memory context.",
         user_input="thread:default:1:user",
         assistant_output="thread:default:2:assistant",
-        thread_id="default",
+        conversation_id="default",
         evidence_refs=["mem_123"],
         participants=["chat_agent", "memory"],
         decision_points=["Memory context included observed_at."],

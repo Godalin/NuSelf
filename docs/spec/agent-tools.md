@@ -291,7 +291,7 @@ capabilities.
 Chat response services and evaluation fixtures exchange framework-native
 LangChain `BaseMessage` values. NuSelf must not
 define a parallel prompt-message DTO or convert framework messages through a
-NuSelf-only wire shape before model invocation. Persisted `ThreadMessage`
+NuSelf-only wire shape before model invocation. Persisted `ConversationMessage`
 remains a storage model and is converted to framework messages at the runtime
 boundary.
 

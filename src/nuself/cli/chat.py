@@ -33,7 +33,7 @@ _theme = TerminalTheme()
 def send_daemon_chat(
     message: str,
     project_root: Path | None,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     *,
     print_reply: ReplyPrinter,
 ) -> int:
@@ -42,7 +42,7 @@ def send_daemon_chat(
     result = send_daemon_chat_interactive(
         message,
         project_root,
-        thread_id,
+        conversation_id,
     )
     if result.reply is not None:
         print_reply(result.reply)
@@ -54,21 +54,21 @@ def send_daemon_chat(
 def send_daemon_chat_interactive(
     message: str,
     project_root: Path | None,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     *,
     turn_id: str | None = None,
 ) -> InteractiveChatResult:
     """Translate one typed daemon chat operation to the REPL result contract."""
 
     with runtime_context(
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         turn_id=turn_id,
         source="client",
     ):
         try:
             response = client.chat(
                 message,
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 turn_id=turn_id,
                 project_root=project_root,
                 timeout=chat_request_timeout_seconds(project_root),
@@ -109,7 +109,7 @@ def send_daemon_chat_interactive(
                 code=CliExitCode.FAILURE,
                 error=error,
             )
-        with runtime_context(thread_id=response.thread_id):
+        with runtime_context(conversation_id=response.conversation_id):
             write_chat_audit(
                 "daemon_chat_completed",
                 project_root=project_root,
@@ -131,7 +131,7 @@ def chat_request_timeout_seconds(project_root: Path | None) -> float:
 def send_one_shot_chat(
     message: str,
     project_root: Path | None,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     *,
     print_reply: ReplyPrinter,
 ) -> int:
@@ -140,24 +140,25 @@ def send_one_shot_chat(
     result = send_one_shot_chat_interactive(
         message,
         project_root,
-        thread_id,
+        conversation_id,
     )
     if result.reply is not None:
         print_reply(result.reply)
+        _run_after_reply(result.after_reply)
     return result.code
 
 
 def send_one_shot_chat_interactive(
     message: str,
     project_root: Path | None,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     *,
     turn_id: str | None = None,
 ) -> InteractiveChatResult:
     """Run one local chat operation and translate expected runtime failure."""
 
     with runtime_context(
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         turn_id=turn_id,
         source="client",
     ):
@@ -165,17 +166,21 @@ def send_one_shot_chat_interactive(
             reply = one_shot_reply(
                 message,
                 project_root,
-                thread_id,
+                conversation_id,
                 turn_id=turn_id,
             )
             write_chat_audit(
                 "one_shot_chat_completed",
                 project_root=project_root,
             )
-            run_memory_curator(project_root, thread_id)
+            run_memory_curator(project_root, conversation_id)
             return InteractiveChatResult(
                 code=CliExitCode.SUCCESS,
                 reply=reply,
+                after_reply=lambda: _compress_after_reply(
+                    conversation_id,
+                    project_root,
+                ),
             )
         except RuntimeError as exc:
             error = diagnostic_exception_message(exc)
@@ -190,14 +195,14 @@ def send_one_shot_chat_interactive(
 
 def run_memory_curator(
     project_root: Path | None,
-    thread_id: str = "default",
+    conversation_id: str = "default",
 ) -> None:
     """Run post-turn curation and present its optional status."""
 
     try:
         result = compose_memory_curator(
             compose_cli_application(project_root)
-        ).run_once(thread_id)
+        ).run_once(conversation_id)
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
         report_memory_failure(
@@ -219,7 +224,7 @@ def run_memory_curator(
 def one_shot_reply(
     message: str,
     project_root: Path | None,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     *,
     turn_id: str | None = None,
 ) -> str:
@@ -230,6 +235,28 @@ def one_shot_reply(
             compose_cli_application(project_root),
             approval_port=TerminalApprovalPort(),
         )
-        .respond(message, thread_id=thread_id, turn_id=turn_id)
+        .respond(message, conversation_id=conversation_id, turn_id=turn_id)
         .reply
     )
+
+
+def _run_after_reply(callback: Callable[[], None] | None) -> None:
+    if callback is not None:
+        callback()
+
+
+def _compress_after_reply(
+    conversation_id: str,
+    project_root: Path | None,
+) -> None:
+    try:
+        compose_conversation_runtime(
+            compose_cli_application(project_root),
+            approval_port=TerminalApprovalPort(),
+        ).compress_conversation(conversation_id)
+    except Exception as exc:
+        report_chat_failure(
+            exc,
+            event="compression_fallback",
+            project_root=project_root,
+        )

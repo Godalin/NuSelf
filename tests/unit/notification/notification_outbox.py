@@ -256,13 +256,13 @@ def test_outbox_round_trip_wire_format(tmp_path: Path) -> None:
         body="Body",
         status="pending",
         idempotency_key="k",
-        deep_link="nuself://thread-1",
+        deep_link="nuself://conversation-1",
     )
     outbox.add(original)
     loaded = outbox.get("e1")
     assert loaded.title == "Title"
     assert loaded.body == "Body"
-    assert loaded.deep_link == "nuself://thread-1"
+    assert loaded.deep_link == "nuself://conversation-1"
 
 
 def test_outbox_round_trips_adapter_delivery_state(tmp_path: Path) -> None:

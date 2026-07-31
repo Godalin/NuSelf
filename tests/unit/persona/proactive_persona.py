@@ -200,7 +200,7 @@ def _make_candidate(
         urgency=urgency,
         interruption_cost=interruption_cost,
         evidence_refs=(),
-        suggested_thread_id=None,
+        suggested_conversation_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )
@@ -646,7 +646,7 @@ def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest
         urgency=0.5,
         interruption_cost=0.2,
         evidence_refs=(),
-        suggested_thread_id=None,
+        suggested_conversation_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )

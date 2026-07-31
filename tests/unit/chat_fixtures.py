@@ -11,7 +11,7 @@ from nuself.agent.chat import (
     ChatAgentSettings,
     ConversationGraphRuntime as _ConversationGraphRuntime,
 )
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
@@ -50,7 +50,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
         memory_query_service: MemoryQueryService | None = None,
-        thread_store: ThreadStore | None = None,
+        conversation_store: ConversationStore | None = None,
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
         event_publisher: EventPublisher | None = None,
@@ -108,8 +108,8 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 application.memory.entries,
                 project_root=project_root,
             ),
-            thread_store=thread_store
-            or ThreadStore(
+            conversation_store=conversation_store
+            or ConversationStore(
                 project_root,
                 backend=application.backend,
             ),

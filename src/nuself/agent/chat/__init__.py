@@ -7,12 +7,12 @@ from nuself.agent.chat.runtime import (
 from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.resources import ConversationResources
-from nuself.agent.chat.thread import (
+from nuself.conversation import (
     ConversationTurnConflictError,
     ConversationTurnIncompleteError,
-    ThreadMessage,
-    ThreadState,
-    ThreadStore,
+    ConversationMessage,
+    ConversationState,
+    ConversationStore,
 )
 from nuself.agent.chat.types import (
     ChatAgentSettings,
@@ -38,8 +38,8 @@ __all__ = [
     "ConversationResponseService",
     "ConversationResources",
     "ConversationTurnState",
-    "ThreadMessage",
-    "ThreadState",
-    "ThreadStore",
+    "ConversationMessage",
+    "ConversationState",
+    "ConversationStore",
     "trace_summary",
 ]

@@ -65,7 +65,7 @@ class DaemonRequestState(Protocol):
         self,
         message: str,
         *,
-        thread_id: str,
+        conversation_id: str,
         turn_id: str | None,
     ) -> ChatResult: ...
 
@@ -190,13 +190,13 @@ def _handle_chat(
     )
     started_at = time.monotonic()
     with runtime_context(
-        thread_id=chat_request.thread_id,
+        conversation_id=chat_request.conversation_id,
         turn_id=chat_request.turn_id,
     ):
         try:
             result = state.run_chat(
                 chat_request.message,
-                thread_id=chat_request.thread_id,
+                conversation_id=chat_request.conversation_id,
                 turn_id=chat_request.turn_id,
             )
         except RuntimeError as exc:
@@ -215,13 +215,13 @@ def _handle_chat(
     payload = ChatResponsePayload(
         answer=result.answer,
         reply=result.reply,
-        thread_id=result.thread_id,
+        conversation_id=result.conversation_id,
         evidence_references=result.evidence_references,
         epistemic_status=result.epistemic_status,
         confidence=result.confidence,
     )
     with runtime_context(
-        thread_id=result.thread_id,
+        conversation_id=result.conversation_id,
         turn_id=chat_request.turn_id,
     ):
         write_daemon_request_audit(

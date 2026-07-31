@@ -28,8 +28,8 @@ import pytest
 from langchain_core.messages import BaseMessage
 
 from nuself import cli
-from nuself.agent.chat import ThreadMessage, ThreadState
-from thread_fixtures import ThreadStore
+from nuself.conversation import ConversationMessage, ConversationState
+from conversation_fixtures import ConversationStore
 from nuself.cli import build_parser, main
 from nuself.config import runtime_paths
 from nuself.daemon.client import DaemonConnectionError
@@ -208,9 +208,9 @@ class FakeChangedCurator:
 
     def run_once(
         self,
-        thread_id: str = "default",
+        conversation_id: str = "default",
     ) -> FakeChangedCuratorResult:
-        assert thread_id == "default"
+        assert conversation_id == "default"
         return FakeChangedCuratorResult()
 
 
@@ -223,7 +223,7 @@ def test_chat_uses_one_shot_when_daemon_is_missing(
     assert result == 0
     assert "LLM API is not configured yet" in captured.out
     assert "Last message: hello" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == ["default"]
+    assert ConversationStore(_authority(tmp_path)).list() == ["default"]
 
 
 def test_one_shot_chat_runs_memory_curator_after_reply(
@@ -417,8 +417,8 @@ def test_interactive_memory_show_uses_readable_detail(
             tags=["display"],
             evidence=[
                 MemoryEvidence(
-                    source_type="thread",
-                    source_ref="thread:default:1-2",
+                    source_type="conversation",
+                    source_ref="conversation:default:1-2",
                     summary="chat",
                 )
             ],
@@ -570,11 +570,11 @@ def test_interactive_turn_prints_activity_events(
     assert "[chat] one_shot_chat_completed" not in captured.out
     assert "LLM API is not configured yet" in captured.out
     assert (
-        "Last message: hello\n[daemon] session status=one-shot thread=default"
+        "Last message: hello\n[daemon] session status=one-shot conversation=default"
         in captured.out
     )
     assert (
-        "Last message: hello\n\n[daemon] session status=one-shot thread=default"
+        "Last message: hello\n\n[daemon] session status=one-shot conversation=default"
         not in captured.out
     )
 
@@ -594,22 +594,22 @@ def test_consecutive_interactive_turns_each_end_with_session_header(
 
     assert result == 0
     assert captured.out.count(
-        "[daemon] session status=one-shot thread=default"
+        "[daemon] session status=one-shot conversation=default"
     ) == 3
     assert (
         "Last message: first\n"
-        "[daemon] session status=one-shot thread=default"
+        "[daemon] session status=one-shot conversation=default"
     ) in captured.out
     assert (
         "Last message: second\n"
-        "[daemon] session status=one-shot thread=default"
+        "[daemon] session status=one-shot conversation=default"
     ) in captured.out
 
 
 def test_interactive_turn_prints_activity_events_while_waiting(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("default"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("default"))
     printed = threading.Event()
     publisher = EventPublisher()
     publisher.attach_projection(runtime_event_log_sink(_authority(tmp_path)))
@@ -623,7 +623,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
         original_print_events(events)
 
     def fake_send(
-        message: str, thread_id: str, turn_id: str | None
+        message: str, conversation_id: str, turn_id: str | None
     ) -> cli.InteractiveChatResult:
         assert turn_id is not None
         publisher.publish(
@@ -645,7 +645,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
             "service_tool_called",
             "memory_search completed",
             project_root=_authority(tmp_path),
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             turn_id=turn_id,
             status="completed",
             metadata={
@@ -707,10 +707,10 @@ def test_interactive_turn_interrupt_cancels_owned_send_before_return(
 
     def fake_send(
         message: str,
-        thread_id: str,
+        conversation_id: str,
         turn_id: str | None,
     ) -> cli.InteractiveChatResult:
-        del message, thread_id, turn_id
+        del message, conversation_id, turn_id
         cancellation = current_cancellation()
         assert cancellation is not None
         unregister = cancellation.register(released.set)
@@ -742,8 +742,8 @@ def test_interactive_turn_interrupt_cancels_owned_send_before_return(
 
     assert released.is_set()
     assert not any(
-        thread.name == "nuself-interactive-send"
-        for thread in threading.enumerate()
+        conversation.name == "nuself-interactive-send"
+        for conversation in threading.enumerate()
     )
 
 
@@ -751,13 +751,13 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
     tmp_path: Path,
     monkeypatch: MonkeyPatchFixture,
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("default"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("default"))
     pending: list[LogEvent] = []
     printed = threading.Event()
 
     def fake_send(
         message: str,
-        thread_id: str,
+        conversation_id: str,
         turn_id: str | None,
     ) -> cli.InteractiveChatResult:
         del message
@@ -769,7 +769,7 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
                 component="chat",
                 event="service_tool_called",
                 message="live",
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 turn_id=turn_id,
                 metadata={
                     "service_component": "memory",
@@ -851,10 +851,10 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
 def test_interactive_turn_hides_background_activity_events(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("default"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("default"))
 
     def fake_send(
-        message: str, thread_id: str, turn_id: str | None
+        message: str, conversation_id: str, turn_id: str | None
     ) -> cli.InteractiveChatResult:
         assert turn_id is not None
         write_log_event(
@@ -862,7 +862,7 @@ def test_interactive_turn_hides_background_activity_events(
             "cycle_completed",
             "background reflection finished",
             project_root=_authority(tmp_path),
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             status="completed",
         )
         write_log_event(
@@ -870,7 +870,7 @@ def test_interactive_turn_hides_background_activity_events(
             "step_created",
             "background reasoning advanced",
             project_root=_authority(tmp_path),
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             status="completed",
         )
         write_log_event(
@@ -878,7 +878,7 @@ def test_interactive_turn_hides_background_activity_events(
             "service_tool_called",
             "memory_search completed",
             project_root=_authority(tmp_path),
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             turn_id=turn_id,
             status="completed",
             metadata={
@@ -911,17 +911,17 @@ def test_interactive_turn_hides_background_activity_events(
     assert [event.component for event in captured_events] == ["chat"]
 
 
-def test_interactive_turn_binds_exact_context_to_send_thread(
+def test_interactive_turn_binds_exact_context_to_send_conversation(
     tmp_path: Path,
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("default"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("default"))
     observed: list[RuntimeContext] = []
 
     def fake_send(
-        message: str, thread_id: str, turn_id: str | None
+        message: str, conversation_id: str, turn_id: str | None
     ) -> cli.InteractiveChatResult:
         assert message == "hello"
-        assert thread_id == "default"
+        assert conversation_id == "default"
         assert turn_id is not None
         observed.append(current_runtime_context())
         return cli.InteractiveChatResult(code=0, reply="final reply")
@@ -950,7 +950,7 @@ def test_interactive_turn_binds_exact_context_to_send_thread(
 
     assert result == 0
     assert len(observed) == 1
-    assert observed[0].thread_id == "default"
+    assert observed[0].conversation_id == "default"
     assert observed[0].turn_id is not None
     assert observed[0].source == "client"
     assert observed[0].request_id is None
@@ -993,7 +993,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
                 "persona_summary",
                 "builder_self: first attempt reached persona discussion",
                 project_root=project_root,
-                thread_id="default",
+                conversation_id="default",
                 turn_id=turn_id if isinstance(turn_id, str) else None,
                 status="retryable timeout",
             )
@@ -1008,7 +1008,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
             payload={
                 "answer": "daemon reply",
                 "reply": "daemon reply",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
             },
@@ -1075,7 +1075,7 @@ def test_interactive_daemon_application_error_does_not_retry(
             "turn_failed",
             "daemon chat turn failed",
             project_root=project_root,
-            thread_id="default",
+            conversation_id="default",
             turn_id=turn_id if isinstance(turn_id, str) else None,
             status="error",
             error="graph failed <- root cause",
@@ -1186,7 +1186,7 @@ def test_interactive_export_saves_connection_transcript(
     assert "second message" not in first_export
     assert "first message" in second_export
     assert "second message" in second_export
-    assert "- Thread: `default`" in second_export
+    assert "- Conversation: `default`" in second_export
     assert len(copied) == 2
     assert "second message" in copied[-1]
 
@@ -1259,7 +1259,7 @@ def test_interactive_export_all_includes_all_logs(
     assert "- Logs: all" in content
     assert "### Logs" in content
     assert (
-        "> [chat] one_shot_chat_completed status=ok thread=default turn=turn-"
+        "> [chat] one_shot_chat_completed status=ok conversation=default turn=turn-"
         in content
     )
     assert ">   one-shot chat turn completed" in content
@@ -1279,7 +1279,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
         component="chat",
         event="service_tool_called",
         message="reflection_list_pending completed",
-        thread_id="default",
+        conversation_id="default",
         status="completed",
         metadata={
             "service_component": "reflection",
@@ -1290,7 +1290,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
     )
 
     content = render_transcript(
-        thread_id="default",
+        conversation_id="default",
         connected_at=datetime.now(UTC),
         exported_at=datetime.now(UTC),
         messages=[(0, "user", "any reflections?"), (1, "assistant", "One idea.")],
@@ -1300,7 +1300,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
     )
 
     assert (
-        "> [chat] [reflection] service_tool_called tool=reflection_list_pending status=completed thread=default"
+        "> [chat] [reflection] service_tool_called tool=reflection_list_pending status=completed conversation=default"
         in content
     )
     assert ">   args: {" in content
@@ -1312,7 +1312,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
 def test_interactive_export_normalizes_markdown_body_fences() -> None:
     render_transcript = cast(Callable[..., str], cli._render_chat_transcript)
     content = render_transcript(
-        thread_id="default",
+        conversation_id="default",
         connected_at=datetime.now(UTC),
         exported_at=datetime.now(UTC),
         messages=[
@@ -1381,11 +1381,11 @@ def test_interactive_keyboard_interrupt_cancels_turn_and_stays_open(
     assert "Saved transcript:" in captured.out
 
 
-def test_interactive_quit_auto_saves_all_threads(
+def test_interactive_quit_auto_saves_all_conversations(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr(
-        "sys.stdin", _TextInput("first thread\n:thread beta\nsecond thread\n:q\n")
+        "sys.stdin", _TextInput("first conversation\n:conversation beta\nsecond conversation\n:q\n")
     )
 
     result = main(["--workspace", str(tmp_path), "chat"])
@@ -1396,10 +1396,10 @@ def test_interactive_quit_auto_saves_all_threads(
     exports = sorted((_authority(tmp_path) / "transcripts").glob("chat-*.md"))
     assert len(exports) == 2
     contents = "\n".join(path.read_text(encoding="utf-8") for path in exports)
-    assert "first thread" in contents
-    assert "second thread" in contents
-    assert "Thread: `default`" in contents
-    assert "Thread: `beta`" in contents
+    assert "first conversation" in contents
+    assert "second conversation" in contents
+    assert "Conversation: `default`" in contents
+    assert "Conversation: `beta`" in contents
 
 
 def test_interactive_history_skips_consecutive_duplicates(
@@ -1493,7 +1493,7 @@ def test_default_entrypoint_interactive_omits_redundant_startup_preamble(
     assert (
         "νSelf interactive mode. Type :help for commands, :q to quit." in captured.out
     )
-    assert "[daemon] session status=running thread=default" in captured.out
+    assert "[daemon] session status=running conversation=default" in captured.out
 
 
 def test_default_entrypoint_creates_daemon_when_missing(
@@ -1571,7 +1571,7 @@ def test_daemon_chat_uses_long_timeout(
             payload={
                 "answer": "daemon reply",
                 "reply": "daemon reply",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
             },
@@ -1623,7 +1623,7 @@ def test_daemon_chat_uses_configured_request_timeout(
             payload={
                 "answer": "daemon reply",
                 "reply": "daemon reply",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
             },
@@ -1694,7 +1694,7 @@ def test_logs_command_renders_structured_events(
         "turn_completed",
         "chat turn completed",
         project_root=_authority(tmp_path),
-        thread_id="default",
+        conversation_id="default",
         status="ok",
     )
     write_log_event(
@@ -1702,7 +1702,7 @@ def test_logs_command_renders_structured_events(
         "curator_completed",
         "memory curator completed",
         project_root=_authority(tmp_path),
-        thread_id="default",
+        conversation_id="default",
         metadata={
             "source_ref": "trace:test",
             "processed_messages": 1,
@@ -1730,7 +1730,7 @@ def test_logs_command_renders_structured_events(
     assert result == 0
     assert "[chat] turn_completed" in captured.out
     assert "  chat turn completed" in captured.out
-    assert "thread=default" in captured.out
+    assert "conversation=default" in captured.out
     assert "[memory]" not in captured.out
 
 
@@ -1785,7 +1785,7 @@ def test_logs_command_accepts_storage_component(
 
 def test_runtime_context_applies_log_ownership_fields(tmp_path: Path) -> None:
     with runtime_context(
-        thread_id="default", request_id="req-1", turn_id="turn-1", source="test"
+        conversation_id="default", request_id="req-1", turn_id="turn-1", source="test"
     ):
         event = write_log_event(
             "chat", "turn_started", "chat turn started", project_root=_authority(tmp_path)
@@ -1796,11 +1796,11 @@ def test_runtime_context_applies_log_ownership_fields(tmp_path: Path) -> None:
 
     events = read_log_events(project_root=_authority(tmp_path), component="chat")
 
-    assert event.thread_id == "default"
+    assert event.conversation_id == "default"
     assert event.request_id == "req-1"
     assert event.turn_id == "turn-1"
     assert event.source == "test"
-    assert nested.thread_id == "default"
+    assert nested.conversation_id == "default"
     assert nested.request_id == "req-1"
     assert nested.turn_id == "turn-2"
     assert events[-2].turn_id == "turn-1"
@@ -1899,9 +1899,9 @@ def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> 
         ],
         ("memory", "plan"): [
             "show",
-            "Show payload-safe recovery metadata for one thread.",
+            "Show payload-safe recovery metadata for one conversation.",
             "discard",
-            "Discard one thread's recovery plan without changing its cursor.",
+                "Discard one conversation recovery plan.",
         ],
     }
 
@@ -1920,7 +1920,7 @@ def test_memory_plan_show_is_payload_safe(
     capsys: CaptureFixture,
 ) -> None:
     plan = MemoryCuratorPlan(
-        thread_id="default",
+        conversation_id="default",
         source_start=2,
         source_end=5,
         observed_at="2026-07-29T00:00:00+00:00",
@@ -1953,7 +1953,7 @@ def test_memory_plan_show_is_payload_safe(
 
     assert result == 0
     assert (
-        "Curator plan: thread=default source=2-5 "
+        "Curator plan: conversation=default source=2-5 "
         "observed_at=2026-07-29T00:00:00+00:00 actions=1"
         in captured.out
     )
@@ -1975,12 +1975,12 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
     backend = get_default_backend(_authority(tmp_path))
     backend.collection("memory_curator_plans").put(
         "default",
-        {"thread_id": "default"},
+        {"conversation_id": "default"},
     )
     backend.collection("memory_curator_cursors").put(
         "default",
         {
-            "thread_id": "default",
+            "conversation_id": "default",
             "processed_message_count": 3,
         },
     )
@@ -2021,7 +2021,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
     assert "Curator plan unavailable" in show_output.err
     assert discard_result == 0
     assert (
-        "Discarded curator plan for thread default. "
+        "Discarded curator plan for conversation default. "
         "Cursor and candidates were not changed."
         in discard_output.out
     )
@@ -2029,7 +2029,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
     assert backend.collection("memory_curator_plans").get("default") is None
     assert backend.collection("memory_curator_cursors").get("default") == {
         "id": "default",
-        "thread_id": "default",
+        "conversation_id": "default",
         "processed_message_count": 3,
     }
     assert memory_candidate_repository(_authority(tmp_path)).get(candidate.id) == candidate
@@ -2051,7 +2051,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
     store = memory_curator_plan_store(_authority(tmp_path))
     plan = store.save(
         MemoryCuratorPlan(
-            thread_id="default",
+            conversation_id="default",
             source_start=0,
             source_end=1,
             observed_at="2026-07-29T00:00:00+00:00",
@@ -2084,7 +2084,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
     assert captured.out == ""
     assert (
         captured.err
-        == "Curator plan is busy for thread: default; "
+        == "Curator plan is busy for conversation: default; "
         "no plan was discarded.\n"
     )
     assert memory_curator_plan_store(_authority(tmp_path)).get("default") == plan
@@ -2110,7 +2110,7 @@ def test_memory_plan_show_missing_is_an_explicit_error(
     assert captured.out == ""
     assert (
         captured.err
-        == "Curator plan not found for thread: missing\n"
+        == "Curator plan not found for conversation: missing\n"
     )
 
 
@@ -2122,11 +2122,11 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
             "logs",
             "Show daemon logs.",
         ],
-        ("thread",): [
+        ("conversation",): [
             "open",
-            "Open or create a thread for chat.",
+            "Open or create a conversation for chat.",
             "archived",
-            "List archived conversation threads.",
+                "List archived conversations.",
         ],
         ("inbox",): [
             "reflection",
@@ -2136,7 +2136,7 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
         ],
         ("inbox", "reflection"): [
             "promote",
-            "Promote one reflection into a reason thread.",
+                "Promote one reflection into a reason thread.",
             "organize",
             "Merge similar pending reflection entries.",
         ],
@@ -2148,9 +2148,9 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
         ],
         ("reason",): [
             "start",
-            "Start a new reasoning thread.",
+                "Start a new reasoning thread.",
             "watch",
-            "Watch reasoning threads for new steps.",
+                "Watch reasoning threads for new steps.",
         ],
         ("trace",): [
             "search",
@@ -2240,14 +2240,14 @@ def test_memory_preview_uses_list_record_style_without_indexes(
 def test_memory_update_defers_without_agent_decision(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(
-        ThreadState(
-            thread_id="default",
+    ConversationStore(_authority(tmp_path)).save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user", content="We need automatic memory curation."
                 ),
-                ThreadMessage(
+                ConversationMessage(
                     role="assistant",
                     content="I will summarize conversations into memory.",
                 ),
@@ -2425,8 +2425,8 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(
             body="Memory should preserve when a view was observed.",
             evidence=[
                 MemoryEvidence(
-                    source_type="thread",
-                    source_ref="thread:default:4-6",
+                    source_type="conversation",
+                    source_ref="conversation:default:4-6",
                     summary="Discussed thought evolution.",
                     observed_at="2026-05-07",
                 )
@@ -2455,10 +2455,10 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(
     assert "[candidate] [0]" in list_output
     assert "Temporal memory" in list_output
     assert f"id={candidate.id}" in show_output
-    assert "thread:thread:default:4-6" in show_output
+    assert "conversation:conversation:default:4-6" in show_output
     assert "Accepted memory candidate:" in accept_output
     assert entries[0].observed_at == "2026-05-07"
-    assert entries[0].evidence[0].source_ref == "thread:default:4-6"
+    assert entries[0].evidence[0].source_ref == "conversation:default:4-6"
     assert entries[0].temporal_note == "The user asked for visible thought evolution."
 
 
@@ -3117,11 +3117,11 @@ def main_memory_preview(project_root: Path) -> str:
     )
 
 
-def test_thread_list_shows_thread_ids(tmp_path: Path, capsys: CaptureFixture) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("alpha"))
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("beta"))
+def test_conversation_list_shows_conversation_ids(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("alpha"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("beta"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "list"])
+    result = main(["--workspace", str(tmp_path), "conversation", "list"])
     captured = capsys.readouterr()
 
     assert result == 0
@@ -3129,60 +3129,60 @@ def test_thread_list_shows_thread_ids(tmp_path: Path, capsys: CaptureFixture) ->
     assert "beta" in captured.out
 
 
-def test_thread_create_makes_new_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--workspace", str(tmp_path), "thread", "new", "new-thread"])
+def test_conversation_create_makes_new_conversation(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--workspace", str(tmp_path), "conversation", "new", "new-conversation"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Created thread: new-thread" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == ["new-thread"]
+    assert "Created conversation: new-conversation" in captured.out
+    assert ConversationStore(_authority(tmp_path)).list() == ["new-conversation"]
 
 
-def test_thread_create_fails_when_thread_exists(
+def test_conversation_create_fails_when_conversation_exists(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("existing"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("existing"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "new", "existing"])
+    result = main(["--workspace", str(tmp_path), "conversation", "new", "existing"])
     captured = capsys.readouterr()
 
     assert result == 1
     assert "already exists" in captured.err
 
 
-def test_thread_rename_moves_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("old"))
+def test_conversation_rename_moves_conversation(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("old"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "rename", "old", "new"])
+    result = main(["--workspace", str(tmp_path), "conversation", "rename", "old", "new"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Renamed thread: old -> new" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == ["new"]
+    assert "Renamed conversation: old -> new" in captured.out
+    assert ConversationStore(_authority(tmp_path)).list() == ["new"]
 
 
-def test_thread_rename_fails_when_target_exists(
+def test_conversation_rename_fails_when_target_exists(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("a"))
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("b"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("a"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("b"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "rename", "a", "b"])
+    result = main(["--workspace", str(tmp_path), "conversation", "rename", "a", "b"])
     captured = capsys.readouterr()
 
     assert result == 1
     assert "already exists" in captured.err
 
 
-def test_thread_branch_copies_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
-    store = ThreadStore(_authority(tmp_path))
+def test_conversation_branch_copies_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
+    store = ConversationStore(_authority(tmp_path))
     store.save(
-        ThreadState(
-            thread_id="source",
+        ConversationState(
+            conversation_id="source",
             summary="summary",
             messages=[
-                ThreadMessage(role="user", content="a"),
-                ThreadMessage(role="assistant", content="b"),
+                ConversationMessage(role="user", content="a"),
+                ConversationMessage(role="assistant", content="b"),
             ],
             message_start_index=0,
             next_message_index=2,
@@ -3190,26 +3190,26 @@ def test_thread_branch_copies_messages(tmp_path: Path, capsys: CaptureFixture) -
     )
 
     result = main(
-        ["--workspace", str(tmp_path), "thread", "branch", "source", "fork"]
+        ["--workspace", str(tmp_path), "conversation", "branch", "source", "fork"]
     )
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Branched thread: source -> fork" in captured.out
-    fork = ThreadStore(_authority(tmp_path)).load("fork")
+    assert "Branched conversation: source -> fork" in captured.out
+    fork = ConversationStore(_authority(tmp_path)).load("fork")
     assert len(fork.messages) == 2
-    assert fork.thread_id == "fork"
+    assert fork.conversation_id == "fork"
 
 
-def test_thread_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
-    store = ThreadStore(_authority(tmp_path))
+def test_conversation_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
+    store = ConversationStore(_authority(tmp_path))
     store.save(
-        ThreadState(
-            thread_id="source",
+        ConversationState(
+            conversation_id="source",
             messages=[
-                ThreadMessage(role="user", content="a"),
-                ThreadMessage(role="assistant", content="b"),
-                ThreadMessage(role="user", content="c"),
+                ConversationMessage(role="user", content="a"),
+                ConversationMessage(role="assistant", content="b"),
+                ConversationMessage(role="user", content="c"),
             ],
             message_start_index=5,
             next_message_index=8,
@@ -3220,7 +3220,7 @@ def test_thread_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
         [
             "--workspace",
             str(tmp_path),
-            "thread",
+            "conversation",
             "branch",
             "source",
             "fork",
@@ -3230,79 +3230,79 @@ def test_thread_branch_at_index(tmp_path: Path, capsys: CaptureFixture) -> None:
     )
 
     assert result == 0
-    fork = ThreadStore(_authority(tmp_path)).load("fork")
+    fork = ConversationStore(_authority(tmp_path)).load("fork")
     assert len(fork.messages) == 2
     assert fork.next_message_index == 7
 
 
-def test_thread_archive_moves_to_subdir(tmp_path: Path, capsys: CaptureFixture) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("old"))
+def test_conversation_archive_moves_to_subdir(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("old"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "archive", "old"])
+    result = main(["--workspace", str(tmp_path), "conversation", "archive", "old"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Archived thread: old" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == []
-    assert ThreadStore(_authority(tmp_path)).list_archived() == ["old"]
+    assert "Archived conversation: old" in captured.out
+    assert ConversationStore(_authority(tmp_path)).list() == []
+    assert ConversationStore(_authority(tmp_path)).list_archived() == ["old"]
 
 
-def test_thread_delete_removes_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("gone"))
+def test_conversation_delete_removes_conversation(tmp_path: Path, capsys: CaptureFixture) -> None:
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("gone"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "delete", "gone"])
+    result = main(["--workspace", str(tmp_path), "conversation", "delete", "gone"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Deleted thread: gone" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == []
-    assert not (_authority(tmp_path) / "threads" / "gone.json").exists()
+    assert "Deleted conversation: gone" in captured.out
+    assert ConversationStore(_authority(tmp_path)).list() == []
+    assert not (_authority(tmp_path) / "conversations" / "gone.json").exists()
 
 
-def test_thread_delete_fails_when_missing(
+def test_conversation_delete_fails_when_missing(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    result = main(["--workspace", str(tmp_path), "thread", "delete", "missing"])
+    result = main(["--workspace", str(tmp_path), "conversation", "delete", "missing"])
     captured = capsys.readouterr()
 
     assert result == 1
-    assert "Error: thread not found: missing" in captured.err
+    assert "Error: conversation not found: missing" in captured.err
 
 
-def test_thread_unarchive_restores_thread(
+def test_conversation_unarchive_restores_conversation(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    store = ThreadStore(_authority(tmp_path))
-    store.save(ThreadState.empty("old"))
+    store = ConversationStore(_authority(tmp_path))
+    store.save(ConversationState.empty("old"))
     store.archive("old")
 
-    result = main(["--workspace", str(tmp_path), "thread", "unarchive", "old"])
+    result = main(["--workspace", str(tmp_path), "conversation", "unarchive", "old"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Unarchived thread: old" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == ["old"]
+    assert "Unarchived conversation: old" in captured.out
+    assert ConversationStore(_authority(tmp_path)).list() == ["old"]
 
 
-def test_thread_unarchive_fails_when_missing(
+def test_conversation_unarchive_fails_when_missing(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    result = main(["--workspace", str(tmp_path), "thread", "unarchive", "missing"])
+    result = main(["--workspace", str(tmp_path), "conversation", "unarchive", "missing"])
     captured = capsys.readouterr()
 
     assert result == 1
-    assert "Error: archived thread not found: missing" in captured.err
+    assert "Error: archived conversation not found: missing" in captured.err
 
 
-def test_thread_archived_lists_archived_threads(
+def test_conversation_archived_lists_archived_conversations(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    store = ThreadStore(_authority(tmp_path))
-    store.save(ThreadState.empty("alpha"))
-    store.save(ThreadState.empty("beta"))
+    store = ConversationStore(_authority(tmp_path))
+    store.save(ConversationState.empty("alpha"))
+    store.save(ConversationState.empty("beta"))
     store.archive("alpha")
 
-    result = main(["--workspace", str(tmp_path), "thread", "archived"])
+    result = main(["--workspace", str(tmp_path), "conversation", "archived"])
     captured = capsys.readouterr()
 
     assert result == 0
@@ -3310,64 +3310,64 @@ def test_thread_archived_lists_archived_threads(
     assert "beta" not in captured.out
 
 
-def test_thread_archived_shows_none_when_empty(
+def test_conversation_archived_shows_none_when_empty(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    result = main(["--workspace", str(tmp_path), "thread", "archived"])
+    result = main(["--workspace", str(tmp_path), "conversation", "archived"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "No archived threads." in captured.out
+    assert "No archived conversations." in captured.out
 
 
-def test_open_existing_thread_shows_thread_in_header(
+def test_open_existing_conversation_shows_conversation_in_header(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("focus"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("focus"))
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
 
-    result = main(["--workspace", str(tmp_path), "thread", "open", "focus"])
+    result = main(["--workspace", str(tmp_path), "conversation", "open", "focus"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "thread=focus" in captured.out
+    assert "conversation=focus" in captured.out
 
 
-def test_open_missing_thread_fails(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--workspace", str(tmp_path), "thread", "open", "missing"])
+def test_open_missing_conversation_fails(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--workspace", str(tmp_path), "conversation", "open", "missing"])
     captured = capsys.readouterr()
 
     assert result == 1
-    assert "Thread not found: missing" in captured.err
+    assert "Conversation not found: missing" in captured.err
 
 
-def test_open_create_makes_thread_and_enters_repl(
+def test_open_create_makes_conversation_and_enters_repl(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
 
     result = main(
-        ["--workspace", str(tmp_path), "thread", "open", "new-thread", "--create"]
+        ["--workspace", str(tmp_path), "conversation", "open", "new-conversation", "--create"]
     )
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Created thread: new-thread" in captured.out
-    assert "thread=new-thread" in captured.out
-    assert ThreadStore(_authority(tmp_path)).list() == ["new-thread"]
+    assert "Created conversation: new-conversation" in captured.out
+    assert "conversation=new-conversation" in captured.out
+    assert ConversationStore(_authority(tmp_path)).list() == ["new-conversation"]
 
 
 def test_open_with_message_sends_then_enters_repl(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    ThreadStore(_authority(tmp_path)).save(ThreadState.empty("focus"))
+    ConversationStore(_authority(tmp_path)).save(ConversationState.empty("focus"))
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
 
     result = main(
         [
             "--workspace",
             str(tmp_path),
-            "thread",
+            "conversation",
             "open",
             "focus",
             "--message",
@@ -3378,7 +3378,7 @@ def test_open_with_message_sends_then_enters_repl(
 
     assert result == 0
     assert "LLM API is not configured yet" in captured.out
-    assert "thread=focus" in captured.out
+    assert "conversation=focus" in captured.out
 
 
 def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -3632,7 +3632,7 @@ def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> N
             body="Test Body",
             status="pending",
             idempotency_key="k1",
-            deep_link="nuself://thread/default",
+            deep_link="nuself://conversation/default",
         )
     )
     result = main(["--workspace", str(tmp_path), "inbox", "notify", "show", "e1"])
@@ -3641,7 +3641,7 @@ def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "Test Title" in output
     assert "Test Body" in output
     assert "pending" in output
-    assert "nuself://thread/default" in output
+    assert "nuself://conversation/default" in output
     assert "idempotency_key=k1" in output
 
 
@@ -3720,22 +3720,22 @@ def test_repl_notify_show_detail(
     assert "Body" in output
 
 
-def test_open_with_deep_link_parses_thread_id(
+def test_open_with_deep_link_parses_conversation_id(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(
         [
             "--workspace",
             str(tmp_path),
-            "thread",
+            "conversation",
             "open",
             "--deep-link",
-            "nuself://thread/my-thread",
+            "nuself://conversation/my-conversation",
         ]
     )
     captured = capsys.readouterr()
     assert result == 1
-    assert "Thread not found: my-thread" in captured.err
+    assert "Conversation not found: my-conversation" in captured.err
 
 
 def test_open_with_deep_link_and_message(
@@ -3746,16 +3746,16 @@ def test_open_with_deep_link_and_message(
         [
             "--workspace",
             str(tmp_path),
-            "thread",
+            "conversation",
             "open",
             "--deep-link",
-            "nuself://thread/my-thread?message=hello",
+            "nuself://conversation/my-conversation?message=hello",
             "--create",
         ]
     )
     captured = capsys.readouterr()
     assert result == 0
-    assert "Created thread: my-thread" in captured.out
+    assert "Created conversation: my-conversation" in captured.out
 
 
 def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -3763,7 +3763,7 @@ def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> 
         [
             "--workspace",
             str(tmp_path),
-            "thread",
+            "conversation",
             "open",
             "--deep-link",
             "https://example.com",
@@ -3774,7 +3774,7 @@ def test_open_with_invalid_deep_link(tmp_path: Path, capsys: CaptureFixture) -> 
     assert "Invalid deep link" in captured.err
 
 
-def test_open_with_new_thread_deep_link(
+def test_open_with_new_conversation_deep_link(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr("sys.stdin", _TextInput(":q\n"))
@@ -3782,25 +3782,25 @@ def test_open_with_new_thread_deep_link(
         [
             "--workspace",
             str(tmp_path),
-            "thread",
+            "conversation",
             "open",
             "--deep-link",
-            "nuself://new-thread?title=proactive-thread&message=hello%20there",
+            "nuself://new-conversation?title=proactive-conversation&message=hello%20there",
         ]
     )
     captured = capsys.readouterr()
     assert result == 0
-    assert "Created thread: proactive-thread" in captured.out
+    assert "Created conversation: proactive-conversation" in captured.out
 
 
-def test_status_command_shows_daemon_threads_and_notifications(
+def test_status_command_shows_daemon_conversations_and_notifications(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(["--workspace", str(tmp_path), "dev", "status"])
     captured = capsys.readouterr()
     assert result == 0
     assert "daemon:" in captured.out
-    assert "threads:" in captured.out
+    assert "conversations:" in captured.out
     assert "pending notifications:" in captured.out
 
 
@@ -3882,7 +3882,7 @@ def test_interactive_notify_send_and_dismiss(
 def test_interactive_unknown_command_shows_hints(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("sys.stdin", _TextInput(":th\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":conversatio\n:q\n"))
     monkeypatch.setattr(
         "nuself.daemon.lifecycle.status",
         _mock_status,
@@ -3891,8 +3891,8 @@ def test_interactive_unknown_command_shows_hints(
     captured = capsys.readouterr()
     assert result == 0
     assert "Did you mean:" in captured.out
-    assert ":thread" in captured.out
-    assert ":thread" in captured.out
+    assert ":conversation" in captured.out
+    assert ":conversation" in captured.out
 
 
 def test_interactive_unknown_command_no_hints_for_unrelated(
@@ -3934,16 +3934,16 @@ def test_eval_command_runs_conversation_fixtures(
 def test_interactive_history_shows_recent_messages(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.agent.chat import ThreadMessage, ThreadState
+    from nuself.conversation import ConversationMessage, ConversationState
 
-    store = ThreadStore(_authority(tmp_path))
-    state = ThreadState.empty("default")
-    state.messages.append(ThreadMessage(role="user", content="Hello there"))
+    store = ConversationStore(_authority(tmp_path))
+    state = ConversationState.empty("default")
+    state.messages.append(ConversationMessage(role="user", content="Hello there"))
     state.messages.append(
-        ThreadMessage(role="assistant", content="Hi! How can I help?")
+        ConversationMessage(role="assistant", content="Hi! How can I help?")
     )
-    state = ThreadState(
-        thread_id=state.thread_id,
+    state = ConversationState(
+        conversation_id=state.conversation_id,
         messages=state.messages,
         next_message_index=2,
     )
@@ -3965,55 +3965,55 @@ def test_interactive_history_shows_recent_messages(
 def test_interactive_archive_unarchive_delete_and_archived(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.agent.chat import ThreadState
+    from nuself.conversation import ConversationState
 
-    store = ThreadStore(_authority(tmp_path))
-    store.save(ThreadState.empty("alpha"))
-    store.save(ThreadState.empty("beta"))
+    store = ConversationStore(_authority(tmp_path))
+    store.save(ConversationState.empty("alpha"))
+    store.save(ConversationState.empty("beta"))
 
     monkeypatch.setattr(
         "sys.stdin",
         _TextInput(
-            ":archive\n:archived\n:unarchive alpha\n:archived\n:thread beta\n:delete\n:q\n"
+            ":archive\n:archived\n:unarchive alpha\n:archived\n:conversation beta\n:delete\n:q\n"
         ),
     )
     monkeypatch.setattr("nuself.daemon.lifecycle.status", _mock_status)
-    result = main(["--workspace", str(tmp_path), "thread", "open", "alpha"])
+    result = main(["--workspace", str(tmp_path), "conversation", "open", "alpha"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Archived thread: alpha" in captured.out
+    assert "Archived conversation: alpha" in captured.out
     assert "alpha" in captured.out  # listed in :archived
-    assert "Unarchived thread: alpha" in captured.out
-    assert "No archived threads." in captured.out  # after unarchive
-    assert "Deleted thread: beta" in captured.out
+    assert "Unarchived conversation: alpha" in captured.out
+    assert "No archived conversations." in captured.out  # after unarchive
+    assert "Deleted conversation: beta" in captured.out
 
 
-def test_thread_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.agent.chat import ThreadMessage, ThreadState
+def test_conversation_show_displays_messages(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.conversation import ConversationMessage, ConversationState
 
-    store = ThreadStore(_authority(tmp_path))
-    state = ThreadState.empty("focus")
-    state.messages.append(ThreadMessage(role="user", content="Tell me about memory."))
-    state = ThreadState(
-        thread_id=state.thread_id,
+    store = ConversationStore(_authority(tmp_path))
+    state = ConversationState.empty("focus")
+    state.messages.append(ConversationMessage(role="user", content="Tell me about memory."))
+    state = ConversationState(
+        conversation_id=state.conversation_id,
         messages=state.messages,
         next_message_index=1,
     )
     store.save(state)
 
-    result = main(["--workspace", str(tmp_path), "thread", "show", "focus"])
+    result = main(["--workspace", str(tmp_path), "conversation", "show", "focus"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "Thread: focus" in captured.out
+    assert "Conversation: focus" in captured.out
     assert "> Tell me about memory." in captured.out
 
 
-def test_thread_show_missing_thread(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--workspace", str(tmp_path), "thread", "show", "missing"])
+def test_conversation_show_missing_conversation(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--workspace", str(tmp_path), "conversation", "show", "missing"])
     captured = capsys.readouterr()
     assert result == 1
-    assert "Thread not found: missing" in captured.err
+    assert "Conversation not found: missing" in captured.err
 
 
 def test_daemon_start_noop_audits_explicit_transition(
@@ -4267,7 +4267,7 @@ def test_interactive_restart_restarts_daemon_and_keeps_session(
     assert calls == ["stop", "start"]
     assert "Restarted daemon:" in captured.out
     assert "pid=789" in captured.out
-    assert "[daemon] session status=running thread=default" in captured.out
+    assert "[daemon] session status=running conversation=default" in captured.out
 
 
 def test_daemon_start_with_mocked_lifecycle(
@@ -5752,7 +5752,7 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
         ["chat", "--help"],
         ["attach", "--help"],
         ["memory", "--help"],
-        ["thread", "--help"],
+        ["conversation", "--help"],
         ["inbox", "--help"],
         ["reason", "--help"],
         ["trace", "--help"],
@@ -5839,7 +5839,7 @@ def test_reflection_cli_promote_creates_reason_and_trace(
         status="pending",
         discussion_approved=True,
         discussion_trace=(),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at="2026-05-19T00:00:00+00:00",
         reviewed_at=None,
     )
@@ -5874,10 +5874,10 @@ def test_interactive_reason_without_args_shows_help(
 
     assert result == 0
     assert "Reason commands:" in captured.out
-    assert "No reason threads." not in captured.out
+    assert "No reasoning threads." not in captured.out
 
 
-def test_interactive_reason_list_shows_threads(
+def test_interactive_reason_list_shows_conversations(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     def fake_status(project_root: Path | None) -> DaemonStatus:
@@ -5886,7 +5886,7 @@ def test_interactive_reason_list_shows_threads(
     ReasonService(
         _authority(tmp_path),
         prompt_generator=_test_reason_prompt_generator,
-    ).start_thread("Track this reasoning thread")
+    ).start_thread("Track this reasoning conversation")
     monkeypatch.setattr("sys.stdin", _TextInput(":reason list\n:q\n"))
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
 
@@ -5895,7 +5895,7 @@ def test_interactive_reason_list_shows_threads(
 
     assert result == 0
     assert "[0] [reason] status=[active] priority=normal" in captured.out
-    assert "Track this reasoning thread" in captured.out
+    assert "Track this reasoning conversation" in captured.out
 
 
 def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
@@ -5949,16 +5949,16 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
         ["memory", "types", "--help"],
         ["memory", "source", "--help"],
         ["memory", "reindex", "--help"],
-        ["thread", "list", "--help"],
-        ["thread", "show", "--help"],
-        ["thread", "new", "--help"],
-        ["thread", "open", "--help"],
-        ["thread", "rename", "--help"],
-        ["thread", "branch", "--help"],
-        ["thread", "archive", "--help"],
-        ["thread", "delete", "--help"],
-        ["thread", "unarchive", "--help"],
-        ["thread", "archived", "--help"],
+        ["conversation", "list", "--help"],
+        ["conversation", "show", "--help"],
+        ["conversation", "new", "--help"],
+        ["conversation", "open", "--help"],
+        ["conversation", "rename", "--help"],
+        ["conversation", "branch", "--help"],
+        ["conversation", "archive", "--help"],
+        ["conversation", "delete", "--help"],
+        ["conversation", "unarchive", "--help"],
+        ["conversation", "archived", "--help"],
         ["persona", "list", "--help"],
         ["persona", "show", "--help"],
         ["persona", "delete", "--help"],
@@ -5984,7 +5984,7 @@ def test_nested_subcommand_help(argv: list[str]) -> None:
         ["eval", "--help"],
         ["open", "--help"],
         ["memory", "candidate", "--help"],
-        ["thread", "create", "--help"],
+        ["conversation", "create", "--help"],
     ],
 )
 def test_removed_v02_command_paths_fail(argv: list[str]) -> None:
@@ -6245,10 +6245,10 @@ def test_trace_cli_lists_shows_and_searches_records(
             kind="chat_turn",
             title="Temporal memory answer",
             summary="NuSelf answered with observed_at context.",
-            inputs=["thread:default:1:user"],
-            outputs=["thread:default:2:assistant"],
+            inputs=["conversation:default:1:user"],
+            outputs=["conversation:default:2:assistant"],
             evidence_refs=["mem_123"],
-            thread_id="default",
+            conversation_id="default",
         )
     )
 
@@ -6285,9 +6285,9 @@ def test_trace_cli_lists_records_related_to_artifact(
     )
     recorder.link(
         "memory:mem_123",
-        "reason:thread_1",
+        "reason:conversation_1",
         "supports",
-        "Memory supported a reason thread.",
+        "Memory supported a reason conversation.",
     )
 
     result = main(
@@ -6299,7 +6299,7 @@ def test_trace_cli_lists_records_related_to_artifact(
     assert trace.id not in output
     assert "Related memory trace" in output
     assert "Related links:" in output
-    assert "memory:mem_123 -> reason:thread_1" in output
+    assert "memory:mem_123 -> reason:conversation_1" in output
 
 
 def test_trace_cli_hides_internal_records_by_default(

@@ -1,10 +1,10 @@
-"""Historical v2→v3 migration: add the current collection set."""
+"""Historical v2→v3 migration: add the frozen v3 collection set."""
 
 from __future__ import annotations
 
 import sqlite3
 
-from nuself.storage import COLLECTION_NAMES
+from scripts.database_migrations.schema_identity import SCHEMA_COLLECTIONS
 
 
 def _identifier(value: str) -> str:
@@ -12,7 +12,7 @@ def _identifier(value: str) -> str:
 
 
 def upgrade(connection: sqlite3.Connection) -> None:
-    for name in COLLECTION_NAMES:
+    for name in SCHEMA_COLLECTIONS[3]:
         connection.execute(
             f"CREATE TABLE IF NOT EXISTS "
             f"{_identifier(f'col_{name}')} (id TEXT PRIMARY KEY)"

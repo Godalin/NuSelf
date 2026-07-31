@@ -74,7 +74,7 @@ class EvalFixture:
     """One golden conversation fixture."""
 
     name: str
-    thread_id: str
+    conversation_id: str
     user_message: str
     memory_entries: tuple[FixtureMemoryEntry, ...]
     response: ChatStructuredOutput
@@ -98,7 +98,7 @@ class EvalFixture:
             raise ValueError("response must be an object")
         return cls(
             name=_expect_str(data, "name"),
-            thread_id=_expect_str(data, "thread_id"),
+            conversation_id=_expect_str(data, "conversation_id"),
             user_message=_expect_str(data, "user_message"),
             memory_entries=tuple(entries),
             response=ChatStructuredOutput.model_validate(response_raw),
@@ -164,7 +164,10 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
         application,
         response_service=FixtureResponseService(fixture.response),
     )
-    result = agent.respond(fixture.user_message, fixture.thread_id)
+    result = agent.respond(
+        fixture.user_message,
+        fixture.conversation_id,
+    )
     return score_result(fixture, result)
 
 

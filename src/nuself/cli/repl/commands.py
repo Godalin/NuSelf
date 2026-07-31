@@ -11,7 +11,7 @@ from nuself.application import (
     compose_trace_services,
 )
 from nuself.application.reflection import compose_reflection_repository
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.cli.composition import compose_cli_conversation_store
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
     format_start_failure,
@@ -177,11 +177,11 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
             return "No reason threads."
         return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads))
     if command.startswith("show "):
-        thread_id = command.removeprefix("show ").strip()
+        conversation_id = command.removeprefix("show ").strip()
         try:
-            thread = service.show_thread(thread_id)
+            thread = service.show_thread(conversation_id)
         except ReasonNotFound:
-            return f"Reason thread not found: {thread_id}"
+            return f"Reason thread not found: {conversation_id}"
         steps = service.list_steps(thread.id)
         return render_reason_detail(thread, steps)
     if command.startswith("start "):
@@ -192,7 +192,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
-        thread_id = command.removeprefix("advance ").strip()
+        conversation_id = command.removeprefix("advance ").strip()
         from nuself.application.reason import compose_reason_advancer
 
         advancer = compose_reason_advancer(
@@ -200,42 +200,42 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         )
         service = _reason_service(project_root, advancer=advancer)
         try:
-            thread = service.advance_thread(thread_id)
+            thread = service.advance_thread(conversation_id)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
     if command.startswith("pause "):
-        thread_id = command.removeprefix("pause ").strip()
+        conversation_id = command.removeprefix("pause ").strip()
         try:
-            thread = service.pause_thread(thread_id)
+            thread = service.pause_thread(conversation_id)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Paused reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resume "):
-        thread_id = command.removeprefix("resume ").strip()
+        conversation_id = command.removeprefix("resume ").strip()
         try:
-            thread = service.resume_thread(thread_id)
+            thread = service.resume_thread(conversation_id)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resumed reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resolve "):
-        thread_id = command.removeprefix("resolve ").strip()
+        conversation_id = command.removeprefix("resolve ").strip()
         try:
-            thread = service.resolve_thread(thread_id)
+            thread = service.resolve_thread(conversation_id)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resolved reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("archive "):
-        thread_id = command.removeprefix("archive ").strip()
+        conversation_id = command.removeprefix("archive ").strip()
         try:
-            thread = service.archive_thread(thread_id)
+            thread = service.archive_thread(conversation_id)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("delete "):
-        thread_id = command.removeprefix("delete ").strip()
+        conversation_id = command.removeprefix("delete ").strip()
         try:
-            tid = service.delete_thread(thread_id)
+            tid = service.delete_thread(conversation_id)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Deleted reason thread: {tid}"
@@ -494,23 +494,23 @@ def interactive_memory_help(command: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def handle_interactive_history_command(project_root: Path | None, thread_id: str) -> str:
+def handle_interactive_history_command(project_root: Path | None, conversation_id: str) -> str:
     try:
-        state = compose_cli_thread_store(project_root).load(thread_id)
+        state = compose_cli_conversation_store(project_root).load(conversation_id)
     except Exception as exc:
         report_chat_failure(
             exc,
             event="interactive_history_load_failed",
             project_root=project_root,
-            metadata={"thread_id": thread_id},
+            metadata={"conversation_id": conversation_id},
         )
         return (
-            f"Unable to load thread history for '{thread_id}': "
+            f"Unable to load conversation history for '{conversation_id}': "
             f"{diagnostic_exception_chain(exc)}"
         )
     if not state.messages:
-        return "No messages in this thread."
-    lines = [f"Recent messages in '{thread_id}':"]
+        return "No messages in this conversation."
+    lines = [f"Recent messages in '{conversation_id}':"]
     for msg in state.messages[-10:]:
         prefix = ">" if msg.role == "user" else "<"
         content = msg.content[:120]
@@ -694,9 +694,9 @@ def handle_interactive_watch_command(project_root: Path | None) -> None:
         print("\nStopped watching.")
 
 
-def handle_interactive_threads_command(project_root: Path | None) -> str:
-    store = compose_cli_thread_store(project_root)
+def handle_interactive_conversations_command(project_root: Path | None) -> str:
+    store = compose_cli_conversation_store(project_root)
     ids = store.list()
     if not ids:
-        return "No active threads."
-    return "Active threads:\n" + "\n".join(f"  {tid}" for tid in ids)
+        return "No active conversations."
+    return "Active conversations:\n" + "\n".join(f"  {tid}" for tid in ids)

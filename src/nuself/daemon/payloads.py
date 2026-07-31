@@ -94,13 +94,13 @@ class ChatRequestPayload:
     """Validated inputs for one daemon chat request."""
 
     message: str
-    thread_id: str = "default"
+    conversation_id: str = "default"
     turn_id: str | None = None
 
     def to_wire(self) -> dict[str, JsonValue]:
         payload: dict[str, JsonValue] = {
             "message": self.message,
-            "thread_id": self.thread_id,
+            "conversation_id": self.conversation_id,
         }
         if self.turn_id is not None:
             payload["turn_id"] = self.turn_id
@@ -111,7 +111,7 @@ class ChatRequestPayload:
         _expect_fields(
             payload,
             required=frozenset({"message"}),
-            optional=frozenset({"thread_id", "turn_id"}),
+            optional=frozenset({"conversation_id", "turn_id"}),
         )
         return cls(
             message=_required_string(
@@ -120,9 +120,9 @@ class ChatRequestPayload:
                 context="chat request",
                 allow_blank=True,
             ),
-            thread_id=_optional_non_blank_string(
+            conversation_id=_optional_non_blank_string(
                 payload,
-                "thread_id",
+                "conversation_id",
                 default="default",
                 context="chat request",
             ),
@@ -234,7 +234,7 @@ class ChatResponsePayload:
 
     answer: str
     reply: str
-    thread_id: str
+    conversation_id: str
     evidence_references: tuple[str, ...]
     epistemic_status: str | None
     confidence: float | None = None
@@ -243,7 +243,7 @@ class ChatResponsePayload:
         payload: dict[str, JsonValue] = {
             "answer": self.answer,
             "reply": self.reply,
-            "thread_id": self.thread_id,
+            "conversation_id": self.conversation_id,
             "evidence_references": list(self.evidence_references),
             "epistemic_status": self.epistemic_status,
         }
@@ -262,7 +262,7 @@ class ChatResponsePayload:
                 {
                     "answer",
                     "reply",
-                    "thread_id",
+                    "conversation_id",
                     "evidence_references",
                     "epistemic_status",
                 }
@@ -315,9 +315,9 @@ class ChatResponsePayload:
                 context="chat response",
                 allow_blank=True,
             ),
-            thread_id=_required_string(
+            conversation_id=_required_string(
                 payload,
-                "thread_id",
+                "conversation_id",
                 context="chat response",
             ),
             evidence_references=tuple(evidence_references),

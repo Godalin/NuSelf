@@ -110,7 +110,7 @@ def test_export_task_uses_reason_resource_and_job_context(
 
     assert len(observed) == 1
     assert observed[0] == RuntimeContext(
-        thread_id="thread-1",
+        reason_id="thread-1",
         request_id="request-1",
         turn_id="turn-1",
         job_id="job-1",

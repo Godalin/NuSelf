@@ -262,8 +262,8 @@ interactive input state.
   causes a concurrent-state failure instead of being overwritten. This lock
   order prevents LangGraph worker threads and daemon background workers from
   deadlocking behind a transaction owned by the request thread.
-- Persisted ThreadState decoding is fail-closed. Every `messages` member must
-  be an object accepted by the exact ThreadMessage decoder; malformed members
+- Persisted ConversationState decoding is fail-closed. Every `messages` member must
+  be an object accepted by the exact `ConversationMessage` decoder; malformed members
   invalidate the complete thread instead of being filtered. Message indexes
   are non-boolean, non-negative integers and must satisfy
   `next_message_index == message_start_index + len(messages)`. A legacy record
@@ -460,7 +460,7 @@ Breaking moves:
 | `nuself config`               | `nuself dev config`                           |
 | `nuself eval`                 | `nuself dev eval`                             |
 | `nuself memory candidate ...` | `nuself memory review ...`                    |
-| `nuself thread create ...`    | `nuself thread new ...`                       |
+| `nuself conversation create ...` | `nuself conversation new ...`             |
 
 Top-level help should group commands as:
 
@@ -480,7 +480,7 @@ REPL commands mirror the same model:
 | `:inbox reflection ...` | Reflection commands          |
 | `:inbox notify ...`     | Notification commands        |
 | `:mem`, `:m`            | Memory preview               |
-| `:thread`, `:t`         | Thread switching/listing     |
+| `:conversation`, `:c`   | Conversation switching/listing |
 | `:reason`               | Long-run reasoning commands  |
 | `:trace`                | Thought provenance commands  |
 | `:dev status`           | Session/system status        |

@@ -140,7 +140,7 @@ def test_scheduler_replaces_task_source_and_preserves_correlation() -> None:
     scheduler = DaemonScheduler({"chat.turn": run})
     scheduler.start()
     with runtime_context(
-        thread_id="thread-1",
+        conversation_id="thread-1",
         turn_id="turn-1",
         request_id="request-1",
         source="request",
@@ -151,7 +151,7 @@ def test_scheduler_replaces_task_source_and_preserves_correlation() -> None:
     submitted.completion.result(timeout=1)
     scheduler.shutdown()
     assert observed is not None
-    assert observed.thread_id == "thread-1"
+    assert observed.conversation_id == "thread-1"
     assert observed.turn_id == "turn-1"
     assert observed.request_id == "request-1"
     assert observed.source == "daemon.task.chat.turn"

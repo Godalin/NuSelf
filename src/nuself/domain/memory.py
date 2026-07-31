@@ -28,7 +28,7 @@ ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected", "quarantined",
 PrivacyLevel: TypeAlias = Literal["private", "shareable"]
 MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
 MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
-MemoryEvidenceSourceType: TypeAlias = Literal["thread", "manual", "source", "optimizer"]
+MemoryEvidenceSourceType: TypeAlias = Literal["conversation", "manual", "source", "optimizer"]
 
 
 def new_memory_entry_id() -> str:
@@ -1306,7 +1306,7 @@ def _expect_candidate_review_state(data: dict[str, object], field_name: str) -> 
 
 def _expect_evidence_source_type(data: dict[str, object], field_name: str) -> MemoryEvidenceSourceType:
     value = _expect_str(data, field_name)
-    if value not in {"thread", "manual", "source", "optimizer"}:
+    if value not in {"conversation", "manual", "source", "optimizer"}:
         raise ValueError(f"unsupported evidence source type: {value}")
     return cast(MemoryEvidenceSourceType, value)
 

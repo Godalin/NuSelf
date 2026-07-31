@@ -11,7 +11,7 @@ from nuself.config import ConfigSystem
 from nuself.logs import LogEvent, read_log_events
 
 _REPAIRABLE_COLLECTION_ALIASES = {
-    "chat_threads": "threads",
+    "conversations": "conversations",
     "memory_entries": "memory",
 }
 

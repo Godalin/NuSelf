@@ -66,7 +66,7 @@ def _run_interactive_cleanup(
             "memory.curator.run",
             lambda: callbacks.run_curator(
                 project_root,
-                tuple(session.thread_start_indexes),
+                tuple(session.conversation_start_indexes),
             ),
         ),
     )
@@ -107,22 +107,22 @@ def run_interactive_loop(
     project_root: Path | None,
     callbacks: ReplCallbacks,
     *,
-    initial_thread_id: str = "default",
+    initial_conversation_id: str = "default",
 ) -> int:
     interactive_input = InteractiveInput(project_root)
-    current_thread_id = initial_thread_id
+    current_conversation_id = initial_conversation_id
     session = InteractiveSession(connected_at=datetime.now(UTC))
-    session.start_index_for(project_root, current_thread_id)
+    session.start_index_for(project_root, current_conversation_id)
     print(callbacks.brand_banner())
     print(
         "νSelf interactive mode. Type :help for commands, "
         ":q to quit."
     )
-    callbacks.show_session_header(project_root, current_thread_id)
+    callbacks.show_session_header(project_root, current_conversation_id)
     callbacks.show_startup_notices(project_root)
 
     def run_loop() -> int:
-        nonlocal current_thread_id
+        nonlocal current_conversation_id
         while True:
             try:
                 line = interactive_input.read()
@@ -136,17 +136,17 @@ def run_interactive_loop(
             if message == "":
                 continue
             if message.startswith(":"):
-                previous_thread_id = current_thread_id
-                result, current_thread_id = callbacks.handle_command(
+                previous_conversation_id = current_conversation_id
+                result, current_conversation_id = callbacks.handle_command(
                     message,
                     project_root,
-                    current_thread_id,
+                    current_conversation_id,
                     session,
                 )
                 session.start_index_for(
-                    project_root, current_thread_id
+                    project_root, current_conversation_id
                 )
-                if current_thread_id != previous_thread_id:
+                if current_conversation_id != previous_conversation_id:
                     session.clear_retry()
                 if result == "exit":
                     return CliExitCode.SUCCESS
@@ -160,7 +160,7 @@ def run_interactive_loop(
                         callbacks.send_turn(
                             send_message,
                             project_root,
-                            offer.thread_id,
+                            offer.conversation_id,
                             offer.message,
                             session,
                         )
@@ -169,20 +169,20 @@ def run_interactive_loop(
                         print("\nInterrupted.")
                     callbacks.show_session_header(
                         project_root,
-                        current_thread_id,
+                        current_conversation_id,
                     )
                     continue
                 if result == "redraw_header":
                     callbacks.show_session_header(
                         project_root,
-                        current_thread_id,
+                        current_conversation_id,
                     )
                 continue
             try:
                 result = callbacks.send_turn(
                     send_message,
                     project_root,
-                    current_thread_id,
+                    current_conversation_id,
                     message,
                     session,
                 )
@@ -191,7 +191,7 @@ def run_interactive_loop(
                 continue
             callbacks.show_session_header(
                 project_root,
-                current_thread_id,
+                current_conversation_id,
             )
             if result != CliExitCode.SUCCESS:
                 continue

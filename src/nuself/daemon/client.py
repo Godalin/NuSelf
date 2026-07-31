@@ -259,7 +259,7 @@ def health(
 def chat(
     message: str,
     *,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     turn_id: str | None = None,
     project_root: Path | None = None,
     timeout: float,
@@ -268,7 +268,7 @@ def chat(
 
     payload = ChatRequestPayload(
         message=message,
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         turn_id=turn_id,
     )
     return decode_response(

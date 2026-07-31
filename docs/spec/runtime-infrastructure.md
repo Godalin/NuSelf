@@ -158,7 +158,7 @@ dispatch and is not routed through `HandlerRegistry`.
 Daemon dispatch installs one request-scope middleware. Every handler inherits
 the daemon request id and `source="daemon"` through `RuntimeContext`, and log
 activity projection is active for the complete handler invocation. Individual
-handlers may add thread, turn, job, or trace fields through nested context
+handlers may add conversation, reason, turn, job, or trace fields through nested context
 scopes. Unknown request mapping and unexpected exception-to-response encoding
 remain daemon transport responsibilities outside the middleware pipeline.
 Unsupported-request mapping is decided from the sealed registry key set before
@@ -179,7 +179,7 @@ Request payload field sets are exact:
 
 - `ping`, `health`, and `shutdown` accept only an empty object;
 - `chat` requires string `message`, accepts optional non-blank string
-  `thread_id` (default `default`) and optional non-blank string `turn_id`;
+  `conversation_id` (default `default`) and optional non-blank string `turn_id`;
 - `activity_open` requires non-blank string `turn_id`;
 - `activity_next` requires non-blank string `subscription_id` and accepts
   optional integer `timeout_ms` (default 200, range 0..5000) and `limit`
@@ -212,7 +212,7 @@ Success response payload field sets are also exact:
 
 - `ping` and `shutdown` return one string `message`;
 - `health` returns one complete typed `scheduler` snapshot;
-- `chat` returns string `answer`, `reply`, and non-blank `thread_id`, a string
+- `chat` returns string `answer`, `reply`, and non-blank `conversation_id`, a string
   list `evidence_references`, nullable string `epistemic_status`, and optional
   numeric `confidence`;
 - activity open/next/close return, respectively, non-blank
@@ -387,7 +387,7 @@ It contains:
 - kind/name;
 - producer component;
 - creation timestamp;
-- correlation fields (`request_id`, `turn_id`, `thread_id`, `job_id`,
+- correlation fields (`request_id`, `turn_id`, `conversation_id`, `reason_id`, `job_id`,
   `trace_id`);
 - JSON-safe typed payload.
 
@@ -450,10 +450,10 @@ retained from a previous message. The prior worker context is restored after
 each message on success, rejection, or failure.
 
 Reason export `JobMessage` consumption additionally projects its durable
-`resource_id` as `thread_id`. Initial queued messages retain the originating
+`resource_id` as `reason_id`. Initial queued messages retain the originating
 request, turn, and trace fields. Retry messages created inside that activated
 scope inherit the same chain and job id. Startup reconciliation messages have
-no invented request identity but still carry their durable job/thread identity.
+no invented request identity but still carry their durable job/reason identity.
 All logs emitted while inspecting, composing, failing, or retrying that job
 therefore receive top-level correlation fields without relying on duplicated
 metadata.
@@ -539,7 +539,7 @@ attach startup requests or previous operations to unrelated background work.
 
 A domain operation must not create a parallel `ContextVar` for an identity
 already represented by `RuntimeContext`. `ReasonAdvancer` establishes a nested
-runtime scope whose `thread_id` is the active durable reason thread. It
+runtime scope whose `reason_id` is the active durable reason thread. It
 preserves caller-owned request, turn, job, trace, and source fields, so manual
 commands and scheduled ticks retain their causal chain while reason workspace
 and persona tools resolve one authoritative thread identity.
@@ -670,7 +670,7 @@ subscriber.
 
 - A new logical turn publishes `chat/turn.started` immediately before pipeline
   execution.
-- `chat/turn.completed` is published only after `ThreadStore.update()` has
+- `chat/turn.completed` is published only after `ConversationStore.update()` has
   atomically saved the assistant result. Optional chat-turn trace projection
   also occurs after that commit and outside the per-thread lock. Its payload
   includes duration and stage-trace metadata.

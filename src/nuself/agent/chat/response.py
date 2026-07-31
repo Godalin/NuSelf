@@ -89,7 +89,7 @@ class ConversationResponseSynthesizer:
         write_chat_audit(
             "final_response_completed",
             project_root=self._project_root,
-            thread_id=state.thread_id,
+            conversation_id=state.conversation_id,
             metadata={"epistemic_status": draft.epistemic_status},
         )
         return draft

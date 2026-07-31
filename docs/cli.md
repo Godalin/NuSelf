@@ -70,15 +70,15 @@ uv run nuself daemon stop
 The daemon hosts chat plus background memory, reflection, reasoning, and
 notification workers over a local Unix socket.
 
-## Threads
+## Conversations
 
 ```bash
-uv run nuself thread list
-uv run nuself thread new research
-uv run nuself thread open research
-uv run nuself thread branch research research-alt
-uv run nuself thread archive research
-uv run nuself thread archived
+uv run nuself conversation list
+uv run nuself conversation new research
+uv run nuself conversation open research
+uv run nuself conversation branch research research-alt
+uv run nuself conversation archive research
+uv run nuself conversation archived
 ```
 
 Add `--help` to a subcommand for ID/index options and destructive-operation

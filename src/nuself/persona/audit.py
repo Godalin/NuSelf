@@ -233,7 +233,7 @@ def write_persona_audit(
     *,
     project_root: Path | None,
     metadata: dict[str, object] | None = None,
-    thread_id: str | None = None,
+    conversation_id: str | None = None,
 ) -> LogEvent | None:
     """Validate and project one successful Persona audit."""
 
@@ -250,7 +250,7 @@ def write_persona_audit(
         definition.event,
         _MESSAGES[event],
         project_root=project_root,
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         level=definition.level,
         status=definition.status,
         metadata=dict(event_metadata),

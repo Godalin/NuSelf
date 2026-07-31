@@ -18,7 +18,7 @@ def test_idea_candidate_round_trip() -> None:
         urgency=0.6,
         interruption_cost=0.3,
         evidence_refs=("ref-1", "ref-2"),
-        suggested_thread_id="thread-1",
+        suggested_conversation_id="conversation-1",
         source_summary="summary",
         created_at="2024-01-01T00:00:00",
     )
@@ -27,10 +27,10 @@ def test_idea_candidate_round_trip() -> None:
     assert restored == original
 
 
-def test_idea_candidate_without_thread_id() -> None:
+def test_idea_candidate_without_conversation_id() -> None:
     original = IdeaCandidate(
         id="c2",
-        title="No Thread",
+        title="No Conversation",
         body="Body",
         candidate_type="question",
         confidence=0.5,
@@ -38,14 +38,14 @@ def test_idea_candidate_without_thread_id() -> None:
         urgency=0.5,
         interruption_cost=0.5,
         evidence_refs=(),
-        suggested_thread_id=None,
+        suggested_conversation_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )
     wire = original.to_wire()
-    assert "suggested_thread_id" not in wire
+    assert "suggested_conversation_id" not in wire
     restored = IdeaCandidate.from_wire(wire)
-    assert restored.suggested_thread_id is None
+    assert restored.suggested_conversation_id is None
 
 
 def test_idea_candidate_invalid_type_raises() -> None:

@@ -75,7 +75,7 @@ Trace fields:
 | `evidence_refs` | `[]` (no direct evidence chain in v0.2.0) |
 | `outputs` | `["reflection:{entry.id}"]` |
 | `participants` | `["reflection"]` |
-| `thread_id` | Key used for link building or cross-referencing, e.g. `"reflections"` |
+| `conversation_id` | Key used for link building or cross-referencing, e.g. `"reflections"` |
 | `visibility` | `"private"` |
 | `decision_points` | `["Relevance gate passed: composite=... threshold=...", "Persona discussion approved/rejected"]` |
 | `metadata` | `{"candidate_type": ..., "composite_score": ..., "discussion_approved": ...}` |

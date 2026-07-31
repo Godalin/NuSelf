@@ -40,11 +40,11 @@ same change.
 
 ## Semi-Durable Chat Threads
 
-- [ ] Make ThreadStore lifecycle mutations crash-durable across directories.
+- [ ] Make ConversationStore lifecycle mutations crash-durable across directories.
   Specify journaling or idempotent recovery for rename/archive/unarchive,
   durable deletion, directory synchronization, and duplicate old/new names
   before strengthening the current semi-durable contract.
-- [ ] Remove `ThreadState` constructor index inference for explicit integer
+- [ ] Remove `ConversationState` constructor index inference for explicit integer
   values. Use a distinct missing sentinel for legacy derivation so internal
   construction rejects inconsistent indexes as strictly as wire decoding.
 

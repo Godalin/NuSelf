@@ -1,5 +1,5 @@
 # pyright: reportPrivateUsage=false
-"""Tests for ThreadStore thread management operations."""
+"""Tests for ConversationStore thread management operations."""
 
 from __future__ import annotations
 
@@ -12,20 +12,20 @@ from pathlib import Path
 
 import pytest
 
-from nuself.agent.chat import ThreadMessage, ThreadState
-from nuself.agent.chat.thread import _PendingTurn
-from thread_fixtures import ThreadStore
+from nuself.conversation import ConversationMessage, ConversationState
+from nuself.conversation import _PendingTurn
+from conversation_fixtures import ConversationStore
 from nuself.storage import get_default_backend
 
 
 def _hold_thread_lock(
     project_root: str,
-    thread_id: str,
+    conversation_id: str,
     ready: Event,
     release: Event,
 ) -> None:
-    store = ThreadStore(Path(project_root))
-    with store._locked(thread_id):
+    store = ConversationStore(Path(project_root))
+    with store._locked(conversation_id):
         ready.set()
         if not release.wait(timeout=10):
             raise RuntimeError("parent did not release thread lock")
@@ -36,19 +36,19 @@ def _hold_thread_update(
     ready: Event,
     release: Event,
 ) -> None:
-    store = ThreadStore(Path(project_root))
+    store = ConversationStore(Path(project_root))
 
-    def update(state: ThreadState) -> tuple[ThreadState, None]:
+    def update(state: ConversationState) -> tuple[ConversationState, None]:
         ready.set()
         if not release.wait(timeout=10):
-            raise RuntimeError("parent did not release thread update")
+            raise RuntimeError("parent did not release conversation update")
         return (
-            ThreadState(
-                thread_id=state.thread_id,
+            ConversationState(
+                conversation_id=state.conversation_id,
                 summary=state.summary,
                 messages=[
                     *state.messages,
-                    ThreadMessage(role="user", content="latest"),
+                    ConversationMessage(role="user", content="latest"),
                 ],
                 message_start_index=state.message_start_index,
                 next_message_index=state.next_message_index + 1,
@@ -65,7 +65,7 @@ def _run_thread_lifecycle(
     attempted: Event,
     done: Event,
 ) -> None:
-    store = ThreadStore(Path(project_root))
+    store = ConversationStore(Path(project_root))
     attempted.set()
     if operation == "rename":
         store.rename("source", "target")
@@ -87,14 +87,14 @@ def _spawn_context() -> SpawnContext:
 
 
 def test_list_returns_empty_when_no_threads(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     assert store.list() == []
 
 
 def test_update_does_not_hold_sqlite_lock_across_callback(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     backend = get_default_backend(tmp_path)
     completed = threading.Event()
 
@@ -102,7 +102,7 @@ def test_update_does_not_hold_sqlite_lock_across_callback(
         backend.collection("memory_entries").list()
         completed.set()
 
-    def update(state: ThreadState) -> tuple[ThreadState, None]:
+    def update(state: ConversationState) -> tuple[ConversationState, None]:
         worker = threading.Thread(target=read_from_worker)
         worker.start()
         worker.join(timeout=2)
@@ -112,16 +112,16 @@ def test_update_does_not_hold_sqlite_lock_across_callback(
     store.update("default", update)
 
 
-def test_update_rejects_direct_concurrent_thread_change(
+def test_update_rejects_direct_concurrent_conversation_change(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    collection = get_default_backend(tmp_path).collection("chat_threads")
+    store = ConversationStore(tmp_path)
+    collection = get_default_backend(tmp_path).collection("conversations")
 
-    def update(state: ThreadState) -> tuple[ThreadState, None]:
+    def update(state: ConversationState) -> tuple[ConversationState, None]:
         collection.put(
             "default",
-            ThreadState.empty("default").to_wire(),
+            ConversationState.empty("default").to_wire(),
         )
         return state, None
 
@@ -141,7 +141,7 @@ def test_thread_state_rejects_boolean_message_indexes(
     value: object,
 ) -> None:
     wire: dict[str, object] = {
-        "thread_id": "strict",
+        "conversation_id": "strict",
         "summary": "",
         "messages": [],
         "message_start_index": 0,
@@ -150,14 +150,14 @@ def test_thread_state_rejects_boolean_message_indexes(
     wire[field_name] = value
 
     with pytest.raises(ValueError, match="index"):
-        ThreadState.from_wire(wire)
+        ConversationState.from_wire(wire)
 
 
-def test_thread_state_rejects_non_object_message_member() -> None:
-    with pytest.raises(ValueError, match="every thread message"):
-        ThreadState.from_wire(
+def test_conversation_state_rejects_non_object_message_member() -> None:
+    with pytest.raises(ValueError, match="every conversation message"):
+        ConversationState.from_wire(
             {
-                "thread_id": "strict",
+                "conversation_id": "strict",
                 "summary": "",
                 "messages": [
                     {"role": "user", "content": "kept"},
@@ -171,9 +171,9 @@ def test_thread_state_rejects_non_object_message_member() -> None:
 
 def test_thread_state_rejects_inconsistent_absolute_index() -> None:
     with pytest.raises(ValueError, match="message count"):
-        ThreadState.from_wire(
+        ConversationState.from_wire(
             {
-                "thread_id": "strict",
+                "conversation_id": "strict",
                 "summary": "",
                 "messages": [{"role": "user", "content": "one"}],
                 "message_start_index": 4,
@@ -183,9 +183,9 @@ def test_thread_state_rejects_inconsistent_absolute_index() -> None:
 
 
 def test_thread_state_derives_missing_legacy_next_index() -> None:
-    state = ThreadState.from_wire(
+    state = ConversationState.from_wire(
         {
-            "thread_id": "legacy",
+            "conversation_id": "legacy",
             "summary": "",
             "messages": [{"role": "user", "content": "one"}],
             "message_start_index": 4,
@@ -198,7 +198,7 @@ def test_thread_state_derives_missing_legacy_next_index() -> None:
 
 def test_thread_message_rejects_unknown_wire_field() -> None:
     with pytest.raises(ValueError, match="unsupported fields"):
-        ThreadMessage.from_wire(
+        ConversationMessage.from_wire(
             {
                 "role": "user",
                 "content": "one",
@@ -207,44 +207,44 @@ def test_thread_message_rejects_unknown_wire_field() -> None:
         )
 
 
-def test_list_returns_thread_ids(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("alpha"))
-    store.save(ThreadState.empty("beta"))
+def test_list_returns_conversation_ids(tmp_path: Path) -> None:
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("alpha"))
+    store.save(ConversationState.empty("beta"))
     assert store.list() == ["alpha", "beta"]
 
 
 def test_list_ignores_lock_files(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("only"))
-    lock_path = tmp_path / "runtime" / "thread-locks" / "only.lock"
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("only"))
+    lock_path = tmp_path / "runtime" / "conversation-locks" / "only.lock"
     lock_path.write_text("lock")
     assert store.list() == ["only"]
 
 
 def test_list_ignores_archived_threads(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("active"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("active"))
     store.archive("active")  # archive removes from root
-    store.save(ThreadState.empty("active"))  # recreate active
+    store.save(ConversationState.empty("active"))  # recreate active
     assert store.list() == ["active"]
 
 
 def test_rename_moves_thread_file(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("old"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("old"))
     store.rename("old", "new")
     assert store.list() == ["new"]
     loaded = store.load("new")
-    assert loaded.thread_id == "new"
+    assert loaded.conversation_id == "new"
 
 
 def test_rename_preserves_messages_and_summary(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    state = ThreadState(
-        thread_id="old",
+    store = ConversationStore(tmp_path)
+    state = ConversationState(
+        conversation_id="old",
         summary="prior summary",
-        messages=[ThreadMessage(role="user", content="hello")],
+        messages=[ConversationMessage(role="user", content="hello")],
         message_start_index=0,
         next_message_index=1,
     )
@@ -261,8 +261,8 @@ def test_rename_preserves_messages_and_summary(tmp_path: Path) -> None:
 def test_rename_waits_for_update_and_moves_latest_snapshot(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("source"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("source"))
     context = _spawn_context()
     update_ready = context.Event()
     release_update = context.Event()
@@ -295,22 +295,22 @@ def test_rename_waits_for_update_and_moves_latest_snapshot(
     assert renamer.exitcode == 0
     assert store.load("target").messages[-1].content == "latest"
     assert (
-        tmp_path / "runtime" / "thread-locks" / "source.lock"
+        tmp_path / "runtime" / "conversation-locks" / "source.lock"
     ).exists()
     assert (
-        tmp_path / "runtime" / "thread-locks" / "target.lock"
+        tmp_path / "runtime" / "conversation-locks" / "target.lock"
     ).exists()
 
 
 def test_rename_same_id_is_noop(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("same"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("same"))
     store.rename("same", "same")
     assert store.list() == ["same"]
 
 
 def test_rename_missing_thread_raises(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     try:
         store.rename("missing", "new")
         raise AssertionError("expected ValueError")
@@ -319,9 +319,9 @@ def test_rename_missing_thread_raises(tmp_path: Path) -> None:
 
 
 def test_rename_to_existing_thread_raises(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("a"))
-    store.save(ThreadState.empty("b"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("a"))
+    store.save(ConversationState.empty("b"))
     try:
         store.rename("a", "b")
         raise AssertionError("expected ValueError")
@@ -330,20 +330,20 @@ def test_rename_to_existing_thread_raises(tmp_path: Path) -> None:
 
 
 def test_branch_copies_all_messages_by_default(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    source = ThreadState(
-        thread_id="source",
+    store = ConversationStore(tmp_path)
+    source = ConversationState(
+        conversation_id="source",
         summary="summary",
         messages=[
-            ThreadMessage(role="user", content="a"),
-            ThreadMessage(role="assistant", content="b"),
+            ConversationMessage(role="user", content="a"),
+            ConversationMessage(role="assistant", content="b"),
         ],
         message_start_index=0,
         next_message_index=2,
     )
     store.save(source)
     branched = store.branch("source", "fork")
-    assert branched.thread_id == "fork"
+    assert branched.conversation_id == "fork"
     assert len(branched.messages) == 2
     assert branched.next_message_index == 2
     loaded = store.load("fork")
@@ -351,14 +351,14 @@ def test_branch_copies_all_messages_by_default(tmp_path: Path) -> None:
 
 
 def test_branch_at_specific_index(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    source = ThreadState(
-        thread_id="source",
+    store = ConversationStore(tmp_path)
+    source = ConversationState(
+        conversation_id="source",
         summary="summary",
         messages=[
-            ThreadMessage(role="user", content="a"),
-            ThreadMessage(role="assistant", content="b"),
-            ThreadMessage(role="user", content="c"),
+            ConversationMessage(role="user", content="a"),
+            ConversationMessage(role="assistant", content="b"),
+            ConversationMessage(role="user", content="c"),
         ],
         message_start_index=5,
         next_message_index=8,
@@ -373,11 +373,11 @@ def test_branch_at_specific_index(tmp_path: Path) -> None:
 
 
 def test_branch_at_zero_index(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    source = ThreadState(
-        thread_id="source",
+    store = ConversationStore(tmp_path)
+    source = ConversationState(
+        conversation_id="source",
         summary="summary",
-        messages=[ThreadMessage(role="user", content="a")],
+        messages=[ConversationMessage(role="user", content="a")],
         message_start_index=3,
         next_message_index=4,
     )
@@ -388,7 +388,7 @@ def test_branch_at_zero_index(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("operation", "held_thread_id"),
+    ("operation", "held_conversation_id"),
     [
         ("rename", "source"),
         ("rename", "target"),
@@ -402,10 +402,10 @@ def test_branch_at_zero_index(tmp_path: Path) -> None:
 def test_lifecycle_operations_wait_for_cross_process_thread_locks(
     tmp_path: Path,
     operation: str,
-    held_thread_id: str,
+    held_conversation_id: str,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("source"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("source"))
     if operation == "unarchive":
         store.archive("source")
     context = _spawn_context()
@@ -417,7 +417,7 @@ def test_lifecycle_operations_wait_for_cross_process_thread_locks(
         target=_hold_thread_lock,
         args=(
             str(tmp_path),
-            held_thread_id,
+            held_conversation_id,
             lock_ready,
             release_lock,
         ),
@@ -446,16 +446,16 @@ def test_lifecycle_operations_wait_for_cross_process_thread_locks(
     assert (
         tmp_path
         / "runtime"
-        / "thread-locks"
-        / f"{held_thread_id}.lock"
+        / "conversation-locks"
+        / f"{held_conversation_id}.lock"
     ).exists()
 
 
 def test_load_uses_committed_snapshot_while_write_transaction_is_held(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    expected = ThreadState.empty("default")
+    store = ConversationStore(tmp_path)
+    expected = ConversationState.empty("default")
     store.save(expected)
     context = _spawn_context()
     lock_ready = context.Event()
@@ -483,7 +483,7 @@ def test_load_uses_committed_snapshot_while_write_transaction_is_held(
 
 
 def test_branch_missing_source_raises(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     try:
         store.branch("missing", "fork")
         raise AssertionError("expected ValueError")
@@ -492,9 +492,9 @@ def test_branch_missing_source_raises(tmp_path: Path) -> None:
 
 
 def test_branch_to_existing_raises(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("source"))
-    store.save(ThreadState.empty("fork"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("source"))
+    store.save(ConversationState.empty("fork"))
     try:
         store.branch("source", "fork")
         raise AssertionError("expected ValueError")
@@ -503,11 +503,11 @@ def test_branch_to_existing_raises(tmp_path: Path) -> None:
 
 
 def test_branch_out_of_range_raises(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     store.save(
-        ThreadState(
-            thread_id="source",
-            messages=[ThreadMessage(role="user", content="a")],
+        ConversationState(
+            conversation_id="source",
+            messages=[ConversationMessage(role="user", content="a")],
         )
     )
     try:
@@ -520,12 +520,12 @@ def test_branch_out_of_range_raises(tmp_path: Path) -> None:
 def test_thread_lifecycle_preserves_or_excludes_pending_turns(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     pending = _PendingTurn.from_message("turn-1", "unfinished")
     store.save(
-        ThreadState(
-            thread_id="source",
-            messages=[ThreadMessage(role="user", content="earlier")],
+        ConversationState(
+            conversation_id="source",
+            messages=[ConversationMessage(role="user", content="earlier")],
             pending_turns=(pending,),
         )
     )
@@ -539,8 +539,8 @@ def test_thread_lifecycle_preserves_or_excludes_pending_turns(
 
 
 def test_archive_moves_thread_to_subdir(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("old"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("old"))
     store.archive("old")
     assert store.list() == []
     assert store.list_archived() == ["old"]
@@ -548,7 +548,7 @@ def test_archive_moves_thread_to_subdir(tmp_path: Path) -> None:
 
 
 def test_archive_missing_thread_raises(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
+    store = ConversationStore(tmp_path)
     try:
         store.archive("missing")
         raise AssertionError("expected ValueError")
@@ -557,8 +557,8 @@ def test_archive_missing_thread_raises(tmp_path: Path) -> None:
 
 
 def test_archive_idempotent_on_already_archived_is_error(tmp_path: Path) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("old"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("old"))
     store.archive("old")
     try:
         store.archive("old")

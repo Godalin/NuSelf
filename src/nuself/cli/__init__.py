@@ -203,18 +203,18 @@ def build_parser() -> argparse.ArgumentParser:
             default_entrypoint=entrypoints.handle_default,
             chat=entrypoints.handle_chat,
             attach=entrypoints.handle_attach,
-            open_thread=entrypoints.handle_open,
+            open_conversation=entrypoints.handle_open,
         )
     )
 
 
 def _send_chat(
-    message: str, project_root: Path | None, thread_id: str = "default"
+    message: str, project_root: Path | None, conversation_id: str = "default"
 ) -> int:
     return _send_daemon_chat(
         message,
         project_root,
-        thread_id,
+        conversation_id,
         print_reply=_print_assistant_reply,
     )
 
@@ -223,7 +223,7 @@ def _interactive_loop(
     send_message: Callable[[str, str, str | None], InteractiveChatResult],
     project_root: Path | None,
     *,
-    initial_thread_id: str = "default",
+    initial_conversation_id: str = "default",
     daemon_activity: bool = False,
 ) -> int:
     header_presenter = SessionHeaderPresenter(
@@ -233,12 +233,12 @@ def _interactive_loop(
 
     def curate_session(
         root: Path | None,
-        thread_ids: tuple[str, ...],
+        conversation_ids: tuple[str, ...],
     ) -> None:
         if daemon_activity:
             return
-        for thread_id in thread_ids:
-            _run_memory_curator(root, thread_id)
+        for conversation_id in conversation_ids:
+            _run_memory_curator(root, conversation_id)
 
     def send_turn(
         turn_sender: Callable[
@@ -246,14 +246,14 @@ def _interactive_loop(
             InteractiveChatResult,
         ],
         turn_project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
         message: str,
         session: InteractiveSession,
     ) -> int:
         return _send_interactive_chat_turn(
             turn_sender,
             turn_project_root,
-            thread_id,
+            conversation_id,
             message,
             session,
             daemon_activity=daemon_activity,
@@ -273,14 +273,14 @@ def _interactive_loop(
             ),
             brand_banner=_brand_banner,
         ),
-        initial_thread_id=initial_thread_id,
+        initial_conversation_id=initial_conversation_id,
     )
 
 
 def _send_interactive_chat_turn(
     send_message: Callable[[str, str, str | None], InteractiveChatResult],
     project_root: Path | None,
-    thread_id: str,
+    conversation_id: str,
     message: str,
     session: InteractiveSession,
     *,
@@ -289,7 +289,7 @@ def _send_interactive_chat_turn(
     return _run_interactive_chat_turn(
         send_message,
         project_root,
-        thread_id,
+        conversation_id,
         message,
         session,
         daemon_activity=daemon_activity,
@@ -302,12 +302,12 @@ def _send_interactive_chat_turn(
 
 
 def _send_one_shot_chat(
-    message: str, project_root: Path | None, thread_id: str = "default"
+    message: str, project_root: Path | None, conversation_id: str = "default"
 ) -> int:
     return _run_one_shot_chat(
         message,
         project_root,
-        thread_id,
+        conversation_id,
         print_reply=_print_assistant_reply,
     )
 

@@ -14,22 +14,22 @@ from nuself.runtime.audit_definitions import (
 _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     (
         "curator_history_gap",
-        {"thread_id": "thread-1", "cursor": 2, "visible_start": 5},
+        {"conversation_id": "conversation-1", "cursor": 2, "visible_start": 5},
     ),
-    ("curator_contended", {"thread_id": "thread-1"}),
+    ("curator_contended", {"conversation_id": "conversation-1"}),
     (
         "curator_deferred",
         {
-            "thread_id": "thread-1",
-            "source_ref": "thread:thread-1:2-5",
+            "conversation_id": "conversation-1",
+            "source_ref": "conversation:conversation-1:2-5",
             "processed_messages": 0,
         },
     ),
     (
         "curator_completed",
         {
-            "thread_id": "thread-1",
-            "source_ref": "thread:thread-1:2-5",
+            "conversation_id": "conversation-1",
+            "source_ref": "conversation:conversation-1:2-5",
             "processed_messages": 3,
             "created": 1,
             "updated": 1,

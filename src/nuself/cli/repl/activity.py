@@ -83,7 +83,7 @@ def _report_activity_transport_degraded(
 def run_live_activity_send(
     send_message: SendMessage,
     message: str,
-    thread_id: str,
+    conversation_id: str,
     turn_id: str | None,
     project_root: Path | None,
     log_cursor: InteractiveLogCursor,
@@ -104,7 +104,7 @@ def run_live_activity_send(
     send_call = OwnedCall(
         name="nuself-interactive-send",
         target=bind_runtime_context(
-            lambda: send_message(message, thread_id, turn_id)
+            lambda: send_message(message, conversation_id, turn_id)
         ),
     )
     captured_events: list[LogEvent] = []

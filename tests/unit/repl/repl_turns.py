@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 
 import nuself.cli.repl.turns as turns
-from nuself.agent.chat import ThreadMessage, ThreadState
-from thread_fixtures import ThreadStore
+from nuself.conversation import ConversationMessage, ConversationState
+from conversation_fixtures import ConversationStore
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.turns import send_interactive_chat_turn
 from nuself.cli.repl.types import InteractiveChatResult
@@ -40,8 +40,8 @@ def _print_no_activity(events: list[LogEvent]) -> None:
 def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("default"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     assert session.start_index_for(tmp_path, "default") == 0
     observed: list[RuntimeContext] = []
@@ -50,7 +50,7 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
 
     def send(
         _message: str,
-        thread_id: str,
+        conversation_id: str,
         turn_id: str | None,
     ) -> InteractiveChatResult:
         observed.append(current_runtime_context())
@@ -62,11 +62,11 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
                 error="temporary transport failure",
             )
         store.save(
-            ThreadState(
-                thread_id=thread_id,
+            ConversationState(
+                conversation_id=conversation_id,
                 messages=[
-                    ThreadMessage(role="user", content="hello", turn_id=turn_id),
-                    ThreadMessage(role="assistant", content="done", turn_id=turn_id),
+                    ConversationMessage(role="user", content="hello", turn_id=turn_id),
+                    ConversationMessage(role="assistant", content="done", turn_id=turn_id),
                 ],
             )
         )
@@ -100,7 +100,7 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
     assert len(turn_ids) == 2
     assert turn_ids[0] == turn_ids[1]
     assert turn_ids[0] is not None
-    assert all(context.thread_id == "default" for context in observed)
+    assert all(context.conversation_id == "default" for context in observed)
     assert all(context.turn_id == turn_ids[0] for context in observed)
     assert all(context.request_id is None for context in observed)
     assert all(context.job_id is None for context in observed)
@@ -115,7 +115,7 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
         if event.event == "turn_retry"
     )
     assert retry.turn_id == turn_ids[0]
-    assert retry.thread_id == "default"
+    assert retry.conversation_id == "default"
     assert retry.source == "client"
     assert retry.request_id is None
     assert retry.job_id is None
@@ -125,13 +125,13 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     attempts = 0
 
     def send(
         _message: str,
-        _thread_id: str,
+        _conversation_id: str,
         _turn_id: str | None,
     ) -> InteractiveChatResult:
         nonlocal attempts
@@ -171,13 +171,13 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
 def test_failed_retry_offer_reuses_original_turn_id(
     tmp_path: Path,
 ) -> None:
-    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     turn_ids: list[str | None] = []
 
     def fail(
         _message: str,
-        _thread_id: str,
+        _conversation_id: str,
         turn_id: str | None,
     ) -> InteractiveChatResult:
         turn_ids.append(turn_id)

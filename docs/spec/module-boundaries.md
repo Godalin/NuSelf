@@ -104,7 +104,7 @@ must reuse its instances for one authority.
 
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records
-and per-thread locks cannot drift across authorities. Persona prompt
+and per-conversation locks cannot drift across authorities. Persona prompt
 persistence likewise receives its collection and resolved paths explicitly;
 outer tools and adapters may compose those resources but the repository may
 not select them.
@@ -120,7 +120,8 @@ the same graph-owned prompt and trace capabilities to every reason advancer.
 
 `ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
 one selected `StorageBackend`. It retains those exact resources and the shared
-memory, notification, persona, reason, reflection, and trace graph. Process
+conversation, memory, notification, persona, reason, reflection, and trace
+graph. Process
 adapters may choose transport and lifecycle, but must not rebuild domain
 dependencies after a graph has been supplied.
 
@@ -132,7 +133,7 @@ workers borrow the graph; they neither rebuild it nor close its resources.
 Interrupt and exceptional exits follow the same outer cleanup path as normal
 completion.
 
-Daemon chat receives its memory, profile, reflection, trace, and thread-storage
+Daemon chat receives its memory, profile, reflection, trace, and conversation
 collaborators from that graph. `application.chat` resolves them once into an
 immutable `ConversationResources` snapshot, with a nested `ToolResources`
 snapshot for the narrower tool boundary. Neither owns lifecycle, dispatch,
@@ -142,12 +143,15 @@ and tool runtimes borrow only their respective snapshot and must not resolve a
 backend or compose a second repository graph.
 Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
-memory/profile/reflection/trace repositories and thread storage always come
+memory/profile/reflection/trace repositories and conversation storage always come
 from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
-`ThreadStore` receives resolved runtime paths and the selected backend as
-required resources. Application composition owns its concrete construction;
-CLI, REPL, daemon, chat, curator, and reflection consumers reuse that
-application-owned factory instead of selecting storage from a project root.
+Conversation state and persistence are neutral domain infrastructure under
+`nuself.conversation`, not an agent implementation detail. `ConversationStore`
+receives resolved runtime paths and the selected backend as required resources
+and is constructed exactly once in `ApplicationGraph`; CLI, REPL, daemon,
+chat, curator, and reflection consumers borrow that same instance. Non-chat
+domains may retain or correlate `conversation_id`, but must not import
+`nuself.agent.chat` merely to read conversation state.
 
 Daemon curation, reflection, reasoning, and notification workers follow the
 same rule: process composition supplies their backend, repositories, outbox,
@@ -170,20 +174,21 @@ promotion-recording ports as required constructor dependencies. They must not
 resolve authority or construct concrete reason and trace services.
 Proactive context collection and candidate generation belong to
 `reflection.candidates`. Conversation history is supplied through its
-consumer-owned `ThreadContextProvider`; the reflection domain must not import
-the concrete chat runtime or thread store.
+consumer-owned `ConversationContextProvider`; the reflection domain must not
+import the concrete chat runtime or agent package.
 
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.
 
 `ConversationGraphRuntime` is an agent orchestration consumer, not a
-composition root. Memory query/repository, thread storage, reflection, reason,
+composition root. Memory query/repository, conversation storage, reflection, reason,
 trace, and persona-tool capabilities are mandatory inputs. Production and
 evaluation surfaces obtain the concrete graph from `application.chat`.
 The model/tool loop remains the framework-native LangChain `create_agent`
-graph. NuSelf's fixed context, response, state-update, and compression stages
-form one direct typed pipeline; wrapping that branch-free sequence in a second
+graph. NuSelf's fixed context, response, and state-update stages form one
+direct typed pipeline; compression is follow-up work after commit. Wrapping
+that branch-free sequence in a second
 `StateGraph` is prohibited because it adds no checkpoint, routing, interrupt,
 or recovery boundary.
 Persona definitions are loaded from an explicitly supplied memory repository
@@ -220,12 +225,12 @@ Memory optimization likewise receives paths, entry/candidate repositories, and
 the profile port explicitly; CLI and daemon composition must reuse the active
 application graph rather than create a second authority graph.
 Memory curation receives the complete authority resource set explicitly:
-runtime paths, backend, thread store, entry/candidate/profile repositories,
+runtime paths, backend, conversation store, entry/candidate/profile repositories,
 recovery-plan store, and trace recorder. Defaults are limited to curation
 policy and model adapters, never persistence or authority selection.
-Daemon request handling may only request curation for a completed thread. The
-single daemon curator worker owns execution, retry isolation, and periodic
-recovery across stored thread IDs; request handlers must not invoke the curator
+Daemon request handling may only request curation for a completed conversation.
+The unified daemon scheduler owns execution, retry isolation, and periodic
+recovery across stored conversation IDs; request handlers must not invoke the curator
 model loop synchronously.
 Its structured model contract, cursor wire format, settings, and result DTO
 belong to `memory.curator_contract`; `memory.curator` owns only workflow

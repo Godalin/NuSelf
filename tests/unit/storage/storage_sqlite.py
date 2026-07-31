@@ -908,7 +908,7 @@ def test_readonly_inspection_closes_source_connection(
 
     inspection = inspect_sqlite_thought_pack(database)
 
-    assert inspection.schema_version == 5
+    assert inspection.schema_version == 6
     assert inspection.total_items == 0
     assert len(connections) == 1
     assert connections[0].close_calls == 1
@@ -1775,7 +1775,20 @@ def _create_v1_database(
             "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
         )
         conn.execute("INSERT INTO _schema_version VALUES (1)")
-        for name in COLLECTION_NAMES:
+        for name in (
+            "memory_entries",
+            "memory_candidates",
+            "trace_nodes",
+            "trace_edges",
+            "reason_threads",
+            "reason_steps",
+            "persona_prompts",
+            "profile_items",
+            "source_documents",
+            "source_chunks",
+            "notification_outbox",
+            "reflection_entries",
+        ):
             conn.execute(
                 f'CREATE TABLE "col_{name}" '
                 "(id TEXT PRIMARY KEY, payload TEXT)"
@@ -1828,7 +1841,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "5",
+            "6",
             "--dry-run",
         ],
         check=True,
@@ -1840,6 +1853,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
         "upgrade v002_to_v003",
         "upgrade v003_to_v004",
         "upgrade v004_to_v005",
+        "upgrade v005_to_v006",
     ]
     subprocess.run(
         [
@@ -1848,7 +1862,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "5",
+            "6",
         ],
         check=True,
         capture_output=True,
@@ -1857,7 +1871,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
     backend = SqliteStorageBackend(db_path)
 
     assert backend.collection("memory_entries").get("mem_legacy") == wire
-    assert (tmp_path / "nuself.sqlite.pre-v1-to-v5.bak").exists()
+    assert (tmp_path / "nuself.sqlite.pre-v1-to-v6.bak").exists()
     assert backend.collection("memory_entries").get("mem_legacy") == wire
     backend.close()
 
@@ -2079,7 +2093,7 @@ def test_registry_rejects_post_v3_migration_without_downgrade() -> None:
     assert "post-v3 migrations must define downgrade" in result.stderr
 
 
-def test_v5_migration_round_trip_preserves_records(tmp_path: Path) -> None:
+def test_v6_migration_round_trip_preserves_records(tmp_path: Path) -> None:
     db_path = tmp_path / "nuself.sqlite"
     backend = create_sqlite_backend(db_path=db_path)
     record_id = "mem_round_trip"
@@ -2125,7 +2139,7 @@ def test_v5_migration_round_trip_preserves_records(tmp_path: Path) -> None:
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "5",
+            "6",
         ],
         check=True,
         capture_output=True,
@@ -2201,6 +2215,186 @@ def test_v4_v5_index_migration_is_reversible(tmp_path: Path) -> None:
         finally:
             connection.close()
         assert indexes == expected_indexes
+
+
+def test_v5_v6_conversation_migration_is_reversible_and_payload_safe(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.collection("conversations").put(
+        "default",
+        {
+            "conversation_id": "default",
+            "summary": "",
+            "messages": [{"role": "user", "content": "conversation"}],
+            "message_start_index": 0,
+            "next_message_index": 1,
+            "archived": False,
+        },
+    )
+    backend.collection("memory_entries").put(
+        "mem-1",
+        {
+            "id": "mem-1",
+            "body": "conversation",
+            "source_refs": ["conversation:default:0-1", "manual:item"],
+            "evidence": [
+                {
+                    "source_type": "conversation",
+                    "source_ref": "conversation:default:0-1",
+                    "summary": "conversation",
+                }
+            ],
+        },
+    )
+    backend.collection("trace_nodes").put(
+        "trace-1", {"id": "trace-1", "conversation_id": "default"}
+    )
+    backend.collection("reflection_entries").put(
+        "reflection-1",
+        {
+            "id": "reflection-1",
+            "suggested_conversation_id": "default",
+        },
+    )
+    backend.collection("notification_outbox").put(
+        "notification-1",
+        {
+            "id": "notification-1",
+            "deep_link": "nuself://conversation/default?message=hello",
+        },
+    )
+    backend.close()
+
+    for target in ("5", "6"):
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.migrate_database",
+                str(db_path),
+                "--to",
+                target,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    reopened = SqliteStorageBackend(db_path)
+    try:
+        conversation = reopened.collection("conversations").get("default")
+        assert conversation is not None
+        assert conversation["conversation_id"] == "default"
+        memory = reopened.collection("memory_entries").get("mem-1")
+        assert memory is not None
+        assert memory["body"] == "conversation"
+        assert memory["source_refs"] == [
+            "conversation:default:0-1",
+            "manual:item",
+        ]
+        assert memory["evidence"] == [
+            {
+                "source_type": "conversation",
+                "source_ref": "conversation:default:0-1",
+                "summary": "conversation",
+            }
+        ]
+        assert reopened.collection("trace_nodes").get("trace-1") == {
+            "id": "trace-1",
+            "conversation_id": "default",
+        }
+        assert reopened.collection("reflection_entries").get(
+            "reflection-1"
+        ) == {
+            "id": "reflection-1",
+            "suggested_conversation_id": "default",
+        }
+        assert reopened.collection("notification_outbox").get(
+            "notification-1"
+        ) == {
+            "id": "notification-1",
+            "deep_link": "nuself://conversation/default?message=hello",
+        }
+    finally:
+        reopened.close()
+
+
+def test_v6_migration_rejects_conversation_collection_collision(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.collection("conversations").put(
+        "legacy",
+        {
+            "conversation_id": "legacy",
+            "summary": "",
+            "messages": [],
+            "message_start_index": 0,
+            "next_message_index": 0,
+            "archived": False,
+        },
+    )
+    backend.close()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "5",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO records VALUES (?,?,?)",
+            (
+                "conversations",
+                "collision",
+                '{"conversation_id":"collision"}',
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "6",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "destination collection already exists" in result.stderr
+    connection = sqlite3.connect(db_path)
+    try:
+        assert connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone() == (5,)
+        collections = {
+            row[0]
+            for row in connection.execute(
+                "SELECT DISTINCT collection FROM records"
+            )
+        }
+    finally:
+        connection.close()
+    assert {"chat_threads", "conversations"} <= collections
 
 
 def test_v4_upgrade_compacts_existing_v3_workspace_entries(
@@ -2408,7 +2602,7 @@ def test_v4_downgrade_requires_workspace_export(tmp_path: Path) -> None:
     try:
         assert connection.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone() == (5,)
+        ).fetchone() == (6,)
         assert connection.execute(
             "SELECT value FROM workspace_entries"
         ).fetchone() == ('{"value":1}',)
@@ -2457,7 +2651,7 @@ def test_v4_downgrade_failure_rolls_back_all_schema_changes(
         }
         assert connection.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone() == (5,)
+        ).fetchone() == (6,)
         assert connection.execute(
             "SELECT payload FROM records WHERE id='mem_invalid_column'"
         ).fetchone() == ('{"\\u0000":"value"}',)

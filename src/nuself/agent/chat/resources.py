@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from nuself.agent.tools.resources import ToolResources
-from nuself.agent.chat.thread import ThreadStore
+from nuself.conversation import ConversationStore
 from nuself.persona.definition import PersonaDefinition
 from nuself.trace.service import TraceRecorder
 
@@ -15,5 +15,5 @@ class ConversationResources:
 
     tools: ToolResources
     trace_recorder: TraceRecorder
-    thread_store: ThreadStore
+    conversation_store: ConversationStore
     personas: tuple[PersonaDefinition, ...]

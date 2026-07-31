@@ -15,7 +15,7 @@ from prompt_toolkit.styles import Style
 
 from nuself.application.reason import compose_reason_repository
 from nuself.agent.chat.audit import run_chat_observed
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.cli.composition import compose_cli_conversation_store
 from nuself.cli.repl.registry import (
     command_tokens,
     render_help_lines,
@@ -70,12 +70,12 @@ class InteractiveCompleter(Completer):
 
         if any(
             stripped.startswith(f"{token} ")
-            for token in tokens_for("thread")
+            for token in tokens_for("conversation")
         ) and word and not word.startswith(":"):
-            yield from self._thread_completions(word)
+            yield from self._conversation_completions(word)
             return
         if stripped.startswith(":unarchive ") and word and not word.startswith(":"):
-            yield from self._archived_thread_completions(word)
+            yield from self._archived_conversation_completions(word)
             return
         if text.rstrip().endswith(tokens_for("reason")):
             for cmd, desc, _ in self._REASON_SUBCOMMANDS:
@@ -110,13 +110,13 @@ class InteractiveCompleter(Completer):
             f"{tokens_for('reason')[0]} "
         )
         subcmd = prefix.split()[0] if prefix.strip() else ""
-        # After a subcommand that takes a thread id, offer thread completions
+        # After a subcommand that takes a conversation id, offer conversation completions
         needs_id = any(cmd == subcmd for cmd, _, needs in self._REASON_SUBCOMMANDS if needs)
         if subcmd and needs_id and prefix.strip() != subcmd:
-            thread_words = prefix.removeprefix(subcmd).strip()
+            conversation_words = prefix.removeprefix(subcmd).strip()
             for tid in self._all_thread_ids_with_status():
-                if thread_words == "" or tid.startswith(thread_words):
-                    yield Completion(tid, start_position=-len(thread_words) if thread_words else 0)
+                if conversation_words == "" or tid.startswith(conversation_words):
+                    yield Completion(tid, start_position=-len(conversation_words) if conversation_words else 0)
             return
         # Offer subcommand completions with descriptions
         for cmd, desc, _ in self._REASON_SUBCOMMANDS:
@@ -140,35 +140,35 @@ class InteractiveCompleter(Completer):
             or []
         )
 
-    def _thread_completions(self, word: str) -> Iterable[Completion]:
-        threads = (
+    def _conversation_completions(self, word: str) -> Iterable[Completion]:
+        conversations = (
             run_chat_observed(
-                lambda: compose_cli_thread_store(
+                lambda: compose_cli_conversation_store(
                     self._project_root
                 ).list(),
                 event="completion_load_failed",
                 project_root=self._project_root,
-                metadata={"completion": "threads"},
+                metadata={"completion": "conversations"},
             )
             or []
         )
-        for t in threads:
+        for t in conversations:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
 
-    def _archived_thread_completions(self, word: str) -> Iterable[Completion]:
-        threads = (
+    def _archived_conversation_completions(self, word: str) -> Iterable[Completion]:
+        conversations = (
             run_chat_observed(
-                lambda: compose_cli_thread_store(
+                lambda: compose_cli_conversation_store(
                     self._project_root
                 ).list_archived(),
                 event="completion_load_failed",
                 project_root=self._project_root,
-                metadata={"completion": "archived_threads"},
+                metadata={"completion": "archived_conversations"},
             )
             or []
         )
-        for t in threads:
+        for t in conversations:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
 

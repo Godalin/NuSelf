@@ -14,6 +14,7 @@ from nuself.application.reason import compose_reason_repository
 from nuself.application.reflection import compose_reflection_repository
 from nuself.application.trace import TraceServices, compose_trace_services
 from nuself.config import RuntimePaths
+from nuself.conversation import ConversationStore
 from nuself.notification import NotificationOutbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
@@ -27,6 +28,7 @@ class ApplicationGraph:
 
     paths: RuntimePaths
     backend: StorageBackend
+    conversations: ConversationStore
     memory: MemoryRepositories
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
@@ -44,6 +46,7 @@ def compose_application(
     return ApplicationGraph(
         paths=paths,
         backend=backend,
+        conversations=ConversationStore(paths, backend=backend),
         memory=compose_memory_repositories(paths, backend),
         notifications=compose_notification_outbox(paths, backend),
         persona_prompts=compose_persona_prompt_repository(paths, backend),

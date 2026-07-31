@@ -20,7 +20,7 @@ def test_notification_eval_returns_one_result_per_scenario(
     assert len(results) == 11
     assert all(result.passed for result in results)
     assert {
-        "deep_link/basic-thread",
+        "deep_link/basic-conversation",
         "outbox_delivery/mark-sent",
         "reflection_scheduler/in-cooldown",
     } <= {result.fixture_name for result in results}
@@ -38,8 +38,8 @@ def test_notification_eval_reports_structured_failure(
                 "scenarios": [
                     {
                         "name": "wrong-expectation",
-                        "url": "nuself://thread/actual",
-                        "expected_thread_id": "expected",
+                        "url": "nuself://conversation/actual",
+                        "expected_conversation_id": "expected",
                         "expected_message": None,
                         "should_succeed": True,
                     }
@@ -57,4 +57,4 @@ def test_notification_eval_reports_structured_failure(
     assert len(results) == 1
     assert not results[0].passed
     assert results[0].score == 0.0
-    assert "thread_id" in results[0].failures[0]
+    assert "conversation_id" in results[0].failures[0]

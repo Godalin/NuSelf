@@ -14,7 +14,8 @@ R = TypeVar("R")
 
 _CONTEXT_FIELDS = frozenset(
     {
-        "thread_id",
+        "conversation_id",
+        "reason_id",
         "request_id",
         "turn_id",
         "job_id",
@@ -28,7 +29,8 @@ _CONTEXT_FIELDS = frozenset(
 class RuntimeContext:
     """Correlation identifiers inherited across one logical operation."""
 
-    thread_id: str | None = None
+    conversation_id: str | None = None
+    reason_id: str | None = None
     request_id: str | None = None
     turn_id: str | None = None
     job_id: str | None = None
@@ -51,7 +53,8 @@ class RuntimeContext:
         return {
             key: value
             for key, value in (
-                ("thread_id", self.thread_id),
+                ("conversation_id", self.conversation_id),
+                ("reason_id", self.reason_id),
                 ("request_id", self.request_id),
                 ("turn_id", self.turn_id),
                 ("job_id", self.job_id),
@@ -66,22 +69,32 @@ class RuntimeContext:
         cls,
         record: Mapping[str, object],
     ) -> RuntimeContext:
-        """Strictly decode one detached correlation-context record."""
+        """Decode one detached context, including the pre-v0.3.1 alias."""
 
-        unknown = set(record) - _CONTEXT_FIELDS
+        normalized = dict(record)
+        legacy_thread_id = normalized.pop("thread_id", None)
+        if legacy_thread_id is not None:
+            if "conversation_id" in normalized:
+                raise ValueError(
+                    "runtime context cannot contain both thread_id and "
+                    "conversation_id"
+                )
+            normalized["conversation_id"] = legacy_thread_id
+        unknown = set(normalized) - _CONTEXT_FIELDS
         if unknown:
             raise ValueError(
                 f"runtime context has unknown fields: {sorted(unknown)!r}"
             )
         values: dict[str, str] = {}
-        for field_name, value in record.items():
+        for field_name, value in normalized.items():
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(
                     f"runtime context {field_name} must be a non-blank string"
                 )
             values[field_name] = value
         return cls(
-            thread_id=values.get("thread_id"),
+            conversation_id=values.get("conversation_id"),
+            reason_id=values.get("reason_id"),
             request_id=values.get("request_id"),
             turn_id=values.get("turn_id"),
             job_id=values.get("job_id"),
@@ -135,7 +148,8 @@ def bind_runtime_context(
 @contextmanager
 def runtime_context(
     *,
-    thread_id: str | None = None,
+    conversation_id: str | None = None,
+    reason_id: str | None = None,
     request_id: str | None = None,
     turn_id: str | None = None,
     job_id: str | None = None,
@@ -146,7 +160,12 @@ def runtime_context(
 
     previous = current_runtime_context()
     merged = RuntimeContext(
-        thread_id=thread_id if thread_id is not None else previous.thread_id,
+        conversation_id=(
+            conversation_id
+            if conversation_id is not None
+            else previous.conversation_id
+        ),
+        reason_id=reason_id if reason_id is not None else previous.reason_id,
         request_id=request_id if request_id is not None else previous.request_id,
         turn_id=turn_id if turn_id is not None else previous.turn_id,
         job_id=job_id if job_id is not None else previous.job_id,

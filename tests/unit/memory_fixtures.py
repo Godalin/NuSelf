@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.agent.structured import StructuredAgent
 from nuself.application import compose_trace_services
 from nuself.config import RuntimePaths, runtime_paths
@@ -128,7 +128,7 @@ class MemoryCurator(_MemoryCurator):
         *,
         agent: StructuredAgent[CuratorActionsOutput] | None = None,
         settings: MemoryCuratorSettings | None = None,
-        thread_store: ThreadStore | None = None,
+        conversation_store: ConversationStore | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
@@ -157,8 +157,8 @@ class MemoryCurator(_MemoryCurator):
             paths,
             agent=agent,
             settings=settings,
-            thread_store=thread_store
-            or ThreadStore(paths.project_root, backend=selected_backend),
+            conversation_store=conversation_store
+            or ConversationStore(paths.project_root, backend=selected_backend),
             repository=entries,
             candidate_repository=candidates,
             profile_repository=profile,

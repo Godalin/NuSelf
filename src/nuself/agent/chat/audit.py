@@ -90,16 +90,16 @@ def _final_response(metadata: Mapping[str, object]) -> None:
     _string(metadata, "epistemic_status")
 
 
-def _thread(metadata: Mapping[str, object]) -> None:
-    _exact(metadata, frozenset({"thread_id"}))
-    _string(metadata, "thread_id")
+def _conversation(metadata: Mapping[str, object]) -> None:
+    _exact(metadata, frozenset({"conversation_id"}))
+    _string(metadata, "conversation_id")
 
 
 def _completion(metadata: Mapping[str, object]) -> None:
     _exact(metadata, frozenset({"completion"}))
     if _string(metadata, "completion") not in {
-        "threads",
-        "archived_threads",
+        "conversations",
+        "archived_conversations",
     }:
         raise AuditSchemaError("audit metadata 'completion' is invalid")
 
@@ -206,7 +206,7 @@ def _build_registry() -> AuditDefinitionRegistry:
         ),
         AuditEventDefinition(
             "chat", "interactive_history_load_failed", "error", "error",
-            error_policy="required", metadata_validator=_thread,
+            error_policy="required", metadata_validator=_conversation,
         ),
         AuditEventDefinition(
             "chat", "interactive_history_write_failed", "warning", "degraded",
@@ -272,7 +272,7 @@ def write_chat_audit(
     *,
     project_root: Path | None,
     metadata: dict[str, object] | None = None,
-    thread_id: str | None = None,
+    conversation_id: str | None = None,
     request_id: str | None = None,
 ) -> LogEvent | None:
     definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
@@ -291,7 +291,7 @@ def write_chat_audit(
         level=definition.level,
         status=definition.status,
         metadata=dict(event_metadata),
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         request_id=request_id,
     )
 

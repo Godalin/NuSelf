@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from nuself.agent.chat import ThreadState
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.conversation import ConversationState
+from nuself.cli.composition import compose_cli_conversation_store
 from nuself.cli.repl.input import interactive_help
 from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
@@ -28,25 +28,25 @@ class TranscriptSession(Protocol):
     def start_index_for(
         self,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
     ) -> int: ...
 
     def transcript_messages(
         self,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
     ) -> list[tuple[int, str, str]]: ...
 
     def transcript_log_events(
         self,
-        thread_id: str,
+        conversation_id: str,
         *,
         include_all: bool,
     ) -> list[LogEvent]: ...
 
     def transcript_log_events_by_message(
         self,
-        thread_id: str,
+        conversation_id: str,
         *,
         include_all: bool,
     ) -> dict[int, list[LogEvent]]: ...
@@ -54,10 +54,10 @@ class TranscriptSession(Protocol):
     def mark_transcript_exported(
         self,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
     ) -> None: ...
 
-    def thread_ids_with_unexported_messages(
+    def conversation_ids_with_unexported_messages(
         self,
         project_root: Path | None,
     ) -> list[str]: ...
@@ -66,7 +66,7 @@ class TranscriptSession(Protocol):
 def handle_interactive_export_command(
     command: str,
     project_root: Path | None,
-    thread_id: str,
+    conversation_id: str,
     session: TranscriptSession,
 ) -> str:
     """Parse one REPL export command and save the requested transcript."""
@@ -88,7 +88,7 @@ def handle_interactive_export_command(
 
     return save_interactive_transcript(
         project_root,
-        thread_id,
+        conversation_id,
         session,
         include_all_logs=include_all_logs,
         copy_requested=copy_requested,
@@ -100,18 +100,18 @@ def auto_save_interactive_transcripts(
     project_root: Path | None,
     session: TranscriptSession,
 ) -> None:
-    """Save every thread with unexported messages on connection exit."""
+    """Save every conversation with unexported messages on connection exit."""
 
-    thread_ids = session.thread_ids_with_unexported_messages(project_root)
-    if not thread_ids:
+    conversation_ids = session.conversation_ids_with_unexported_messages(project_root)
+    if not conversation_ids:
         return
     print()
     exported_at = datetime.now(UTC)
-    for thread_id in thread_ids:
+    for conversation_id in conversation_ids:
         print(
             save_interactive_transcript(
                 project_root,
-                thread_id,
+                conversation_id,
                 session,
                 include_all_logs=False,
                 copy_requested=False,
@@ -122,7 +122,7 @@ def auto_save_interactive_transcripts(
 
 def save_interactive_transcript(
     project_root: Path | None,
-    thread_id: str,
+    conversation_id: str,
     session: TranscriptSession,
     *,
     include_all_logs: bool,
@@ -132,20 +132,20 @@ def save_interactive_transcript(
     """Persist one session transcript and optionally copy its contents."""
 
     try:
-        start_index = session.start_index_for(project_root, thread_id)
+        start_index = session.start_index_for(project_root, conversation_id)
         path, content = export_interactive_transcript(
             project_root,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             start_index=start_index,
             connected_at=session.connected_at,
             exported_at=exported_at,
-            messages=session.transcript_messages(project_root, thread_id),
+            messages=session.transcript_messages(project_root, conversation_id),
             log_events=session.transcript_log_events(
-                thread_id,
+                conversation_id,
                 include_all=include_all_logs,
             ),
             log_events_by_message=session.transcript_log_events_by_message(
-                thread_id,
+                conversation_id,
                 include_all=include_all_logs,
             ),
             include_all_logs=include_all_logs,
@@ -153,7 +153,7 @@ def save_interactive_transcript(
     except ValueError as exc:
         return f"Error: {diagnostic_exception_message(exc)}"
 
-    session.mark_transcript_exported(project_root, thread_id)
+    session.mark_transcript_exported(project_root, conversation_id)
     lines = [f"Saved transcript: {path}"]
     if copy_requested:
         copied, reason = copy_text_to_clipboard(content)
@@ -167,7 +167,7 @@ def save_interactive_transcript(
 def export_interactive_transcript(
     project_root: Path | None,
     *,
-    thread_id: str,
+    conversation_id: str,
     start_index: int,
     connected_at: datetime,
     exported_at: datetime,
@@ -178,19 +178,19 @@ def export_interactive_transcript(
 ) -> tuple[Path, str]:
     paths = runtime_paths(project_root)
     if messages is None:
-        thread = compose_cli_thread_store(project_root).load(thread_id)
-        messages = thread_messages_from_index(thread, start_index)
+        conversation = compose_cli_conversation_store(project_root).load(conversation_id)
+        messages = conversation_messages_from_index(conversation, start_index)
     if not messages:
         raise ValueError("no chat messages in this connection yet")
 
     export_dir = paths.authority_root / "transcripts"
     filename = (
-        f"chat-{_safe_filename_component(thread_id)}-"
+        f"chat-{_safe_filename_component(conversation_id)}-"
         f"{_compact_timestamp(connected_at)}-{_compact_timestamp(exported_at)}.md"
     )
     path = export_dir / filename
     content = render_chat_transcript(
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         connected_at=connected_at,
         exported_at=exported_at,
         messages=messages,
@@ -202,12 +202,12 @@ def export_interactive_transcript(
     return path, content
 
 
-def thread_messages_from_index(
-    thread: ThreadState, start_index: int
+def conversation_messages_from_index(
+    conversation: ConversationState, start_index: int
 ) -> list[tuple[int, str, str]]:
     messages: list[tuple[int, str, str]] = []
-    for offset, message in enumerate(thread.messages):
-        index = thread.message_start_index + offset
+    for offset, message in enumerate(conversation.messages):
+        index = conversation.message_start_index + offset
         if index >= start_index:
             messages.append((index, message.role, message.content))
     return messages
@@ -215,7 +215,7 @@ def thread_messages_from_index(
 
 def render_chat_transcript(
     *,
-    thread_id: str,
+    conversation_id: str,
     connected_at: datetime,
     exported_at: datetime,
     messages: list[tuple[int, str, str]],
@@ -226,7 +226,7 @@ def render_chat_transcript(
     lines = [
         "# NuSelf Chat Transcript",
         "",
-        f"- Thread: `{thread_id}`",
+        f"- Conversation: `{conversation_id}`",
         f"- Connected: {format_display_timestamp(connected_at)}",
         f"- Exported: {format_display_timestamp(exported_at)}",
         f"- Logs: {'all' if include_all_logs else 'share'}",
@@ -329,7 +329,7 @@ def _clipboard_command() -> list[str] | None:
 
 def _safe_filename_component(text: str) -> str:
     cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in text)
-    return cleaned.strip("-") or "thread"
+    return cleaned.strip("-") or "conversation"
 
 
 def _compact_timestamp(value: datetime) -> str:

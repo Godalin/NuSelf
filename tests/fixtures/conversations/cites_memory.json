@@ -1,6 +1,6 @@
 {
   "name": "cites-memory-when-available",
-  "thread_id": "eval-test",
+  "conversation_id": "eval-test",
   "user_message": "What do I believe about remote work?",
   "memory_entries": [
     {

@@ -151,7 +151,7 @@ def test_audit_envelope_round_trip_retains_complete_projection(
         "turn_completed",
         "turn completed",
         level="warning",
-        thread_id="thread-1",
+        conversation_id="conversation-1",
         request_id="request-1",
         turn_id="turn-1",
         job_id="job-1",
@@ -175,7 +175,7 @@ def test_audit_envelope_round_trip_retains_complete_projection(
         message="turn completed",
         event_id=envelope.message_id,
         schema_version=envelope.schema_version,
-        thread_id="thread-1",
+        conversation_id="conversation-1",
         request_id="request-1",
         turn_id="turn-1",
         job_id="job-1",
@@ -608,7 +608,7 @@ def test_log_corruption_warning_redacts_exception_credentials() -> None:
     assert "api_key=***" in warning
 
 
-def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:
+def test_log_observers_are_not_inherited_by_new_conversations(tmp_path: Path) -> None:
     delivered: list[LogEvent] = []
 
     with project_log_events(delivered.append):
@@ -616,7 +616,7 @@ def test_log_observers_are_not_inherited_by_new_threads(tmp_path: Path) -> None:
             target=lambda: write_log_event(
                 "chat",
                 "observer_test",
-                "thread",
+                "conversation",
                 project_root=tmp_path,
             )
         )
@@ -700,7 +700,7 @@ def test_legacy_log_records_remain_readable_without_identity() -> None:
         ("event_id", " ", ValueError),
         ("schema_version", True, TypeError),
         ("schema_version", 2, ValueError),
-        ("thread_id", 42, TypeError),
+        ("conversation_id", 42, TypeError),
         ("duration_ms", True, TypeError),
         ("duration_ms", -1, TypeError),
         ("metadata", [], TypeError),
@@ -991,7 +991,7 @@ def test_log_corruption_warning_policy_cannot_fail_read(
         ) == []
 
 
-def test_log_writes_are_complete_under_thread_contention(tmp_path: Path) -> None:
+def test_log_writes_are_complete_under_conversation_contention(tmp_path: Path) -> None:
     def write(index: int) -> None:
         write_log_event(
             "daemon",

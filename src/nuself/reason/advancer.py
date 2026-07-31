@@ -42,7 +42,7 @@ from nuself.workspace import PrivateWorkspaceStore
 
 
 def _current_reason_thread_id() -> str:
-    thread_id = current_runtime_context().thread_id
+    thread_id = current_runtime_context().reason_id
     if thread_id is None:
         raise RuntimeError("reason tool requires an active reason thread context")
     return thread_id
@@ -276,7 +276,7 @@ class ReasonAdvancer:
 
     def _advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         assert self._agents
-        with runtime_context(thread_id=thread.id):
+        with runtime_context(reason_id=thread.id):
             try:
                 self._captured.clear()
                 base = build_advance_prompt(thread)

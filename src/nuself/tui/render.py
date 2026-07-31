@@ -84,8 +84,8 @@ def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -
         result = legacy_result
         error = legacy_error if legacy_error is not None else error
     extra: dict[str, object] = {}
-    if event.thread_id:
-        extra["thread"] = event.thread_id
+    if event.conversation_id:
+        extra["conversation"] = event.conversation_id
     if event.turn_id:
         extra["turn"] = event.turn_id
     if event.metadata:
@@ -420,8 +420,8 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status:
         fields.append(theme.muted(_format_log_field("status", event.status)))
     if event.duration_ms is not None:
         fields.append(theme.muted(_format_log_field("duration_ms", event.duration_ms)))
-    if event.thread_id:
-        fields.append(theme.muted(_format_log_field("thread", event.thread_id)))
+    if event.conversation_id:
+        fields.append(theme.muted(_format_log_field("conversation", event.conversation_id)))
     if event.request_id:
         fields.append(theme.muted(_format_log_field("request", event.request_id)))
     if event.turn_id:
@@ -577,7 +577,7 @@ def _is_timestamp_field(key: str) -> bool:
     return key in {"created", "created_at", "updated_at", "reviewed_at", "sent_at", "connected", "exported", "last_advanced_at"}
 
 
-def render_session_header(*, daemon_status: str, thread_id: str) -> str:
+def render_session_header(*, daemon_status: str, conversation_id: str) -> str:
     """Render a compact REPL session header."""
 
     theme = TerminalTheme()
@@ -586,7 +586,7 @@ def render_session_header(*, daemon_status: str, thread_id: str) -> str:
         f"{tag} session",
         [
             render_key_value_field("status", daemon_status),
-            render_key_value_field("thread", thread_id),
+            render_key_value_field("conversation", conversation_id),
         ],
     )
 

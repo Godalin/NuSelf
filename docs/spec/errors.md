@@ -120,7 +120,8 @@ When daemon chat handling fails:
 - The daemon request layer writes `daemon/chat_turn_failed` with:
   - `level=error`
   - `status=error`
-  - `thread_id`
+  - `conversation_id`
+  - `reason_id`
   - `request_id`
   - `turn_id` when the request supplied one
   - compact exception chain in `error`

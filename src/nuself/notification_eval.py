@@ -88,13 +88,13 @@ def _evaluate_deep_link(scenario: dict[str, object]) -> None:
         raise AssertionError("expected deep link parsing to fail")
 
     link = DeepLink.parse(url)
-    expected_thread = _required_str(
+    expected_conversation = _required_str(
         scenario,
-        "expected_thread_id",
+        "expected_conversation_id",
     )
-    if link.thread_id != expected_thread:
+    if link.conversation_id != expected_conversation:
         raise AssertionError(
-            f"thread_id {link.thread_id!r} != {expected_thread!r}"
+            f"conversation_id {link.conversation_id!r} != {expected_conversation!r}"
         )
     expected_message = scenario.get("expected_message")
     if link.message != expected_message:

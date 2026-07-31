@@ -87,7 +87,7 @@ class ThoughtTrace:
     outputs: Sequence[str] = ()
     participants: Sequence[str] = ()
     decision_points: Sequence[str] = ()
-    thread_id: str | None = None
+    conversation_id: str | None = None
     visibility: TraceVisibility = "private"
     created_at: str = field(default_factory=utc_now_iso)
     metadata: Mapping[str, object] = field(default_factory=empty_metadata)
@@ -135,7 +135,7 @@ class ThoughtTrace:
             "outputs": self.outputs,
             "participants": self.participants,
             "decision_points": self.decision_points,
-            "thread_id": self.thread_id,
+            "conversation_id": self.conversation_id,
             "visibility": self.visibility,
             "created_at": self.created_at,
             "metadata": self.metadata,
@@ -155,7 +155,7 @@ class ThoughtTrace:
             outputs=_optional_str_list(data, "outputs"),
             participants=_optional_str_list(data, "participants"),
             decision_points=_optional_str_list(data, "decision_points"),
-            thread_id=_optional_str(data, "thread_id"),
+            conversation_id=_optional_str(data, "conversation_id"),
             visibility=_expect_trace_visibility(data, "visibility"),
             created_at=_expect_str(data, "created_at"),
             metadata=_optional_dict(data, "metadata"),

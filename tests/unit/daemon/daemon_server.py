@@ -12,9 +12,9 @@ from langchain_core.messages import BaseMessage
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
-    ThreadState,
+    ConversationState,
 )
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
@@ -103,9 +103,9 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     assert response.payload["evidence_references"] == ["mem_1", "source:note:0"]
     assert response.payload["confidence"] == 0.8
     assert response.payload["epistemic_status"] == "grounded"
-    assert response.payload["thread_id"] == "default"
+    assert response.payload["conversation_id"] == "default"
     assert "node_trace" not in response.payload
-    assert ThreadStore(tmp_path).list() == ["default"]
+    assert ConversationStore(tmp_path).list() == ["default"]
 
 
 def test_daemon_chat_uses_state_event_publisher(
@@ -130,7 +130,7 @@ def test_daemon_chat_uses_state_event_publisher(
             type="chat",
             payload={
                 "message": "hello",
-                "thread_id": "shared-events",
+                "conversation_id": "shared-events",
                 "turn_id": "turn-1",
             },
             request_id="chat-events",
@@ -171,16 +171,16 @@ def test_daemon_chat_uses_state_event_publisher(
     ]
 
 
-def test_daemon_chat_uses_explicit_thread_id(tmp_path: Path) -> None:
+def test_daemon_chat_uses_explicit_conversation_id(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     state.conversation_runtime = _successful_conversation_runtime(tmp_path)
-    request = DaemonRequest(type="chat", payload={"message": "hello", "thread_id": "custom"}, request_id="chat2")
+    request = DaemonRequest(type="chat", payload={"message": "hello", "conversation_id": "custom"}, request_id="chat2")
 
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    assert response.payload["thread_id"] == "custom"
-    assert ThreadStore(tmp_path).list() == ["custom"]
+    assert response.payload["conversation_id"] == "custom"
+    assert ConversationStore(tmp_path).list() == ["custom"]
 
 
 def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> None:
@@ -188,14 +188,14 @@ def test_daemon_chat_persists_turn_id_for_retry_idempotency(tmp_path: Path) -> N
     state.conversation_runtime = _successful_conversation_runtime(tmp_path)
     request = DaemonRequest(
         type="chat",
-        payload={"message": "hello", "thread_id": "default", "turn_id": "turn-retry"},
+        payload={"message": "hello", "conversation_id": "default", "turn_id": "turn-retry"},
         request_id="chat-turn-id",
     )
 
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    stored = ThreadStore(tmp_path).load("default")
+    stored = ConversationStore(tmp_path).load("default")
     assert stored.messages[0].turn_id == "turn-retry"
     assert stored.messages[1].turn_id == "turn-retry"
 
@@ -332,7 +332,7 @@ def test_daemon_chat_requests_curation_for_non_default_thread(
         type="chat",
         payload={
             "message": "remember this",
-            "thread_id": "project",
+            "conversation_id": "project",
             "turn_id": "turn-curator-failure",
         },
         request_id="chat-curator-failure",
@@ -345,15 +345,15 @@ def test_daemon_chat_requests_curation_for_non_default_thread(
     assert requested == ["project"]
 
 
-def test_memory_curator_worker_coalesces_requested_thread_ids(
+def test_memory_curator_worker_coalesces_requested_conversation_ids(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
     calls: list[str] = []
 
     class RecordingCurator:
-        def run_once(self, thread_id: str) -> None:
-            calls.append(thread_id)
+        def run_once(self, conversation_id: str) -> None:
+            calls.append(conversation_id)
             state.shutdown_requested.set()
 
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
@@ -371,14 +371,14 @@ def test_memory_curator_periodic_scan_recovers_all_stored_threads(
 ) -> None:
     state = DaemonState(tmp_path)
     state.memory_curator_interval_seconds = 0.01
-    state.thread_store.save(ThreadState(thread_id="active"))
-    state.thread_store.save(ThreadState(thread_id="archived"))
-    state.thread_store.archive("archived")
+    state.conversation_store.save(ConversationState(conversation_id="active"))
+    state.conversation_store.save(ConversationState(conversation_id="archived"))
+    state.conversation_store.archive("archived")
     calls: list[str] = []
 
     class RecordingCurator:
-        def run_once(self, thread_id: str) -> None:
-            calls.append(thread_id)
+        def run_once(self, conversation_id: str) -> None:
+            calls.append(conversation_id)
             if set(calls) == {"active", "archived"}:
                 state.shutdown_requested.set()
 

@@ -96,7 +96,7 @@ class ConversationPersonaOrchestrator:
         mode: str = "consult",
         context: str | None = None,
     ) -> str:
-        thread_id = current_runtime_context().thread_id or "default"
+        conversation_id = current_runtime_context().conversation_id or "default"
         memory_context = self._memory_query_service.pack(
             MemoryQuery(text=topic)
         ).text
@@ -120,7 +120,7 @@ class ConversationPersonaOrchestrator:
         trigger = activation.trigger or "selves_consult"
         self._write_summary_log(
             updated_turn_state,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             trigger=trigger,
         )
 
@@ -137,13 +137,13 @@ class ConversationPersonaOrchestrator:
             else "consultation only"
         )
         self._write_host_decision_log(
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             should_escalate=should_escalate,
             escalation_reason=escalation_reason,
         )
         discussion_note = self._run_discussion(
             topic=topic,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             trigger=trigger,
             turn_state=updated_turn_state,
             should_escalate=should_escalate,
@@ -158,7 +158,7 @@ class ConversationPersonaOrchestrator:
         self,
         *,
         topic: str,
-        thread_id: str,
+        conversation_id: str,
         trigger: str,
         turn_state: PersonaTurnState,
         should_escalate: bool,
@@ -171,11 +171,11 @@ class ConversationPersonaOrchestrator:
             nonlocal step_number
             del entry
             step_number += 1
-            self._write_discussion_step_log(thread_id, step_number)
+            self._write_discussion_step_log(conversation_id, step_number)
 
         try:
             candidate = self._build_candidate(
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 user_message=topic,
                 title=(
                     topic.splitlines()[0]
@@ -195,7 +195,7 @@ class ConversationPersonaOrchestrator:
             write_persona_audit(
                 "persona_discussion",
                 project_root=self._project_root,
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 metadata={
                     "candidate_id": candidate.id,
                     "approved": result.approved,
@@ -235,14 +235,14 @@ class ConversationPersonaOrchestrator:
         self,
         turn_state: PersonaTurnState,
         *,
-        thread_id: str,
+        conversation_id: str,
         trigger: str,
     ) -> None:
         del trigger
         write_persona_audit(
             "persona_summary",
             project_root=self._project_root,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             metadata={
                 "persona_count": len(turn_state.contributions),
                 "has_synthesis": turn_state.synthesis is not None,
@@ -252,7 +252,7 @@ class ConversationPersonaOrchestrator:
     def _write_host_decision_log(
         self,
         *,
-        thread_id: str,
+        conversation_id: str,
         should_escalate: bool,
         escalation_reason: str,
     ) -> None:
@@ -260,33 +260,33 @@ class ConversationPersonaOrchestrator:
         write_persona_audit(
             "host_discussion_decision",
             project_root=self._project_root,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             metadata={"should_escalate": should_escalate},
         )
 
     def _write_discussion_step_log(
         self,
-        thread_id: str,
+        conversation_id: str,
         step_number: int,
     ) -> None:
         write_persona_audit(
             "persona_discussion_step",
             project_root=self._project_root,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             metadata={"step_number": step_number},
         )
 
     @staticmethod
     def _build_candidate(
         *,
-        thread_id: str,
+        conversation_id: str,
         user_message: str,
         title: str,
         source_summary: str,
     ) -> IdeaCandidate:
         now = datetime.now(UTC)
         return IdeaCandidate(
-            id=f"chat-{thread_id}-{int(now.timestamp())}",
+            id=f"chat-{conversation_id}-{int(now.timestamp())}",
             title=title,
             body=user_message,
             candidate_type=(
@@ -297,7 +297,7 @@ class ConversationPersonaOrchestrator:
             urgency=0.2,
             interruption_cost=0.1,
             evidence_refs=(),
-            suggested_thread_id=thread_id,
+            suggested_conversation_id=conversation_id,
             source_summary=source_summary,
             created_at=now.isoformat(),
         )

@@ -41,7 +41,7 @@ from nuself.storage import (
 )
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
-SQLITE_SCHEMA_VERSION = 5
+SQLITE_SCHEMA_VERSION = 6
 _V2_COLLECTION_NAMES = (
     "memory_entries",
     "memory_candidates",
@@ -858,7 +858,7 @@ def _validate_nuself_schema_connection(
                 f"thought pack schema version {version} is newer than "
                 f"supported version {SQLITE_SCHEMA_VERSION}"
             )
-        if version in (4, 5):
+        if version in (4, 5, 6):
             expected_tables = {
                 "_schema_version",
                 "records",

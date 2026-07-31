@@ -126,7 +126,7 @@ def test_html_message_escapes_body_and_link(tmp_path: Path) -> None:
         body='<script>alert("x")</script> & text',
         status="pending",
         idempotency_key="safe-html",
-        deep_link="nuself://new-thread?title=A&message=B",
+        deep_link="nuself://new-conversation?title=A&message=B",
     )
     adapter = EmailNotificationAdapter(
         tmp_path,

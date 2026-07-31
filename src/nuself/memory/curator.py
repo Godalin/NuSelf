@@ -7,7 +7,7 @@ from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from nuself.agent.chat import ThreadMessage, ThreadState, ThreadStore
+from nuself.conversation import ConversationMessage, ConversationState, ConversationStore
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
@@ -39,7 +39,7 @@ from nuself.memory.curator_plan import (
     MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLockContended,
     MemoryCuratorPlanStore,
-    validate_curator_thread_id,
+    validate_curator_conversation_id,
 )
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
@@ -126,7 +126,7 @@ class MemoryCurator:
         *,
         agent: StructuredAgent[CuratorActionsOutput] | None = None,
         settings: MemoryCuratorSettings | None = None,
-        thread_store: ThreadStore,
+        conversation_store: ConversationStore,
         repository: MemoryEntryRepository,
         candidate_repository: MemoryCandidateRepository,
         profile_repository: ProfileRepositoryPort,
@@ -146,7 +146,7 @@ class MemoryCurator:
         self._cursor_collection = self._backend.collection(
             "memory_curator_cursors"
         )
-        self._thread_store = thread_store
+        self._conversation_store = conversation_store
         self._repository = repository
         self._profile_repository = profile_repository
         self._candidate_repository = candidate_repository
@@ -156,22 +156,22 @@ class MemoryCurator:
 
     def run_once(
         self,
-        thread_id: str = "default",
+        conversation_id: str = "default",
         *,
         source_trace_id: str | None = None,
     ) -> MemoryCuratorResult:
         try:
-            with self._plan_store.exclusive(thread_id):
+            with self._plan_store.exclusive(conversation_id):
                 return self._run_once_locked(
-                    thread_id,
+                    conversation_id,
                     source_trace_id=source_trace_id,
                 )
         except MemoryCuratorPlanLockContended:
             write_curator_audit(
                 "curator_contended",
-                "Memory curator found the source thread busy",
+                "Memory curator found the source conversation busy",
                 project_root=self._paths.project_root,
-                metadata={"thread_id": thread_id},
+                metadata={"conversation_id": conversation_id},
             )
             return MemoryCuratorResult(
                 processed_messages=0,
@@ -183,12 +183,12 @@ class MemoryCurator:
 
     def _run_once_locked(
         self,
-        thread_id: str,
+        conversation_id: str,
         *,
         source_trace_id: str | None,
     ) -> MemoryCuratorResult:
-        state = self._thread_store.load(thread_id)
-        cursor = self._load_cursor(thread_id)
+        state = self._conversation_store.load(conversation_id)
+        cursor = self._load_cursor(conversation_id)
         visible_start = state.message_start_index
         visible_end = state.next_message_index
         if cursor >= visible_end:
@@ -200,7 +200,7 @@ class MemoryCurator:
                 log_path=self._memory_log_path(),
             )
         plan = self._load_plan(
-            thread_id,
+            conversation_id,
             cursor=cursor,
             next_message_index=visible_end,
         )
@@ -210,7 +210,7 @@ class MemoryCurator:
                 "Older unprocessed turns were already compressed",
                 project_root=self._paths.project_root,
                 metadata={
-                    "thread_id": thread_id,
+                    "conversation_id": conversation_id,
                     "cursor": cursor,
                     "visible_start": visible_start,
                 },
@@ -232,13 +232,13 @@ class MemoryCurator:
                 )
 
             decision = self._decide_actions(
-                thread_id,
+                conversation_id,
                 state,
                 source_start,
                 new_messages,
             )
             source_ref = (
-                f"thread:{thread_id}:{source_start}-{visible_end}"
+                f"conversation:{conversation_id}:{source_start}-{visible_end}"
             )
             if decision.status == "deferred":
                 write_curator_audit(
@@ -246,7 +246,7 @@ class MemoryCurator:
                     "Memory curator deferred the source range",
                     project_root=self._paths.project_root,
                     metadata={
-                        "thread_id": thread_id,
+                        "conversation_id": conversation_id,
                         "source_ref": source_ref,
                         "processed_messages": 0,
                     },
@@ -259,7 +259,7 @@ class MemoryCurator:
                     log_path=self._memory_log_path(),
                 )
             plan = MemoryCuratorPlan(
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 source_start=source_start,
                 source_end=visible_end,
                 observed_at=utc_now_iso(),
@@ -303,13 +303,13 @@ class MemoryCurator:
                     ignored += 1
             else:
                 ignored += 1
-        self._save_cursor(thread_id, visible_end)
+        self._save_cursor(conversation_id, visible_end)
         write_curator_audit(
             "curator_completed",
             "Memory curator processed a source range",
             project_root=self._paths.project_root,
             metadata={
-                "thread_id": thread_id,
+                "conversation_id": conversation_id,
                 "source_ref": source_ref,
                 "processed_messages": processed_messages,
                 "created": created,
@@ -327,10 +327,10 @@ class MemoryCurator:
 
     def _decide_actions(
         self,
-        thread_id: str,
-        state: ThreadState,
+        conversation_id: str,
+        state: ConversationState,
         cursor: int,
-        messages: list[ThreadMessage],
+        messages: list[ConversationMessage],
     ) -> MemoryDecision:
         prompt = [
             SystemMessage(
@@ -349,7 +349,7 @@ class MemoryCurator:
             ),
             HumanMessage(
                 content=(
-                    f"Thread: {thread_id}\n"
+                    f"Conversation: {conversation_id}\n"
                     f"Existing summary:\n{state.summary or '(none)'}\n\n"
                     f"Existing memories:\n{self._existing_memory_context() or '(none)'}\n\n"
                     f"Existing profile items:\n{self._existing_profile_context() or '(none)'}\n\n"
@@ -438,7 +438,7 @@ class MemoryCurator:
                     source_refs=[source_ref],
                     evidence=[
                         MemoryEvidence(
-                            source_type="thread",
+                            source_type="conversation",
                             source_ref=source_ref,
                             summary=action.reason,
                             observed_at=observed_at,
@@ -480,7 +480,7 @@ class MemoryCurator:
             source_refs=[source_ref],
             evidence=[
                 MemoryEvidence(
-                    source_type="thread",
+                    source_type="conversation",
                     source_ref=source_ref,
                     summary=action.reason,
                     observed_at=observed_at,
@@ -537,7 +537,7 @@ class MemoryCurator:
             source_refs=[source_ref],
             evidence=[
                 MemoryEvidence(
-                    source_type="thread",
+                    source_type="conversation",
                     source_ref=source_ref,
                     summary=action.reason,
                     observed_at=observed_at,
@@ -654,10 +654,10 @@ class MemoryCurator:
             },
         )
 
-    def _load_cursor(self, thread_id: str) -> int:
+    def _load_cursor(self, conversation_id: str) -> int:
         try:
-            validate_curator_thread_id(thread_id)
-            raw = self._cursor_collection.get(thread_id)
+            validate_curator_conversation_id(conversation_id)
+            raw = self._cursor_collection.get(conversation_id)
             if raw is None:
                 return 0
             cursor = MemoryCuratorCursor.from_wire(
@@ -666,31 +666,31 @@ class MemoryCurator:
                     for key, value in raw.items()
                     if key != "id"
                 },
-                expected_thread_id=thread_id,
+                expected_conversation_id=conversation_id,
             )
         except ValueError as exc:
             report_corrupt_record(
                 exc,
                 component="memory",
                 collection="memory_curator_cursors",
-                record_id=thread_id,
+                record_id=conversation_id,
                 project_root=self._paths.project_root,
             )
             raise ValueError(
-                f"invalid memory curator cursor for thread {thread_id!r}"
+                f"invalid memory curator cursor for conversation {conversation_id!r}"
             ) from exc
         return cursor.processed_message_count
 
     def _load_plan(
         self,
-        thread_id: str,
+        conversation_id: str,
         *,
         cursor: int,
         next_message_index: int,
     ) -> MemoryCuratorPlan | None:
         try:
             return self._plan_store.resumable(
-                thread_id,
+                conversation_id,
                 cursor=cursor,
                 next_message_index=next_message_index,
             )
@@ -699,23 +699,23 @@ class MemoryCurator:
                 diagnostic_exception_message(exc)
             ) from exc
 
-    def _save_cursor(self, thread_id: str, processed_message_count: int) -> None:
+    def _save_cursor(self, conversation_id: str, processed_message_count: int) -> None:
         cursor = MemoryCuratorCursor(
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             processed_message_count=processed_message_count,
         )
-        validate_curator_thread_id(thread_id)
-        self._cursor_collection.put(thread_id, cursor.to_wire())
+        validate_curator_conversation_id(conversation_id)
+        self._cursor_collection.put(conversation_id, cursor.to_wire())
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"
 
 
-def _render_transcript(messages: list[ThreadMessage]) -> str:
+def _render_transcript(messages: list[ConversationMessage]) -> str:
     return "\n".join(f"{message.role}: {message.content}" for message in messages)
 
 
-def _has_memory_worthy_signal(messages: list[ThreadMessage], min_quality_chars: int) -> bool:
+def _has_memory_worthy_signal(messages: list[ConversationMessage], min_quality_chars: int) -> bool:
     user_text = "\n".join(message.content for message in messages if message.role == "user")
     if len(user_text.strip()) >= min_quality_chars:
         return True

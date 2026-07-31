@@ -23,10 +23,10 @@ from nuself.agent.chat import (
     ChatResult,
     ChatStructuredOutput,
     ConversationTurnState,
-    ThreadMessage,
-    ThreadState,
+    ConversationMessage,
+    ConversationState,
 )
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.agent.chat import (
     ConversationGraphRuntimeError,
     ConversationTurnConflictError,
@@ -278,8 +278,8 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     assert result.confidence == 0.92
     assert result.epistemic_status == "grounded"
     assert response_service.calls[0][0].text.startswith("You are NuSelf")
-    thread = ThreadStore(tmp_path).load("default")
-    assert thread.messages[-1].content == "Use the profile context."
+    conversation = ConversationStore(tmp_path).load("default")
+    assert conversation.messages[-1].content == "Use the profile context."
 
 
 def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
@@ -305,9 +305,15 @@ def test_chat_agent_compresses_old_context(tmp_path: Path) -> None:
     agent.respond("two")
     agent.respond("three")
 
-    thread = ThreadStore(tmp_path).load("default")
-    assert thread.summary == "compressed context"
-    assert len(thread.messages) == 2
+    # Reply persistence is the critical path; compression is a follow-up job.
+    before_compression = ConversationStore(tmp_path).load("default")
+    assert before_compression.summary == ""
+    assert len(before_compression.messages) == 6
+    agent.compress_conversation("default")
+
+    conversation = ConversationStore(tmp_path).load("default")
+    assert conversation.summary == "compressed context"
+    assert len(conversation.messages) == 2
     assert len(compression_agent.calls) == 1
     assert "Compress a private NuSelf conversation" in (
         compression_agent.calls[0][0].text
@@ -322,11 +328,12 @@ def test_chat_agent_uses_local_summary_without_api_key(tmp_path: Path) -> None:
     agent.respond("two")
     agent.respond("three")
     agent.respond("four")
+    agent.compress_conversation("default")
 
-    thread = ThreadStore(tmp_path).load("default")
-    assert "LLM API key is not configured" not in thread.summary
-    assert thread.messages[-2].content == "four"
-    assert thread.summary
+    conversation = ConversationStore(tmp_path).load("default")
+    assert "LLM API key is not configured" not in conversation.summary
+    assert conversation.messages[-2].content == "four"
+    assert conversation.summary
 
 
 def test_chat_compression_failure_falls_back_and_is_observable(
@@ -352,10 +359,11 @@ def test_chat_compression_failure_falls_back_and_is_observable(
     agent.respond("one")
     agent.respond("two")
     agent.respond("three")
+    agent.compress_conversation("default")
 
-    thread = ThreadStore(tmp_path).load("default")
-    assert thread.summary != ""
-    assert len(thread.messages) == 2
+    conversation = ConversationStore(tmp_path).load("default")
+    assert conversation.summary != ""
+    assert len(conversation.messages) == 2
     events = [
         event
         for event in read_log_events(
@@ -373,13 +381,13 @@ def test_chat_compression_failure_falls_back_and_is_observable(
 
 
 def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="old question"),
-                ThreadMessage(
+                ConversationMessage(role="user", content="old question"),
+                ConversationMessage(
                     role="assistant",
                     content=(
                         "LLM API is not configured yet. I saved the message and can use local memory/context, "
@@ -390,12 +398,12 @@ def test_chat_agent_drops_old_local_fallback_replies(tmp_path: Path) -> None:
         )
     )
     llm = FakeResponseService()
-    agent = ConversationGraphRuntime(tmp_path, response_service=llm, thread_store=thread_store)
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, conversation_store=conversation_store)
 
     agent.respond("new question")
 
     prompt_text = "\n".join(message.text for message in llm.calls[0][1:])
-    saved_text = str(thread_store.load("default").to_wire())
+    saved_text = str(conversation_store.load("default").to_wire())
     assert "LLM API is not configured yet" not in prompt_text
     assert "LLM API is not configured yet" not in saved_text
     assert "old question" in prompt_text
@@ -437,24 +445,24 @@ def test_selves_consult_writes_host_discussion_decision_log(tmp_path: Path, caps
     assert "Persona Trigger" not in captured
 
 
-def test_thread_store_update_writes_under_transaction(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
+def test_conversation_store_update_writes_under_transaction(tmp_path: Path) -> None:
+    conversation_store = ConversationStore(tmp_path)
 
-    def add_message(state: ThreadState) -> tuple[ThreadState, str]:
+    def add_message(state: ConversationState) -> tuple[ConversationState, str]:
         return (
-            ThreadState(
-                thread_id=state.thread_id,
+            ConversationState(
+                conversation_id=state.conversation_id,
                 summary=state.summary,
-                messages=[*state.messages, ThreadMessage(role="user", content="locked write")],
+                messages=[*state.messages, ConversationMessage(role="user", content="locked write")],
             ),
             "done",
         )
 
-    result = thread_store.update("default", add_message)
-    state = thread_store.load("default")
+    result = conversation_store.update("default", add_message)
+    state = conversation_store.load("default")
 
     assert result == "done"
-    assert state.messages == [ThreadMessage(role="user", content="locked write")]
+    assert state.messages == [ConversationMessage(role="user", content="locked write")]
 
 
 def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> None:
@@ -469,23 +477,23 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
         ),
         memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
-    turn_state = ConversationTurnState.start(ThreadState.empty("default"), "node contracts", "default")
+    turn_state = ConversationTurnState.start(ConversationState.empty("default"), "node contracts", "default")
 
     prepared = runtime.prepare_context_node(turn_state)
-    assert prepared.state.active_messages == (ThreadMessage(role="user", content="node contracts"),)
+    assert prepared.state.active_messages == (ConversationMessage(role="user", content="node contracts"),)
 
     responded = runtime.respond_node(prepared.state)
     assert responded.state.final_response is not None
     assert responded.state.final_response.answer == "Runtime node reply."
     assert responded.state.final_response.evidence_references == ["mem_node"]
-    assert responded.state.saved_messages[-1] == ThreadMessage(role="assistant", content="Runtime node reply.")
+    assert responded.state.saved_messages[-1] == ConversationMessage(role="assistant", content="Runtime node reply.")
 
     updated = runtime.state_update_node(responded.state)
-    assert updated.state.updated_thread_state is not None
-    assert updated.state.updated_thread_state.next_message_index == 2
+    assert updated.state.updated_conversation_state is not None
+    assert updated.state.updated_conversation_state.next_message_index == 2
 
     compressed = runtime.compression_node(updated.state)
-    assert compressed.state.updated_thread_state == updated.state.updated_thread_state
+    assert compressed.state.updated_conversation_state == updated.state.updated_conversation_state
 
 
 def test_conversation_state_transitions_preserve_archived_status(
@@ -500,9 +508,9 @@ def test_conversation_state_transitions_preserve_archived_status(
         ),
         response_service=FakeResponseService(),
     )
-    archived = ThreadState(
-        thread_id="archived",
-        messages=[ThreadMessage(role="user", content="earlier")],
+    archived = ConversationState(
+        conversation_id="archived",
+        messages=[ConversationMessage(role="user", content="earlier")],
         archived=True,
     )
 
@@ -524,14 +532,13 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
         memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
-    _, result, node_trace = runtime.run_turn(ThreadState.empty("trivial"), "hello", "trivial")
+    _, result, node_trace = runtime.run_turn(ConversationState.empty("trivial"), "hello", "trivial")
 
     assert result.answer == "Trivial reply."
     assert node_trace == (
         "prepare_context",
         "respond",
         "state_update",
-        "compression",
     )
     assert _trace_repository(tmp_path).list_traces(kind="chat_turn") == []
 
@@ -624,13 +631,12 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
     assert " | " not in persona_events[-1].message
     assert persona_events[-1].metadata == {"persona_count": 1, "has_synthesis": True}
 
-    _, graph_result, graph_node_trace = runtime.run_turn(ThreadState.empty("persona-graph"), "Should I split this project?", "persona-graph")
+    _, graph_result, graph_node_trace = runtime.run_turn(ConversationState.empty("persona-graph"), "Should I split this project?", "persona-graph")
     assert graph_result.answer == "Persona reply."
     assert graph_node_trace == (
         "prepare_context",
         "respond",
         "state_update",
-        "compression",
     )
 
 
@@ -650,7 +656,7 @@ def test_conversation_runtime_executes_direct_typed_stages(tmp_path: Path) -> No
         memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
-    state, chat_result, node_trace = runtime.run_turn(ThreadState.empty("graph"), "graph runtime", "graph")
+    state, chat_result, node_trace = runtime.run_turn(ConversationState.empty("graph"), "graph runtime", "graph")
 
     assert chat_result.answer == "Graph driver reply."
     assert chat_result.evidence_references == ("mem_graph",)
@@ -659,20 +665,19 @@ def test_conversation_runtime_executes_direct_typed_stages(tmp_path: Path) -> No
         "prepare_context",
         "respond",
         "state_update",
-        "compression",
     )
     assert state.messages == [
-        ThreadMessage(role="user", content="graph runtime"),
-        ThreadMessage(role="assistant", content="Graph driver reply."),
+        ConversationMessage(role="user", content="graph runtime"),
+        ConversationMessage(role="assistant", content="Graph driver reply."),
     ]
     assert _trace_repository(tmp_path).list_traces(kind="chat_turn") == []
 
-    chat_result = runtime.respond("committed runtime", thread_id="committed")
+    chat_result = runtime.respond("committed runtime", conversation_id="committed")
     traces = _trace_repository(tmp_path).list_traces(kind="chat_turn")
     assert len(traces) == 1
     trace = traces[0]
     assert chat_result.trace_id == trace.id
-    assert trace.thread_id == "committed"
+    assert trace.conversation_id == "committed"
     assert trace.evidence_refs == ("mem_graph",)
     assert trace.inputs == ("committed runtime",)
     assert trace.outputs == ("Graph driver reply.",)
@@ -686,19 +691,19 @@ def test_conversation_runtime_executes_direct_typed_stages(tmp_path: Path) -> No
 
 
 
-def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
-            messages=[ThreadMessage(role="user", content="existing message")],
+def test_chat_agent_preserves_conversation_state_when_graph_driver_fails(tmp_path: Path) -> None:
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
+            messages=[ConversationMessage(role="user", content="existing message")],
             next_message_index=1,
         )
     )
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=FailingResponseService(),
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
     )
 
@@ -707,8 +712,8 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
 
     assert exc_info.value.node == "respond"
     assert exc_info.value.node_trace == ("prepare_context", "respond")
-    state = thread_store.load("default")
-    assert state.messages == [ThreadMessage(role="user", content="existing message")]
+    state = conversation_store.load("default")
+    assert state.messages == [ConversationMessage(role="user", content="existing message")]
     assert state.next_message_index == 1
     lifecycle = [
         event
@@ -724,22 +729,22 @@ def test_chat_agent_preserves_thread_state_when_graph_driver_fails(tmp_path: Pat
     ]
     assert lifecycle[-1].error is not None
     assert "conversation graph node 'respond' failed" in lifecycle[-1].error
-    assert lifecycle[-1].thread_id == "default"
+    assert lifecycle[-1].conversation_id == "default"
     assert lifecycle[-1].source == "chat_runtime"
 
 
-def test_chat_completed_event_is_published_after_thread_persistence(
+def test_chat_completed_event_is_published_after_conversation_persistence(
     tmp_path: Path,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
+    conversation_store = ConversationStore(tmp_path)
     publisher = EventPublisher()
     publisher.attach_projection(runtime_event_log_sink(tmp_path))
     observed: list[RuntimeEnvelope] = []
 
     def inspect_persisted_state(event: RuntimeEnvelope) -> None:
         if event.name == "turn.completed":
-            state = thread_store.load("thread-a")
-            assert state.messages[-1] == ThreadMessage(
+            state = conversation_store.load("conversation-a")
+            assert state.messages[-1] == ConversationMessage(
                 role="assistant",
                 content="agent reply",
                 turn_id="turn-1",
@@ -750,13 +755,13 @@ def test_chat_completed_event_is_published_after_thread_persistence(
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         event_publisher=publisher,
     )
 
     result = agent.respond(
         "persist this",
-        thread_id="thread-a",
+        conversation_id="conversation-a",
         turn_id="turn-1",
     )
 
@@ -776,17 +781,17 @@ def test_chat_completed_event_is_published_after_thread_persistence(
     assert [event.event_id for event in audit] == [
         event.message_id for event in observed
     ]
-    assert all(event.thread_id == "thread-a" for event in audit)
+    assert all(event.conversation_id == "conversation-a" for event in audit)
     assert all(event.turn_id == "turn-1" for event in audit)
 
 
 def test_chat_persistence_failure_publishes_failed_not_completed(
     tmp_path: Path,
 ) -> None:
-    class FailingSaveThreadStore(ThreadStore):
-        def _save_unlocked(self, state: ThreadState) -> None:
+    class FailingSaveConversationStore(ConversationStore):
+        def _save_unlocked(self, state: ConversationState) -> None:
             if state.messages:
-                raise OSError("thread storage unavailable")
+                raise OSError("conversation storage unavailable")
             super()._save_unlocked(state)
 
     agent = ConversationGraphRuntime(
@@ -797,10 +802,10 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
                 evidence_references=["memory-1"],
             )
         ),
-        thread_store=FailingSaveThreadStore(tmp_path),
+        conversation_store=FailingSaveConversationStore(tmp_path),
     )
 
-    with pytest.raises(OSError, match="thread storage unavailable"):
+    with pytest.raises(OSError, match="conversation storage unavailable"):
         agent.respond("cannot persist", turn_id="turn-1")
 
     lifecycle = [
@@ -815,9 +820,9 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
         "turn.started",
         "turn.failed",
     ]
-    assert lifecycle[-1].error == "thread storage unavailable"
+    assert lifecycle[-1].error == "conversation storage unavailable"
     assert _trace_repository(tmp_path).list_traces(kind="chat_turn") == []
-    [pending] = ThreadStore(tmp_path).load("default").pending_turns
+    [pending] = ConversationStore(tmp_path).load("default").pending_turns
     assert pending.turn_id == "turn-1"
 
 
@@ -859,7 +864,7 @@ def test_completed_stable_turn_removes_pending_marker(
 
     runtime.respond("complete", turn_id="turn-1")
 
-    assert ThreadStore(tmp_path).load("default").pending_turns == ()
+    assert ConversationStore(tmp_path).load("default").pending_turns == ()
 
 
 def test_chat_reused_event_does_not_rerun_graph(
@@ -903,7 +908,7 @@ def test_chat_rejects_turn_id_reused_with_different_input(
     assert len(llm.calls) == 1
     assert [
         message.content
-        for message in ThreadStore(tmp_path).load("default").messages
+        for message in ConversationStore(tmp_path).load("default").messages
     ] == [
         "original",
         "agent reply",
@@ -962,7 +967,7 @@ def test_chat_event_subscriber_failure_does_not_replace_completed_turn(
     result = agent.respond("complete despite subscriber")
 
     assert result.reply == "agent reply"
-    assert ThreadStore(tmp_path).load("default").messages[-1].content == (
+    assert ConversationStore(tmp_path).load("default").messages[-1].content == (
         "agent reply"
     )
     lifecycle = [
@@ -1185,7 +1190,7 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
             status="pending",
             discussion_approved=None,
             discussion_trace=(),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at="2024-01-01T00:00:00+00:00",
             reviewed_at=None,
         )
@@ -1204,7 +1209,7 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
             status="pending",
             discussion_approved=None,
             discussion_trace=(),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at="2024-01-01T00:00:00+00:00",
             reviewed_at=None,
         )
@@ -1235,7 +1240,7 @@ def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
                 status="pending",
                 discussion_approved=None,
                 discussion_trace=(),
-                deep_link="nuself://thread/reflections",
+                deep_link="nuself://conversation/reflections",
                 created_at="2024-01-01T00:00:00+00:00",
                 reviewed_at=None,
             )
@@ -1263,7 +1268,7 @@ def test_reflection_count_tool(tmp_path: Path) -> None:
             status="pending",
             discussion_approved=None,
             discussion_trace=(),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at="2024-01-01T00:00:00+00:00",
             reviewed_at=None,
         )
@@ -1293,7 +1298,7 @@ def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPa
             status="pending",
             discussion_approved=None,
             discussion_trace=(),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at="2024-01-01T00:00:00+00:00",
             reviewed_at=None,
         )
@@ -1346,7 +1351,7 @@ def test_reflection_archive_success(tmp_path: Path) -> None:
             status="pending",
             discussion_approved=None,
             discussion_trace=(),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at="2024-01-01T00:00:00+00:00",
             reviewed_at=None,
         )
@@ -1425,7 +1430,7 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     assert "decorated tool wrapper will prompt for confirmation" in proposal.replace("\n", " ")
 
 
-def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import builtins
     import sys
 
@@ -1447,7 +1452,7 @@ def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkey
         tool,
         {
             "topic": "What should I think about next?",
-            "working_summary": "We should keep the thread short.",
+            "working_summary": "We should keep the conversation short.",
             "active_items": [{"label": "next step", "kind": "decision"}],
             "mandates": ["advance at most one complete round per step"],
         },
@@ -1462,13 +1467,13 @@ def test_reason_propose_creates_thread_after_confirmation(tmp_path: Path, monkey
         "active_item_count": 1,
         "mandate_count": 1,
     }
-    assert "We should keep the thread short." not in str(
+    assert "We should keep the conversation short." not in str(
         proposal.to_record()
     )
     assert events[-1].event == "thread_started"
 
 
-def test_reason_propose_creates_thread_when_proposal_audit_is_unavailable(
+def test_reason_propose_creates_conversation_when_proposal_audit_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1531,19 +1536,19 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
     )
 
     service = ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *args, **kwargs: "Test-generated reasoning prompt.")
-    thread = service.start_thread("Queued export")
+    conversation = service.start_thread("Queued export")
     service.advance_thread(
-        thread.id,
-        step=ReasoningStep(thread_id=thread.id, summary="Step 1", output="Out 1", delta="Delta 1"),
+        conversation.id,
+        step=ReasoningStep(thread_id=conversation.id, summary="Step 1", output="Out 1", delta="Delta 1"),
     )
 
     monkeypatch.setattr("builtins.input", _input)
     tool = _chat_tool(tmp_path, "reason_export")
-    result = _invoke_chat_tool(tool, {"thread_id": thread.id, "segment_size": 1})
+    result = _invoke_chat_tool(tool, {"thread_id": conversation.id, "segment_size": 1})
     inner = json.loads(result)
 
     assert inner.get("queued") is True
-    assert inner.get("job", {}).get("thread_id") == thread.id
+    assert inner.get("job", {}).get("thread_id") == conversation.id
     # No file-based queue — the event went to the in-memory callback.
     assert not (Path(inner["paths"]["root"]) / "queue").exists()
     assert not Path(inner["paths"]["combined"]).exists()
@@ -1696,7 +1701,7 @@ def test_reason_count_tool(tmp_path: Path) -> None:
     from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
-    service.start_thread("Count this reason thread")
+    service.start_thread("Count this reason conversation")
     tool = _chat_tool(tmp_path, "reason_count")
 
     result = _invoke_chat_tool(tool)
@@ -1707,14 +1712,14 @@ def test_reason_count_tool(tmp_path: Path) -> None:
 def test_reason_show_tool(tmp_path: Path) -> None:
     from reason_fixtures import ReasonService
 
-    thread = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread("Inspect this reason thread")
+    conversation = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread("Inspect this reason conversation")
     tool = _chat_tool(tmp_path, "reason_show")
 
-    result = _invoke_chat_tool(tool, {"thread_id": thread.id})
+    result = _invoke_chat_tool(tool, {"thread_id": conversation.id})
 
     data = json.loads(result)
-    assert data["thread"]["topic"] == "Inspect this reason thread"
-    assert data["thread"]["id"] == thread.id
+    assert data["thread"]["topic"] == "Inspect this reason conversation"
+    assert data["thread"]["id"] == conversation.id
     assert data["steps"] == []
     assert data["tool_logs"] == "omitted"
 
@@ -1722,18 +1727,18 @@ def test_reason_show_tool(tmp_path: Path) -> None:
 def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) -> None:
     from reason_fixtures import ReasonService
 
-    thread = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread(
-        "Context-only reason thread",
+    conversation = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread(
+        "Context-only reason conversation",
         working_summary="Current state summary",
         active_items=({"label": "Tracked premise", "kind": "premise"},),
         mandates=("Keep it bounded.",),
     )
     tool = _chat_tool(tmp_path, "reason_context")
 
-    result = _invoke_chat_tool(tool, {"thread_id": thread.id})
+    result = _invoke_chat_tool(tool, {"thread_id": conversation.id})
 
     data = json.loads(result)
-    assert data["thread"]["topic"] == "Context-only reason thread"
+    assert data["thread"]["topic"] == "Context-only reason conversation"
     assert data["thread"]["working_summary"] == "Current state summary"
     assert data["thread"]["active_items"][0]["label"] == "Tracked premise"
     assert data["thread"]["mandates"] == ["Keep it bounded."]
@@ -1747,9 +1752,9 @@ def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) 
     from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
-    thread = service.start_thread("Step reason thread")
+    conversation = service.start_thread("Step reason conversation")
     step = ReasoningStep(
-        thread_id=thread.id,
+        thread_id=conversation.id,
         summary="Step summary",
         delta="Step delta",
         output="Visible step output",
@@ -1763,13 +1768,13 @@ def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) 
             },
         ),
     )
-    service.advance_thread(thread.id, step=step)
+    service.advance_thread(conversation.id, step=step)
     tool = _chat_tool(tmp_path, "reason_step")
 
-    result = _invoke_chat_tool(tool, {"thread_id": thread.id, "step": "0"})
+    result = _invoke_chat_tool(tool, {"thread_id": conversation.id, "step": "0"})
 
     data = json.loads(result)
-    assert data["thread"]["topic"] == "Step reason thread"
+    assert data["thread"]["topic"] == "Step reason conversation"
     assert data["step"]["index"] == 0
     assert data["step"]["kind"] == "progress"
     assert data["step"]["summary"] == "Step summary"
@@ -1786,11 +1791,11 @@ def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
     from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
-    thread = service.start_thread("Show reason thread")
+    conversation = service.start_thread("Show reason conversation")
     service.advance_thread(
-        thread.id,
+        conversation.id,
         step=ReasoningStep(
-            thread_id=thread.id,
+            thread_id=conversation.id,
             summary="Shown step summary",
             delta="Shown step delta",
             output="Shown output",
@@ -1807,10 +1812,10 @@ def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
     )
     tool = _chat_tool(tmp_path, "reason_show")
 
-    result = _invoke_chat_tool(tool, {"thread_id": thread.id})
+    result = _invoke_chat_tool(tool, {"thread_id": conversation.id})
 
     data = json.loads(result)
-    assert data["thread"]["topic"] == "Show reason thread"
+    assert data["thread"]["topic"] == "Show reason conversation"
     assert data["steps"][0]["summary"] == "Shown step summary"
     assert data["steps"][0]["output"] == "Shown output"
     assert "persona_think" not in result
@@ -1901,7 +1906,7 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
     )
     result = ChatResult(
         answer="completed answer",
-        thread_id="thread-1",
+        conversation_id="conversation-1",
         evidence_references=("memory-1",),
     )
 
@@ -1912,7 +1917,7 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
         trace_id = runtime._record_chat_turn_trace(  # pyright: ignore[reportPrivateUsage]
             user_message="hello",
             result=result,
-            thread_id="thread-1",
+            conversation_id="conversation-1",
             node_trace=("prepare_context", "respond"),
         )
 

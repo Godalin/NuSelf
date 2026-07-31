@@ -116,12 +116,12 @@ uv run nuself chat --message "你了解这个项目的哪些内容？"
 
 ## 常用流程
 
-### 恢复对话线程
+### 恢复对话
 
 ```bash
-uv run nuself thread list
-uv run nuself thread open default
-uv run nuself thread branch default alternative
+uv run nuself conversation list
+uv run nuself conversation open default
+uv run nuself conversation branch default alternative
 ```
 
 ### 搜索与整理记忆

@@ -75,7 +75,7 @@ def migrate(
     require_private_file(database)
     connection = sqlite3.connect(database)
     try:
-        if validate_schema(connection) not in (4, 5):
+        if validate_schema(connection) not in (4, 5, 6):
             raise ValueError("workspace migration requires compact schema v4+")
         connection.execute("BEGIN IMMEDIATE")
         for owner in owners:
@@ -163,7 +163,7 @@ def _restore_legacy(
     exports_root = authority / "exports" / "reason"
     created_legacy = False
     try:
-        if validate_schema(connection) not in (4, 5):
+        if validate_schema(connection) not in (4, 5, 6):
             raise ValueError("workspace migration requires compact schema v4+")
         rows = connection.execute(
             "SELECT namespace,key,value,created_at,updated_at "

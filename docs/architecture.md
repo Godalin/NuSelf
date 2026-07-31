@@ -45,10 +45,13 @@ runtime events and request confirmation through injected ports. Terminal
 rendering, daemon activity transport, tests, and a future web frontend are
 adapters over those contracts; backend modules do not import terminal UI code.
 
-Conversation execution lives under `nuself.agent.chat`. A persistent
-conversation is distinct from a transient interactive session and contains
-ordered turns, a bounded summary, and branch/archive state. A direct typed NuSelf
-pipeline coordinates context, response, state update, and compression;
+Persistent conversation state and its repository live in the neutral
+`nuself.conversation` domain and are owned once by `ApplicationGraph`.
+Conversation execution lives under `nuself.agent.chat` and borrows that store.
+A persistent conversation is distinct from a transient interactive session
+and contains ordered turns, a bounded summary, and branch/archive state. A
+direct typed NuSelf pipeline coordinates context, response, and state update;
+compression is follow-up work after the reply commits and is presented.
 LangChain supplies the single framework-native model/tool graph. NuSelf-owned
 code adds domain semantics such as personal-memory retrieval, evidence
 handling, persona discussion, and response presentation.

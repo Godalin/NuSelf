@@ -28,7 +28,7 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
         ("quit", "exit"),
         ("  :q         exit", "  :quit      exit", "  :exit      exit"),
     ),
-    ReplCommand("history", help_lines=("  :history   show recent thread messages",)),
+    ReplCommand("history", help_lines=("  :history   show recent conversation messages",)),
     ReplCommand("whoami", help_lines=("  :whoami    show core profile",)),
     ReplCommand(
         "inbox",
@@ -57,7 +57,7 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ReplCommand(
         "dev",
         help_lines=(
-            "  :dev status                   show daemon and thread status",
+            "  :dev status                   show daemon and conversation status",
             "  :dev logs                     show recent activity logs",
         ),
     ),
@@ -84,11 +84,11 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
         ),
     ),
     ReplCommand(
-        "thread",
-        ("t",),
+        "conversation",
+        ("c",),
         (
-            "  :thread, :t               list active threads",
-            "  :thread <id>, :t <id>     switch to or create a thread",
+            "  :conversation, :c               list active conversations",
+            "  :conversation <id>, :c <id>     switch to or create a conversation",
         ),
     ),
     ReplCommand("reason", help_lines=("  :reason                   long-run reasoning commands",)),
@@ -102,12 +102,12 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ),
     ReplCommand("persona", ("p",), ("  :persona, :p             list/manage custom personas",)),
     ReplCommand("restart", ("r",), ("  :restart, :r              restart daemon and reconnect",)),
-    ReplCommand("rename", help_lines=("  :rename <new-id>          rename the current thread",)),
-    ReplCommand("branch", help_lines=("  :branch <new-id> [index]  branch current thread at index",)),
-    ReplCommand("archive", help_lines=("  :archive                  archive the current thread",)),
-    ReplCommand("unarchive", help_lines=("  :unarchive <id>           restore an archived thread",)),
-    ReplCommand("archived", help_lines=("  :archived                 list archived threads",)),
-    ReplCommand("delete", help_lines=("  :delete                   delete the current thread",)),
+    ReplCommand("rename", help_lines=("  :rename <new-id>          rename the current conversation",)),
+    ReplCommand("branch", help_lines=("  :branch <new-id> [index]  branch current conversation at index",)),
+    ReplCommand("archive", help_lines=("  :archive                  archive the current conversation",)),
+    ReplCommand("unarchive", help_lines=("  :unarchive <id>           restore an archived conversation",)),
+    ReplCommand("archived", help_lines=("  :archived                 list archived conversations",)),
+    ReplCommand("delete", help_lines=("  :delete                   delete the current conversation",)),
 )
 
 

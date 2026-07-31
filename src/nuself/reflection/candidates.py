@@ -39,12 +39,12 @@ class CandidateListOutput(BaseModel):
     candidates: list[CandidateItemOutput] = Field(max_length=3)
 
 
-class ThreadContextProvider(Protocol):
+class ConversationContextProvider(Protocol):
     """Provide recent conversation context without exposing chat storage."""
 
     def recent_context(
         self,
-        max_threads: int,
+        max_conversations: int,
         max_messages: int,
     ) -> str: ...
 
@@ -60,14 +60,14 @@ class IdeaCandidateGenerator:
         memory_repository: MemoryEntryRepository,
         source_repository: SourceRepository,
         profile_repository: ProfileItemRepository,
-        thread_context: ThreadContextProvider,
+        conversation_context: ConversationContextProvider,
         agent: StructuredAgent[CandidateListOutput] | None = None,
     ) -> None:
         self._project_root = project_root
         self._memory_repository = memory_repository
         self._source_repository = source_repository
         self._profile_repository = profile_repository
-        self._thread_context = thread_context
+        self._conversation_context = conversation_context
         self._agent = agent or default_structured_agent(
             CandidateListOutput,
             project_root=project_root,
@@ -120,7 +120,7 @@ class IdeaCandidateGenerator:
 
     def _collect_context(self) -> _ThinkingContext:
         return _ThinkingContext(
-            threads=self._thread_context.recent_context(5, 10),
+            conversations=self._conversation_context.recent_context(5, 10),
             memories="\n".join(
                 f"- [{entry.type}] {entry.title}: {entry.body[:120]}"
                 for entry in self._memory_repository.list()[-8:]
@@ -169,7 +169,7 @@ class IdeaCandidateGenerator:
                 urgency=item.urgency,
                 interruption_cost=item.interruption_cost,
                 evidence_refs=(),
-                suggested_thread_id=None,
+                suggested_conversation_id=None,
                 source_summary="llm-generated",
                 created_at=utc_now_iso(),
             )
@@ -179,18 +179,20 @@ class IdeaCandidateGenerator:
 
 @dataclass(frozen=True)
 class _ThinkingContext:
-    threads: str
+    conversations: str
     memories: str
     profile: str
     sources: str
 
     def is_empty(self) -> bool:
-        return not any((self.threads, self.memories, self.profile, self.sources))
+        return not any(
+            (self.conversations, self.memories, self.profile, self.sources)
+        )
 
     def to_prompt(self) -> str:
         named = (
             ("Memory entries", self.memories),
-            ("Recent conversations", self.threads),
+            ("Recent conversations", self.conversations),
             ("Personal profile", self.profile),
             ("Source documents", self.sources),
         )

@@ -23,6 +23,9 @@ without weakening same-conversation ordering or crash safety.
 2. Update governing specifications before behavioral implementation.
 3. Rename domain types, repositories, CLI, daemon protocol, scheduler resource
    keys, runtime context, records, tests, and documentation.
+   Keep conversation state/storage outside the agent package and construct one
+   shared store in `ApplicationGraph` so cross-domain readers do not depend on
+   chat implementation details.
 4. Add a schema migration that preserves existing conversation data.
 5. Commit the completed reply before returning it; schedule compression on the
    same conversation resource and tolerate an uncompressed next turn.

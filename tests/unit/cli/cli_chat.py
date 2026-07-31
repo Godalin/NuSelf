@@ -62,7 +62,7 @@ def test_daemon_connection_failure_is_retryable(
     assert result.error in capsys.readouterr().err
     assert observed == [
         RuntimeContext(
-            thread_id="thread-1",
+            conversation_id="thread-1",
             request_id="request-1",
             turn_id="turn-1",
             job_id="job-1",
@@ -173,7 +173,7 @@ def test_daemon_application_failure_is_correlated_and_not_retryable(
         component="chat",
     )[-1]
     assert event.event == "daemon_chat_failed"
-    assert event.thread_id == "thread-1"
+    assert event.conversation_id == "thread-1"
     assert event.turn_id == "turn-1"
     assert event.source == "client"
     assert event.error == "graph failed"
@@ -244,7 +244,7 @@ def test_daemon_success_projects_reply(
         return ChatResponsePayload(
             answer="answer",
             reply="reply",
-            thread_id="server-thread",
+            conversation_id="server-thread",
             evidence_references=(),
             epistemic_status=None,
         )
@@ -267,7 +267,7 @@ def test_daemon_success_projects_reply(
     assert result.reply == "reply"
     assert observed == [
         RuntimeContext(
-            thread_id="thread-1",
+            conversation_id="thread-1",
             request_id="request-1",
             turn_id="turn-1",
             source="client",
@@ -278,7 +278,7 @@ def test_daemon_success_projects_reply(
         component="chat",
     )[-1]
     assert event.event == "daemon_chat_completed"
-    assert event.thread_id == "server-thread"
+    assert event.conversation_id == "server-thread"
     assert event.request_id == "request-1"
     assert event.turn_id == "turn-1"
     assert event.source == "client"
@@ -293,7 +293,7 @@ def test_daemon_success_survives_uncertain_completion_audit(
         return ChatResponsePayload(
             answer="answer",
             reply="reply",
-            thread_id="thread-1",
+            conversation_id="thread-1",
             evidence_references=(),
             epistemic_status=None,
         )
@@ -329,18 +329,18 @@ def test_one_shot_success_runs_curator_after_reply(
     def reply(
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
         *,
         turn_id: str | None = None,
     ) -> str:
         assert project_root == tmp_path
         contexts.append(current_runtime_context())
-        calls.append(f"reply:{message}:{thread_id}:{turn_id}")
+        calls.append(f"reply:{message}:{conversation_id}:{turn_id}")
         return "done"
 
-    def curate(project_root: Path | None, thread_id: str) -> None:
+    def curate(project_root: Path | None, conversation_id: str) -> None:
         assert project_root == tmp_path
-        assert thread_id == "thread-1"
+        assert conversation_id == "thread-1"
         contexts.append(current_runtime_context())
         calls.append("curator")
         write_log_event(
@@ -370,13 +370,13 @@ def test_one_shot_success_runs_curator_after_reply(
     assert calls == ["reply:hello:thread-1:turn-1", "curator"]
     assert contexts == [
         RuntimeContext(
-            thread_id="thread-1",
+            conversation_id="thread-1",
             turn_id="turn-1",
             trace_id="trace-1",
             source="client",
         ),
         RuntimeContext(
-            thread_id="thread-1",
+            conversation_id="thread-1",
             turn_id="turn-1",
             trace_id="trace-1",
             source="client",
@@ -386,10 +386,46 @@ def test_one_shot_success_runs_curator_after_reply(
         project_root=tmp_path,
         component="memory",
     )[-1]
-    assert event.thread_id == "thread-1"
+    assert event.conversation_id == "thread-1"
     assert event.turn_id == "turn-1"
     assert event.trace_id == "trace-1"
     assert event.source == "client"
+
+
+def test_one_shot_compresses_only_after_reply_is_presented(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def send(
+        message: str,
+        project_root: Path | None,
+        conversation_id: str = "default",
+        *,
+        turn_id: str | None = None,
+    ) -> chat.InteractiveChatResult:
+        del message, project_root, conversation_id, turn_id
+        return chat.InteractiveChatResult(
+            code=0,
+            reply="done",
+            after_reply=lambda: calls.append("compress"),
+        )
+
+    monkeypatch.setattr(
+        chat,
+        "send_one_shot_chat_interactive",
+        send,
+    )
+
+    result = chat.send_one_shot_chat(
+        "hello",
+        tmp_path,
+        print_reply=lambda reply: calls.append(f"reply:{reply}"),
+    )
+
+    assert result == 0
+    assert calls == ["reply:done", "compress"]
 
 
 def test_one_shot_success_survives_uncertain_completion_audit(
@@ -402,7 +438,7 @@ def test_one_shot_success_survives_uncertain_completion_audit(
         del args, kwargs
         return "done"
 
-    def curate(_project_root: Path | None, _thread_id: str) -> None:
+    def curate(_project_root: Path | None, _conversation_id: str) -> None:
         calls.append("curator")
 
     monkeypatch.setattr(

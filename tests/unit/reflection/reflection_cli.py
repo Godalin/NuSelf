@@ -39,7 +39,7 @@ def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[Reflect
             status="pending" if i < 2 else "dismissed",
             discussion_approved=i % 2 == 0,
             discussion_trace=(f"turn-1: analyst scores 0.{8 + i}",),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at=f"2024-01-0{i + 1}T12:00:00+00:00",
             reviewed_at=None,
         )

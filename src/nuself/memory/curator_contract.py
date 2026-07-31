@@ -29,9 +29,9 @@ class MemoryCuratorSettings:
 
 @dataclass(frozen=True)
 class MemoryCuratorCursor:
-    """Authoritative absolute position for one curated thread."""
+    """Authoritative absolute position for one curated conversation."""
 
-    thread_id: str
+    conversation_id: str
     processed_message_count: int
 
     @classmethod
@@ -39,15 +39,15 @@ class MemoryCuratorCursor:
         cls,
         data: dict[str, object],
         *,
-        expected_thread_id: str,
+        expected_conversation_id: str,
     ) -> MemoryCuratorCursor:
-        thread_id = data.get("thread_id")
-        if not isinstance(thread_id, str):
-            raise ValueError("cursor field 'thread_id' must be a string")
-        if thread_id != expected_thread_id:
+        conversation_id = data.get("conversation_id")
+        if not isinstance(conversation_id, str):
+            raise ValueError("cursor field 'conversation_id' must be a string")
+        if conversation_id != expected_conversation_id:
             raise ValueError(
-                "cursor thread identity mismatch: "
-                f"expected {expected_thread_id!r}, got {thread_id!r}"
+                "cursor conversation identity mismatch: "
+                f"expected {expected_conversation_id!r}, got {conversation_id!r}"
             )
         count = data.get("processed_message_count")
         if isinstance(count, bool) or not isinstance(count, int):
@@ -58,11 +58,11 @@ class MemoryCuratorCursor:
             raise ValueError(
                 "cursor field 'processed_message_count' must be non-negative"
             )
-        return cls(thread_id=thread_id, processed_message_count=count)
+        return cls(conversation_id=conversation_id, processed_message_count=count)
 
     def to_wire(self) -> dict[str, object]:
         return {
-            "thread_id": self.thread_id,
+            "conversation_id": self.conversation_id,
             "processed_message_count": self.processed_message_count,
         }
 

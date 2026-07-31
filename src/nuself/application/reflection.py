@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from nuself.config import ReflectionSettings
 from nuself.config import RuntimePaths
+from nuself.conversation import ConversationStore
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.notification import NotificationOutbox
@@ -55,10 +56,9 @@ def compose_reflection_scheduler(
     memory_repository: MemoryEntryRepository,
     source_repository: SourceRepository,
     profile_repository: ProfileItemRepository,
+    conversation_store: ConversationStore,
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
-
-    from nuself.agent.chat.thread import ThreadStore
 
     schedule_collection = backend.collection("scheduler_state")
     generator = IdeaCandidateGenerator(
@@ -67,7 +67,7 @@ def compose_reflection_scheduler(
         memory_repository=memory_repository,
         source_repository=source_repository,
         profile_repository=profile_repository,
-        thread_context=ThreadStore(paths, backend=backend),
+        conversation_context=conversation_store,
     )
     gate = LLMRelevanceGate(
         paths.project_root,

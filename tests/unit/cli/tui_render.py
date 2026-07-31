@@ -32,16 +32,16 @@ def _strip_ansi(text: str) -> str:
 
 
 def test_render_record_block_splits_header_and_body() -> None:
-    assert render_record_block("[test] event", ["status=ok", "thread=default"], body="first\nsecond") == (
-        "[test] event status=ok thread=default\n"
+    assert render_record_block("[test] event", ["status=ok", "conversation=default"], body="first\nsecond") == (
+        "[test] event status=ok conversation=default\n"
         "  first\n"
         "  second"
     )
 
 
 def test_render_session_header_uses_daemon_record_style() -> None:
-    assert render_session_header(daemon_status="running", thread_id="default") == (
-        "[daemon] session status=running thread=default"
+    assert render_session_header(daemon_status="running", conversation_id="default") == (
+        "[daemon] session status=running conversation=default"
     )
 
 
@@ -52,14 +52,14 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
         component="chat",
         event="service_tool_called",
         message="chat called memory service tool memory_archive",
-        thread_id="default",
+        conversation_id="default",
         turn_id="turn-1",
         status="completed",
         metadata={"service_component": "memory", "tool": "memory_archive", "args": {"entry_id": "m1"}, "result": 'Archived "Old memory".'},
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[chat] [memory] service_tool_called tool=memory_archive status=completed thread=default turn=turn-1",
+        "[chat] [memory] service_tool_called tool=memory_archive status=completed conversation=default turn=turn-1",
         "  args: {",
         '    "entry_id": "m1"',
         "  }",
@@ -207,7 +207,7 @@ def test_render_host_decision_formats_block() -> None:
         component="persona",
         event="host_discussion_decision",
         message="user asked for multi-perspective discussion",
-        thread_id="default",
+        conversation_id="default",
         status="approved",
         metadata={"should_escalate": True, "escalation_reason": "multi-perspective request"},
     )
@@ -215,7 +215,7 @@ def test_render_host_decision_formats_block() -> None:
     lines = render_host_decision(event)
 
     assert lines == [
-        "[host decision] host_discussion_decision thread=default should_escalate=true",
+        "[host decision] host_discussion_decision conversation=default should_escalate=true",
         "  approved",
         "  user asked for multi-perspective discussion",
     ]
@@ -228,13 +228,13 @@ def test_render_persona_host_decision_does_not_repeat_escalation_reason() -> Non
         component="persona",
         event="host_discussion_decision",
         message="multi-perspective request",
-        thread_id="default",
+        conversation_id="default",
         status="approved",
         metadata={"should_escalate": True, "escalation_reason": "multi-perspective request"},
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[selves] host_discussion_decision thread=default should_escalate=true",
+        "[selves] host_discussion_decision conversation=default should_escalate=true",
         "  approved",
         "  multi-perspective request",
     ]
@@ -251,13 +251,13 @@ def test_render_persona_summary_formats_personas_on_separate_lines() -> None:
             "skeptic_self: Skeptic challenges the assumption.\n"
             "synthesizer_self: Synthesis keeps the useful tension."
         ),
-        thread_id="default",
+        conversation_id="default",
         status="deep tradeoff",
         metadata={"persona_count": 2, "has_synthesis": True},
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[selves] persona_summary thread=default has_synthesis=true persona_count=2",
+        "[selves] persona_summary conversation=default has_synthesis=true persona_count=2",
         "  deep tradeoff",
         "  analyst_self: Analyst decomposes the question.",
         "  skeptic_self: Skeptic challenges the assumption.",
@@ -276,7 +276,7 @@ def test_render_persona_summary_colors_each_self_label() -> None:
             "skeptic_self: Skeptic challenges the assumption.\n"
             "builder_self: Builder proposes the next move."
         ),
-        thread_id="default",
+        conversation_id="default",
         status="deep tradeoff",
         metadata={"persona_count": 3, "has_synthesis": False},
     )
@@ -295,7 +295,7 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
         component="persona",
         event="persona_discussion",
         message="New idea - approved after discussion",
-        thread_id="default",
+        conversation_id="default",
         status="approved",
         metadata={
             "candidate_id": "candidate-1",
@@ -309,7 +309,7 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
     )
 
     assert render_log_event(event, color=False).splitlines() == [
-        "[selves] persona_discussion thread=default candidate_id=candidate-1",
+        "[selves] persona_discussion conversation=default candidate_id=candidate-1",
         "  approved",
         "  New idea - approved after discussion",
         "  [discussion]",
@@ -330,7 +330,7 @@ def test_render_outbox_records_use_shared_key_value_style() -> None:
         body="Test Body",
         status="pending",
         idempotency_key="k1",
-        deep_link="nuself://thread/default",
+        deep_link="nuself://conversation/default",
         created_at="2026-05-12T10:00:00Z",
     )
 
@@ -338,7 +338,7 @@ def test_render_outbox_records_use_shared_key_value_style() -> None:
         f"e1 [pending] Test Title created={created} attempts=0 link=true"
     )
     assert render_outbox_detail(entry, color=False).splitlines() == [
-        f"e1 [pending] Test Title idempotency_key=k1 attempts=0 created_at={created} deep_link=nuself://thread/default",
+        f"e1 [pending] Test Title idempotency_key=k1 attempts=0 created_at={created} deep_link=nuself://conversation/default",
         "  Test Body",
     ]
 
@@ -358,7 +358,7 @@ def test_render_reflection_records_use_shared_key_value_style() -> None:
         status="pending",
         discussion_approved=True,
         discussion_trace=("candidate: Test idea", "turn-1:builder_self: build it"),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at="2026-05-12T10:00:00Z",
         reviewed_at=None,
     )
@@ -371,7 +371,7 @@ def test_render_reflection_records_use_shared_key_value_style() -> None:
         "[2] \033[33m[reflection]\033[0m status=\033[33m[pending]\033[0m"
     )
     assert render_reflection_entry_detail(entry, color=False).splitlines() == [
-        f"[pending] Test idea id=reflection-candidate-1 type=question score=0.65 confidence=0.70 novelty=0.60 urgency=0.50 interruption=0.20 discussion=approved deep_link=nuself://thread/reflections created_at={created}",
+        f"[pending] Test idea id=reflection-candidate-1 type=question score=0.65 confidence=0.70 novelty=0.60 urgency=0.50 interruption=0.20 discussion=approved deep_link=nuself://conversation/reflections created_at={created}",
         "  Body line",
         "  [discussion]",
         "    [candidate] Test idea",

@@ -31,7 +31,7 @@ locks and Unix-domain sockets.
 ## Features
 
 - Memory-aware one-shot and daemon-backed chat
-- Persisted, resumable, branchable conversation threads
+- Persisted, resumable, branchable conversations
 - Durable memory with review, search, relations, and symbolic graph views
 - Markdown and plain-text source ingestion with cited profile extraction
 - Long-run reasoning threads and traceable thought provenance
@@ -108,7 +108,7 @@ uv run nuself
 ```
 
 Opening another interactive client remains responsive while the daemon is
-still completing a turn; startup reads the last committed thread snapshot.
+still completing a turn; startup reads the last committed conversation snapshot.
 Ctrl-C cancels an in-flight turn only after its request transport is closed;
 Ctrl-D exits through transcript, curator, and storage cleanup.
 
@@ -129,12 +129,12 @@ than pretending to produce a model-backed answer.
 
 ## Common Workflows
 
-### Resume a thread
+### Resume a conversation
 
 ```bash
-uv run nuself thread list
-uv run nuself thread open default
-uv run nuself thread branch default alternative
+uv run nuself conversation list
+uv run nuself conversation open default
+uv run nuself conversation branch default alternative
 ```
 
 ### Search and curate memory

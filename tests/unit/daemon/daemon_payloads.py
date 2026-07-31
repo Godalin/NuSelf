@@ -42,8 +42,8 @@ def test_chat_request_payload_requires_message() -> None:
     "payload, field",
     [
         (
-            {"message": "hello", "thread_id": 42},
-            "thread_id",
+            {"message": "hello", "conversation_id": 42},
+            "conversation_id",
         ),
         (
             {"message": "hello", "turn_id": False},
@@ -73,7 +73,7 @@ def test_chat_response_payload_omits_absent_optional_fields() -> None:
     payload = ChatResponsePayload(
         answer="answer",
         reply="answer",
-        thread_id="default",
+        conversation_id="default",
         evidence_references=("m1",),
         epistemic_status="grounded",
     )
@@ -81,7 +81,7 @@ def test_chat_response_payload_omits_absent_optional_fields() -> None:
     assert payload.to_wire() == {
         "answer": "answer",
         "reply": "answer",
-        "thread_id": "default",
+        "conversation_id": "default",
         "evidence_references": ["m1"],
         "epistemic_status": "grounded",
     }
@@ -137,7 +137,7 @@ def test_health_response_payload_projects_scheduler_model() -> None:
             {
                 "answer": "answer",
                 "reply": "answer",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [1],
                 "epistemic_status": "grounded",
             },
@@ -147,7 +147,7 @@ def test_health_response_payload_projects_scheduler_model() -> None:
             {
                 "answer": "answer",
                 "reply": "answer",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": "invented",
             },
@@ -157,7 +157,7 @@ def test_health_response_payload_projects_scheduler_model() -> None:
             {
                 "answer": "answer",
                 "reply": "answer",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
                 "confidence": 2,

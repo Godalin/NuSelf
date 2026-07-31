@@ -165,7 +165,8 @@ class LogEvent:
     message: str
     event_id: str | None = field(default_factory=lambda: uuid4().hex)
     schema_version: int | None = RUNTIME_SCHEMA_VERSION
-    thread_id: str | None = None
+    conversation_id: str | None = None
+    reason_id: str | None = None
     request_id: str | None = None
     turn_id: str | None = None
     job_id: str | None = None
@@ -221,7 +222,8 @@ class LogEvent:
             ),
         )
         for field_name in (
-            "thread_id",
+            "conversation_id",
+            "reason_id",
             "request_id",
             "turn_id",
             "job_id",
@@ -266,7 +268,8 @@ class LogEvent:
         for key, value in (
             ("event_id", self.event_id),
             ("schema_version", self.schema_version),
-            ("thread_id", self.thread_id),
+            ("conversation_id", self.conversation_id),
+            ("reason_id", self.reason_id),
             ("request_id", self.request_id),
             ("turn_id", self.turn_id),
             ("job_id", self.job_id),
@@ -317,7 +320,8 @@ class LogEvent:
                 record,
                 "schema_version",
             ),
-            thread_id=_record_optional_str(record, "thread_id"),
+            conversation_id=_record_optional_str(record, "conversation_id"),
+            reason_id=_record_optional_str(record, "reason_id"),
             request_id=_record_optional_str(record, "request_id"),
             turn_id=_record_optional_str(record, "turn_id"),
             job_id=_record_optional_str(record, "job_id"),
@@ -338,7 +342,8 @@ def write_log_event(
     *,
     project_root: Path | None = None,
     level: LogLevel = "info",
-    thread_id: str | None = None,
+    conversation_id: str | None = None,
+    reason_id: str | None = None,
     request_id: str | None = None,
     turn_id: str | None = None,
     job_id: str | None = None,
@@ -358,7 +363,8 @@ def write_log_event(
         event,
         message,
         level=level,
-        thread_id=thread_id,
+        conversation_id=conversation_id,
+        reason_id=reason_id,
         request_id=request_id,
         turn_id=turn_id,
         job_id=job_id,
@@ -383,7 +389,8 @@ def create_audit_envelope(
     message: str,
     *,
     level: LogLevel = "info",
-    thread_id: str | None = None,
+    conversation_id: str | None = None,
+    reason_id: str | None = None,
     request_id: str | None = None,
     turn_id: str | None = None,
     job_id: str | None = None,
@@ -414,7 +421,8 @@ def create_audit_envelope(
         name=event,
         producer=component,
         context=RuntimeContext(
-            thread_id=thread_id if thread_id is not None else context.thread_id,
+            conversation_id=conversation_id if conversation_id is not None else context.conversation_id,
+            reason_id=reason_id if reason_id is not None else context.reason_id,
             request_id=request_id if request_id is not None else context.request_id,
             turn_id=turn_id if turn_id is not None else context.turn_id,
             job_id=job_id if job_id is not None else context.job_id,
@@ -490,7 +498,8 @@ def _write_envelope_log_projection(
         message=redact_sensitive_text(message),
         event_id=envelope.message_id,
         schema_version=envelope.schema_version,
-        thread_id=envelope.context.thread_id,
+        conversation_id=envelope.context.conversation_id,
+        reason_id=envelope.context.reason_id,
         request_id=envelope.context.request_id,
         turn_id=envelope.context.turn_id,
         job_id=envelope.context.job_id,

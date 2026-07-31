@@ -25,7 +25,7 @@ def _entry(entry_id: str, *, title: str, body: str, score: float, created_at: st
         status="pending",
         discussion_approved=None,
         discussion_trace=(),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at=created_at,
         reviewed_at=None,
     )

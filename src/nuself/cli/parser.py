@@ -80,16 +80,16 @@ from nuself.cli.commands.system import (
     handle_logs,
     handle_status,
 )
-from nuself.cli.commands.threads import (
-    handle_thread_archive,
-    handle_thread_archived,
-    handle_thread_branch,
-    handle_thread_create,
-    handle_thread_delete,
-    handle_thread_list,
-    handle_thread_rename,
-    handle_thread_show,
-    handle_thread_unarchive,
+from nuself.cli.commands.conversations import (
+    handle_conversation_archive,
+    handle_conversation_archived,
+    handle_conversation_branch,
+    handle_conversation_create,
+    handle_conversation_delete,
+    handle_conversation_list,
+    handle_conversation_rename,
+    handle_conversation_show,
+    handle_conversation_unarchive,
 )
 from nuself.cli.commands.trace import (
     handle_trace_list,
@@ -115,7 +115,7 @@ class EntrypointHandlers:
     default_entrypoint: CliHandler
     chat: CliHandler
     attach: CliHandler
-    open_thread: CliHandler
+    open_conversation: CliHandler
 
 
 def _add_log_arguments(
@@ -339,74 +339,74 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
 
     add_memory_parser(subparsers, bindings)
 
-    thread_parser = subparsers.add_parser(
-        "thread",
-        help="Manage conversation threads.",
-        description="Manage conversation threads.",
+    conversation_parser = subparsers.add_parser(
+        "conversation",
+        help="Manage conversations.",
+        description="Manage conversations.",
     )
-    bind_help(thread_parser)
-    thread_subparsers = thread_parser.add_subparsers(
-        dest="thread_command", metavar="<command>"
+    bind_help(conversation_parser)
+    conversation_subparsers = conversation_parser.add_subparsers(
+        dest="conversation_command", metavar="<command>"
     )
     bind_handler(
-        thread_subparsers.add_parser("list", help="List conversation threads."),
-        handle_thread_list,
+        conversation_subparsers.add_parser("list", help="List conversations."),
+        handle_conversation_list,
     )
-    thread_show_parser = thread_subparsers.add_parser(
-        "show", help="Show one conversation thread."
+    conversation_show_parser = conversation_subparsers.add_parser(
+        "show", help="Show one conversation."
     )
-    thread_show_parser.add_argument("thread_id")
-    bind_handler(thread_show_parser, handle_thread_show)
-    thread_create_parser = thread_subparsers.add_parser(
-        "new", help="Create an empty conversation thread."
+    conversation_show_parser.add_argument("conversation_id")
+    bind_handler(conversation_show_parser, handle_conversation_show)
+    conversation_create_parser = conversation_subparsers.add_parser(
+        "new", help="Create an empty conversation."
     )
-    thread_create_parser.add_argument("thread_id")
-    bind_handler(thread_create_parser, handle_thread_create)
-    thread_open_parser = thread_subparsers.add_parser(
-        "open", help="Open or create a thread for chat."
+    conversation_create_parser.add_argument("conversation_id")
+    bind_handler(conversation_create_parser, handle_conversation_create)
+    conversation_open_parser = conversation_subparsers.add_parser(
+        "open", help="Open or create a conversation for chat."
     )
-    thread_open_parser.add_argument("thread_id", nargs="?", default=None)
-    thread_open_parser.add_argument("--message", "-m", default=None)
-    thread_open_parser.add_argument("--create", action="store_true")
-    thread_open_parser.add_argument("--deep-link", default=None)
+    conversation_open_parser.add_argument("conversation_id", nargs="?", default=None)
+    conversation_open_parser.add_argument("--message", "-m", default=None)
+    conversation_open_parser.add_argument("--create", action="store_true")
+    conversation_open_parser.add_argument("--deep-link", default=None)
     bind_handler(
-        thread_open_parser,
-        handlers.open_thread,
+        conversation_open_parser,
+        handlers.open_conversation,
         requirements=INTERACTIVE_MODEL_READY,
     )
-    thread_rename_parser = thread_subparsers.add_parser(
-        "rename", help="Rename a conversation thread."
+    conversation_rename_parser = conversation_subparsers.add_parser(
+        "rename", help="Rename a conversation."
     )
-    thread_rename_parser.add_argument("old_thread_id")
-    thread_rename_parser.add_argument("new_thread_id")
-    bind_handler(thread_rename_parser, handle_thread_rename)
-    thread_branch_parser = thread_subparsers.add_parser(
-        "branch", help="Create a thread branch from an existing thread."
+    conversation_rename_parser.add_argument("old_conversation_id")
+    conversation_rename_parser.add_argument("new_conversation_id")
+    bind_handler(conversation_rename_parser, handle_conversation_rename)
+    conversation_branch_parser = conversation_subparsers.add_parser(
+        "branch", help="Create a conversation branch from an existing conversation."
     )
-    thread_branch_parser.add_argument("source_thread_id")
-    thread_branch_parser.add_argument("new_thread_id")
-    thread_branch_parser.add_argument("--index", type=int, default=None)
-    bind_handler(thread_branch_parser, handle_thread_branch)
-    thread_archive_parser = thread_subparsers.add_parser(
-        "archive", help="Archive a conversation thread."
+    conversation_branch_parser.add_argument("source_conversation_id")
+    conversation_branch_parser.add_argument("new_conversation_id")
+    conversation_branch_parser.add_argument("--index", type=int, default=None)
+    bind_handler(conversation_branch_parser, handle_conversation_branch)
+    conversation_archive_parser = conversation_subparsers.add_parser(
+        "archive", help="Archive a conversation."
     )
-    thread_archive_parser.add_argument("thread_id")
-    bind_handler(thread_archive_parser, handle_thread_archive)
-    thread_delete_parser = thread_subparsers.add_parser(
-        "delete", help="Delete a conversation thread."
+    conversation_archive_parser.add_argument("conversation_id")
+    bind_handler(conversation_archive_parser, handle_conversation_archive)
+    conversation_delete_parser = conversation_subparsers.add_parser(
+        "delete", help="Delete a conversation."
     )
-    thread_delete_parser.add_argument("thread_id")
-    bind_handler(thread_delete_parser, handle_thread_delete)
-    thread_unarchive_parser = thread_subparsers.add_parser(
-        "unarchive", help="Restore an archived conversation thread."
+    conversation_delete_parser.add_argument("conversation_id")
+    bind_handler(conversation_delete_parser, handle_conversation_delete)
+    conversation_unarchive_parser = conversation_subparsers.add_parser(
+        "unarchive", help="Restore an archived conversation."
     )
-    thread_unarchive_parser.add_argument("thread_id")
-    bind_handler(thread_unarchive_parser, handle_thread_unarchive)
+    conversation_unarchive_parser.add_argument("conversation_id")
+    bind_handler(conversation_unarchive_parser, handle_conversation_unarchive)
     bind_handler(
-        thread_subparsers.add_parser(
-            "archived", help="List archived conversation threads."
+        conversation_subparsers.add_parser(
+            "archived", help="List archived conversations."
         ),
-        handle_thread_archived,
+        handle_conversation_archived,
     )
 
     inbox_parser = subparsers.add_parser(

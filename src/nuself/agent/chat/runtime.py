@@ -35,10 +35,10 @@ from nuself.agent.chat.response import (
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
-from nuself.agent.chat.thread import (
+from nuself.conversation import (
     ConversationTurnConflictError,
-    ThreadMessage,
-    ThreadState,
+    ConversationMessage,
+    ConversationState,
 )
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
@@ -112,7 +112,7 @@ class ConversationGraphRuntime:
             if event_publisher is not None
             else self._build_event_publisher(project_root)
         )
-        self._thread_store = resources.thread_store
+        self._conversation_store = resources.conversation_store
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
         self._trace_recorder = resources.trace_recorder
@@ -191,20 +191,23 @@ class ConversationGraphRuntime:
     def respond(
         self,
         message: str,
-        thread_id: str = "default",
+        conversation_id: str = "default",
         *,
         turn_id: str | None = None,
     ) -> ChatResult:
         started_at = time.monotonic()
         reused = False
         node_trace: tuple[ConversationNodeName, ...] = ()
+        stage_durations_ms: tuple[tuple[str, int], ...] = ()
+        context_metadata: dict[str, object] = {}
+        commit_duration_ms = 0
 
-        def update(state: ThreadState) -> tuple[ThreadState, ChatResult]:
-            nonlocal reused, node_trace
+        def update(state: ConversationState) -> tuple[ConversationState, ChatResult]:
+            nonlocal reused, node_trace, stage_durations_ms, context_metadata
             completed = _completed_turn_result(
                 state,
                 message=message,
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 turn_id=turn_id,
             )
             if completed is not None:
@@ -218,22 +221,36 @@ class ConversationGraphRuntime:
             state, result, node_trace = self.run_turn(
                 state,
                 message,
-                thread_id,
+                conversation_id,
                 turn_id=turn_id,
+                metrics_observer=observe_turn_metrics,
             )
             return state, result
 
+        def observe_turn_metrics(
+            durations: tuple[tuple[str, int], ...],
+            metadata: dict[str, object],
+        ) -> None:
+            nonlocal stage_durations_ms, context_metadata
+            stage_durations_ms = durations
+            context_metadata = metadata
+
+        def observe_commit(duration_ms: int) -> None:
+            nonlocal commit_duration_ms
+            commit_duration_ms = duration_ms
+
         with runtime_context(
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             turn_id=turn_id,
             source="chat_runtime",
         ):
             try:
-                result = self._thread_store.update(
-                    thread_id,
+                result = self._conversation_store.update(
+                    conversation_id,
                     update,
                     turn_id=turn_id,
                     user_message=(message if turn_id is not None else None),
+                    commit_observer=observe_commit,
                 )
             except Exception as exc:
                 self._publish_turn_event(
@@ -257,7 +274,7 @@ class ConversationGraphRuntime:
                 trace_id = self._record_chat_turn_trace(
                     user_message=message,
                     result=result,
-                    thread_id=thread_id,
+                    conversation_id=conversation_id,
                     node_trace=node_trace,
                 )
                 result = replace(result, trace_id=trace_id)
@@ -266,7 +283,12 @@ class ConversationGraphRuntime:
                     message="chat turn completed",
                     status="completed",
                     duration_ms=duration_ms,
-                    metadata={"node_trace": list(node_trace)},
+                    metadata={
+                        "node_trace": list(node_trace),
+                        "stage_durations_ms": dict(stage_durations_ms),
+                        "commit_duration_ms": commit_duration_ms,
+                        **context_metadata,
+                    },
                 )
             return result
 
@@ -300,36 +322,45 @@ class ConversationGraphRuntime:
 
     def run_turn(
         self,
-        state: ThreadState,
+        state: ConversationState,
         message: str,
-        thread_id: str,
+        conversation_id: str,
         *,
         turn_id: str | None = None,
-    ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
+        metrics_observer: Callable[
+            [tuple[tuple[str, int], ...], dict[str, object]], None
+        ]
+        | None = None,
+    ) -> tuple[ConversationState, ChatResult, tuple[ConversationNodeName, ...]]:
         with runtime_context(
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             turn_id=turn_id,
             source="chat_runtime",
         ):
             return self._execute_turn(
                 state,
                 message,
-                thread_id,
+                conversation_id,
                 turn_id=turn_id,
+                metrics_observer=metrics_observer,
             )
 
     def _execute_turn(
         self,
-        state: ThreadState,
+        state: ConversationState,
         message: str,
-        thread_id: str,
+        conversation_id: str,
         *,
         turn_id: str | None,
-    ) -> tuple[ThreadState, ChatResult, tuple[ConversationNodeName, ...]]:
+        metrics_observer: Callable[
+            [tuple[tuple[str, int], ...], dict[str, object]], None
+        ]
+        | None,
+    ) -> tuple[ConversationState, ChatResult, tuple[ConversationNodeName, ...]]:
         turn_state = ConversationTurnState.start(
             state,
             message,
-            thread_id,
+            conversation_id,
             turn_id=turn_id,
         )
         turn_state = self._run_node(
@@ -341,15 +372,25 @@ class ConversationGraphRuntime:
         turn_state = self._run_node(
             "state_update", turn_state, self.state_update_node
         )
-        turn_state = self._run_node(
-            "compression", turn_state, self.compression_node
-        )
-        updated = _require_thread_state(turn_state.updated_thread_state)
+        updated = _require_conversation_state(turn_state.updated_conversation_state)
         final_response = _require_final_response(turn_state.final_response)
         state = updated
+        context_metadata: dict[str, object] = {
+            "recent_message_count": turn_state.recent_message_count,
+            "summary_present": bool(turn_state.persisted_state.summary),
+            "memory_match_count": turn_state.memory_match_count,
+            "profile_match_count": turn_state.profile_match_count,
+            "source_match_count": turn_state.source_match_count,
+            "prompt_message_count": turn_state.prompt_message_count,
+        }
+        if metrics_observer is not None:
+            metrics_observer(
+                turn_state.stage_durations_ms,
+                context_metadata,
+            )
         return state, ChatResult(
             answer=final_response.answer,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             evidence_references=tuple(final_response.evidence_references),
             confidence=final_response.confidence,
             epistemic_status=final_response.epistemic_status,
@@ -360,7 +401,7 @@ class ConversationGraphRuntime:
         *,
         user_message: str,
         result: ChatResult,
-        thread_id: str,
+        conversation_id: str,
         node_trace: tuple[ConversationNodeName, ...],
     ) -> str | None:
         if not result.evidence_references:
@@ -372,7 +413,7 @@ class ConversationGraphRuntime:
                 summary="Assistant reply used retrieved context cited by the final response.",
                 user_input=trace_summary(user_message),
                 assistant_output=trace_summary(result.answer),
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 evidence_refs=evidence_refs,
                 participants=["chat_agent"],
                 decision_points=["Recorded because the final response cited evidence references."],
@@ -397,13 +438,22 @@ class ConversationGraphRuntime:
             ConversationNodeResult,
         ],
     ) -> ConversationTurnState:
+        started_at = time.monotonic()
         try:
-            return run(state).state
+            completed = run(state).state
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            return replace(
+                completed,
+                stage_durations_ms=(
+                    *completed.stage_durations_ms,
+                    (node_name, duration_ms),
+                ),
+            )
         except ConversationGraphRuntimeError:
             raise
         except Exception as exc:
             raise ConversationGraphRuntimeError(
-                f"conversation graph node '{node_name}' failed while handling thread '{state.thread_id}'",
+                f"conversation graph node '{node_name}' failed while handling conversation '{state.conversation_id}'",
                 node=node_name,
                 node_trace=(*state.node_trace, node_name),
             ) from exc
@@ -421,13 +471,14 @@ class ConversationGraphRuntime:
         final = self._finalize_draft_response(state, response)
         saved = (
             *state.active_messages,
-            ThreadMessage(role="assistant", content=final.answer, turn_id=state.turn_id),
+            ConversationMessage(role="assistant", content=final.answer, turn_id=state.turn_id),
         )
         return ConversationNodeResult(
             state=replace(
                 state,
                 final_response=final,
                 saved_messages=saved,
+                prompt_message_count=len(prompt),
                 node_trace=(*state.node_trace, "respond"),
             ),
         )
@@ -437,6 +488,16 @@ class ConversationGraphRuntime:
 
     def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         return self._state_manager.compress(state)
+
+    def compress_conversation(self, conversation_id: str) -> None:
+        """Compress one committed conversation outside reply delivery."""
+
+        def compress(
+            state: ConversationState,
+        ) -> tuple[ConversationState, None]:
+            return self._state_manager.compress_conversation(state), None
+
+        self._conversation_store.update(conversation_id, compress)
 
     # ------------------------------------------------------------------
     # Prompt building
@@ -518,9 +579,9 @@ class ConversationGraphRuntime:
 # ======================================================================
 
 
-def _require_thread_state(state: ThreadState | None) -> ThreadState:
+def _require_conversation_state(state: ConversationState | None) -> ConversationState:
     if state is None:
-        raise RuntimeError("conversation runtime thread state is missing")
+        raise RuntimeError("conversation runtime conversation state is missing")
     return state
 
 
@@ -531,15 +592,15 @@ def _require_final_response(response: ChatStructuredOutput | None) -> ChatStruct
 
 
 def _completed_turn_result(
-    state: ThreadState,
+    state: ConversationState,
     *,
     message: str,
-    thread_id: str,
+    conversation_id: str,
     turn_id: str | None,
 ) -> ChatResult | None:
     if turn_id is None or len(state.messages) < 2:
         return None
-    assistant_message: ThreadMessage | None = None
+    assistant_message: ConversationMessage | None = None
     for item in reversed(state.messages):
         if item.turn_id == turn_id and item.role == "assistant":
             assistant_message = item
@@ -549,7 +610,7 @@ def _completed_turn_result(
     for item in reversed(state.messages):
         if item.turn_id == turn_id and item.role == "user":
             if item.content == message:
-                return ChatResult(answer=assistant_message.content, thread_id=thread_id)
+                return ChatResult(answer=assistant_message.content, conversation_id=conversation_id)
             raise ConversationTurnConflictError(
                 f"turn ID {turn_id!r} is already bound to different input"
             )

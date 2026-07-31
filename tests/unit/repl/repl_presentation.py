@@ -23,6 +23,6 @@ def test_session_header_presenter_uses_current_status_every_time(
 
     assert roots == [tmp_path, tmp_path]
     assert capsys.readouterr().out.splitlines() == [
-        "[daemon] session status=one-shot thread=first",
-        "[daemon] session status=running thread=second",
+        "[daemon] session status=one-shot conversation=first",
+        "[daemon] session status=running conversation=second",
     ]

@@ -51,7 +51,7 @@ def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
         status="pending",
         discussion_approved=True,
         discussion_trace=(),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at=now,
         reviewed_at=None,
     )
@@ -62,11 +62,11 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     entry = repo.add(_reflection_entry())
     service = _service(tmp_path, repo)
 
-    thread = service.promote_to_reason(entry.id)
+    conversation = service.promote_to_reason(entry.id)
 
-    assert thread.topic == entry.title
-    assert thread.working_summary == entry.body
-    assert thread.evidence_refs == (f"reflection:{entry.id}",)
+    assert conversation.topic == entry.title
+    assert conversation.working_summary == entry.body
+    assert conversation.evidence_refs == (f"reflection:{entry.id}",)
     assert repo.get(entry.id).status == "pending"
 
     query = compose_trace_services(
@@ -78,10 +78,10 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     assert len(reason_traces) == 1
     assert len(promotion_traces) == 1
     assert promotion_traces[0].inputs == (f"reflection:{entry.id}",)
-    assert promotion_traces[0].outputs == (f"reason:{thread.id}",)
+    assert promotion_traces[0].outputs == (f"reason:{conversation.id}",)
     links = query.links_for(f"reflection:{entry.id}")
     assert len(links) == 1
-    assert links[0].target_id == f"reason:{thread.id}"
+    assert links[0].target_id == f"reason:{conversation.id}"
 
 
 def test_promote_rejects_non_pending_reflection(tmp_path: Path) -> None:

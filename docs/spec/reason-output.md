@@ -27,7 +27,7 @@ The first implementation does not require trace as an input. Trace may be added 
 - This spec does not define a general unrestricted filesystem API.
 - This spec does not make chat transcripts the source of truth for long-form output.
 - This spec does not define a trace-backed provenance export path in the first version.
-- This spec does not require the composed output to be stored inside the chat thread.
+- This spec does not require the composed output to be stored inside a chat conversation.
 
 ## Domain Model
 

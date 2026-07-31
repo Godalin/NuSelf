@@ -4,27 +4,27 @@
   "description": "DeepLink.parse should accept valid URLs and reject invalid ones.",
   "scenarios": [
     {
-      "name": "basic-thread",
-      "url": "nuself://thread/my-thread",
-      "expected_thread_id": "my-thread",
+      "name": "basic-conversation",
+      "url": "nuself://conversation/my-conversation",
+      "expected_conversation_id": "my-conversation",
       "expected_message": null,
       "should_succeed": true
     },
     {
       "name": "with-message",
-      "url": "nuself://thread/my-thread?message=hello%20world",
-      "expected_thread_id": "my-thread",
+      "url": "nuself://conversation/my-conversation?message=hello%20world",
+      "expected_conversation_id": "my-conversation",
       "expected_message": "hello world",
       "should_succeed": true
     },
     {
       "name": "wrong-scheme",
-      "url": "https://example.com/thread/my-thread",
+      "url": "https://example.com/conversation/my-conversation",
       "should_succeed": false
     },
     {
       "name": "wrong-path",
-      "url": "nuself://memory/my-thread",
+      "url": "nuself://memory/my-conversation",
       "should_succeed": false
     }
   ]

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from nuself import cli
-from nuself.agent.chat.thread import ThreadStore
+from nuself.conversation import ConversationStore
 from nuself.cli.chat import chat_request_timeout_seconds
 from nuself.cli.commands.reason import handle_reason_start
 from nuself.cli.repl.commands import (
@@ -48,9 +48,9 @@ def test_chat_timeout_does_not_hide_unexpected_config_failure(
         chat_request_timeout_seconds(tmp_path)
 
 
-def test_history_reports_empty_missing_thread(tmp_path: Path) -> None:
+def test_history_reports_empty_missing_conversation(tmp_path: Path) -> None:
     assert handle_interactive_history_command(tmp_path, "missing") == (
-        "No messages in this thread."
+        "No messages in this conversation."
     )
 
 
@@ -58,13 +58,13 @@ def test_history_reports_compact_load_failure_chain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_load(self: ThreadStore, thread_id: str) -> None:
+    def fail_load(self: ConversationStore, conversation_id: str) -> None:
         try:
-            raise OSError("thread file unreadable")
+            raise OSError("conversation record unreadable")
         except OSError as exc:
             raise RuntimeError("history decode failed") from exc
 
-    monkeypatch.setattr(ThreadStore, "load", fail_load)
+    monkeypatch.setattr(ConversationStore, "load", fail_load)
 
     rendered = handle_interactive_history_command(
         tmp_path,
@@ -72,15 +72,15 @@ def test_history_reports_compact_load_failure_chain(
     )
 
     assert rendered == (
-        "Unable to load thread history for 'default': "
-        "history decode failed <- thread file unreadable"
+        "Unable to load conversation history for 'default': "
+        "history decode failed <- conversation record unreadable"
     )
     [event] = read_log_events(project_root=tmp_path, component="chat")
     assert event.event == "interactive_history_load_failed"
     assert event.level == "error"
     assert event.status == "error"
-    assert event.error == "history decode failed <- thread file unreadable"
-    assert event.metadata == {"thread_id": "default"}
+    assert event.error == "history decode failed <- conversation record unreadable"
+    assert event.metadata == {"conversation_id": "default"}
 
 
 def test_persona_command_reports_failure_without_logging_prompt(
@@ -115,13 +115,13 @@ def test_history_keeps_rendered_error_when_diagnostic_sink_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_load(self: ThreadStore, thread_id: str) -> None:
+    def fail_load(self: ConversationStore, conversation_id: str) -> None:
         raise RuntimeError("history unavailable")
 
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("log disk full")
 
-    monkeypatch.setattr(ThreadStore, "load", fail_load)
+    monkeypatch.setattr(ConversationStore, "load", fail_load)
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
@@ -142,7 +142,7 @@ def test_history_keeps_rendered_error_when_diagnostic_sink_fails(
         rendered = handle_interactive_history_command(tmp_path, "default")
 
     assert rendered == (
-        "Unable to load thread history for 'default': history unavailable"
+        "Unable to load conversation history for 'default': history unavailable"
     )
 
 
@@ -152,10 +152,10 @@ def test_history_does_not_convert_control_flow(
 ) -> None:
     interrupt = KeyboardInterrupt()
 
-    def interrupt_load(self: ThreadStore, thread_id: str) -> None:
+    def interrupt_load(self: ConversationStore, conversation_id: str) -> None:
         raise interrupt
 
-    monkeypatch.setattr(ThreadStore, "load", interrupt_load)
+    monkeypatch.setattr(ConversationStore, "load", interrupt_load)
 
     with pytest.raises(KeyboardInterrupt) as caught:
         handle_interactive_history_command(tmp_path, "default")

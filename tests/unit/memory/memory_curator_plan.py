@@ -19,9 +19,9 @@ from nuself.memory.curator_plan import (
 from memory_fixtures import memory_curator_plan_store
 
 
-def _plan(thread_id: str = "default") -> MemoryCuratorPlan:
+def _plan(conversation_id: str = "default") -> MemoryCuratorPlan:
     return MemoryCuratorPlan(
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         source_start=0,
         source_end=1,
         observed_at="2026-07-29T00:00:00+00:00",
@@ -38,12 +38,12 @@ def _plan(thread_id: str = "default") -> MemoryCuratorPlan:
 
 def _hold_curator_lock(
     project_root: str,
-    thread_id: str,
+    conversation_id: str,
     ready: Event,
     release: Event,
 ) -> None:
     store = memory_curator_plan_store(Path(project_root))
-    with store.exclusive(thread_id):
+    with store.exclusive(conversation_id):
         ready.set()
         if not release.wait(timeout=10):
             raise RuntimeError("parent did not release curator lock test child")

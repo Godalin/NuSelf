@@ -21,7 +21,7 @@ from langchain_core.messages import BaseMessage
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
-    ThreadState,
+    ConversationState,
 )
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQueryService
@@ -176,7 +176,7 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
     )
 
     _, result, _ = runtime.run_turn(
-        ThreadState.empty("payload-test"),
+        ConversationState.empty("payload-test"),
         "What are the risks and implementation steps for this?",
         "payload-test",
     )
@@ -191,7 +191,7 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
     # Verify expected fields are present and correct
     assert payload["answer"] == "Final answer."
     assert payload["reply"] == "Final answer."
-    assert payload["thread_id"] == "payload-test"
+    assert payload["conversation_id"] == "payload-test"
     assert isinstance(payload["evidence_references"], list)
     assert isinstance(payload["epistemic_status"], str)
 
@@ -207,7 +207,7 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("no-synthesis"),
+        ConversationState.empty("no-synthesis"),
         "Hello there.",
         "no-synthesis",
     )
@@ -282,7 +282,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("preserved-test"),
+        ConversationState.empty("preserved-test"),
         "What are the risks in this approach?",  # Triggers skeptic
         "preserved-test",
     )
@@ -316,7 +316,7 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("synth-test"),
+        ConversationState.empty("synth-test"),
         "What are the risks and implementation steps for this decision?",
         "synth-test",
     )
@@ -351,7 +351,7 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("normal-test"),
+        ConversationState.empty("normal-test"),
         "Hello there.",
         "normal-test",
     )

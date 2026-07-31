@@ -21,11 +21,11 @@ class SessionHeaderPresenter:
     def show(
         self,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
     ) -> None:
         print_ansi(
             render_session_header(
                 daemon_status=self.daemon_status(project_root),
-                thread_id=thread_id,
+                conversation_id=conversation_id,
             )
         )

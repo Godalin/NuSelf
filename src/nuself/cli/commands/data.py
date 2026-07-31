@@ -13,7 +13,7 @@ import sys
 import tempfile
 from typing import Callable, cast
 
-from nuself.agent.chat import ThreadState
+from nuself.conversation import ConversationState
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.domain.memory import MemoryEntry
@@ -28,7 +28,7 @@ from nuself.storage import COLLECTION_NAMES, get_default_backend
 _PUBLIC_ALIASES: dict[str, str] = {
     "memory": "memory_entries",
     "candidates": "memory_candidates",
-    "threads": "chat_threads",
+    "conversations": "conversations",
     "profile": "profile_items",
     "sources": "source_documents",
     "source-chunks": "source_chunks",
@@ -47,7 +47,7 @@ _INTERNAL_COLLECTIONS = {
 }
 _VALIDATORS: dict[str, Callable[[dict[str, object]], object]] = {
     "memory_entries": MemoryEntry.from_wire,
-    "chat_threads": ThreadState.from_wire,
+    "conversations": ConversationState.from_wire,
 }
 
 
@@ -90,7 +90,7 @@ def _collection_name(value: str, *, internal: bool) -> str:
 
 
 def _record_id(record: dict[str, object]) -> str:
-    value = record.get("id", record.get("thread_id"))
+    value = record.get("id", record.get("conversation_id"))
     return value if isinstance(value, str) else "<invalid-id>"
 
 
@@ -254,7 +254,7 @@ def handle_data_edit(args: argparse.Namespace) -> int:
         if not isinstance(decoded, dict):
             raise ValueError("edited record must be a JSON object")
         edited = cast(dict[str, object], decoded)
-        identity = edited.get("id", edited.get("thread_id"))
+        identity = edited.get("id", edited.get("conversation_id"))
         if identity != args.record_id:
             raise ValueError("edited record cannot change its stable identity")
         validator(edited)

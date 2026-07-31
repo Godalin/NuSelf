@@ -210,7 +210,7 @@ def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
     events = read_log_events(project_root=tmp_path, component="reasoning")
     failed = [event for event in events if event.event == "scheduler_advance_failed"]
     assert len(failed) == 1
-    assert failed[0].thread_id == thread.id
+    assert failed[0].reason_id == thread.id
     assert failed[0].status == "error"
     assert failed[0].metadata == {}
 

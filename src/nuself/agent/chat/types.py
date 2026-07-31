@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nuself.agent.chat.thread import ThreadMessage, ThreadState
+from nuself.conversation import ConversationMessage, ConversationState
 from nuself.config import ConfigSystem
 
 ConversationNodeName = Literal[
@@ -78,7 +78,7 @@ class ChatResult:
     """Result returned by one chat turn."""
 
     answer: str
-    thread_id: str
+    conversation_id: str
     evidence_references: tuple[str, ...] = ()
     confidence: float | None = None
     epistemic_status: str = "inferred"
@@ -92,7 +92,7 @@ class ChatResult:
         payload: dict[str, object] = {
             "answer": self.answer,
             "reply": self.answer,
-            "thread_id": self.thread_id,
+            "conversation_id": self.conversation_id,
             "evidence_references": list(self.evidence_references),
             "epistemic_status": self.epistemic_status,
         }
@@ -107,29 +107,35 @@ class ChatResult:
 class ConversationTurnState:
     """Typed state passed between conversation pipeline stages."""
 
-    thread_id: str
-    persisted_state: ThreadState
+    conversation_id: str
+    persisted_state: ConversationState
     user_message: str
     turn_id: str | None = None
     memory_context: str = ""
-    base_messages: tuple[ThreadMessage, ...] = ()
-    active_messages: tuple[ThreadMessage, ...] = ()
+    base_messages: tuple[ConversationMessage, ...] = ()
+    active_messages: tuple[ConversationMessage, ...] = ()
     final_response: ChatStructuredOutput | None = None
-    saved_messages: tuple[ThreadMessage, ...] = ()
-    updated_thread_state: ThreadState | None = None
+    saved_messages: tuple[ConversationMessage, ...] = ()
+    updated_conversation_state: ConversationState | None = None
     node_trace: tuple[ConversationNodeName, ...] = ()
+    stage_durations_ms: tuple[tuple[str, int], ...] = ()
+    recent_message_count: int = 0
+    memory_match_count: int = 0
+    profile_match_count: int = 0
+    source_match_count: int = 0
+    prompt_message_count: int = 0
 
     @classmethod
     def start(
         cls,
-        state: ThreadState,
+        state: ConversationState,
         message: str,
-        thread_id: str,
+        conversation_id: str,
         *,
         turn_id: str | None = None,
     ) -> ConversationTurnState:
         return cls(
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             persisted_state=state,
             user_message=message,
             turn_id=turn_id,

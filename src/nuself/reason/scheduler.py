@@ -57,7 +57,7 @@ class ReasonScheduler:
             return
 
         with runtime_context(
-            thread_id=candidate.id,
+            reason_id=candidate.id,
             source="reason_scheduler",
         ):
             try:

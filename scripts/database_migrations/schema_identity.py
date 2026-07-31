@@ -53,6 +53,7 @@ SCHEMA_COLLECTIONS: dict[int, tuple[str, ...]] = {
     ),
     4: (),
     5: (),
+    6: (),
 }
 
 
@@ -156,7 +157,7 @@ def validate_schema(connection: sqlite3.Connection) -> int:
     collections = SCHEMA_COLLECTIONS.get(version)
     if collections is None:
         raise ValueError(f"unsupported current version: {version}")
-    if version in (4, 5):
+    if version in (4, 5, 6):
         expected_tables = {
             "_schema_version",
             "records",

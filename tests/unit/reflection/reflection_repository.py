@@ -34,7 +34,7 @@ def _sample_entry(index: int = 0) -> ReflectionEntry:
         status="pending",
         discussion_approved=True,
         discussion_trace=("turn-1: analyst: good idea",),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at="2024-01-01T12:00:00+00:00",
         reviewed_at=None,
     )

@@ -21,7 +21,7 @@ def test_memory_entry_detaches_and_freezes_nested_inputs() -> None:
     relations = {"related_to": related}
     evidence = [
         MemoryEvidence(
-            source_type="thread",
+            source_type="conversation",
             source_ref="thread:default:0-1",
         )
     ]

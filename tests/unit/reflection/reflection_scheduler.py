@@ -21,7 +21,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.application.composition import compose_application
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
@@ -201,10 +201,7 @@ def _generator(
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
-        thread_context=ThreadStore(
-            project_root,
-            backend=application.backend,
-        ),
+        conversation_context=application.conversations,
     )
 
 
@@ -243,7 +240,7 @@ def _sample_reflection_entry(index: int = 0) -> ReflectionEntry:
         status="pending",
         discussion_approved=None,
         discussion_trace=(),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at=f"2024-01-01T12:00:0{index}+00:00",
         reviewed_at=None,
     )
@@ -289,6 +286,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
+        conversation_store=application.conversations,
     )
 
 
@@ -393,7 +391,7 @@ def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> Non
     assert entries[0].status == "pending"
     assert entries[0].id.startswith("reflection-candidate-")
     assert entries[0].deep_link is not None
-    assert entries[0].deep_link.startswith("nuself://thread/reflections")
+    assert entries[0].deep_link.startswith("nuself://conversation/reflections")
 
 
 def test_reflect_result_survives_unavailable_auxiliary_logs(
@@ -732,7 +730,7 @@ def test_quiet_hours_non_wrapping_range() -> None:
 # --- IdeaCandidateGenerator tests ---
 
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
-    """No threads, no memory, no sources → no candidates."""
+    """No conversations, no memory, no sources → no candidates."""
     gen = _generator(tmp_path, agent=_CandidateAgent())
     candidates = gen.generate()
     assert candidates == []
@@ -748,15 +746,15 @@ def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
     assert candidates[0].title == "Proactive insight about memory patterns"
 
 
-def test_generator_produces_ideas_from_threads(tmp_path: Path) -> None:
+def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:
     """Conversations alone should be enough to generate ideas."""
-    from nuself.agent.chat import ThreadMessage, ThreadState
+    from nuself.conversation import ConversationMessage, ConversationState
 
-    store = ThreadStore(tmp_path)
-    state = ThreadState.empty("default")
-    state.messages.append(ThreadMessage(role="user", content="What is consciousness?"))
-    state = ThreadState(
-        thread_id=state.thread_id,
+    store = ConversationStore(tmp_path)
+    state = ConversationState.empty("default")
+    state.messages.append(ConversationMessage(role="user", content="What is consciousness?"))
+    state = ConversationState(
+        conversation_id=state.conversation_id,
         messages=state.messages,
         next_message_index=1,
     )
@@ -913,7 +911,7 @@ def _make_candidate(
         urgency=urgency,
         interruption_cost=interruption_cost,
         evidence_refs=(),
-        suggested_thread_id=None,
+        suggested_conversation_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )

@@ -175,7 +175,7 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
     ):
         result = orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
             topic="compare",
-            thread_id="thread-1",
+            conversation_id="thread-1",
             trigger="requested",
             turn_state=turn_state,
             should_escalate=True,
@@ -220,7 +220,7 @@ def test_persona_discussion_implementation_errors_propagate(
     with pytest.raises(type(error)) as caught:
         orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
             topic="compare",
-            thread_id="thread-1",
+            conversation_id="thread-1",
             trigger="requested",
             turn_state=turn_state,
             should_escalate=True,

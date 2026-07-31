@@ -17,7 +17,7 @@ from nuself.agent.chat.response import (
     _LangChainChatSupervisor,
     _structured_output_from_state,  # pyright: ignore[reportPrivateUsage]
 )
-from nuself.agent.chat.thread import ThreadState
+from nuself.conversation import ConversationState
 from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
@@ -570,7 +570,7 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
         log_tool_outcome=_ignore_tool_outcome,
     )
     state = ConversationTurnState.start(
-        ThreadState.empty("thread-1"),
+        ConversationState.empty("thread-1"),
         "hello",
         "thread-1",
     )

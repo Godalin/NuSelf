@@ -49,14 +49,14 @@ def test_saved_runtime_context_replaces_ambient_and_restores() -> None:
 
     with runtime_context(
         request_id="ambient-request",
-        thread_id="ambient-thread",
+        conversation_id="ambient-thread",
         source="worker",
     ):
         with use_runtime_context(saved):
             assert current_runtime_context() == saved
         assert current_runtime_context() == RuntimeContext(
             request_id="ambient-request",
-            thread_id="ambient-thread",
+            conversation_id="ambient-thread",
             source="worker",
         )
 
@@ -68,7 +68,7 @@ def test_bound_runtime_callback_captures_context_across_thread() -> None:
 
     with runtime_context(
         request_id="captured-request",
-        thread_id="captured-thread",
+        conversation_id="captured-thread",
         source="client",
     ):
         bound = bind_runtime_context(
@@ -87,7 +87,7 @@ def test_bound_runtime_callback_captures_context_across_thread() -> None:
     assert observed == [
         RuntimeContext(
             request_id="captured-request",
-            thread_id="captured-thread",
+            conversation_id="captured-thread",
             source="client",
         )
     ]
@@ -156,6 +156,32 @@ def test_runtime_envelope_round_trips_detached_record() -> None:
     assert decoded.to_record()["payload"] == {
         "nested": {"workers": ["memory"]}
     }
+
+
+def test_runtime_envelope_decodes_legacy_thread_context() -> None:
+    record = RuntimeEnvelope(
+        kind="job",
+        name="legacy.chat",
+        producer="test",
+    ).to_record()
+    record["context"] = {"thread_id": "legacy-chat"}
+
+    decoded = RuntimeEnvelope.from_record(record)
+
+    assert decoded.context.conversation_id == "legacy-chat"
+    assert decoded.to_record()["context"] == {
+        "conversation_id": "legacy-chat"
+    }
+
+
+def test_runtime_context_rejects_ambiguous_thread_alias() -> None:
+    with pytest.raises(ValueError, match="both thread_id and conversation_id"):
+        RuntimeContext.from_record(
+            {
+                "thread_id": "legacy-chat",
+                "conversation_id": "current-chat",
+            }
+        )
 
 
 def test_runtime_envelope_payload_is_immutable() -> None:

@@ -223,10 +223,10 @@ corrupt-record diagnostics remain owned by shared observability.
 
 | Format | Parses to |
 |---|---|
-| `nuself://thread/<id>` | `open_thread`, `thread_id=<id>` |
-| `nuself://thread/<id>?message=...` | `open_thread` + optional message |
-| `nuself://new-thread` | `new_thread` |
-| `nuself://new-thread?title=...&message=...&candidate_id=...` | `new_thread` with params |
+| `nuself://conversation/<id>` | `open_conversation`, `conversation_id=<id>` |
+| `nuself://conversation/<id>?message=...` | `open_conversation` + optional message |
+| `nuself://new-conversation` | `new_conversation` |
+| `nuself://new-conversation?title=...&message=...&candidate_id=...` | `new_conversation` with params |
 
 Thread IDs are encoded as a single path segment. Query values use standard URL encoding, so messages, titles, and candidate IDs may contain `/`, `&`, `=`, spaces, or non-ASCII text and round-trip through `DeepLink.to_url()` / `DeepLink.parse()`.
 

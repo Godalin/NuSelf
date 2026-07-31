@@ -8,7 +8,7 @@ from nuself.agent.chat.types import (
     ConversationNodeResult,
     ConversationTurnState,
 )
-from nuself.agent.chat.thread import ThreadMessage
+from nuself.conversation import ConversationMessage
 from nuself.memory.query import MemoryQuery, MemoryQueryService
 
 
@@ -28,7 +28,7 @@ class ConversationContextPreparer:
         )
         active_messages = (
             *base_messages,
-            ThreadMessage(
+            ConversationMessage(
                 role="user",
                 content=state.user_message,
                 turn_id=state.turn_id,
@@ -43,6 +43,10 @@ class ConversationContextPreparer:
                 base_messages=base_messages,
                 active_messages=active_messages,
                 memory_context=packed_memory.text,
+                recent_message_count=len(base_messages),
+                memory_match_count=len(packed_memory.matches),
+                profile_match_count=len(packed_memory.profile_matches),
+                source_match_count=len(packed_memory.source_matches),
                 node_trace=(
                     *state.node_trace,
                     "prepare_context",
@@ -52,8 +56,8 @@ class ConversationContextPreparer:
 
 
 def _messages_for_prompt_context(
-    messages: list[ThreadMessage],
-) -> list[ThreadMessage]:
+    messages: list[ConversationMessage],
+) -> list[ConversationMessage]:
     return [
         message
         for message in messages

@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from pathlib import Path
 
-from nuself.agent.chat.thread import ThreadStore
+from nuself.conversation import ConversationStore
 from nuself.application.composition import (
     ApplicationGraph,
     compose_application,
@@ -15,7 +15,6 @@ from nuself.application.runtime import (
     current_application_runtime,
     use_application_runtime,
 )
-from nuself.application.thread import compose_thread_store
 from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
 
@@ -47,9 +46,9 @@ def compose_cli_application(
     )
 
 
-def compose_cli_thread_store(
+def compose_cli_conversation_store(
     project_root: Path | None,
-) -> ThreadStore:
-    """Borrow chat-thread persistence from the invocation application."""
+) -> ConversationStore:
+    """Borrow conversation persistence from the invocation application."""
 
-    return compose_thread_store(compose_cli_application(project_root))
+    return compose_cli_application(project_root).conversations

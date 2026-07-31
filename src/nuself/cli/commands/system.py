@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.cli.composition import compose_cli_conversation_store
 from nuself.cli.commands.output import print_ansi
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.daemon_status import observe_daemon_status
@@ -22,14 +22,14 @@ def handle_status(args: argparse.Namespace) -> int:
     daemon = observe_daemon_status(args.project_root)
     if daemon is None:
         return 1
-    threads = compose_cli_thread_store(args.project_root).list()
+    conversations = compose_cli_conversation_store(args.project_root).list()
     pending = len(
         compose_cli_application(args.project_root).notifications.list(
             status="pending"
         )
     )
     print(f"daemon: {daemon.phase} pid={daemon.pid or '-'}")
-    print(f"threads: {len(threads)}")
+    print(f"conversations: {len(conversations)}")
     print(f"pending notifications: {pending}")
     return 0
 

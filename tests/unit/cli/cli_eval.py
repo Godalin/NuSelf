@@ -23,5 +23,5 @@ def test_dev_eval_notifications_counts_structured_scenarios(
 
     assert result == 0
     assert "== notifications: 11/11 passed ==" in output
-    assert "PASS deep_link/basic-thread" in output
+    assert "PASS deep_link/basic-conversation" in output
     assert output.rstrip().endswith("11/11 passed")

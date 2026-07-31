@@ -175,7 +175,7 @@ def test_outbox_context_round_trip_and_legacy_decode(
 ) -> None:
     with runtime_context(
         request_id="request-1",
-        thread_id="thread-1",
+        conversation_id="thread-1",
         turn_id="turn-1",
         trace_id="trace-1",
         source="reflection",
@@ -209,7 +209,7 @@ def test_delivery_activates_entry_context_and_restores_ambient(
 ) -> None:
     with runtime_context(
         request_id="origin-request",
-        thread_id="origin-thread",
+        conversation_id="origin-thread",
         turn_id="origin-turn",
         trace_id="origin-trace",
         source="reflection",
@@ -238,7 +238,7 @@ def test_delivery_activates_entry_context_and_restores_ambient(
     assert adapter.contexts == [
         RuntimeContext(
             request_id="origin-request",
-            thread_id="origin-thread",
+            conversation_id="origin-thread",
             turn_id="origin-turn",
             trace_id="origin-trace",
             source="daemon.worker.notification_delivery",
@@ -251,7 +251,7 @@ def test_delivery_log_projects_origin_correlation(
 ) -> None:
     with runtime_context(
         request_id="notification-request",
-        thread_id="notification-thread",
+        conversation_id="notification-thread",
     ):
         entry = OutboxEntry(
             id="logged",
@@ -272,7 +272,7 @@ def test_delivery_log_projects_origin_correlation(
         component="outbox",
     )[-1]
     assert event.request_id == "notification-request"
-    assert event.thread_id == "notification-thread"
+    assert event.conversation_id == "notification-thread"
     assert event.source == "daemon.worker.notification_delivery"
     assert event.status == "delivered"
     assert event.metadata == {"entry_id": "logged", "attempt": 0}

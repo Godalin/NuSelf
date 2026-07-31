@@ -87,9 +87,9 @@ def _integer(metadata: Mapping[str, object], field: str) -> int:
 def _history_gap(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
-        frozenset({"thread_id", "cursor", "visible_start"}),
+        frozenset({"conversation_id", "cursor", "visible_start"}),
     )
-    _string(metadata, "thread_id")
+    _string(metadata, "conversation_id")
     cursor = _integer(metadata, "cursor")
     visible_start = _integer(metadata, "visible_start")
     if cursor >= visible_start:
@@ -99,9 +99,9 @@ def _history_gap(metadata: Mapping[str, object]) -> None:
 def _deferred(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
-        frozenset({"thread_id", "source_ref", "processed_messages"}),
+        frozenset({"conversation_id", "source_ref", "processed_messages"}),
     )
-    _string(metadata, "thread_id")
+    _string(metadata, "conversation_id")
     _string(metadata, "source_ref")
     if _integer(metadata, "processed_messages") != 0:
         raise AuditSchemaError(
@@ -110,8 +110,8 @@ def _deferred(metadata: Mapping[str, object]) -> None:
 
 
 def _curator_contended(metadata: Mapping[str, object]) -> None:
-    _require_exact(metadata, frozenset({"thread_id"}))
-    _string(metadata, "thread_id")
+    _require_exact(metadata, frozenset({"conversation_id"}))
+    _string(metadata, "conversation_id")
 
 
 def _curator_completed(metadata: Mapping[str, object]) -> None:
@@ -119,7 +119,7 @@ def _curator_completed(metadata: Mapping[str, object]) -> None:
         metadata,
         frozenset(
             {
-                "thread_id",
+                "conversation_id",
                 "source_ref",
                 "processed_messages",
                 "created",
@@ -128,7 +128,7 @@ def _curator_completed(metadata: Mapping[str, object]) -> None:
             }
         ),
     )
-    _string(metadata, "thread_id")
+    _string(metadata, "conversation_id")
     _string(metadata, "source_ref")
     if _integer(metadata, "processed_messages") < 1:
         raise AuditSchemaError(

@@ -29,7 +29,7 @@ class TraceRecorder:
         outputs: list[str] | None = None,
         participants: list[str] | None = None,
         decision_points: list[str] | None = None,
-        thread_id: str | None = None,
+        conversation_id: str | None = None,
         visibility: TraceVisibility = "private",
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
@@ -43,7 +43,7 @@ class TraceRecorder:
             outputs=outputs or [],
             participants=participants or [],
             decision_points=decision_points or [],
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             visibility=visibility,
             metadata=metadata or {},
         )
@@ -56,7 +56,7 @@ class TraceRecorder:
         summary: str,
         user_input: str,
         assistant_output: str,
-        thread_id: str,
+        conversation_id: str,
         evidence_refs: list[str] | None = None,
         participants: list[str] | None = None,
         decision_points: list[str] | None = None,
@@ -71,7 +71,7 @@ class TraceRecorder:
             evidence_refs=evidence_refs or [],
             participants=participants or [],
             decision_points=decision_points or [],
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             metadata=metadata or {},
         )
 
@@ -130,7 +130,7 @@ class TraceRecorder:
         candidate_type: str,
         composite_score: float,
         discussion_approved: bool | None,
-        thread_id: str | None = None,
+        conversation_id: str | None = None,
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
@@ -140,7 +140,7 @@ class TraceRecorder:
             summary=body,
             outputs=[f"reflection:{reflection_id}"],
             participants=["reflection"],
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             decision_points=decision_points or [],
             visibility="private",
             metadata={

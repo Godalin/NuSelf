@@ -42,7 +42,7 @@ Rules:
 
 - Runtime storage keeps timestamps as timezone-aware ISO strings.
 - `created_at` and `updated_at` are storage metadata; they do not necessarily describe when the remembered thing happened.
-- `observed_at` should be filled when the source has an event/date or when a chat-derived memory is created from a thread turn.
+- `observed_at` should be filled when the source has an event/date or when a chat-derived memory is created from a conversation turn.
 - For chat-derived memories, `observed_at` should use the curation source time and evidence should carry the same observation time.
 - Retrieval context shown to chat must include available temporal fields so NuSelf can reason about whether a memory is old, recent, current, or historically bounded.
 - Missing temporal fields must be omitted from compact prompts rather than rendered as `None`.
@@ -101,14 +101,14 @@ repository while composing that snapshot.
 
 ### Triggers
 
-1. The daemon chat handler requests curation for the completed thread after
+1. The daemon chat handler requests curation for the completed conversation after
    the assistant reply has been persisted. It does not execute curation in the
    request path or delay the reply.
-2. The daemon's single memory-curator worker coalesces requested thread IDs and
+2. The daemon's unified scheduler coalesces requested conversation IDs and
    processes them promptly. Every
    `daemon.memory_curator.interval_seconds` (default `300`) it also scans all
-   stored thread IDs, so a daemon exit between reply persistence and the
-   in-memory wake-up cannot permanently skip a thread.
+   stored conversation IDs, so a daemon exit between reply persistence and the
+   in-memory wake-up cannot permanently skip a conversation.
 3. Direct local chat runs curation at its owned post-turn/exit lifecycle
    boundary because no daemon worker exists.
 4. Manual CLI: `nuself memory update`.
@@ -116,24 +116,24 @@ repository while composing that snapshot.
 Post-chat curation is a secondary effect after the assistant reply has already
 been produced and persisted. Daemon curation failures belong to the worker
 health and observability boundary and cannot alter the completed chat response.
-Each requested or discovered thread ID must be passed explicitly to
+Each requested or discovered conversation ID must be passed explicitly to
 `MemoryCurator.run_once`; silently falling back to `default` for a non-default
-thread is forbidden.
+conversation is forbidden.
 
-### Per-Thread Cursor
+### Per-Conversation Cursor
 
-- Load cursor from `<authority-root>/memory/cursors/{thread_id}.json`.
-- A missing cursor means the thread has not been processed and starts at zero.
+- Load the durable cursor for the selected `conversation_id`.
+- A missing cursor means the conversation has not been processed and starts at zero.
 - A present cursor is an authoritative typed record containing the same
-  `thread_id` as its filename/request and a non-negative integer
+  `conversation_id` as its record identity and a non-negative integer
   `processed_message_count`.
 - Invalid JSON, non-object shape, mismatched identity, boolean/non-integer
   counts, and negative counts are corrupt state. The curator reports a
   payload-safe `record_decode_failed` event and aborts that run; it must not
   reinterpret corruption as cursor zero and replay old messages.
-- Cursor updates use atomic same-directory replacement.
+- Cursor updates commit through the authority-owned storage transaction.
 - Before applying a ready model decision, persist one typed curator plan at
-  `<authority-root>/memory/plans/{thread_id}.json`. The plan owns the exact source
+  the `memory_curator_plans` collection. The plan owns the exact source
   range and structured actions. A plan write failure occurs before any
   candidate mutation and aborts the run.
 - Candidate IDs produced from a curator plan are deterministic over the plan's
@@ -144,42 +144,42 @@ thread is forbidden.
 - If candidate application completes but cursor persistence fails, the plan
   remains authoritative. The next run resumes that saved plan without invoking
   the model, advances only to the plan's original end position, and leaves
-  later thread messages for a subsequent run.
-- One plan file exists per thread. Once its end position is at or behind the
+  later conversation messages for a subsequent run.
+- One plan record exists per conversation. Once its end position is at or behind the
   durable cursor it is stale and may be atomically replaced by the next ready
   decision, so plans do not grow without bound.
 - A plan is an authoritative typed record. Invalid JSON, identity/range
   mismatch, invalid actions, or an end position beyond the currently known
-  thread are corrupt state: report `record_decode_failed` and abort rather than
+  conversation are corrupt state: report `record_decode_failed` and abort rather than
   calling the model or guessing whether prior candidate effects committed.
 - Curator runtime and operator tooling share one typed plan store for path
-  validation, strict decoding, corruption reporting, and exact-thread delete.
-- `nuself memory plan show <thread>` exposes only operational metadata:
-  thread, source range, observation time, action count, action/type, optional
+  validation, strict decoding, corruption reporting, and exact-conversation delete.
+- `nuself memory plan show <conversation>` exposes only operational metadata:
+  conversation, source range, observation time, action count, action/type, optional
   target ID, and deterministic candidate ID. It must not print candidate
   title/body, tags, or model reason.
-- `nuself memory plan discard <thread> --force` removes exactly that thread's
+- `nuself memory plan discard <conversation> --force` removes exactly that conversation's
   plan and does not alter its cursor or candidates. `--force` is mandatory
   because discarding an unfinished plan makes the source range eligible for a
   new model decision. Missing and corrupt plans remain explicitly
   diagnosable; there is no automatic discard.
-- Curator plan/candidate/cursor mutation for one thread is guarded by a stable
-  advisory lock at `<authority-root>/memory/locks/{thread_id}.lock`. The lock is
-  per-thread, so unrelated threads remain concurrent; it is separate from the
-  chat ThreadStore lock so model curation never blocks message persistence.
+- Curator plan/candidate/cursor mutation for one conversation is guarded by a stable
+  advisory lock keyed by `conversation_id`. The lock is
+  per-conversation, so unrelated conversations remain concurrent; it is separate from the
+  chat ConversationStore lock so model curation never blocks message persistence.
 - Lock acquisition is exclusive and non-blocking. A curator run that finds the
-  same thread busy performs no model call or plan/candidate/cursor mutation,
+  same conversation busy performs no model call or plan/candidate/cursor mutation,
   emits
   `memory/curator_contended`, and returns a zero-change result. This is a normal
   deferred outcome, not a worker failure.
-- `memory plan discard` holds the same lock across existence check and unlink.
+- `memory plan discard` holds the same lock across existence check and delete.
   Contention returns non-zero and leaves the plan untouched. `memory plan show`
   reads one atomic snapshot and does not acquire the mutation lock.
 - Lock files are stable coordination inodes and are not deleted after release.
   Acquisition/release must close owned handles and preserve primary lock
   errors when cleanup also fails.
 - If `cursor >= next_message_index`, no-op (idempotent).
-- If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
+- If the conversation was compressed (`cursor < message_start_index`), log a gap and start from `visible_start`.
 - Advance cursor to `visible_end` after processing.
 - Gap, deferred, candidate, and completion observations are structured
   `memory` log events. The curator never appends raw text to `memory.log`;
@@ -187,7 +187,7 @@ thread is forbidden.
 - Memory curation owns one sealed audit registry shared by curator and
   optimizer. Unknown events and invalid status/error/metadata fail before the
   best-effort sink. Candidate audit metadata is identity-only: it may contain
-  candidate ID, target ID, action, memory type, thread/source identity, and
+  candidate ID, target ID, action, memory type, conversation/source identity, and
   aggregate counts, but never candidate title/body or free-form model reason.
 - Curator audit persistence is auxiliary. Failure to write one audit or its
   diagnostic cannot replace a saved candidate/entry, prevent an authoritative
@@ -229,7 +229,7 @@ thread is forbidden.
   empty normalized tags, unknown `type`, raw-transcript bodies (`>=2`
   occurrences of `user:`/`assistant:`), and `update` without a non-empty
   `entry_id`.
-- LLM prompt includes: thread summary, up to 12 existing memory entries, up to 12 profile items, and the current registered memory type names from `MemoryTypeRegistry`.
+- LLM prompt includes: conversation summary, up to 12 existing memory entries, up to 12 profile items, and the current registered memory type names from `MemoryTypeRegistry`.
 
 ### Conflict Detection
 
@@ -327,10 +327,10 @@ The closed Memory curation taxonomy is:
 
 | Event | Level | Status | Metadata |
 |---|---|---|---|
-| `curator_history_gap` | `warning` | `degraded` | thread, cursor, visible start |
-| `curator_contended` | `info` | `deferred` | thread |
-| `curator_deferred` | `info` | `deferred` | thread, source range, zero processed count |
-| `curator_completed` | `info` | `completed` | thread, source range, processed/create/update/ignore counts |
+| `curator_history_gap` | `warning` | `degraded` | conversation, cursor, visible start |
+| `curator_contended` | `info` | `deferred` | conversation |
+| `curator_deferred` | `info` | `deferred` | conversation, source range, zero processed count |
+| `curator_completed` | `info` | `completed` | conversation, source range, processed/create/update/ignore counts |
 | `candidate_merged` | `info` | `created` | candidate, target, memory type |
 | `candidate_created` | `info` | `created` | candidate and memory type |
 | `candidate_updated` | `info` | `created` | candidate, target, memory type |
@@ -348,8 +348,8 @@ daemon request handler, or Memory CLI operation initiates the work. Those
 callers use Memory-domain adapters and never construct raw `component=memory`
 records. Post-chat completion is already represented by `curator_completed`;
 clients must not emit a second `curator_changed` record or copy its free-form
-summary into audit metadata. Chat trace failures use runtime context for thread
-correlation rather than duplicating the thread id.
+summary into audit metadata. Chat trace failures use runtime context for
+conversation correlation rather than duplicating the conversation id.
 
 ## Candidate Review Queue
 

@@ -307,7 +307,7 @@ def test_advance_uses_shared_reason_thread_context_and_restores_caller(
     assert step is not None
     assert agent.contexts == [
         RuntimeContext(
-            thread_id="reason-test",
+            reason_id="reason-test",
             request_id="request-1",
             turn_id="turn-1",
             job_id="job-1",
@@ -423,7 +423,7 @@ def test_advance_failure_logs_shared_context_and_restores_caller(
 
     events = read_log_events(project_root=tmp_path, component="reasoning")
     failure = next(event for event in events if event.event == "advance_failed")
-    assert failure.thread_id == "reason-test"
+    assert failure.reason_id == "reason-test"
     assert failure.request_id == "request-1"
     assert failure.source == "client"
     assert failure.error == "agent failed"
@@ -577,13 +577,13 @@ def test_workspace_tools_route_by_shared_reason_thread_context(
     put = tool_map["workspace_put"]
     get = tool_map["workspace_get"]
 
-    with runtime_context(thread_id="reason-a"):
+    with runtime_context(reason_id="reason-a"):
         assert put.invoke({"key": "item", "value": '{"owner": "a"}'}) == (
             "Stored item"
         )
         assert '"owner": "a"' in get.invoke({"key": "item"})
 
-    with runtime_context(thread_id="reason-b"):
+    with runtime_context(reason_id="reason-b"):
         assert get.invoke({"key": "item"}) == "Key item not found"
 
     with pytest.raises(

@@ -27,7 +27,7 @@ from nuself.storage import StorageBackend
 class MemoryCuratorPlan:
     """One durable structured decision awaiting cursor completion."""
 
-    thread_id: str
+    conversation_id: str
     source_start: int
     source_end: int
     observed_at: str
@@ -36,7 +36,7 @@ class MemoryCuratorPlan:
     @property
     def source_ref(self) -> str:
         return (
-            f"thread:{self.thread_id}:{self.source_start}-{self.source_end}"
+            f"conversation:{self.conversation_id}:{self.source_start}-{self.source_end}"
         )
 
     def candidate_id(self, action_index: int) -> str:
@@ -48,7 +48,7 @@ class MemoryCuratorPlan:
 
     def to_wire(self) -> dict[str, object]:
         return {
-            "thread_id": self.thread_id,
+            "conversation_id": self.conversation_id,
             "source_start": self.source_start,
             "source_end": self.source_end,
             "observed_at": self.observed_at,
@@ -72,11 +72,11 @@ class MemoryCuratorPlan:
         cls,
         data: dict[str, object],
         *,
-        expected_thread_id: str,
+        expected_conversation_id: str,
         allowed_types: tuple[str, ...],
     ) -> MemoryCuratorPlan:
         expected_fields = {
-            "thread_id",
+            "conversation_id",
             "source_start",
             "source_end",
             "observed_at",
@@ -84,9 +84,9 @@ class MemoryCuratorPlan:
         }
         if set(data) != expected_fields:
             raise ValueError("curator plan fields differ from schema")
-        thread_id = data["thread_id"]
-        if thread_id != expected_thread_id:
-            raise ValueError("curator plan thread identity mismatch")
+        conversation_id = data["conversation_id"]
+        if conversation_id != expected_conversation_id:
+            raise ValueError("curator plan conversation identity mismatch")
         source_start = data["source_start"]
         source_end = data["source_end"]
         observed_at = data["observed_at"]
@@ -115,7 +115,7 @@ class MemoryCuratorPlan:
             for raw_action in action_values
         )
         return cls(
-            thread_id=expected_thread_id,
+            conversation_id=expected_conversation_id,
             source_start=source_start,
             source_end=source_end,
             observed_at=observed_at,
@@ -124,7 +124,7 @@ class MemoryCuratorPlan:
 
 
 class MemoryCuratorPlanNotFound(KeyError):
-    """Raised when one thread has no curator recovery plan."""
+    """Raised when one conversation has no curator recovery plan."""
 
 
 class MemoryCuratorPlanCorruptError(ValueError):
@@ -132,7 +132,7 @@ class MemoryCuratorPlanCorruptError(ValueError):
 
 
 class MemoryCuratorPlanLockContended(RuntimeError):
-    """Raised when another process is mutating one thread's curator state."""
+    """Raised when another process is mutating one conversation's curator state."""
 
 
 class MemoryCuratorPlanLockCleanupError(RuntimeError):
@@ -174,7 +174,7 @@ class MemoryCuratorPlanLock:
             flock(handle.fileno(), LOCK_EX | LOCK_NB)
         except BlockingIOError:
             primary_error = MemoryCuratorPlanLockContended(
-                "another process is mutating this thread's curator state"
+                "another process is mutating this conversation's curator state"
             )
             try:
                 handle.close()
@@ -247,38 +247,38 @@ class MemoryCuratorPlanStore:
             "memory_curator_plans"
         )
 
-    def get(self, thread_id: str) -> MemoryCuratorPlan | None:
+    def get(self, conversation_id: str) -> MemoryCuratorPlan | None:
         try:
-            raw = self._collection.get(thread_id)
+            raw = self._collection.get(conversation_id)
             if raw is None:
                 return None
             return MemoryCuratorPlan.from_wire(
                 _without_storage_id(raw),
-                expected_thread_id=thread_id,
+                expected_conversation_id=conversation_id,
                 allowed_types=self._registry.names(),
             )
         except (
             TypeError,
             ValueError,
         ) as exc:
-            self._raise_corrupt(thread_id, exc)
+            self._raise_corrupt(conversation_id, exc)
 
     def resumable(
         self,
-        thread_id: str,
+        conversation_id: str,
         *,
         cursor: int,
         next_message_index: int,
     ) -> MemoryCuratorPlan | None:
         try:
-            raw = self._collection.get(thread_id)
+            raw = self._collection.get(conversation_id)
             if raw is None:
                 return None
             raw_mapping = _without_storage_id(raw)
-            stored_thread_id = raw_mapping.get("thread_id")
+            stored_conversation_id = raw_mapping.get("conversation_id")
             stored_source_end = raw_mapping.get("source_end")
             if (
-                stored_thread_id == thread_id
+                stored_conversation_id == conversation_id
                 and not isinstance(stored_source_end, bool)
                 and isinstance(stored_source_end, int)
                 and stored_source_end <= cursor
@@ -286,7 +286,7 @@ class MemoryCuratorPlanStore:
                 return None
             plan = MemoryCuratorPlan.from_wire(
                 raw_mapping,
-                expected_thread_id=thread_id,
+                expected_conversation_id=conversation_id,
                 allowed_types=self._registry.names(),
             )
             if plan.source_start != cursor:
@@ -295,58 +295,58 @@ class MemoryCuratorPlanStore:
                 )
             if plan.source_end > next_message_index:
                 raise ValueError(
-                    "curator plan extends beyond the current thread"
+                    "curator plan extends beyond the current conversation"
                 )
             return plan
         except (
             TypeError,
             ValueError,
         ) as exc:
-            self._raise_corrupt(thread_id, exc)
+            self._raise_corrupt(conversation_id, exc)
 
     def save(self, plan: MemoryCuratorPlan) -> MemoryCuratorPlan:
-        self._collection.put(plan.thread_id, plan.to_wire())
+        self._collection.put(plan.conversation_id, plan.to_wire())
         return plan
 
-    def discard(self, thread_id: str) -> None:
-        with self.exclusive(thread_id):
+    def discard(self, conversation_id: str) -> None:
+        with self.exclusive(conversation_id):
             with self._backend.transaction():
-                if self._collection.get(thread_id) is None:
-                    raise MemoryCuratorPlanNotFound(thread_id)
-                self._collection.delete(thread_id)
+                if self._collection.get(conversation_id) is None:
+                    raise MemoryCuratorPlanNotFound(conversation_id)
+                self._collection.delete(conversation_id)
 
-    def exclusive(self, thread_id: str) -> MemoryCuratorPlanLock:
-        """Return the authoritative mutation lock for one curator thread."""
+    def exclusive(self, conversation_id: str) -> MemoryCuratorPlanLock:
+        """Return the authoritative mutation lock for one curator conversation."""
 
-        validate_curator_thread_id(thread_id)
+        validate_curator_conversation_id(conversation_id)
         return MemoryCuratorPlanLock(
             self._paths.runtime_dir
             / "curator-locks"
-            / f"{thread_id}.lock"
+            / f"{conversation_id}.lock"
         )
 
     def _raise_corrupt(
         self,
-        thread_id: str,
+        conversation_id: str,
         exc: Exception,
     ) -> Never:
         report_corrupt_record(
             exc,
             component="memory",
             collection="memory_curator_plans",
-            record_id=thread_id,
+            record_id=conversation_id,
             project_root=self._paths.project_root,
         )
         raise MemoryCuratorPlanCorruptError(
-            f"invalid memory curator plan for thread {thread_id!r}; "
-            "inspect with 'nuself memory plan show THREAD' or explicitly "
-            "discard with 'nuself memory plan discard THREAD --force'"
+            f"invalid memory curator plan for conversation {conversation_id!r}; "
+            "inspect with 'nuself memory plan show CONVERSATION' or explicitly "
+            "discard with 'nuself memory plan discard CONVERSATION --force'"
         ) from exc
 
 
-def validate_curator_thread_id(thread_id: str) -> None:
-    if thread_id == "" or "/" in thread_id or thread_id in {".", ".."}:
-        raise ValueError(f"invalid thread id: {thread_id}")
+def validate_curator_conversation_id(conversation_id: str) -> None:
+    if conversation_id == "" or "/" in conversation_id or conversation_id in {".", ".."}:
+        raise ValueError(f"invalid conversation id: {conversation_id}")
 
 
 def _without_storage_id(

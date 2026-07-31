@@ -11,7 +11,8 @@
 | `message`     | `str`                                       | yes      |
 | `event_id`    | `str`                                       | new records |
 | `schema_version` | `int`                                    | new records |
-| `thread_id`   | `str \| None`                               | no       |
+| `conversation_id` | `str \| None`                          | no       |
+| `reason_id`   | `str \| None`                               | no       |
 | `request_id`  | `str \| None`                               | no       |
 | `turn_id`     | `str \| None`                               | no       |
 | `job_id`      | `str \| None`                               | no       |
@@ -162,7 +163,7 @@ Recoverable local command boundaries write ordinary structured events:
 | Component | Event                              | Required metadata |
 | --------- | ---------------------------------- | ----------------- |
 | `persona` | `interactive_command_failed`       | `action`          |
-| `chat`    | `interactive_history_load_failed`  | `thread_id`       |
+| `chat`    | `interactive_history_load_failed`  | `conversation_id` |
 
 The persona `action` is the first command token, or `list` for an empty
 command. It must not contain the persona prompt, full command body, or other
@@ -215,7 +216,7 @@ metadata.
 | `llm_retry_suppressed_after_tool_call` | `fallback` | `endpoint_index`, `model` |
 | `llm_endpoints_exhausted` | `fallback` | required error, no metadata |
 | `llm_endpoint_state_write_failed` | `degraded` | required error, `endpoint_index` |
-| `interactive_history_load_failed` | `error` | required error, `thread_id` |
+| `interactive_history_load_failed` | `error` | required error, `conversation_id` |
 | `interactive_history_write_failed` | `degraded` | required error, no metadata |
 | Chat `completion_load_failed` | `degraded` | required error, exact `completion` kind |
 | `interactive_prompt_failed` | `degraded` | required error, fixed fallback kind |
@@ -249,7 +250,7 @@ the audit projection writes their log records:
 
 Rules:
 
-- `turn.started` and `turn.completed` use the same `thread_id` and, when available, the same top-level `turn_id`.
+- `turn.started` and `turn.completed` use the same `conversation_id` and, when available, the same top-level `turn_id`.
 - `turn.completed` includes `duration_ms` and compact metadata such as `node_trace` and `tool_call_count`.
 - `turn_retry` is a client-side transport retry marker. It must reuse the same `turn_id` and does not mean the daemon should persist a second user message.
 - `turn_retry` metadata retains the previous client failure phase, daemon
@@ -273,7 +274,7 @@ Rules:
   delivered identities. Daemon activity subscription batches use it before
   presentation so a later file fallback returns only events not already
   delivered.
-- Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
+- Chat service-tool logs should include the active `conversation_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
 - Approval-gated tools publish `chat/tool.activity` with
   `frontend_event=approval_requested` before asking the injected approval port,
   then publish `frontend_event=approval_decided`. The same runtime envelope is

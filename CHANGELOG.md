@@ -6,6 +6,16 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Persistent chat streams are now consistently named `conversation` across
+  the CLI (`nuself conversation`, `:conversation`/`:c`), daemon protocol,
+  storage, logs, traces, memory evidence, notifications, and internal APIs.
+  `session` remains one transient client connection and `turn` remains one
+  interaction; reasoning threads keep their separate reason-domain identity.
+  Schema v6 provides an explicit reversible migration from v5 without changing
+  message content or order. Completed replies are committed and presented
+  before compression; daemon compression runs after memory curation on the same
+  conversation resource, while bounded stage durations and context counts make
+  slow context preparation observable without logging private content.
 - The daemon now runs chat, memory curation, reflection, reasoning,
   notifications, and reason export through one bounded scheduler in one daemon
   process. Stable task identities coalesce duplicate wake-ups, resource keys

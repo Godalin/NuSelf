@@ -291,7 +291,8 @@ class DaemonScheduler:
 
     def _run(self, task: DaemonTask) -> object:
         context = RuntimeContext(
-            thread_id=task.context.thread_id,
+            conversation_id=task.context.conversation_id,
+            reason_id=task.context.reason_id,
             request_id=task.context.request_id,
             turn_id=task.context.turn_id,
             job_id=task.context.job_id,

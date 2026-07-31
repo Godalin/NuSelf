@@ -219,15 +219,15 @@ def add_memory_parser(
     )
     plan_show_parser = plan_subparsers.add_parser(
         "show",
-        help="Show payload-safe recovery metadata for one thread.",
+        help="Show payload-safe recovery metadata for one conversation.",
     )
-    plan_show_parser.add_argument("thread_id")
+    plan_show_parser.add_argument("conversation_id")
     bind_handler(plan_show_parser, handle_memory_plan_show)
     plan_discard_parser = plan_subparsers.add_parser(
         "discard",
-        help="Discard one thread's recovery plan without changing its cursor.",
+        help="Discard one conversation recovery plan.",
     )
-    plan_discard_parser.add_argument("thread_id")
+    plan_discard_parser.add_argument("conversation_id")
     plan_discard_parser.add_argument(
         "--force",
         action="store_true",
