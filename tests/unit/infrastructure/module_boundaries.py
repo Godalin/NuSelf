@@ -123,3 +123,7 @@ def test_migrated_reason_repository_does_not_resolve_authority() -> None:
     ]
 
     assert violations == []
+
+
+def test_reason_domain_does_not_import_application_composition() -> None:
+    assert _violations(("reason",), ("nuself.application",)) == ()
