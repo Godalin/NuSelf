@@ -17,15 +17,13 @@ Current working branch for v0.3.1.
 
 1. Define and enforce package dependency rules. Complete.
 2. Establish one runtime composition root shared by daemon and direct mode.
-   In progress: the final workspace path-resolution fallback is being removed.
+   Complete.
 3. Remove hidden backend/path resolution from domain repositories. Complete.
-4. Extract narrow cross-domain ports and shared contracts. In progress.
+4. Extract narrow cross-domain ports and shared contracts. Complete.
 5. Remove agent/domain dependencies on CLI/TUI presentation. Complete.
-6. Split oversized cross-cutting modules along actual ownership. In progress;
-   the final audit found reason-output durable contracts mixed with export
-   workflow; those contracts now live in `reason.output_contracts`.
+6. Split oversized cross-cutting modules along actual ownership. Complete.
 7. Run complete gates and close the goal with requirement-by-requirement
-   dependency evidence.
+   dependency evidence. In progress.
 
 ## Out Of Scope
 
@@ -36,7 +34,8 @@ Current working branch for v0.3.1.
 ## Current Evidence
 
 - Application-owned persona, reason, chat, thread, reflection, curator,
-  notification, trace, and memory composition is committed through `8d97935`.
+  notification, trace, memory, workspace, and output-contract composition is
+  committed through `e52425e`.
 - Persona tools, reason advancers, schedulers, output services, conversation
   runtime, and thread storage no longer resolve storage authority.
 - The committed reason-export phase passed 270 focused tests and Pyright with
@@ -48,6 +47,12 @@ Current working branch for v0.3.1.
   `reason.output_contracts`; `reason.output` contains only workflow and its
   local rendering/planning helpers. The reason/daemon-export/agent/chat slice
   passed 639 tests and Pyright clean.
+- The final source audit finds no authority lookup in agent, memory, persona,
+  profile, reason, reflection, trace, or workspace modules; no domain imports
+  of CLI/daemon/TUI/REPL; and no constructor-shaped `or Service(...)` fallback.
+- Final local gates passed: 2494 tests; Pyright 0 errors/0 warnings; sdist and
+  wheel build; clean Python 3.14 wheel install, critical imports, and
+  `nuself --version` smoke.
 
 ## Completion Standard
 
