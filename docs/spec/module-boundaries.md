@@ -145,13 +145,29 @@ Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
 memory/profile/reflection/trace repositories and conversation storage always come
 from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
-Conversation state and persistence are neutral domain infrastructure under
-`nuself.conversation`, not an agent implementation detail. `ConversationStore`
+Conversation state and persistence are isolated domain infrastructure under
+`nuself.conversation`, not shared knowledge infrastructure. `ConversationStore`
 receives resolved runtime paths and the selected backend as required resources
-and is constructed exactly once in `ApplicationGraph`; CLI, REPL, daemon,
-chat, curator, and reflection consumers borrow that same instance. Non-chat
-domains may retain or correlate `conversation_id`, but must not import
-`nuself.agent.chat` merely to read conversation state.
+and is constructed exactly once in `ApplicationGraph`; only chat and explicit
+conversation-management surfaces may borrow it. Memory, reflection, reason,
+persona, notification, and trace code must not import, query, or retain
+conversation state, messages, stores, or identifiers.
+
+A completed turn may cross into the knowledge system only through an
+application-owned projector. The projector converts the committed turn into a
+memory-owned durable observation containing an opaque source reference,
+ordered text fragments, and trace correlation. Once accepted, the observation
+is governed entirely by memory storage, locking, recovery, and retention.
+Memory must not reconstruct an observation by opening conversation storage,
+and daemon recovery must enumerate the memory inbox rather than conversations.
+This establishes the dependency direction `conversation -> application event
+projection -> memory`; there is no reverse edge.
+
+Reflection candidate generation consumes durable memory entries, profile
+items, and imported sources only. It must neither accept a conversation context
+provider nor include recent conversation text in its prompt. Conversation may
+consume reflection through user-facing tools, but reflection remains runnable
+when the conversation domain is absent.
 
 Daemon curation, reflection, reasoning, and notification workers follow the
 same rule: process composition supplies their backend, repositories, outbox,

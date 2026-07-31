@@ -45,7 +45,7 @@ runtime events and request confirmation through injected ports. Terminal
 rendering, daemon activity transport, tests, and a future web frontend are
 adapters over those contracts; backend modules do not import terminal UI code.
 
-Persistent conversation state and its repository live in the neutral
+Persistent conversation state and its repository live in the isolated
 `nuself.conversation` domain and are owned once by `ApplicationGraph`.
 Conversation execution lives under `nuself.agent.chat` and borrows that store.
 A persistent conversation is distinct from a transient interactive session

@@ -5,9 +5,45 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — decouple conversation from the knowledge domains for v0.3.1.
 
-## Completed Evidence
+## Objective
+
+Make conversation an optional producer at the application boundary rather than
+an authority read by memory or reflection. Memory and reflection must remain
+fully usable when no conversation store or chat runtime is composed.
+
+## Ordered Steps
+
+1. Define a one-way projection from a completed conversation turn into a
+   memory-owned durable observation.
+2. Replace conversation-backed memory scanning, cursors, plans, and locks with
+   observation-owned ingestion and recovery state.
+3. Remove recent conversation text from reflection candidate generation; use
+   only memory, profile, and imported source knowledge.
+4. Reduce daemon/application composition to publish and schedule observations
+   without memory or reflection reading conversation state.
+5. Migrate existing SQLite state without losing unprocessed durable chat input,
+   update user-visible documentation, and verify all supported platforms.
+
+## Exclusions
+
+- Conversation may call memory/reflection tools; this consumer direction is
+  intentional and does not grant either domain access to conversation state.
+- Provenance may retain an opaque source reference created by the application
+  projection, but knowledge-domain records must not require a conversation ID.
+- This goal does not redesign the model provider or interactive presentation.
+
+## Completion Evidence
+
+- No production module below `nuself.memory` or `nuself.reflection` imports,
+  stores, or queries conversation state, messages, stores, or IDs.
+- Memory curation can recover from a process restart using only memory-owned
+  storage, and reflection can run without a conversation collaborator.
+- Migration, focused boundary tests, full pytest, Pyright, build, clean-wheel
+  smoke, and the final six-platform CI pass.
+
+## Previous Completed Evidence
 
 The v0.3.1 persistent-conversation refactor is complete in `e656b19`:
 
