@@ -29,6 +29,17 @@ def _imports(path: Path) -> tuple[str, ...]:
     return tuple(imported)
 
 
+def _from_imports(path: Path) -> tuple[tuple[str, str], ...]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported: list[tuple[str, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported.extend(
+                (node.module, alias.name) for alias in node.names
+            )
+    return tuple(imported)
+
+
 def _package_files(package: str) -> tuple[Path, ...]:
     return tuple(sorted((_SOURCE_ROOT / package).rglob("*.py")))
 
@@ -65,3 +76,15 @@ def test_domains_do_not_depend_on_outer_adapters() -> None:
 
 def test_agent_does_not_depend_on_process_or_terminal_adapters() -> None:
     assert _violations(("agent",), _OUTER_ADAPTERS) == ()
+
+
+def test_migrated_trace_boundary_does_not_resolve_default_storage() -> None:
+    violations: list[str] = []
+    for path in _package_files("trace"):
+        if (
+            "nuself.storage",
+            "get_default_backend",
+        ) in _from_imports(path):
+            violations.append(str(path.relative_to(_SOURCE_ROOT)))
+
+    assert violations == []

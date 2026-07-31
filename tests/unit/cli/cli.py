@@ -59,11 +59,18 @@ from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
 from nuself.runtime.execution import current_cancellation
 from nuself.storage import get_default_backend
+from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 
 
 def _authority(workspace: Path) -> Path:
     return workspace / ".nuself"
+
+
+def _trace_repository(workspace: Path) -> TraceRepository:
+    root = _authority(workspace)
+    return TraceRepository(root, backend=get_default_backend(root))
+
 
 
 class CaptureResult(Protocol):
@@ -5857,7 +5864,11 @@ def test_reflection_cli_promote_creates_reason_and_trace(
     assert result == 0
     assert "Promoted reflection to reason thread:" in output
     assert "Follow a long idea" in output
-    assert len(TraceQueryService(_authority(tmp_path)).list_traces(kind="promotion")) == 1
+    assert len(
+        TraceQueryService(_trace_repository(tmp_path)).list_traces(
+            kind="promotion"
+        )
+    ) == 1
 
 
 def test_interactive_reason_without_args_shows_help(
@@ -6238,9 +6249,9 @@ def test_repl_notify_watch_subcommand(
 def test_trace_cli_lists_shows_and_searches_records(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.trace import ThoughtTrace, TraceRepository
+    from nuself.trace import ThoughtTrace
 
-    trace = TraceRepository(_authority(tmp_path)).save_trace(
+    trace = _trace_repository(tmp_path).save_trace(
         ThoughtTrace(
             kind="chat_turn",
             title="Temporal memory answer",
@@ -6276,7 +6287,7 @@ def test_trace_cli_lists_records_related_to_artifact(
 ) -> None:
     from nuself.trace import TraceRecorder
 
-    recorder = TraceRecorder(_authority(tmp_path))
+    recorder = TraceRecorder(_trace_repository(tmp_path))
     trace = recorder.record(
         kind="memory_update",
         title="Related memory trace",
@@ -6305,9 +6316,9 @@ def test_trace_cli_lists_records_related_to_artifact(
 def test_trace_cli_hides_internal_records_by_default(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.trace import ThoughtTrace, TraceRepository
+    from nuself.trace import ThoughtTrace
 
-    repo = TraceRepository(_authority(tmp_path))
+    repo = _trace_repository(tmp_path)
     repo.save_trace(
         ThoughtTrace(kind="decision", title="Visible trace", summary="Visible.")
     )
@@ -6333,9 +6344,9 @@ def test_trace_cli_hides_internal_records_by_default(
 def test_repl_trace_lists_records(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.trace import ThoughtTrace, TraceRepository
+    from nuself.trace import ThoughtTrace
 
-    TraceRepository(_authority(tmp_path)).save_trace(
+    _trace_repository(tmp_path).save_trace(
         ThoughtTrace(
             kind="decision",
             title="REPL trace",

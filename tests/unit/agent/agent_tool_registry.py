@@ -15,6 +15,8 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.store import ScopedWorkspace, SqliteStore
+from nuself.storage import get_default_backend
+from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 
 
@@ -61,7 +63,16 @@ def test_subsystem_tool_builders_own_their_registries(
         "reason_propose",
         "reason_export",
     }
-    assert _names(build_trace_tools(TraceQueryService(tmp_path))) == {
+    assert _names(
+        build_trace_tools(
+            TraceQueryService(
+                TraceRepository(
+                    tmp_path,
+                    backend=get_default_backend(tmp_path),
+                )
+            )
+        )
+    ) == {
         "trace_search",
         "trace_count",
         "trace_show",

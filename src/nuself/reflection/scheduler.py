@@ -29,6 +29,7 @@ from nuself.persona.audit import write_persona_audit
 from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import StorageCollection, get_default_backend
+from nuself.trace.composition import build_trace_recorder
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
 
@@ -227,8 +228,6 @@ class ReflectionScheduler:
         )
         self._reflection_repo.add(entry)
         try:
-            from nuself.trace.service import TraceRecorder
-
             decision_points: list[str] = [
                 f"Relevance gate passed: composite={score.composite:.2f} threshold={self._config.gate.relevance_threshold}",
                 f"Novelty={score.novelty:.2f} confidence={score.confidence:.2f} urgency={score.urgency:.2f}",
@@ -245,7 +244,10 @@ class ReflectionScheduler:
                     f"Below persona discussion threshold ({self._config.gate.persona_discussion_threshold}), no discussion triggered"
                 )
 
-            TraceRecorder(project_root=self._project_root).record_reflection_created(
+            build_trace_recorder(
+                self._project_root,
+                backend=get_default_backend(self._project_root),
+            ).record_reflection_created(
                 reflection_id=entry.id,
                 title=entry.title,
                 body=entry.body,

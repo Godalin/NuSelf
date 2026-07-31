@@ -17,7 +17,9 @@ from nuself.reason.errors import (
 )
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
+from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, SqliteStore
+from nuself.trace.composition import build_trace_recorder
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
@@ -81,7 +83,10 @@ class ReasonService:
         self._project_root = effective_root
         self._workspace_store = workspace_store or PrivateWorkspaceStore(effective_root, scope="reason")
         self._trace_recorder: TraceRecorder | None = trace_recorder if trace_recorder is not None else (
-            TraceRecorder(effective_root)
+            build_trace_recorder(
+                effective_root,
+                backend=get_default_backend(effective_root),
+            )
         )
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer

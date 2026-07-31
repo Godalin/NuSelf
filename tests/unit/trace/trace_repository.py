@@ -9,9 +9,13 @@ from nuself.storage import get_default_backend
 from nuself.trace import ThoughtTrace, TraceNotFound, TraceRepository, TraceRecorder
 
 
+def _repository(root: Path) -> TraceRepository:
+    return TraceRepository(root, backend=get_default_backend(root))
+
+
 def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None:
-    repo = TraceRepository(tmp_path)
-    recorder = TraceRecorder(repository=repo)
+    repo = _repository(tmp_path)
+    recorder = TraceRecorder(repo)
 
     trace = recorder.record_chat_turn(
         title="Answer about memory time",
@@ -47,8 +51,8 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
 
 
 def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> None:
-    repo = TraceRepository(tmp_path)
-    recorder = TraceRecorder(repository=repo)
+    repo = _repository(tmp_path)
+    recorder = TraceRecorder(repo)
     memory_trace = recorder.record(
         kind="memory_update",
         title="Remembered preference",
@@ -75,7 +79,7 @@ def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> N
 
 
 def test_trace_repository_hides_internal_records_by_default(tmp_path: Path) -> None:
-    repo = TraceRepository(tmp_path)
+    repo = _repository(tmp_path)
     private = repo.save_trace(
         ThoughtTrace(kind="decision", title="Private decision", summary="Visible locally.")
     )
@@ -89,7 +93,7 @@ def test_trace_repository_hides_internal_records_by_default(tmp_path: Path) -> N
 
 
 def test_trace_repository_resolves_numeric_handle(tmp_path: Path) -> None:
-    repo = TraceRepository(tmp_path)
+    repo = _repository(tmp_path)
     first = repo.save_trace(ThoughtTrace(kind="decision", title="First", summary="First trace."))
     second = repo.save_trace(ThoughtTrace(kind="decision", title="Second", summary="Second trace."))
 
@@ -106,11 +110,11 @@ def test_trace_repository_concurrent_saves(tmp_path: Path) -> None:
     )
 
     def save_trace(index: int) -> None:
-        TraceRepository(tmp_path).save_trace(traces[index])
+        _repository(tmp_path).save_trace(traces[index])
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         list(executor.map(save_trace, range(len(traces))))
 
-    repo = TraceRepository(tmp_path)
+    repo = _repository(tmp_path)
     stored = repo.list_traces()
     assert {trace.id for trace in stored} == {trace.id for trace in traces}

@@ -18,7 +18,9 @@ Current working branch for v0.3.1.
 1. Define and enforce package dependency rules. Complete: AST gates now reject
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
-3. Remove hidden backend/path resolution from domain repositories.
+3. Remove hidden backend/path resolution from domain repositories. In
+   progress: the trace repository and services now require explicit storage
+   composition.
 4. Extract narrow cross-domain ports and shared contracts.
 5. Remove agent/domain dependencies on CLI/TUI presentation.
 6. Split oversized cross-cutting modules along their actual ownership.
@@ -41,5 +43,9 @@ In progress:
 - `AuthorityRuntime` now provides one explicit, idempotently closed owner for
   resolved paths and a closeable authority backend; process adapters can share
   this primitive without turning it into a domain service locator;
-- the first focused boundary gate passed 74 tests and Pyright reported
-  0 errors and 0 warnings.
+- trace repositories and services no longer resolve a default backend;
+  package composition receives the selected authority backend explicitly, and
+  an AST gate prevents the repository from restoring hidden backend lookup;
+- the first focused boundary gate passed 74 tests; infrastructure and storage
+  regression coverage passed 307 tests; the trace integration slice passed
+  596 tests; Pyright reported 0 errors and 0 warnings.

@@ -15,6 +15,7 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.persona.audit import run_persona_observed
 from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, WorkspaceCollection
+from nuself.trace.composition import build_trace_recorder
 
 
 def _persona_tool(
@@ -203,9 +204,10 @@ def build_persona_tools(
 
 def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
     def record() -> object:
-        from nuself.trace.service import TraceRecorder
-
-        return TraceRecorder(project_root=project_root).record_persona_prompt_created(
+        return build_trace_recorder(
+            project_root,
+            backend=get_default_backend(project_root),
+        ).record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
         )
@@ -220,9 +222,10 @@ def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = N
 
 def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
     def record() -> object:
-        from nuself.trace.service import TraceRecorder
-
-        return TraceRecorder(project_root=project_root).record_persona_disabled(
+        return build_trace_recorder(
+            project_root,
+            backend=get_default_backend(project_root),
+        ).record_persona_disabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],
@@ -238,9 +241,10 @@ def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path |
 
 def _record_prompt_enabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
     def record() -> object:
-        from nuself.trace.service import TraceRecorder
-
-        return TraceRecorder(project_root=project_root).record_persona_enabled(
+        return build_trace_recorder(
+            project_root,
+            backend=get_default_backend(project_root),
+        ).record_persona_enabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],

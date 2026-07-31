@@ -43,8 +43,8 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
 )
 from nuself.storage import get_default_backend
+from nuself.trace.composition import build_trace_query_service
 from nuself.trace.repository import TraceNotFound
-from nuself.trace.service import TraceQueryService
 from nuself.tui.memory import (
     render_candidate_detail,
     render_candidate_row,
@@ -297,7 +297,10 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 
 
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
-    service = TraceQueryService(project_root)
+    service = build_trace_query_service(
+        project_root,
+        backend=get_default_backend(project_root),
+    )
     if command in {"", "list"}:
         traces = service.list_traces()
         if not traces:

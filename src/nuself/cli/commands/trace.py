@@ -8,13 +8,16 @@ import sys
 from typing import cast
 
 from nuself.cli.commands.output import print_ansi
+from nuself.storage import get_default_backend
+from nuself.trace.composition import (
+    build_trace_query_service,
+    build_trace_repository,
+)
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import (
     TraceNotFound,
-    TraceRepository,
     TraceVisibilityFilter,
 )
-from nuself.trace.service import TraceQueryService
 from nuself.tui.trace import render_trace_detail, render_trace_row
 
 
@@ -38,7 +41,10 @@ def _trace_visibility_filter(
 
 
 def handle_trace_list(args: argparse.Namespace) -> int:
-    traces = TraceQueryService(args.project_root).list_traces(
+    traces = build_trace_query_service(
+        args.project_root,
+        backend=get_default_backend(args.project_root),
+    ).list_traces(
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
     )
@@ -54,7 +60,10 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 
 
 def handle_trace_show(args: argparse.Namespace) -> int:
-    repository = TraceRepository(args.project_root)
+    repository = build_trace_repository(
+        args.project_root,
+        backend=get_default_backend(args.project_root),
+    )
     try:
         trace = repository.resolve_trace(args.trace_id)
     except TraceNotFound:
@@ -71,7 +80,10 @@ def handle_trace_show(args: argparse.Namespace) -> int:
 
 
 def handle_trace_search(args: argparse.Namespace) -> int:
-    traces = TraceQueryService(args.project_root).search_traces(
+    traces = build_trace_query_service(
+        args.project_root,
+        backend=get_default_backend(args.project_root),
+    ).search_traces(
         args.query,
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
@@ -88,7 +100,10 @@ def handle_trace_search(args: argparse.Namespace) -> int:
 
 
 def handle_trace_related(args: argparse.Namespace) -> int:
-    service = TraceQueryService(args.project_root)
+    service = build_trace_query_service(
+        args.project_root,
+        backend=get_default_backend(args.project_root),
+    )
     traces = service.traces_for_artifact(
         args.artifact_ref,
         visibility=_trace_visibility_filter(args.visibility),
@@ -124,6 +139,9 @@ def handle_trace_related(args: argparse.Namespace) -> int:
 
 
 def handle_trace_reindex(args: argparse.Namespace) -> int:
-    path = TraceRepository(args.project_root).reindex()
+    path = build_trace_repository(
+        args.project_root,
+        backend=get_default_backend(args.project_root),
+    ).reindex()
     print(f"Rebuilt trace index: {path}")
     return 0

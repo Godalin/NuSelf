@@ -11,7 +11,7 @@ from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import runtime_paths
 from nuself.derived import write_derived_index
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
 TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
@@ -31,15 +31,10 @@ class TraceRepository:
         self,
         project_root: Path | None = None,
         *,
-        backend: StorageBackend | None = None,
+        backend: StorageBackend,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._traces = be.collection("trace_nodes")
-        self._links = be.collection("trace_edges")
+        self._traces = backend.collection("trace_nodes")
+        self._links = backend.collection("trace_edges")
         self._lock = threading.RLock()
         self._paths = runtime_paths(project_root)
 

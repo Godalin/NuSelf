@@ -30,8 +30,13 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
+from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
+
+
+def _trace_repository(root: Path) -> TraceRepository:
+    return TraceRepository(root, backend=get_default_backend(root))
 
 
 def _chat_tool(
@@ -458,7 +463,7 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
         "state_update",
         "compression",
     )
-    assert TraceRepository(tmp_path).list_traces(kind="chat_turn") == []
+    assert _trace_repository(tmp_path).list_traces(kind="chat_turn") == []
 
 
 def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent(
@@ -590,7 +595,7 @@ def test_conversation_graph_runtime_executes_turn_through_graph_driver(tmp_path:
         ThreadMessage(role="user", content="graph runtime"),
         ThreadMessage(role="assistant", content="Graph driver reply."),
     ]
-    traces = TraceRepository(tmp_path).list_traces(kind="chat_turn")
+    traces = _trace_repository(tmp_path).list_traces(kind="chat_turn")
     assert len(traces) == 1
     trace = traces[0]
     assert trace.thread_id == "graph"
@@ -1680,7 +1685,7 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
 def test_trace_search_tool(tmp_path: Path) -> None:
     from nuself.trace.service import TraceRecorder
 
-    trace = TraceRecorder(tmp_path).record(
+    trace = TraceRecorder(_trace_repository(tmp_path)).record(
         kind="decision",
         title="Trace search target",
         summary="A searchable provenance item.",
@@ -1696,7 +1701,7 @@ def test_trace_search_tool(tmp_path: Path) -> None:
 def test_trace_count_tool(tmp_path: Path) -> None:
     from nuself.trace.service import TraceRecorder
 
-    TraceRecorder(tmp_path).record(
+    TraceRecorder(_trace_repository(tmp_path)).record(
         kind="decision",
         title="Trace count target",
         summary="A countable provenance item.",
@@ -1711,7 +1716,7 @@ def test_trace_count_tool(tmp_path: Path) -> None:
 def test_trace_show_tool(tmp_path: Path) -> None:
     from nuself.trace.service import TraceRecorder
 
-    trace = TraceRecorder(tmp_path).record(
+    trace = TraceRecorder(_trace_repository(tmp_path)).record(
         kind="decision",
         title="Trace detail target",
         summary="A detailed provenance item.",
@@ -1753,7 +1758,7 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
     )
     runtime._project_root = tmp_path  # pyright: ignore[reportPrivateUsage]
     runtime._trace_recorder = TraceRecorder(  # pyright: ignore[reportPrivateUsage]
-        tmp_path
+        _trace_repository(tmp_path)
     )
     response = ChatStructuredOutput(
         answer="completed answer",

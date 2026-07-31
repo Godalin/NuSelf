@@ -61,7 +61,8 @@ from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
 )
-from nuself.trace.service import TraceRecorder
+from nuself.storage import get_default_backend
+from nuself.trace.composition import build_trace_recorder
 
 LOGGER = logging.getLogger(__name__)
 
@@ -123,7 +124,10 @@ class ConversationGraphRuntime:
         self._thread_store = thread_store or ThreadStore(project_root)
         system_config = ConfigSystem.load(project_root=project_root)
         self._language_preference = system_config.chat.language_preference
-        self._trace_recorder = TraceRecorder(project_root)
+        self._trace_recorder = build_trace_recorder(
+            project_root,
+            backend=get_default_backend(project_root),
+        )
         self._memory_query_service = memory_query_service or MemoryQueryService(
             MemoryEntryRepository(project_root),
             SourceRepository(project_root),

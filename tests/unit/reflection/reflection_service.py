@@ -8,7 +8,8 @@ from pathlib import Path
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.service import ReflectionService
-from nuself.trace.service import TraceQueryService
+from nuself.storage import get_default_backend
+from nuself.trace.composition import build_trace_query_service
 
 
 def _reason_service(project_root: Path) -> ReasonService:
@@ -52,7 +53,10 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     assert thread.evidence_refs == (f"reflection:{entry.id}",)
     assert repo.get(entry.id).status == "pending"
 
-    query = TraceQueryService(tmp_path)
+    query = build_trace_query_service(
+        tmp_path,
+        backend=get_default_backend(tmp_path),
+    )
     reason_traces = query.list_traces(kind="reason_thread")
     promotion_traces = query.list_traces(kind="promotion")
     assert len(reason_traces) == 1

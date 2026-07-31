@@ -23,7 +23,8 @@ from nuself.reason.output import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.jobs import JobSink
-from nuself.trace.service import TraceQueryService
+from nuself.storage import get_default_backend
+from nuself.trace.composition import build_trace_query_service
 
 __all__ = [
     "build_langchain_chat_tools",
@@ -58,7 +59,12 @@ def build_langchain_chat_tools(
             job_sink=job_sink,
             section_planner=section_planner,
         )
-        + build_trace_tools(TraceQueryService(project_root))
+        + build_trace_tools(
+            build_trace_query_service(
+                project_root,
+                backend=get_default_backend(project_root),
+            )
+        )
         + build_selves_tools(selves_consult)
         + build_persona_tools(project_root)
     )

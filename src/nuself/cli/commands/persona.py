@@ -24,7 +24,7 @@ from nuself.persona.prompt_repo import (
 )
 from nuself.persona.audit import run_persona_observed
 from nuself.storage import get_default_backend
-from nuself.trace.service import TraceRecorder
+from nuself.trace.composition import build_trace_recorder
 from nuself.tui.persona import render_persona_detail, render_persona_row
 from nuself.tui.render import TerminalTheme
 
@@ -68,7 +68,10 @@ def _record_lifecycle(
     action: str,
     persona: PersonaPrompt,
 ) -> None:
-    recorder = TraceRecorder(project_root=project_root)
+    recorder = build_trace_recorder(
+        project_root,
+        backend=get_default_backend(project_root),
+    )
     method = getattr(recorder, f"record_persona_{action}")
 
     def record() -> object:

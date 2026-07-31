@@ -42,7 +42,7 @@ from nuself.storage import (
     reset_default_backend,
     set_default_backend,
 )
-from nuself.trace.repository import TraceRepository
+from nuself.trace.composition import build_trace_repository
 from nuself.storage_sqlite import (
     COLLECTION_NAMES,
     SqliteStorageBackend,
@@ -634,7 +634,6 @@ def test_repositories_share_the_project_default_backend(
         "nuself.profile.repository",
         "nuself.reason.repository",
         "nuself.reflection.repository",
-        "nuself.trace.repository",
     ):
         monkeypatch.setattr(
             f"{module}.get_default_backend",
@@ -648,9 +647,9 @@ def test_repositories_share_the_project_default_backend(
     ProfileItemRepository(tmp_path)
     ReasonRepository(tmp_path)
     ReflectionRepository(tmp_path)
-    TraceRepository(tmp_path)
+    build_trace_repository(tmp_path, backend=backend)
 
-    assert calls == [tmp_path] * 8
+    assert calls == [tmp_path] * 7
 
 
 def test_reset_closes_backend_used_by_default_repository(

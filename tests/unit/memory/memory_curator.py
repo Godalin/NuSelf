@@ -31,6 +31,10 @@ from nuself.memory.repository import (
 )
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import get_default_backend
+from nuself.trace.composition import (
+    build_trace_query_service,
+    build_trace_recorder,
+)
 
 
 def _stored_record(
@@ -1201,7 +1205,10 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
         agent=agent,
         thread_store=thread_store,
         repository=repository,
-        trace_recorder=TraceRecorder(tmp_path),
+        trace_recorder=build_trace_recorder(
+            tmp_path,
+            backend=get_default_backend(tmp_path),
+        ),
     )
 
     with pytest.warns(RuntimeWarning) as captured:
@@ -1223,8 +1230,6 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
 def test_auto_accept_update_trace_retains_update_action(
     tmp_path: Path,
 ) -> None:
-    from nuself.trace.service import TraceQueryService, TraceRecorder
-
     thread_store = ThreadStore(tmp_path)
     thread_store.save(
         ThreadState(
@@ -1263,13 +1268,19 @@ def test_auto_accept_update_trace_retains_update_action(
         agent=agent,
         thread_store=thread_store,
         repository=repository,
-        trace_recorder=TraceRecorder(tmp_path),
+        trace_recorder=build_trace_recorder(
+            tmp_path,
+            backend=get_default_backend(tmp_path),
+        ),
     )
 
     result = curator.run_once()
 
     assert result.updated == 1
-    [trace] = TraceQueryService(tmp_path).list_traces(
+    [trace] = build_trace_query_service(
+        tmp_path,
+        backend=get_default_backend(tmp_path),
+    ).list_traces(
         kind="memory_update"
     )
     assert trace.metadata["action"] == "update"

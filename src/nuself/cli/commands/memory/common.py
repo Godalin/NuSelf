@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.memory.audit import run_memory_observed
-from nuself.trace.service import TraceRecorder
+from nuself.storage import get_default_backend
+from nuself.trace.composition import build_trace_recorder
 
 
 class TraceableMemory(Protocol):
@@ -32,7 +33,10 @@ def record_memory_trace(
     action: str,
 ) -> None:
     run_memory_observed(
-        lambda: TraceRecorder(project_root=project_root).record_memory_update(
+        lambda: build_trace_recorder(
+            project_root,
+            backend=get_default_backend(project_root),
+        ).record_memory_update(
             memory_id=entry.id,
             title=entry.title,
             summary=entry.body,

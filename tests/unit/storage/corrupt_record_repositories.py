@@ -44,7 +44,10 @@ def test_repository_lists_report_corrupt_records(
     elif collection == "notification_outbox":
         result = NotificationOutbox(tmp_path, backend=backend).list()
     elif collection == "trace_nodes":
-        result = TraceRepository(tmp_path, backend=backend).list_traces()
+        result = TraceRepository(
+            tmp_path,
+            backend=backend,
+        ).list_traces()
     else:
         result = TraceRepository(tmp_path, backend=backend).links_for(
             "trace_healthy"

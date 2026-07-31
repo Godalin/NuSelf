@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceRelation, TraceVisibility
@@ -15,8 +14,8 @@ if TYPE_CHECKING:
 class TraceRecorder:
     """Service interface for other subsystems to create traces and links."""
 
-    def __init__(self, project_root: Path | None = None, repository: TraceRepository | None = None) -> None:
-        self._repository = repository or TraceRepository(project_root)
+    def __init__(self, repository: TraceRepository) -> None:
+        self._repository = repository
 
     def record(
         self,
@@ -274,8 +273,8 @@ class TraceRecorder:
 class TraceQueryService:
     """Read/query interface for trace records."""
 
-    def __init__(self, project_root: Path | None = None, repository: TraceRepository | None = None) -> None:
-        self._repository = repository or TraceRepository(project_root)
+    def __init__(self, repository: TraceRepository) -> None:
+        self._repository = repository
 
     def list_traces(
         self,

@@ -62,6 +62,13 @@ composition helpers, not domain service locators. Domain repositories must not
 call them. Direct CLI mode and daemon mode must construct the same service
 graph; transport and lifecycle ownership are their only differences.
 
+The trace package is the first migrated domain boundary. `TraceRepository`
+requires an explicit `StorageBackend`, and `TraceRecorder` and
+`TraceQueryService` require an explicit repository. Outer composition calls
+the package-owned `build_trace_*` factories with the selected authority's
+backend. Reintroducing implicit backend resolution in the repository is
+forbidden and covered by an executable architecture test.
+
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.
