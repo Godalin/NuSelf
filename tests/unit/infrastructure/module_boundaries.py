@@ -213,6 +213,24 @@ def test_reflection_orchestration_does_not_resolve_authority() -> None:
     assert violations == []
 
 
+def test_reflection_schedule_state_is_not_defined_by_scheduler() -> None:
+    scheduler = ast.parse(
+        (_SOURCE_ROOT / "reflection" / "scheduler.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    classes = {
+        node.name
+        for node in scheduler.body
+        if isinstance(node, ast.ClassDef)
+    }
+
+    assert "ReflectionScheduleState" not in classes
+    assert (
+        _SOURCE_ROOT / "reflection" / "schedule_state.py"
+    ).is_file()
+
+
 def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
     forbidden = {
         ("nuself.storage", "get_default_backend"),

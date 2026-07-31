@@ -139,6 +139,9 @@ generation, relevance evaluation, organization, schedule-state storage, and
 publication dependencies are constructed outside the scheduler and injected.
 Those collaborators may depend on reflection-owned repository interfaces, but
 must not rediscover storage after explicit resources are provided.
+The persisted schedule schema and strict codec belong to
+`reflection.schedule_state`; orchestration imports that contract and does not
+define storage records inline.
 
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they

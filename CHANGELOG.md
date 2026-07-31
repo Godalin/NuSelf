@@ -20,7 +20,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   graph resources through application-owned composition. Direct and daemon
   chat also share one application-owned factory; reason, trace, persona,
   memory, reflection, and thread-storage tool collaborators are injected
-  before the agent layer. Trace
+  before the agent layer. Reflection schedule-state persistence is separated
+  from orchestration into its own strict codec module. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

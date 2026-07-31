@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
@@ -30,62 +29,17 @@ from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
 from nuself.persona.audit import write_persona_audit
 from nuself.profile.repository import ProfileItemRepository
-from nuself.runtime import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.reflection.schedule_state import (
+    REFLECTION_SCHEDULE_STATE_VERSION,
+    ReflectionScheduleState,
+    ReflectionScheduleStateError,
+    read_reflection_schedule_state,
+)
 from nuself.storage import StorageCollection
 from nuself.trace.service import TraceRecorder
 
-REFLECTION_SCHEDULE_STATE_VERSION = 1
-
-
-class ReflectionScheduleStateError(ValueError):
-    """Raised when persisted reflection schedule state is not trustworthy."""
-
-
-class ReflectionScheduleState(BaseModel):
-    """Strict persisted cooldown and daily-cap state."""
-
-    model_config = ConfigDict(strict=True, extra="forbid")
-
-    schema_version: Literal[1]
-    timestamp: datetime
-    daily_count: int = Field(ge=0)
-    daily_date: date
-    title: str | None = None
-    body: str | None = None
-
-    @field_validator("timestamp")
-    @classmethod
-    def _timestamp_must_be_aware(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("timestamp must be timezone-aware")
-        return value
-
-    def to_record(self) -> dict[str, object]:
-        return cast(dict[str, object], self.model_dump(mode="json", exclude_none=True))
-
-
-def _read_schedule_collection(
-    collection: StorageCollection,
-) -> ReflectionScheduleState | None:
-    record = collection.get("reflection")
-    if record is None:
-        return None
-    try:
-        return ReflectionScheduleState.model_validate_json(
-            encode_json_value(
-                {
-                    key: value
-                    for key, value in record.items()
-                    if key != "id"
-                },
-                ensure_ascii=True,
-            )
-        )
-    except ValidationError:
-        raise ReflectionScheduleStateError(
-            "reflection schedule state is malformed or unsupported"
-        ) from None
+_read_schedule_collection = read_reflection_schedule_state
 
 
 class RelevanceScoreOutput(BaseModel):
