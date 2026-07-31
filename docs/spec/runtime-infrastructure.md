@@ -226,61 +226,62 @@ raises `DaemonConnectionError` with the payload `ProtocolError` as its cause.
 Nested worker and activity records fail the whole response; clients must not
 skip malformed records or synthesize defaults.
 
-## Daemon Worker Supervision
+## Unified Daemon Scheduler
 
-`nuself.daemon.workers.DaemonWorkerSupervisor` owns daemon background-thread
-registration and common lifecycle semantics over the neutral
-`nuself.runtime.workers.OwnedWorker` primitive.
+The daemon owns one `DaemonScheduler`. It replaces subsystem-specific worker
+threads, wake-up events, pending sets, admission queues, start locks, periodic
+loops, and worker-health bookkeeping. Adding a daemon responsibility registers
+one typed task handler; it must not add another long-lived worker abstraction.
 
-- The daemon composition root registers each named worker exactly once and
-  seals the supervisor before workers can start. Duplicate, late, or unknown
-  worker access fails immediately.
-- The supervisor owns `OwnedWorker` instances and combines their live
-  lifecycle snapshot with the last successful iteration, compact exception
-  chain, and consecutive failure count.
-- Every worker target runs under `source="daemon.worker.<name>"`. An exception
-  escaping the complete target updates health and publishes
-  `daemon/worker.failed` without escaping the thread.
-- A complete target that returns while daemon shutdown is not requested is
-  treated as a typed unexpected exit: health gains an error and consecutive
-  failure, and `worker.failed` is published before `worker.stopped`. A return
-  after the shared shutdown event is set is the only graceful target return.
-- Every scheduled iteration gets a fresh job id and a context containing only
-  that job id and worker source. Ambient request, thread, trace, and job
-  identity must not leak into worker iterations.
-- Expected iteration failures update health and publish `daemon/worker.failed`
-  with the worker-specific operation event in metadata, without terminating
-  the schedule. A later successful iteration clears the consecutive failure
-  count while retaining a success timestamp.
-- Joining a still-live worker after the caller's timeout emits
-  `daemon/thread_timeout` with worker and timeout, then raises
-  `DaemonWorkerJoinTimeoutError`. The worker remains owned and may be joined
-  again after it exits.
-- Before daemon readiness, the supervisor checks every sealed registration.
-  Each worker must have lifecycle state `running` and `alive=true`; otherwise a
-  typed `DaemonWorkerReadinessError` names the non-running workers and aborts
-  startup. A successful `start()` call alone is not readiness evidence because
-  the target may already have exited.
-- The same readiness check rejects an already-set daemon shutdown event before
-  inspecting liveness. A signal or internal shutdown request racing with worker
-  startup therefore enters cleanup without publishing readiness.
-- The supervisor owns only common execution semantics. `DaemonState` retains
-  subsystem construction, interval values, concrete operations, and worker
-  target registration; the process runner retains daemon startup/cleanup
-  order.
+Each in-memory task has a registered kind, stable identity, one primary
+resource key, fixed priority, optional monotonic `run_at`, immutable runtime
+context and payload, and one completion handle. Identity coalesces pending and
+running duplicates. A busy resource prevents overlapping work on that resource
+without allocating a resource lock.
 
-`nuself.daemon.state.DaemonState` is the daemon subsystem composition owner. It
-constructs request-facing state, config-derived subsystem services, cross-
-capability wiring, the reason export worker, and all concrete worker targets;
-then it registers and seals those targets with `DaemonWorkerSupervisor`.
+The queue is a wake-up mechanism, never authoritative business state. Durable
+state remains in SQLite, repositories, outboxes, or export manifests. Startup
+recovery and periodic discovery may therefore submit the same identity safely.
+A queue-capacity failure does not erase durable work; a later scan or restart
+must rediscover it.
 
-`DaemonState` exposes the worker-specific start/stop operations required by the
-process runner, but does not own PID/socket files, instance locking, signal
-installation, server-loop timing, startup order, cleanup ordering, or lifecycle
-error aggregation. Those process concerns remain in `nuself.daemon.server`.
-Business, request-handler, and worker tests should import the state owner
-directly. Process-lifecycle tests may replace the `DaemonState` factory imported
-by the runner to verify failure and cleanup boundaries.
+One dispatcher owns admission state and a bounded executor performs handlers.
+All scheduler state (pending tasks, active identities, busy resources, delayed
+tasks, and stopping state) is protected by one short-held condition. No handler,
+database operation, model call, file operation, event projection, audit write,
+or approval prompt runs while that condition is held. Tasks declare one primary
+resource; multi-record consistency remains a repository transaction concern.
+
+Control-plane requests (`ping`, `health`, `shutdown`, and activity subscription
+operations) execute directly in the socket adapter. Work-plane requests such
+as chat submit a task and wait on its completion handle. Slow model calls must
+not prevent control-plane service. Socket request threads perform transport and
+waiting only; they do not execute chat/domain work.
+
+Periodic responsibilities are recurring scheduler admissions, not permanent
+threads. The next occurrence is calculated after the current occurrence
+completes, preventing overlapping or accumulated ticks. Discovery tasks may
+submit resource-specific work, while domain state and retry policy remain
+domain-owned.
+
+Shutdown closes admission, wakes the dispatcher, cancels pending volatile
+wake-ups, and waits within one daemon-wide graceful deadline for dispatched
+work. Completion always releases task identity and resource in a `finally`
+boundary. Durable unprocessed work is recovered at the next startup.
+
+Runtime events remain observation only. Scheduler activity may publish typed
+task lifecycle events; neither an event projection nor audit replay may submit
+work. The scheduler API is intentionally limited to registration, admission,
+scheduling, start, shutdown, and an immutable snapshot. It must not grow plugin
+discovery, dependency graphs, event sourcing, dynamic policy engines, or a
+persistent generic queue.
+
+`DaemonState` composes scheduler handlers from the existing `ApplicationGraph`.
+It does not own PID/socket files, instance locking, signal installation, server
+timing, or lifecycle error aggregation. The only daemon-wide concurrency
+primitives introduced here are the existing single-daemon instance lock and the
+scheduler condition. Repository transactions, cross-process locks needed for
+direct CLI coexistence, and the activity broker condition remain independent.
 
 ### JSONL Transport Framing
 

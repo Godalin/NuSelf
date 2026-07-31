@@ -1,0 +1,317 @@
+"""Small typed scheduler shared by every daemon work-plane task."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, field
+import threading
+import time
+from typing import Literal
+
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    use_runtime_context,
+)
+
+TaskHandler = Callable[["DaemonTask"], object]
+TaskAdmission = Literal["admitted", "coalesced"]
+
+
+class DaemonSchedulerError(RuntimeError):
+    """Base error for scheduler lifecycle and admission failures."""
+
+
+class DaemonSchedulerCapacityError(DaemonSchedulerError):
+    """Raised when bounded volatile admission is full."""
+
+
+class DaemonSchedulerStoppedError(DaemonSchedulerError):
+    """Raised when work is submitted outside the running lifecycle."""
+
+
+@dataclass(frozen=True)
+class DaemonTask:
+    """One immutable in-process wake-up for durable domain work."""
+
+    kind: str
+    identity: str
+    resource: str
+    payload: object = None
+    priority: int = 100
+    context: RuntimeContext = field(default_factory=current_runtime_context)
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("kind", self.kind),
+            ("identity", self.identity),
+            ("resource", self.resource),
+        ):
+            if not value.strip():
+                raise ValueError(f"daemon task {name} must not be blank")
+        if type(self.priority) is not int:
+            raise TypeError("daemon task priority must be an integer")
+
+
+@dataclass(frozen=True)
+class DaemonTaskSubmission:
+    """Admission outcome and shared completion for one task identity."""
+
+    admission: TaskAdmission
+    completion: Future[object]
+
+
+@dataclass(frozen=True)
+class DaemonSchedulerSnapshot:
+    """Immutable scheduler health view."""
+
+    running: bool
+    accepting: bool
+    pending: int
+    in_flight: int
+    capacity: int
+    last_error: str | None = None
+
+
+@dataclass
+class _QueuedTask:
+    task: DaemonTask
+    completion: Future[object]
+    run_at: float
+    sequence: int
+    interval_seconds: float | None = None
+
+
+class DaemonScheduler:
+    """Admit, coalesce, schedule, and resource-serialize daemon tasks."""
+
+    def __init__(
+        self,
+        handlers: dict[str, TaskHandler],
+        *,
+        max_concurrency: int = 4,
+        queue_capacity: int = 256,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if not handlers:
+            raise ValueError("daemon scheduler requires at least one handler")
+        if max_concurrency < 1:
+            raise ValueError("max_concurrency must be positive")
+        if queue_capacity < 1:
+            raise ValueError("queue_capacity must be positive")
+        if any(not name.strip() for name in handlers):
+            raise ValueError("daemon task kinds must not be blank")
+        self._handlers = dict(handlers)
+        self._max_concurrency = max_concurrency
+        self._queue_capacity = queue_capacity
+        self._clock = clock
+        self._condition = threading.Condition()
+        self._pending: list[_QueuedTask] = []
+        self._active: dict[str, _QueuedTask] = {}
+        self._busy_resources: set[str] = set()
+        self._running_count = 0
+        self._sequence = 0
+        self._started = False
+        self._accepting = False
+        self._stopping = False
+        self._last_error: str | None = None
+        self._dispatcher: threading.Thread | None = None
+        self._executor = ThreadPoolExecutor(
+            max_workers=max_concurrency,
+            thread_name_prefix="nuself-task",
+        )
+
+    def start(self) -> None:
+        """Start the sole dispatcher and open admission."""
+
+        with self._condition:
+            if self._started:
+                return
+            self._started = True
+            self._accepting = True
+            self._dispatcher = threading.Thread(
+                target=self._dispatch,
+                name="nuself-scheduler",
+                daemon=False,
+            )
+            self._dispatcher.start()
+
+    def submit(
+        self,
+        task: DaemonTask,
+        *,
+        delay_seconds: float = 0.0,
+        interval_seconds: float | None = None,
+    ) -> DaemonTaskSubmission:
+        """Admit one identity or reuse its existing completion."""
+
+        if delay_seconds < 0:
+            raise ValueError("task delay must not be negative")
+        if interval_seconds is not None and interval_seconds <= 0:
+            raise ValueError("task interval must be positive")
+        with self._condition:
+            if not self._started or not self._accepting:
+                raise DaemonSchedulerStoppedError(
+                    "daemon scheduler is not accepting tasks"
+                )
+            if task.kind not in self._handlers:
+                raise ValueError(f"unknown daemon task kind: {task.kind}")
+            existing = self._active.get(task.identity)
+            if existing is not None:
+                return DaemonTaskSubmission(
+                    "coalesced", existing.completion
+                )
+            if len(self._active) >= self._queue_capacity:
+                raise DaemonSchedulerCapacityError(
+                    "daemon scheduler admission is full"
+                )
+            completion: Future[object] = Future()
+            queued = _QueuedTask(
+                task=task,
+                completion=completion,
+                run_at=self._clock() + delay_seconds,
+                sequence=self._sequence,
+                interval_seconds=interval_seconds,
+            )
+            self._sequence += 1
+            self._pending.append(queued)
+            self._active[task.identity] = queued
+            self._condition.notify()
+            return DaemonTaskSubmission("admitted", completion)
+
+    def snapshot(self) -> DaemonSchedulerSnapshot:
+        with self._condition:
+            return DaemonSchedulerSnapshot(
+                running=(
+                    self._started
+                    and self._dispatcher is not None
+                    and self._dispatcher.is_alive()
+                ),
+                accepting=self._accepting,
+                pending=len(self._pending),
+                in_flight=self._running_count,
+                capacity=self._max_concurrency,
+                last_error=self._last_error,
+            )
+
+    def shutdown(
+        self,
+        *,
+        timeout: float = 30.0,
+        cancel_pending: bool = True,
+    ) -> None:
+        """Close admission and wait for dispatched work within one budget."""
+
+        if timeout < 0:
+            raise ValueError("scheduler shutdown timeout must not be negative")
+        deadline = self._clock() + timeout
+        with self._condition:
+            if not self._started:
+                return
+            self._accepting = False
+            self._stopping = True
+            if cancel_pending:
+                pending = tuple(self._pending)
+                self._pending.clear()
+                for queued in pending:
+                    self._active.pop(queued.task.identity, None)
+                    queued.completion.cancel()
+            self._condition.notify_all()
+        dispatcher = self._dispatcher
+        if dispatcher is not None:
+            dispatcher.join(max(0.0, deadline - self._clock()))
+            if dispatcher.is_alive():
+                raise TimeoutError(
+                    "daemon scheduler did not stop within its deadline"
+                )
+        self._executor.shutdown(wait=True, cancel_futures=False)
+
+    def _dispatch(self) -> None:
+        while True:
+            with self._condition:
+                queued = self._next_runnable_locked()
+                while queued is None:
+                    if self._stopping and self._running_count == 0:
+                        return
+                    self._condition.wait(self._wait_timeout_locked())
+                    queued = self._next_runnable_locked()
+                self._pending.remove(queued)
+                self._busy_resources.add(queued.task.resource)
+                self._running_count += 1
+            future = self._executor.submit(self._run, queued.task)
+            future.add_done_callback(
+                lambda completed, item=queued: self._complete(
+                    item, completed
+                )
+            )
+
+    def _next_runnable_locked(self) -> _QueuedTask | None:
+        if self._running_count >= self._max_concurrency:
+            return None
+        now = self._clock()
+        eligible = (
+            queued
+            for queued in self._pending
+            if queued.run_at <= now
+            and queued.task.resource not in self._busy_resources
+        )
+        return min(
+            eligible,
+            key=lambda queued: (
+                queued.task.priority,
+                queued.run_at,
+                queued.sequence,
+            ),
+            default=None,
+        )
+
+    def _wait_timeout_locked(self) -> float | None:
+        if not self._pending:
+            return None
+        next_run = min(queued.run_at for queued in self._pending)
+        return max(0.0, next_run - self._clock())
+
+    def _run(self, task: DaemonTask) -> object:
+        context = RuntimeContext(
+            thread_id=task.context.thread_id,
+            request_id=task.context.request_id,
+            turn_id=task.context.turn_id,
+            job_id=task.context.job_id,
+            trace_id=task.context.trace_id,
+            source=f"daemon.task.{task.kind}",
+        )
+        with use_runtime_context(context):
+            return self._handlers[task.kind](task)
+
+    def _complete(
+        self,
+        queued: _QueuedTask,
+        executed: Future[object],
+    ) -> None:
+        error = executed.exception()
+        if error is None:
+            queued.completion.set_result(executed.result())
+        else:
+            queued.completion.set_exception(error)
+        with self._condition:
+            self._running_count -= 1
+            self._busy_resources.remove(queued.task.resource)
+            self._active.pop(queued.task.identity, None)
+            if error is not None:
+                self._last_error = f"{type(error).__name__}: {error}"
+            if (
+                queued.interval_seconds is not None
+                and self._accepting
+            ):
+                repeated = _QueuedTask(
+                    task=queued.task,
+                    completion=Future(),
+                    run_at=self._clock() + queued.interval_seconds,
+                    sequence=self._sequence,
+                    interval_seconds=queued.interval_seconds,
+                )
+                self._sequence += 1
+                self._pending.append(repeated)
+                self._active[queued.task.identity] = repeated
+            self._condition.notify_all()
