@@ -315,20 +315,28 @@ Projection failure remains secondary, but the authoritative agent error is not
 allowed to erase evidence that a tool already ran. Public tool-log snapshots
 retain the existing `metadata.result` / `metadata.error` wire contract.
 
-`ConversationGraphRuntime` runs one direct typed pipeline with four stages:
+`ConversationGraphRuntime` runs one synchronous reply pipeline with three
+stages:
 
-1. **prepare_context** — assemble durable context (memory, thread state, skills)
+1. **prepare_context** — assemble durable context (memory, conversation state, skills)
 2. **respond** — delegate to `create_agent` with LangChain-native tool calling and structured output
-3. **state_update** — persist messages and update thread state
-4. **compression** — summarize when the message window grows past the trigger threshold
+3. **state_update** — atomically persist the completed turn
+
+Conversation compression is a scheduler-owned maintenance task, not part of
+reply delivery. The completed turn commits before the result becomes visible.
+The daemon then admits `conversation.compress:<conversation_id>` on the same
+`conversation:<conversation_id>` resource used by chat, so compression cannot
+overlap another turn. A subsequent turn may use the still-valid uncompressed
+window if compression has not run; it never waits for compression merely to
+start. Direct mode performs the same maintenance after presenting the reply.
 
 The `nuself.agent.chat` package composes focused collaborators rather than
 implementing every stage directly:
 
 - `ConversationContextPreparer` owns durable-context retrieval and prompt-window
   message filtering for **prepare_context**.
-- `ConversationStateManager` owns message-state persistence and bounded
-  summarization for **state_update** and **compression**.
+- `ConversationStateManager` owns message-state construction and bounded
+  summarization; the conversation store owns atomic persistence.
 - Model-backed compression uses an optional shared `TextAgent` with LangChain
   system and human messages. `ConversationStateManager` does not depend on
   `ChatLLM`, construct a model, or call `complete()`.
@@ -346,10 +354,27 @@ implementing every stage directly:
 
 `ConversationGraphRuntime` exposes explicit stage methods that delegate to these
 collaborators. They are testable pipeline seams, not compatibility adapters.
-The runtime remains responsible for stage sequencing and turn-level error
-boundaries. A chat-turn provenance trace is projected only after the thread
-store commits the completed reply; trace projection never runs inside the
-thread update callback or its per-thread lock.
+The runtime remains responsible for reply-stage sequencing and turn-level
+error boundaries. A chat-turn provenance trace is projected only after the
+conversation store commits the completed reply; trace projection never runs
+inside the conversation update callback or its per-conversation lock.
+
+Every completed reply emits bounded stage timing and context-composition
+metadata: prepare/respond/state-update/commit durations, recent-message count,
+summary presence, memory result/reference count, and final prompt-message
+count. Metadata must contain no prompt, message, summary, memory, tool result,
+or other private payload text. Timing is diagnostic only and never controls
+execution.
+
+## Conversation Identity
+
+A `conversation` is a persistent, branchable, archivable discussion inside one
+authority. A `session` is one transient CLI/client runtime and may open several
+conversations; several sessions may reopen the same conversation. A `turn` is
+one user/assistant interaction inside a conversation. Public CLI, daemon wire,
+runtime correlation, storage records, logs, and traces use `conversation_id`.
+The word `thread` remains valid only for operating-system/Python threads and
+the separately specified reason-domain concept.
 
 The package root is the stable public import boundary. Runtime implementation,
 context preparation, state management, persona orchestration, conversation

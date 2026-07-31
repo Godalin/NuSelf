@@ -104,7 +104,7 @@ Fields:
 | `outputs` | list[string] | Artifacts produced or changed |
 | `participants` | list[string] | Agents, selves, or subsystems involved |
 | `decision_points` | list[string] | Durable decision summaries, not hidden chain-of-thought |
-| `thread_id` | string \| null | Related chat thread when applicable |
+| `conversation_id` | string \| null | Related persistent conversation when applicable |
 | `visibility` | enum | `private`, `shareable`, or `internal` |
 | `created_at` | string | Timezone-aware creation timestamp |
 | `metadata` | object | Small extension field for future typed details |
@@ -300,7 +300,7 @@ Important chat turn rule:
 - First implementation treats non-empty final `evidence_references` as the deterministic signal that retrieved context materially influenced the reply.
 - The trace must include a user input ref or sanitized user input summary in `inputs`.
 - The trace must include an assistant output ref or sanitized answer summary in `outputs`.
-- The trace should reference the chat thread and relevant evidence refs, not duplicate the whole turn.
+- The trace should reference the conversation and relevant evidence refs, not duplicate the whole turn.
 - Chat trace creation is best-effort infrastructure work. A trace write failure must emit a concise log and must not fail the chat turn.
 
 Reason integration:

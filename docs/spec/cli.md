@@ -440,7 +440,7 @@ Top-level commands:
 | `nuself chat`   | Explicit chat entry                                       |
 | `nuself attach` | Attach to a running daemon                                |
 | `nuself daemon` | Background process lifecycle                              |
-| `nuself thread` | Conversation thread management                            |
+| `nuself conversation` | Persistent conversation management                    |
 | `nuself memory` | Memory, sources, profile, review queue, graph             |
 | `nuself inbox`  | User-facing proactive items: reflection and notifications |
 | `nuself reason` | Long-run reasoning threads                                |

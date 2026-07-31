@@ -45,7 +45,8 @@ chat turn, background job, or trace-producing operation.
 `write_log_event(...)` inherits unset ownership fields from the current
 runtime context:
 
-- `thread_id` for conversation thread ownership;
+- `conversation_id` for persistent conversation ownership;
+- `reason_id` for long-running reason ownership;
 - `request_id` for daemon/client request ownership;
 - `turn_id` for one logical chat turn;
 - `job_id` for daemon background jobs such as memory, reflection, notification, or future log maintenance;
