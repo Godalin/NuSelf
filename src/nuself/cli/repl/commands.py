@@ -193,10 +193,10 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
         thread_id = command.removeprefix("advance ").strip()
-        from nuself.reason.advancer import default_reason_advancer
+        from nuself.application.reason import compose_reason_advancer
 
-        advancer = default_reason_advancer(
-            project_root=project_root,
+        advancer = compose_reason_advancer(
+            compose_cli_application(project_root)
         )
         service = _reason_service(project_root, advancer=advancer)
         try:

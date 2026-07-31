@@ -148,11 +148,16 @@ class DaemonState:
             capabilities = (
                 self.conversation_runtime.capability_snapshot()
             )
+            from nuself.application.reason import compose_reason_advancer
+
             self.reason_scheduler = ReasonScheduler(
                 self.project_root,
+                advancer=compose_reason_advancer(
+                    self.application,
+                    readonly_tools=capabilities.readonly_tools,
+                    langchain_models=capabilities.endpoints,
+                ),
                 interval_seconds=self.reason_scheduler_interval_seconds,
-                readonly_tools=capabilities.readonly_tools,
-                langchain_models=capabilities.endpoints,
                 repository=self.application.reason,
                 service=compose_reason_service(self.application),
             )

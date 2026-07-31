@@ -11,12 +11,14 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 
 from nuself.agent.errors import AgentModelUnavailableError
+from nuself.application.composition import compose_application
+from nuself.config import runtime_paths
 from nuself.persona.tools import (
     build_persona_tools,
     build_reason_persona_tools,
 )
 from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.storage import _create_sqlite_backend
+from nuself.storage import _create_sqlite_backend, get_default_backend
 
 
 class _TextAgent:
@@ -41,11 +43,24 @@ def _invoke_tool(tool: BaseTool, args: dict[str, object]) -> object:
     return invoke(args)
 
 
+def _persona_dependencies(tmp_path: Path):
+    return compose_application(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    )
+
+
 def test_global_persona_think_uses_injected_text_agent(
     tmp_path: Path,
 ) -> None:
     agent = _TextAgent()
-    tools = build_persona_tools(tmp_path, text_agent=agent)
+    application = _persona_dependencies(tmp_path)
+    tools = build_persona_tools(
+        tmp_path,
+        repository=application.persona_prompts,
+        trace_recorder=application.trace.recorder,
+        text_agent=agent,
+    )
     _invoke_tool(
         _tool(tools, "persona_craft"),
         {
@@ -82,8 +97,11 @@ def test_persona_think_sanitizes_agent_failure(
                 f"persona unavailable api_key={agent_secret}"
             )
 
+    application = _persona_dependencies(tmp_path)
     tools = build_persona_tools(
         tmp_path,
+        repository=application.persona_prompts,
+        trace_recorder=application.trace.recorder,
         text_agent=_FailingTextAgent(),
     )
     _invoke_tool(
@@ -123,6 +141,7 @@ def test_persona_think_propagates_untyped_agent_errors(
             raise expected
 
     if reason_scoped:
+        application = _persona_dependencies(tmp_path)
         database = tmp_path / "private" / "workspace.sqlite"
         database.parent.mkdir(parents=True)
         _create_sqlite_backend(db_path=database).close()
@@ -131,7 +150,9 @@ def test_persona_think_propagates_untyped_agent_errors(
             ("reason", "thread-1"),
         )
         tools = build_reason_persona_tools(
-            global_project_root=tmp_path,
+            paths=application.paths,
+            global_repository=application.persona_prompts,
+            trace_recorder=application.trace.recorder,
             get_thread_workspace=lambda: workspace,
             text_agent=_UntypedFailureAgent(),
         )
@@ -145,8 +166,11 @@ def test_persona_think_propagates_untyped_agent_errors(
             "scope": "local",
         }
     else:
+        application = _persona_dependencies(tmp_path)
         tools = build_persona_tools(
             tmp_path,
+            repository=application.persona_prompts,
+            trace_recorder=application.trace.recorder,
             text_agent=_UntypedFailureAgent(),
         )
         craft_args = {
@@ -168,6 +192,7 @@ def test_persona_think_propagates_untyped_agent_errors(
 def test_reason_persona_think_uses_same_injected_text_agent(
     tmp_path: Path,
 ) -> None:
+    application = _persona_dependencies(tmp_path)
     database = tmp_path / "private" / "workspace.sqlite"
     database.parent.mkdir(parents=True)
     _create_sqlite_backend(db_path=database).close()
@@ -177,7 +202,9 @@ def test_reason_persona_think_uses_same_injected_text_agent(
     )
     agent = _TextAgent("thread persona conclusion")
     tools = build_reason_persona_tools(
-        global_project_root=tmp_path,
+        paths=application.paths,
+        global_repository=application.persona_prompts,
+        trace_recorder=application.trace.recorder,
         get_thread_workspace=lambda: workspace,
         text_agent=agent,
     )

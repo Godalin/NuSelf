@@ -42,7 +42,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   reflection, reason, trace, and persona capability set instead of rebuilding
   authority resources inside the agent layer. Persona definitions receive the
   graph-owned memory repository rather than opening storage from persona
-  policy. Logging terminal-warning schemas
+  policy. Persona tools and reason advancement now also receive graph-owned
+  prompt, trace, path, and workspace capabilities instead of selecting a
+  second authority during tool construction. Logging terminal-warning schemas
   are isolated from the durable log engine in a dedicated runtime contract
   module. Trace
   repositories and services now require explicitly composed storage instead
@@ -59,6 +61,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   now receive graph-owned authority resources instead of resolving defaults
   inside their repositories. Memory-backed persona definition loading also
   receives the graph-owned memory repository instead of selecting storage.
+  Persona agent tools and reason advancers now receive prompt, trace,
+  workspace, path, and storage capabilities from application composition;
+  reason scheduling no longer builds an advancer from a project root.
   Notification delivery orchestration is now
   separated from outbox persistence and consumes an injected delivery plan.
   Memory persistence and query components now

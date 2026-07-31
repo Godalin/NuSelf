@@ -17,6 +17,8 @@ from langchain_core.tools import StructuredTool
 from pydantic import ValidationError
 
 from nuself.agent.middleware import ToolOutcome
+from nuself.application.composition import compose_application
+from nuself.config import runtime_paths
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
 from nuself.logs import read_log_events
 from nuself.reason.advancer import (
@@ -32,8 +34,24 @@ from nuself.reason.advancer import (
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
-from nuself.storage import _create_sqlite_backend
+from nuself.storage import _create_sqlite_backend, get_default_backend
 from nuself.workspace import PrivateWorkspaceStore
+
+
+def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
+    application = compose_application(
+        runtime_paths(project_root),
+        get_default_backend(project_root),
+    )
+    return {
+        "paths": application.paths,
+        "workspace_store": PrivateWorkspaceStore(
+            project_root,
+            scope="reason",
+        ),
+        "persona_repository": application.persona_prompts,
+        "trace_recorder": application.trace.recorder,
+    }
 
 
 def test_default_reason_advancer_loads_project_endpoints_once(
@@ -85,7 +103,7 @@ def test_default_reason_advancer_loads_project_endpoints_once(
     )
 
     advancer = default_reason_advancer(
-        project_root=tmp_path,
+        **_advancer_dependencies(tmp_path),
         readonly_tools=(readonly_tool, invalid_metadata_tool),
     )
 
@@ -114,7 +132,7 @@ def test_default_reason_advancer_preserves_explicit_empty_endpoints(
     )
 
     advancer = default_reason_advancer(
-        project_root=tmp_path,
+        **_advancer_dependencies(tmp_path),
         langchain_models=(),
     )
 
@@ -205,7 +223,7 @@ def _advancer_with_agent(
     project_root: Path,
     agent: Any,
 ) -> ReasonAdvancer:
-    advancer = ReasonAdvancer(project_root=project_root)
+    advancer = ReasonAdvancer(**_advancer_dependencies(project_root))
     dynamic = cast(Any, advancer)
     endpoint = LangChainLLMEndpoint(
         index=0,
@@ -225,7 +243,7 @@ def _advancer_with_agents(
     project_root: Path,
     agents: tuple[Any, ...],
 ) -> ReasonAdvancer:
-    advancer = ReasonAdvancer(project_root=project_root)
+    advancer = ReasonAdvancer(**_advancer_dependencies(project_root))
     dynamic = cast(Any, advancer)
     dynamic._agents = tuple(
         (
@@ -552,8 +570,7 @@ def test_workspace_tools_route_by_shared_reason_thread_context(
 ) -> None:
     _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     advancer = ReasonAdvancer(
-        project_root=tmp_path,
-        workspace_store=PrivateWorkspaceStore(tmp_path, scope="reason"),
+        **_advancer_dependencies(tmp_path),
     )
     tools = cast(Any, advancer)._build_workspace_tools()
     tool_map = {tool.name: tool for tool in tools}

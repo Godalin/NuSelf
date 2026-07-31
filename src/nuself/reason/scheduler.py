@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from langchain_core.tools import BaseTool
-
 from nuself.clock import utc_now
-from nuself.llm import LangChainLLMEndpoint
-from nuself.reason.advancer import (
-    ReasonAdvancer,
-    default_reason_advancer,
-)
+from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.audit import report_reason_failure, write_reason_audit
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
@@ -31,8 +24,6 @@ class ReasonScheduler:
         interval_seconds: int = 600,
         *,
         service: ReasonService,
-        readonly_tools: Sequence[BaseTool] | None = None,
-        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         repository: ReasonRepository,
     ) -> None:
         self._project_root = project_root
@@ -40,13 +31,6 @@ class ReasonScheduler:
         self._service = service
         self._repository = repository
         self._interval_seconds = interval_seconds
-
-        if advancer is None and project_root is not None:
-            self._advancer = default_reason_advancer(
-                project_root=project_root,
-                readonly_tools=readonly_tools,
-                langchain_models=langchain_models,
-            )
 
     def run_once(self) -> None:
         """Advance exactly one thread if any active thread is not on cooldown."""

@@ -108,6 +108,12 @@ not select them.
 Memory-backed persona definition loading receives the graph-owned memory
 repository. Chat orchestration receives the resulting immutable definitions;
 neither layer may resolve storage from a project root.
+Persona agent tools receive their global prompt repository and trace recorder
+as required capabilities. Reason-scoped persona tools additionally receive
+resolved runtime paths for their workspace-local repository. Tool factories
+may construct model adapters, but they must not call `runtime_paths()`, open a
+backend, or compose trace services. The application reason factory supplies
+the same graph-owned prompt and trace capabilities to every reason advancer.
 
 `ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
 one selected `StorageBackend`. It retains those exact resources and the shared
@@ -134,6 +140,10 @@ Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
 memory/profile/reflection/trace repositories and thread storage always come
 from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
+`ThreadStore` receives resolved runtime paths and the selected backend as
+required resources. Application composition owns its concrete construction;
+CLI, REPL, daemon, chat, curator, and reflection consumers reuse that
+application-owned factory instead of selecting storage from a project root.
 
 Daemon curation, reflection, reasoning, and notification workers follow the
 same rule: process composition supplies their backend, repositories, outbox,
@@ -216,6 +226,9 @@ as required dependencies. Reason scheduling and output export must receive an
 existing reason service, and scheduling also receives its repository
 explicitly; daemon workers may own queues and workspace adapters, but must not
 create or infer a second reason persistence graph.
+`ReasonAdvancer` receives workspace, persona repository, trace recorder, and
+resolved paths from application composition. `ReasonScheduler` receives an
+advancer explicitly and never constructs one from a project root.
 
 Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require

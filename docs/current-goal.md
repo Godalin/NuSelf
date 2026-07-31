@@ -94,6 +94,11 @@ Current working branch for v0.3.1.
   orchestration.
 - Memory-backed persona definitions now load from an injected memory
   repository and are supplied to chat by application composition.
+- The remaining authority audit identified persona tool factories and
+  `ThreadStore` as hidden composition points. The governing boundary now
+  requires explicit graph-owned prompt/trace/path/storage resources; migration
+  is proceeding through persona tools and reason advancers before thread
+  consumers.
 
 ## Completion Standard
 

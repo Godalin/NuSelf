@@ -349,6 +349,38 @@ def test_persona_definition_loading_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_persona_tools_do_not_resolve_or_compose_authority() -> None:
+    path = _SOURCE_ROOT / "persona" / "tools.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.application", "compose_trace_services"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
+
+
+def test_reason_advancement_does_not_resolve_or_compose_authority() -> None:
+    paths = (
+        _SOURCE_ROOT / "reason" / "advancer.py",
+        _SOURCE_ROOT / "reason" / "scheduler.py",
+    )
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.application", "compose_reason_service"),
+    }
+    assert {
+        (path.relative_to(_SOURCE_ROOT), imported)
+        for path in paths
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
+
+
 def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "notification" / "__init__.py"
     forbidden = {

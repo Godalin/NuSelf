@@ -8,14 +8,12 @@ from pathlib import Path
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 
-from nuself.application import compose_trace_services
 from nuself.agent.errors import AgentError
 from nuself.agent.text import TextAgent, default_text_agent
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.persona.audit import run_persona_observed
-from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, WorkspaceCollection
 from nuself.trace.service import TraceRecorder
 
@@ -39,17 +37,13 @@ def _persona_tool(
 def build_persona_tools(
     project_root: Path | None = None,
     *,
+    repository: PersonaPromptRepository,
+    trace_recorder: TraceRecorder,
     text_agent: TextAgent | None = None,
-    repository: PersonaPromptRepository | None = None,
-    trace_recorder: TraceRecorder | None = None,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
-    paths = runtime_paths(project_root)
-    repo = repository or PersonaPromptRepository(
-        get_default_backend(project_root).collection("persona_prompts"),
-        paths,
-    )
+    repo = repository
     persona_agent = (
         text_agent
         if text_agent is not None
@@ -221,13 +215,10 @@ def _record_prompt_trace(
     prompt: PersonaPrompt,
     *,
     project_root: Path | None = None,
-    recorder: TraceRecorder | None = None,
+    recorder: TraceRecorder,
 ) -> None:
     def record() -> object:
-        selected = recorder or compose_trace_services(
-            runtime_paths(project_root), get_default_backend(project_root)
-        ).recorder
-        return selected.record_persona_prompt_created(
+        return recorder.record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
         )
@@ -244,13 +235,10 @@ def _record_prompt_disabled_trace(
     prompt: PersonaPrompt,
     *,
     project_root: Path | None = None,
-    recorder: TraceRecorder | None = None,
+    recorder: TraceRecorder,
 ) -> None:
     def record() -> object:
-        selected = recorder or compose_trace_services(
-            runtime_paths(project_root), get_default_backend(project_root)
-        ).recorder
-        return selected.record_persona_disabled(
+        return recorder.record_persona_disabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],
@@ -268,13 +256,10 @@ def _record_prompt_enabled_trace(
     prompt: PersonaPrompt,
     *,
     project_root: Path | None = None,
-    recorder: TraceRecorder | None = None,
+    recorder: TraceRecorder,
 ) -> None:
     def record() -> object:
-        selected = recorder or compose_trace_services(
-            runtime_paths(project_root), get_default_backend(project_root)
-        ).recorder
-        return selected.record_persona_enabled(
+        return recorder.record_persona_enabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],
@@ -290,7 +275,9 @@ def _record_prompt_enabled_trace(
 
 def build_reason_persona_tools(
     *,
-    global_project_root: Path | None,
+    paths: RuntimePaths,
+    global_repository: PersonaPromptRepository,
+    trace_recorder: TraceRecorder,
     get_thread_workspace: Callable[[], ScopedWorkspace],
     text_agent: TextAgent | None = None,
 ) -> tuple[StructuredTool, ...]:
@@ -306,7 +293,6 @@ def build_reason_persona_tools(
     """
 
     def _thread_repo() -> PersonaPromptRepository:
-        paths = runtime_paths(global_project_root)
         return PersonaPromptRepository(
             WorkspaceCollection(
                 get_thread_workspace(),
@@ -315,21 +301,12 @@ def build_reason_persona_tools(
             paths,
         )
 
-    global_repo = (
-        PersonaPromptRepository(
-            get_default_backend(global_project_root).collection(
-                "persona_prompts"
-            ),
-            runtime_paths(global_project_root),
-        )
-        if global_project_root
-        else None
-    )
+    global_repo = global_repository
     persona_agent = (
         text_agent
         if text_agent is not None
         else default_text_agent(
-            project_root=global_project_root,
+            project_root=paths.project_root,
             component="persona",
         )
     )
@@ -356,14 +333,18 @@ def build_reason_persona_tools(
                 updated_at=persona.updated_at,
             )
         repo.save(persona)
-        _record_prompt_trace(persona, project_root=global_project_root)
+        _record_prompt_trace(
+            persona,
+            project_root=paths.project_root,
+            recorder=trace_recorder,
+        )
         result = f"Created thinking persona '{name}' (id={persona.id}, scoped to this reason thread)."
         return result
 
     def _list(scope: str = "", include_disabled: bool = False) -> str:
         repo = _thread_repo()
         thread_prompts = repo.list()
-        raw_global = global_repo.list() if global_repo else ()
+        raw_global = global_repo.list()
         global_prompts = [p for p in raw_global if include_disabled or not p.disabled]
         local_list = thread_prompts if scope in ("", "local") else ()
         global_list = global_prompts if scope in ("", "global") else ()
@@ -394,14 +375,13 @@ def build_reason_persona_tools(
         prompt: PersonaPrompt | None = None
         if scope in ("", "local"):
             prompt = thread_repo_inst.resolve(persona)
-        if prompt is None and scope in ("", "global") and global_repo is not None:
+        if prompt is None and scope in ("", "global"):
             prompt = global_repo.resolve(persona)
         if prompt is not None and prompt.disabled and scope in ("", "global"):
             return f"Persona '{prompt.name}' is disabled. Use persona_enable tool or CLI to reactivate it."
         if prompt is None:
             available: list[str] = []
-            if global_repo:
-                available.extend(p.name for p in global_repo.list())
+            available.extend(p.name for p in global_repo.list())
             available.extend(p.name for p in thread_repo_inst.list())
             if available:
                 return f"No persona found for '{persona}'. Available: {', '.join(available)}"
@@ -425,15 +405,17 @@ def build_reason_persona_tools(
         persona = persona.strip()
         if not persona:
             return "Error: persona must be a non-empty string (name or id)"
-        if global_repo is None:
-            return "Error: no global persona repository available."
         prompt = global_repo.resolve(persona)
         if prompt is None:
             return f"No global persona found for '{persona}'."
         if prompt.disabled:
             return f"Persona '{prompt.name}' is already disabled."
         global_repo.set_disabled(prompt.id, True)
-        _record_prompt_disabled_trace(prompt, project_root=global_project_root)
+        _record_prompt_disabled_trace(
+            prompt,
+            project_root=paths.project_root,
+            recorder=trace_recorder,
+        )
         return f"Disabled persona: {prompt.name}"
 
     def _enable(persona: str) -> str:
@@ -441,15 +423,17 @@ def build_reason_persona_tools(
         persona = persona.strip()
         if not persona:
             return "Error: persona must be a non-empty string (name or id)"
-        if global_repo is None:
-            return "Error: no global persona repository available."
         prompt = global_repo.resolve(persona)
         if prompt is None:
             return f"No global persona found for '{persona}'."
         if not prompt.disabled:
             return f"Persona '{prompt.name}' is already enabled."
         global_repo.set_disabled(prompt.id, False)
-        _record_prompt_enabled_trace(prompt, project_root=global_project_root)
+        _record_prompt_enabled_trace(
+            prompt,
+            project_root=paths.project_root,
+            recorder=trace_recorder,
+        )
         return f"Enabled persona: {prompt.name}"
 
     return (

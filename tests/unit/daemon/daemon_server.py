@@ -499,6 +499,14 @@ def test_reason_scheduler_uses_public_agent_capability_snapshot(
 
     captured: dict[str, object] = {}
 
+    def build_advancer(
+        application: object,
+        **kwargs: object,
+    ) -> object:
+        captured["advancer_application"] = application
+        captured.update(kwargs)
+        return object()
+
     def build_scheduler(
         project_root: Path,
         **kwargs: object,
@@ -516,6 +524,10 @@ def test_reason_scheduler_uses_public_agent_capability_snapshot(
         build_scheduler,
     )
     monkeypatch.setattr(
+        "nuself.application.reason.compose_reason_advancer",
+        build_advancer,
+    )
+    monkeypatch.setattr(
         cast(Any, state)._worker_supervisor,
         "start",
         start_worker,
@@ -525,8 +537,10 @@ def test_reason_scheduler_uses_public_agent_capability_snapshot(
 
     assert snapshot_calls == 1
     assert captured["project_root"] == tmp_path
+    assert captured["advancer_application"] is state.application
     assert captured["readonly_tools"] == ()
     assert captured["langchain_models"] == ()
+    assert captured["advancer"] is not None
     assert captured["started"] == "reason_scheduler"
 
 

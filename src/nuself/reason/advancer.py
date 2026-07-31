@@ -21,6 +21,7 @@ from nuself.agent.structured import require_structured_response
 from nuself.agent.tool_utils import (
     index_tool_service_components,
 )
+from nuself.config import RuntimePaths
 
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -34,7 +35,9 @@ from nuself.reason.domain import (
 )
 from nuself.reason.audit import report_reason_failure
 from nuself.reason.errors import ReasonAdvanceError
+from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.runtime import current_runtime_context, runtime_context
+from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -219,13 +222,18 @@ class ReasonAdvancer:
     def __init__(
         self,
         *,
-        project_root: Path | None = None,
-        workspace_store: PrivateWorkspaceStore | None = None,
+        paths: RuntimePaths,
+        workspace_store: PrivateWorkspaceStore,
+        persona_repository: PersonaPromptRepository,
+        trace_recorder: TraceRecorder,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
-        self._project_root = project_root
+        self._paths = paths
+        self._project_root = paths.project_root
         self._workspace_store = workspace_store
+        self._persona_repository = persona_repository
+        self._trace_recorder = trace_recorder
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
         self._captured: list[ToolOutcome] = []
@@ -355,8 +363,6 @@ class ReasonAdvancer:
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
         """Build workspace tools once that resolve the active reason thread."""
         ws_store = self._workspace_store
-        if ws_store is None:
-            return ()
         from nuself.agent.tools import build_workspace_tools_from_provider
         from nuself.store import ScopedWorkspace, SqliteStore
 
@@ -373,9 +379,6 @@ class ReasonAdvancer:
 
     def _build_persona_tools(self) -> tuple[BaseTool, ...]:
         """Build thread-scoped persona tools that resolve the current thread."""
-        if self._workspace_store is None:
-            return ()
-
         ws_store = self._workspace_store
         from nuself.persona.tools import build_reason_persona_tools
         from nuself.store import ScopedWorkspace, SqliteStore
@@ -389,28 +392,31 @@ class ReasonAdvancer:
             )
 
         return build_reason_persona_tools(
-            global_project_root=self._project_root,
+            paths=self._paths,
+            global_repository=self._persona_repository,
+            trace_recorder=self._trace_recorder,
             get_thread_workspace=_thread_workspace,
         )
 
 
 def default_reason_advancer(
     *,
-    project_root: Path | None,
-    workspace_store: PrivateWorkspaceStore | None = None,
+    paths: RuntimePaths,
+    workspace_store: PrivateWorkspaceStore,
+    persona_repository: PersonaPromptRepository,
+    trace_recorder: TraceRecorder,
     readonly_tools: Sequence[BaseTool] | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> ReasonAdvancer:
-    """Compose the default reason capability from explicit or project inputs."""
+    """Build the default reason capability from explicit application resources."""
     return ReasonAdvancer(
-        project_root=project_root,
-        workspace_store=(
-            workspace_store
-            or PrivateWorkspaceStore(project_root, scope="reason")
-        ),
+        paths=paths,
+        workspace_store=workspace_store,
+        persona_repository=persona_repository,
+        trace_recorder=trace_recorder,
         readonly_tools=readonly_tools,
         langchain_models=(
-            configured_langchain_chat_models(project_root)
+            configured_langchain_chat_models(paths.project_root)
             if langchain_models is None
             else langchain_models
         ),

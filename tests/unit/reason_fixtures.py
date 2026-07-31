@@ -10,9 +10,6 @@ from nuself.config import runtime_paths
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.scheduler import ReasonScheduler as _ReasonScheduler
-from nuself.llm import LangChainLLMEndpoint
-from langchain_core.tools import BaseTool
-from collections.abc import Sequence
 from nuself.reason.service import (
     ReasonAdvancerProtocol,
     ReasonService as _ReasonService,
@@ -74,8 +71,6 @@ class ReasonScheduler(_ReasonScheduler):
         interval_seconds: int = 600,
         *,
         service: _ReasonService,
-        readonly_tools: Sequence[BaseTool] | None = None,
-        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         repository: ReasonRepository | None = None,
     ) -> None:
         super().__init__(
@@ -83,7 +78,5 @@ class ReasonScheduler(_ReasonScheduler):
             advancer,
             interval_seconds,
             service=service,
-            readonly_tools=readonly_tools,
-            langchain_models=langchain_models,
             repository=repository or service.repository,
         )

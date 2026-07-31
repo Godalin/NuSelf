@@ -6,7 +6,10 @@ import argparse
 import json
 import sys
 
-from nuself.application.reason import compose_reason_service
+from nuself.application.reason import (
+    compose_reason_advancer,
+    compose_reason_service,
+)
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
 from nuself.reason.errors import ReasonError, ReasonNotFound
@@ -100,10 +103,8 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
     service = _service(args)
     if args.action == "advance":
-        from nuself.reason.advancer import default_reason_advancer
-
-        advancer = default_reason_advancer(
-            project_root=args.project_root,
+        advancer = compose_reason_advancer(
+            compose_cli_application(args.project_root)
         )
         service = _service(args, advancer=advancer)
     method = getattr(service, method_name)

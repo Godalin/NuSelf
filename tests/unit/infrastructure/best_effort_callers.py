@@ -5,12 +5,15 @@ import pytest
 
 import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
+from nuself.application.composition import compose_application
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
 from nuself.logs import read_log_events
+from nuself.config import runtime_paths
 from nuself.persona import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.persona.tools import _record_prompt_trace  # pyright: ignore[reportPrivateUsage]
+from nuself.storage import get_default_backend
 
 
 class _Memory:
@@ -60,7 +63,15 @@ def test_persona_trace_failure_is_observed_without_failing_tool(
         updated_at="2026-01-01T00:00:00+00:00",
     )
 
-    _record_prompt_trace(prompt, project_root=tmp_path)
+    application = compose_application(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    )
+    _record_prompt_trace(
+        prompt,
+        project_root=tmp_path,
+        recorder=application.trace.recorder,
+    )
 
     event = read_log_events(project_root=tmp_path, component="persona")[-1]
     assert event.event == "trace_recording_failed"
