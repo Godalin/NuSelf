@@ -1,12 +1,10 @@
-"""Daemon-side durable job worker for reason output export."""
+"""Daemon-scheduled durable reason-output export service."""
 
 from __future__ import annotations
 
 import json
-import queue
-import threading
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, cast
 
@@ -23,7 +21,6 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem
-from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
@@ -40,24 +37,16 @@ from nuself.reason.audit import (
     report_reason_failure,
     write_reason_audit,
 )
-from nuself.runtime.context import use_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.jobs import (
-    JobAdmissionQueue,
-    JobAdmissionResult,
-    JobMessage,
-)
+from nuself.runtime.jobs import JobMessage
 from nuself.runtime.job_definitions import JobDefinitionRegistry
-from nuself.runtime.scheduling import DelayedTaskScheduler
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
 
 MAX_EXPORT_ATTEMPTS = 5
 EXPORT_RETRY_BASE_SECONDS = 10
 EXPORT_RETRY_MAX_SECONDS = 600
-EXPORT_QUEUE_POLL_SECONDS = 1.0
-EXPORT_QUEUE_CAPACITY = 256
-EXPORT_WORKER_NAME = "export_worker"
+ExportTaskSink = Callable[[JobMessage, float], None]
 
 SectionPlanner = Callable[
     [ReasoningThread, Sequence[ReasoningStep], str],
@@ -259,24 +248,19 @@ def build_reason_export_section_planner(
     return planner
 
 
-class ReasonExportWorker:
-    """Own the daemon-side queue, retries, and recovery of export jobs."""
+class ReasonExportService:
+    """Own durable reason-export behavior; scheduling remains daemon-owned."""
 
     def __init__(
         self,
         project_root: Path,
-        shutdown_requested: threading.Event,
-        supervisor: DaemonWorkerSupervisor,
         *,
         reason_service: ReasonService,
         workspace_store: PrivateWorkspaceStore,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
-        queue_capacity: int = EXPORT_QUEUE_CAPACITY,
     ) -> None:
         self._project_root = project_root
-        self._shutdown_requested = shutdown_requested
-        self._supervisor = supervisor
         self._reason_service = reason_service
         self._workspace_store = workspace_store
         self._text_agent = (
@@ -292,34 +276,23 @@ class ReasonExportWorker:
             if job_definitions is not None
             else build_reason_job_definition_registry()
         )
-        self._queue = JobAdmissionQueue(queue_capacity)
-        self._reconciliation_requested = threading.Event()
-        self._stopping = threading.Event()
-        self._lifecycle_lock = threading.Lock()
-        self._retry_scheduler = DelayedTaskScheduler()
+        self._task_sink: ExportTaskSink | None = None
         self._store: PrivateWorkspaceStore | None = None
         self._service: ReasonOutputService | None = None
 
     def enqueue(self, message: JobMessage) -> None:
-        """Enqueue one typed export job message."""
+        """Validate and submit one export wake-up to the daemon scheduler."""
 
         self._job_definitions.validate(message)
-        self._admit(message)
+        self._submit(message, 0.0)
 
-    def _admit(
-        self,
-        message: JobMessage,
-    ) -> JobAdmissionResult | None:
-        with self._lifecycle_lock:
-            if self._stopping.is_set():
-                return None
-            result = self._queue.admit(message)
-            if result == "full":
-                self._reconciliation_requested.set()
-            return result
+    def bind_task_sink(self, sink: ExportTaskSink) -> None:
+        if self._task_sink is not None:
+            raise RuntimeError("reason export task sink is already bound")
+        self._task_sink = sink
 
     def prepare(self) -> None:
-        """Construct dependencies before the owned worker thread starts."""
+        """Construct dependencies before recovery or task execution."""
 
         if self._store is not None or self._service is not None:
             return
@@ -332,70 +305,10 @@ class ReasonExportWorker:
         self._store = store
         self._service = service
 
-    def stop(self) -> None:
-        """Cancel retry timers and drain work that cannot be processed."""
+    def process(self, message: JobMessage) -> None:
+        """Process one definition-validated scheduler task."""
 
-        self._stopping.set()
-        self._retry_scheduler.close()
-        with self._lifecycle_lock:
-            drained = len(self._queue.drain())
-        if drained:
-            write_reason_audit(
-                "export_queue_drained",
-                project_root=self._project_root,
-                metadata={"drained_jobs": drained},
-            )
-
-    @property
-    def pending_retry_count(self) -> int:
-        return self._retry_scheduler.pending_count
-
-    def run(self) -> None:
-        """Reconcile durable jobs, then process queue messages until shutdown."""
-
-        store, _ = self._dependencies()
-        self._reconcile(store)
-        while not self._shutdown_requested.is_set():
-            try:
-                message = self._queue.get(
-                    timeout=EXPORT_QUEUE_POLL_SECONDS
-                )
-            except queue.Empty:
-                self._run_requested_reconciliation(store)
-                continue
-            except Exception as exc:
-                report_reason_failure(
-                    exc,
-                    event="export_worker_get_error",
-                    project_root=self._project_root,
-                    metadata=None,
-                )
-                continue
-            try:
-                if self._shutdown_requested.is_set():
-                    break
-                message_context = replace(
-                    message.envelope.context,
-                    thread_id=message.resource_id,
-                    job_id=message.job_id,
-                    source="daemon.worker.export_worker",
-                )
-                with use_runtime_context(message_context):
-                    self._process(message)
-            finally:
-                self._queue.complete(message)
-            self._run_requested_reconciliation(store)
-
-    def _run_requested_reconciliation(
-        self,
-        store: PrivateWorkspaceStore,
-    ) -> None:
-        if not self._reconciliation_requested.is_set():
-            return
-        self._reconciliation_requested.clear()
-        self._reconcile(store)
-
-    def _process(self, message: JobMessage) -> None:
+        self._job_definitions.validate(message)
         thread_id = message.resource_id
         job_id = message.job_id
         write_reason_audit(
@@ -423,7 +336,6 @@ class ReasonExportWorker:
             ValueError,
             KeyError,
         ) as exc:
-            self._supervisor.record_failure(EXPORT_WORKER_NAME, exc)
             report_reason_failure(
                 exc,
                 event="export_job_manifest_invalid",
@@ -453,9 +365,7 @@ class ReasonExportWorker:
                 job_id,
                 self._llm_runner,
             )
-            self._supervisor.record_success(EXPORT_WORKER_NAME)
         except Exception as exc:
-            self._supervisor.record_failure(EXPORT_WORKER_NAME, exc)
             self._handle_composition_failure(
                 manifest_path,
                 message,
@@ -494,11 +404,7 @@ class ReasonExportWorker:
                 metadata={"attempts": attempts},
             )
             return
-        if self._stopping.is_set() or self._shutdown_requested.is_set():
-            return
         backoff = _next_backoff(attempts)
-        if self._stopping.is_set() or self._shutdown_requested.is_set():
-            return
         retry_message = self._job_definitions.create(
             name=REASON_OUTPUT_JOB_NAME,
             producer="daemon_retry",
@@ -506,25 +412,12 @@ class ReasonExportWorker:
             resource_id=thread_id,
             payload={"attempt": attempts + 1},
         )
-        retry_key = (thread_id, job_id)
         retry_metadata: dict[str, object] = {
             "attempts": attempts,
             "next_backoff": backoff,
         }
         try:
-            scheduled = self._retry_scheduler.schedule(
-                retry_key,
-                backoff,
-                lambda: self.enqueue(retry_message),
-                on_callback_error=lambda _key, error: (
-                    self._handle_retry_callback_error(
-                        thread_id,
-                        job_id,
-                        error,
-                        retry_metadata,
-                    )
-                ),
-            )
+            self._submit(retry_message, float(backoff))
         except Exception as schedule_error:
             report_reason_failure(
                 schedule_error,
@@ -532,9 +425,7 @@ class ReasonExportWorker:
                 project_root=self._project_root,
                 metadata=retry_metadata,
             )
-            self._reconciliation_requested.set()
-            return
-        if not scheduled:
+            self._schedule_delayed_reconciliation(thread_id, job_id)
             return
         write_reason_audit(
             "export_job_retry",
@@ -542,42 +433,26 @@ class ReasonExportWorker:
             metadata=retry_metadata,
         )
 
-    def _handle_retry_callback_error(
-        self,
-        thread_id: str,
-        job_id: str,
-        callback_error: BaseException,
-        metadata: dict[str, object],
-    ) -> None:
-        report_reason_failure(
-            callback_error,
-            event="export_retry_callback_failed",
-            project_root=self._project_root,
-            metadata=metadata,
-        )
-        self._schedule_delayed_reconciliation(thread_id, job_id)
-
     def _schedule_delayed_reconciliation(
         self,
         thread_id: str,
         job_id: str,
     ) -> None:
-        if self._stopping.is_set() or self._shutdown_requested.is_set():
-            return
-        key = ("reconciliation", thread_id, job_id)
+        message = self._job_definitions.create(
+            name=REASON_OUTPUT_JOB_NAME,
+            producer="daemon_reconciliation",
+            job_id=job_id,
+            resource_id=thread_id,
+        )
         try:
-            scheduled = self._retry_scheduler.schedule(
-                key,
-                EXPORT_RETRY_BASE_SECONDS,
-                self._reconciliation_requested.set,
-            )
+            self._submit(message, float(EXPORT_RETRY_BASE_SECONDS))
         except Exception:
-            self._reconciliation_requested.set()
             return
-        if not scheduled and not self._retry_scheduler.contains(key):
-            self._reconciliation_requested.set()
 
-    def _reconcile(self, store: PrivateWorkspaceStore) -> None:
+    def recover(self) -> None:
+        """Rediscover incomplete durable manifests into scheduler wake-ups."""
+
+        store, _ = self._dependencies()
         reconciled = 0
         for owner_id in store.list_owners():
             jobs_dir = store.paths(owner_id).artifacts / "jobs"
@@ -600,10 +475,6 @@ class ReasonExportWorker:
                     ValueError,
                     KeyError,
                 ) as exc:
-                    self._supervisor.record_failure(
-                        EXPORT_WORKER_NAME,
-                        exc,
-                    )
                     report_reason_failure(
                         exc,
                         event="export_reconciliation_skip",
@@ -616,25 +487,38 @@ class ReasonExportWorker:
                     continue
                 if manifest.status in ("complete", "failed"):
                     continue
-                if self._retry_scheduler.contains(
-                    (owner_id, manifest.job_id)
-                ):
-                    continue
-                result = self._admit(
-                    self._job_definitions.create(
-                        name=REASON_OUTPUT_JOB_NAME,
-                        producer="daemon_reconciliation",
-                        job_id=manifest.job_id,
-                        resource_id=owner_id,
+                try:
+                    self.enqueue(
+                        self._job_definitions.create(
+                            name=REASON_OUTPUT_JOB_NAME,
+                            producer="daemon_reconciliation",
+                            job_id=manifest.job_id,
+                            resource_id=owner_id,
+                        )
                     )
-                )
-                if result == "admitted":
+                except Exception as exc:
+                    report_reason_failure(
+                        exc,
+                        event="export_reconciliation_skip",
+                        project_root=self._project_root,
+                        metadata={
+                            "thread_id": owner_id,
+                            "job_id": manifest.job_id,
+                        },
+                    )
+                else:
                     reconciled += 1
         write_reason_audit(
             "export_queue_reconciled",
             project_root=self._project_root,
             metadata={"replayed_jobs": reconciled},
         )
+
+    def _submit(self, message: JobMessage, delay_seconds: float) -> None:
+        sink = self._task_sink
+        if sink is None:
+            raise RuntimeError("reason export task sink is not bound")
+        sink(message, delay_seconds)
 
     def _llm_runner(
         self,

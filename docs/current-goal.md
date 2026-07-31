@@ -16,14 +16,16 @@ domain recovery, and bounded shutdown.
 
 ## Ordered Steps
 
-1. Specify the minimal task envelope, stable identity, admission, scheduling,
-   resource-serialization, recovery, and shutdown contracts.
-2. Map each current daemon responsibility to the proposed model and identify
-   which locks and worker abstractions disappear.
-3. Record the approved governing design and migration sequence.
-4. Update authoritative daemon/runtime specifications before implementation.
-5. Implement in reversible commits with focused concurrency and recovery
-   tests, then run full release gates and final CI.
+1. [done] Specify the task envelope, stable identity, admission, scheduling,
+   resource serialization, recovery, and shutdown contracts.
+2. [done] Move chat, memory, reflection, reason, notification, and export onto
+   one scheduler and one bounded executor.
+3. [done] Remove worker supervisors, dedicated admission queues, delayed timer
+   schedulers, worker health payloads, and export-worker lifecycle.
+4. [done] Update governing runtime, error, development, reason-output, and
+   architecture documentation.
+5. [in progress] Run full release gates, commit the completed migration, push,
+   and verify final CI.
 
 ## Exclusions
 

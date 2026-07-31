@@ -292,7 +292,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         requirements=NO_READINESS,
     )
     bind_handler(
-        daemon_subparsers.add_parser("health", help="Show background worker health."),
+        daemon_subparsers.add_parser("health", help="Show daemon scheduler health."),
         handle_daemon_health,
     )
     bind_handler(

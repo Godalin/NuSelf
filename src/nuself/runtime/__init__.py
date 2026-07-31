@@ -68,11 +68,6 @@ from nuself.runtime.messages import (
     freeze_json_value,
     thaw_json_value,
 )
-from nuself.runtime.workers import (
-    OwnedWorker,
-    WorkerLifecycleSnapshot,
-    WorkerLifecycleState,
-)
 
 __all__ = [
     "CORE_EVENT_DEFINITIONS",
@@ -108,7 +103,6 @@ __all__ = [
     "JobPayload",
     "JobSink",
     "MessageKind",
-    "OwnedWorker",
     "OwnedCall",
     "RuntimeContext",
     "RuntimeEnvelope",
@@ -120,8 +114,6 @@ __all__ = [
     "UnknownEventDefinitionError",
     "UnknownHandlerError",
     "UnknownJobDefinitionError",
-    "WorkerLifecycleSnapshot",
-    "WorkerLifecycleState",
     "build_event_definition_registry",
     "build_job_definition_registry",
     "bind_runtime_context",

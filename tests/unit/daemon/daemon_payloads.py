@@ -17,10 +17,9 @@ from nuself.daemon.payloads import (
     EmptyRequestPayload,
     HealthResponsePayload,
     MessagePayload,
-    WorkerHealthPayload,
+    SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
-from nuself.daemon.types import WorkerHealth
 from nuself.logs import LogEvent
 
 
@@ -89,31 +88,30 @@ def test_chat_response_payload_omits_absent_optional_fields() -> None:
     assert ChatResponsePayload.from_wire(payload.to_wire()) == payload
 
 
-def test_health_response_payload_projects_worker_model() -> None:
-    worker = WorkerHealthPayload.from_health(
-        WorkerHealth(
-            name="memory",
-            alive=True,
-            last_success_at="now",
-            consecutive_failures=0,
-        )
+def test_health_response_payload_projects_scheduler_model() -> None:
+    scheduler = SchedulerHealthPayload(
+        running=True,
+        accepting=True,
+        pending=2,
+        in_flight=1,
+        capacity=4,
+        last_error=None,
     )
 
-    assert HealthResponsePayload((worker,)).to_wire() == {
-        "workers": [
-            {
-                "name": "memory",
-                "alive": True,
-                "last_success_at": "now",
-                "last_error": None,
-                "consecutive_failures": 0,
-            }
-        ]
+    assert HealthResponsePayload(scheduler).to_wire() == {
+        "scheduler": {
+            "running": True,
+            "accepting": True,
+            "pending": 2,
+            "in_flight": 1,
+            "capacity": 4,
+            "last_error": None,
+        }
     }
     assert MessagePayload("pong").to_wire() == {"message": "pong"}
     assert HealthResponsePayload.from_wire(
-        HealthResponsePayload((worker,)).to_wire()
-    ) == HealthResponsePayload((worker,))
+        HealthResponsePayload(scheduler).to_wire()
+    ) == HealthResponsePayload(scheduler)
     assert MessagePayload.from_wire(
         MessagePayload("pong").to_wire()
     ) == MessagePayload("pong")
@@ -124,17 +122,16 @@ def test_health_response_payload_projects_worker_model() -> None:
     [
         (
             {
-                "workers": [
-                    {
-                        "name": "memory",
-                        "alive": "yes",
-                        "last_success_at": None,
-                        "last_error": None,
-                        "consecutive_failures": 0,
-                    }
-                ]
+                "scheduler": {
+                    "running": "yes",
+                    "accepting": True,
+                    "pending": 0,
+                    "in_flight": 0,
+                    "capacity": 4,
+                    "last_error": None,
+                }
             },
-            r"worker\[0\].*alive",
+            "running",
         ),
         (
             {
@@ -175,7 +172,7 @@ def test_response_payloads_reject_malformed_nested_fields(
 ) -> None:
     decoder = (
         HealthResponsePayload.from_wire
-        if "workers" in payload
+        if "scheduler" in payload
         else ChatResponsePayload.from_wire
     )
     with pytest.raises(ProtocolError, match=error):

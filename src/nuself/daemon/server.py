@@ -143,12 +143,8 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             state,
         ) as server:
             write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
-            state.start_background_memory_curator()
-            state.start_background_reflection_scheduler()
-            state.start_background_reason_scheduler()
-            state.start_background_export_worker()
-            state.start_background_notification_delivery()
-            state.require_background_workers_ready()
+            state.start_background_tasks()
+            state.require_scheduler_ready()
             write_lifecycle_audit(
                 "started",
                 project_root=paths.project_root,
@@ -165,26 +161,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         cleanup_steps.extend(
             (
                 ("shutdown.signal", state.shutdown_requested.set),
-                (
-                    "worker.memory_curator.stop",
-                    state.stop_background_memory_curator,
-                ),
-                (
-                    "worker.reflection_scheduler.stop",
-                    state.stop_background_reflection_scheduler,
-                ),
-                (
-                    "worker.reason_scheduler.stop",
-                    state.stop_background_reason_scheduler,
-                ),
-                (
-                    "worker.export_worker.stop",
-                    state.stop_background_export_worker,
-                ),
-                (
-                    "worker.notification_delivery.stop",
-                    state.stop_background_notification_delivery,
-                ),
+                ("scheduler.stop", state.stop_background_tasks),
             )
         )
     if signal_owner is not None:

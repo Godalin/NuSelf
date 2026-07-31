@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.agent.chat import ConversationGraphRuntime
+from nuself.agent.chat import ChatResult, ConversationGraphRuntime
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService
@@ -17,6 +17,8 @@ from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.jobs import JobSink
 from nuself.workspace import PrivateWorkspaceStore
+
+__all__ = ["ChatResult", "compose_conversation_runtime"]
 
 
 def compose_conversation_runtime(

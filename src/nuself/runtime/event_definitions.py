@@ -149,6 +149,24 @@ CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (
         payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(
+        producer="daemon",
+        name="task.started",
+        description="A unified daemon scheduler task started.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="daemon",
+        name="task.completed",
+        description="A unified daemon scheduler task completed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="daemon",
+        name="task.failed",
+        description="A unified daemon scheduler task failed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
         producer="chat",
         name="turn.started",
         description="A logical chat turn started.",

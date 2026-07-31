@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, TypeVar
 
-from nuself.agent.chat import ConversationGraphRuntime
+from nuself.agent.chat import ChatResult, ConversationGraphRuntime
 from nuself.daemon.activity import (
     ActivityBroker,
     ActivitySubscriptionNotFound,
@@ -26,7 +26,7 @@ from nuself.daemon.payloads import (
     EmptyRequestPayload,
     HealthResponsePayload,
     MessagePayload,
-    WorkerHealthPayload,
+    SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import (
     REQUEST_TYPES,
@@ -40,7 +40,7 @@ from nuself.daemon.request_audit import (
     report_daemon_request_failure,
     write_daemon_request_audit,
 )
-from nuself.daemon.types import WorkerHealth
+from nuself.daemon.scheduler import DaemonSchedulerSnapshot
 from nuself.logs import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
@@ -60,8 +60,14 @@ class DaemonRequestState(Protocol):
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
 
-    def worker_health(self) -> tuple[WorkerHealth, ...]: ...
-    def request_memory_curation(self, thread_id: str) -> None: ...
+    def scheduler_health(self) -> DaemonSchedulerSnapshot: ...
+    def run_chat(
+        self,
+        message: str,
+        *,
+        thread_id: str,
+        turn_id: str | None,
+    ) -> ChatResult: ...
 
 
 DaemonRequestRegistry = HandlerRegistry[
@@ -152,8 +158,16 @@ def _handle_health(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
+    snapshot = state.scheduler_health()
     payload = HealthResponsePayload(
-        tuple(WorkerHealthPayload.from_health(item) for item in state.worker_health())
+        SchedulerHealthPayload(
+            running=snapshot.running,
+            accepting=snapshot.accepting,
+            pending=snapshot.pending,
+            in_flight=snapshot.in_flight,
+            capacity=snapshot.capacity,
+            last_error=snapshot.last_error,
+        )
     )
     return DaemonResponse.ok(request, payload.to_wire())
 
@@ -180,7 +194,7 @@ def _handle_chat(
         turn_id=chat_request.turn_id,
     ):
         try:
-            result = state.conversation_runtime.respond(
+            result = state.run_chat(
                 chat_request.message,
                 thread_id=chat_request.thread_id,
                 turn_id=chat_request.turn_id,
@@ -197,7 +211,6 @@ def _handle_chat(
                 exc,
                 include_chain=True,
             )
-        state.request_memory_curation(result.thread_id)
     duration_ms = int((time.monotonic() - started_at) * 1000)
     payload = ChatResponsePayload(
         answer=result.answer,

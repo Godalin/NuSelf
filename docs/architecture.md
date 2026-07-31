@@ -36,8 +36,8 @@ repositories, SQLite/file storage, logs, and private artifacts
 ```
 
 `nuself.cli` owns command parsing, one-shot command adapters, and interactive
-session orchestration. The daemon owns long-lived local processes, JSONL
-transport, background workers, and live activity subscriptions. Both
+session orchestration. One daemon process owns JSONL transport, a unified
+bounded task scheduler, and live activity subscriptions. Both
 boundaries call typed services rather than embedding domain behavior.
 
 Interactive presentation is replaceable. Backend operations publish typed

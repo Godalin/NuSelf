@@ -6,8 +6,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The daemon now runs chat, memory curation, reflection, reasoning,
+  notifications, and reason export through one bounded scheduler in one daemon
+  process. Stable task identities coalesce duplicate wake-ups, resource keys
+  serialize conflicting work without per-module locks, and one health snapshot
+  replaces worker-specific lifecycle state. Dedicated worker supervisors,
+  admission queues, timer schedulers, and export-worker threads were removed.
 - Daemon chat now returns immediately after persisting the reply and requests
-  per-thread memory curation from its single background worker instead of
+  per-thread memory curation from the unified scheduler instead of
   running a second model call in the request path. Requested thread IDs are
   coalesced, periodic scans recover missed in-memory wake-ups, and non-default
   daemon and local conversations are curated under their correct thread.

@@ -104,15 +104,16 @@ def handle_daemon_health(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    for worker in response.workers:
-        print(
-            "worker"
-            f" name={worker.name}"
-            f" alive={str(worker.alive).lower()}"
-            f" failures={worker.consecutive_failures}"
-            f" last_success={worker.last_success_at or '-'}"
-            f" last_error={worker.last_error or '-'}"
-        )
+    scheduler = response.scheduler
+    print(
+        "scheduler"
+        f" running={str(scheduler.running).lower()}"
+        f" accepting={str(scheduler.accepting).lower()}"
+        f" pending={scheduler.pending}"
+        f" in_flight={scheduler.in_flight}"
+        f" capacity={scheduler.capacity}"
+        f" last_error={scheduler.last_error or '-'}"
+    )
     return 0
 
 

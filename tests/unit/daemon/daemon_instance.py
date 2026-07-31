@@ -15,7 +15,6 @@ from nuself.daemon.instance import (
     DaemonInstanceLockCleanupError,
     DaemonInstanceLockContended,
 )
-from nuself.daemon.workers import DaemonWorkerReadinessError
 from nuself.logs import read_log_events
 
 
@@ -418,10 +417,17 @@ class _UnstartedDaemonState:
     def start_background_notification_delivery(self) -> None:
         self.start_calls.append("notification")
 
-    def require_background_workers_ready(self) -> None:
+    def start_background_tasks(self) -> None:
+        self.start_background_memory_curator()
+        self.start_background_reflection_scheduler()
+        self.start_background_reason_scheduler()
+        self.start_background_export_worker()
+        self.start_background_notification_delivery()
+
+    def require_scheduler_ready(self) -> None:
         self.readiness_checks += 1
         if self.shutdown_requested.is_set():
-            raise DaemonWorkerReadinessError(
+            raise RuntimeError(
                 "daemon shutdown was requested before readiness"
             )
 
@@ -439,6 +445,13 @@ class _UnstartedDaemonState:
 
     def stop_background_notification_delivery(self) -> None:
         self.stop_calls.append("notification")
+
+    def stop_background_tasks(self) -> None:
+        self.stop_background_memory_curator()
+        self.stop_background_reflection_scheduler()
+        self.stop_background_reason_scheduler()
+        self.stop_background_export_worker()
+        self.stop_background_notification_delivery()
 
 
 def test_pid_is_published_only_after_successful_bind(
@@ -702,8 +715,8 @@ def test_worker_readiness_failure_never_publishes_ready_lifecycle(
     readiness_error = RuntimeError("export worker already stopped")
 
     class UnreadyState(_UnstartedDaemonState):
-        def require_background_workers_ready(self) -> None:
-            super().require_background_workers_ready()
+        def require_scheduler_ready(self) -> None:
+            super().require_scheduler_ready()
             raise readiness_error
 
     class BoundServer:
@@ -931,13 +944,9 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     reset_roots: list[Path | None] = []
 
     class FailingCleanupState(_UnstartedDaemonState):
-        def stop_background_memory_curator(self) -> None:
-            super().stop_background_memory_curator()
-            raise RuntimeError("memory stop failed")
-
-        def stop_background_reason_scheduler(self) -> None:
-            super().stop_background_reason_scheduler()
-            raise RuntimeError("reason stop failed")
+        def stop_background_tasks(self) -> None:
+            self.stop_calls.append("scheduler")
+            raise RuntimeError("scheduler stop failed")
 
     def make_state(
         project_root: Path,
@@ -981,17 +990,10 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert str(captured.value.__cause__) == "bind failed"
     assert captured.value.primary_error is captured.value.__cause__
     assert [failure.step for failure in captured.value.failures] == [
-        "worker.memory_curator.stop",
-        "worker.reason_scheduler.stop",
+        "scheduler.stop",
         "application_runtime.close",
     ]
-    assert states[0].stop_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
+    assert states[0].stop_calls == ["scheduler"]
     assert reset_roots == [paths.project_root]
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
@@ -1003,12 +1005,8 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert event.metadata == {
         "failures": (
             {
-                "step": "worker.memory_curator.stop",
-                "error": "memory stop failed",
-            },
-            {
-                "step": "worker.reason_scheduler.stop",
-                "error": "reason stop failed",
+                "step": "scheduler.stop",
+                "error": "scheduler stop failed",
             },
             {
                 "step": "application_runtime.close",
@@ -1020,12 +1018,8 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert event.to_record()["metadata"] == {
         "failures": [
             {
-                "step": "worker.memory_curator.stop",
-                "error": "memory stop failed",
-            },
-            {
-                "step": "worker.reason_scheduler.stop",
-                "error": "reason stop failed",
+                "step": "scheduler.stop",
+                "error": "scheduler stop failed",
             },
             {
                 "step": "application_runtime.close",

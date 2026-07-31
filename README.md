@@ -198,8 +198,8 @@ Personal state defaults to `~/.nuself`. Use `--local` for `./.nuself` or
 `--workspace PATH` for `PATH/.nuself`; each selection is an isolated state
 authority. Workspace configuration inherits user defaults, but databases and
 runtime state are never merged. Each authority permits exactly one NuSelf
-daemon operating-system process; its schedulers run as owned threads inside
-that process.
+daemon operating-system process; one bounded scheduler inside it coordinates
+chat and background tasks.
 
 Interactive chat shows a concise `Attention:` block when the selected
 authority has no usable model, a local workspace authority was not selected,

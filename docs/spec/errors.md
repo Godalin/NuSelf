@@ -205,44 +205,17 @@ decoding are not retryable. Send and every later phase mean the request may
 already have completed; connect and request encoding do not. The exception
 message remains concise and the original cause remains chained.
 
-## Background Worker Boundary
+## Daemon Task Boundary
 
-Every daemon-owned background worker must keep its loop alive after an
-unexpected per-iteration exception unless shutdown has been requested.
-
-- The outer iteration boundary catches `Exception`, preserves the compact
-  exception chain in a structured error log, and continues after the normal
-  configured interval.
-- Catching only an expected application exception is insufficient at this
-  boundary because validation, storage, and adapter failures must not silently
-  terminate the worker thread.
-- Workers track their last successful run, last error, consecutive failure
-  count, and thread liveness so daemon status can expose degraded subsystems.
-- All worker targets run inside `source="daemon.worker.<name>"` runtime
-  context. A target-level exception that escapes initialization or the loop is
-  recorded in health and published as `daemon/worker.failed`
-  before the owned thread becomes stopped.
-- Daemon worker targets are long-lived. Returning from the complete target
-  before daemon shutdown is requested is an unexpected exit even when no
-  exception escaped. The supervisor records a typed unexpected-exit failure in
-  health and publishes the same `daemon/worker.failed` lifecycle event before
-  `worker.stopped`. Returning after shutdown is requested is graceful and does
-  not create a failure.
-- The structured error write is a secondary reporting effect. If it fails,
-  shared observability emits a Python warning; logging failure must not escape
-  the iteration boundary or terminate an otherwise recoverable worker.
-- The loop itself must not retry the failed operation immediately. The next
-  configured scheduled iteration is the retry boundary.
-- Dependencies required before a worker loop starts are constructed by its
-  synchronous `start_background_*` boundary before thread ownership. Those
-  initialization failures remain daemon startup failures and surface to the
-  caller.
-- A retryable worker operation must persist its retry/attempt transition before
-  scheduling another execution. If that durable transition fails, log the
-  state-persistence failure separately and do not enqueue an untracked retry.
-- Worker join timeouts produce a daemon warning with worker identity and
-  timeout. The worker remains reported alive/timed-out until its target exits;
-  shutdown must not claim a successful join.
+Every daemon task executes through the unified scheduler boundary. An
+unexpected `Exception` completes that task as failed, records the compact
+exception chain in scheduler health, and publishes `daemon/task.failed`.
+Recurring tasks are admitted again only after completion, so failures cannot
+kill a dedicated subsystem loop or create overlap. Domain retries must persist
+their attempt transition before admitting a successor. Reporting remains a
+secondary best-effort effect. Scheduler shutdown closes admission, cancels
+pending volatile wake-ups, and waits for already-dispatched authoritative work
+within the daemon lifecycle deadline.
 
 ## Daemon Lifecycle Cleanup
 

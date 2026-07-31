@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import cast, overload
 
 from nuself.daemon.protocol import JsonValue, ProtocolError
-from nuself.daemon.types import WorkerHealth
 from nuself.logs import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
@@ -137,94 +136,82 @@ class ChatRequestPayload:
 
 
 @dataclass(frozen=True)
-class WorkerHealthPayload:
-    """Serializable worker-health snapshot."""
+class SchedulerHealthPayload:
+    """Serializable unified scheduler-health snapshot."""
 
-    name: str
-    alive: bool
-    last_success_at: str | None
+    running: bool
+    accepting: bool
+    pending: int
+    in_flight: int
+    capacity: int
     last_error: str | None
-    consecutive_failures: int
-
-    @classmethod
-    def from_health(cls, health: WorkerHealth) -> WorkerHealthPayload:
-        return cls(
-            name=health.name,
-            alive=health.alive,
-            last_success_at=health.last_success_at,
-            last_error=health.last_error,
-            consecutive_failures=health.consecutive_failures,
-        )
 
     def to_wire(self) -> dict[str, JsonValue]:
         return {
-            "name": self.name,
-            "alive": self.alive,
-            "last_success_at": self.last_success_at,
+            "running": self.running,
+            "accepting": self.accepting,
+            "pending": self.pending,
+            "in_flight": self.in_flight,
+            "capacity": self.capacity,
             "last_error": self.last_error,
-            "consecutive_failures": self.consecutive_failures,
         }
 
     @classmethod
     def from_wire(
         cls,
         payload: dict[str, JsonValue],
-    ) -> WorkerHealthPayload:
+    ) -> SchedulerHealthPayload:
         _expect_fields(
             payload,
             required=frozenset(
                 {
-                    "name",
-                    "alive",
-                    "last_success_at",
+                    "running",
+                    "accepting",
+                    "pending",
+                    "in_flight",
+                    "capacity",
                     "last_error",
-                    "consecutive_failures",
                 }
             ),
         )
-        consecutive_failures = _required_integer(
-            payload,
-            "consecutive_failures",
-            context="worker health response",
-        )
-        if consecutive_failures < 0:
-            raise ProtocolError(
-                "worker health response field "
-                "'consecutive_failures' must be non-negative"
+        counts = {
+            name: _required_integer(
+                payload, name, context="scheduler health response"
             )
+            for name in ("pending", "in_flight", "capacity")
+        }
+        if any(value < 0 for value in counts.values()) or counts["capacity"] < 1:
+            raise ProtocolError("scheduler health counts are invalid")
         return cls(
-            name=_required_string(
+            running=_required_bool(
                 payload,
-                "name",
-                context="worker health response",
+                "running",
+                context="scheduler health response",
             ),
-            alive=_required_bool(
+            accepting=_required_bool(
                 payload,
-                "alive",
-                context="worker health response",
+                "accepting",
+                context="scheduler health response",
             ),
-            last_success_at=_required_nullable_string(
-                payload,
-                "last_success_at",
-                context="worker health response",
-            ),
+            pending=counts["pending"],
+            in_flight=counts["in_flight"],
+            capacity=counts["capacity"],
             last_error=_required_nullable_string(
                 payload,
                 "last_error",
-                context="worker health response",
+                context="scheduler health response",
             ),
-            consecutive_failures=consecutive_failures,
         )
 
 
 @dataclass(frozen=True)
 class HealthResponsePayload:
-    """Daemon background-worker health response."""
+    """Daemon unified-scheduler health response."""
 
-    workers: tuple[WorkerHealthPayload, ...]
+    scheduler: SchedulerHealthPayload
 
     def to_wire(self) -> dict[str, JsonValue]:
-        return {"workers": [worker.to_wire() for worker in self.workers]}
+        return {"scheduler": self.scheduler.to_wire()}
 
     @classmethod
     def from_wire(
@@ -233,27 +220,12 @@ class HealthResponsePayload:
     ) -> HealthResponsePayload:
         _expect_fields(
             payload,
-            required=frozenset({"workers"}),
+            required=frozenset({"scheduler"}),
         )
-        workers = payload.get("workers")
-        if not isinstance(workers, list):
-            raise ProtocolError(
-                "health response field 'workers' must be a list"
-            )
-        decoded: list[WorkerHealthPayload] = []
-        for index, worker in enumerate(workers):
-            if not isinstance(worker, dict):
-                raise ProtocolError(
-                    f"health response worker[{index}] must be an object"
-                )
-            try:
-                decoded.append(WorkerHealthPayload.from_wire(worker))
-            except ProtocolError as exc:
-                raise ProtocolError(
-                    f"health response worker[{index}] is invalid: "
-                    f"{diagnostic_exception_message(exc)}"
-                ) from exc
-        return cls(tuple(decoded))
+        scheduler = payload.get("scheduler")
+        if not isinstance(scheduler, dict):
+            raise ProtocolError("health response scheduler must be an object")
+        return cls(SchedulerHealthPayload.from_wire(scheduler))
 
 
 @dataclass(frozen=True)

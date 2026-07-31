@@ -4,14 +4,11 @@ from notification_fixtures import notification_outbox
 from chat_fixtures import ConversationGraphRuntime
 
 import threading
-import time
 from pathlib import Path
-from typing import Any, cast
 
 import pytest
 from langchain_core.messages import BaseMessage
 
-from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
@@ -21,37 +18,10 @@ from thread_fixtures import ThreadStore
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
-from nuself.daemon.workers import (
-    DaemonWorkerJoinTimeoutError,
-    DaemonWorkerSupervisor,
-)
-from nuself.logs import read_log_events, runtime_event_log_sink
+from nuself.logs import read_log_events
 from nuself.notification import OutboxEntry
-from nuself.runtime.context import (
-    RuntimeContext,
-    current_runtime_context,
-    runtime_context,
-)
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
-
-
-def _worker_supervisor(
-    tmp_path: Path,
-    shutdown_requested: threading.Event | None = None,
-) -> DaemonWorkerSupervisor:
-    publisher = EventPublisher()
-    publisher.attach_projection(runtime_event_log_sink(tmp_path))
-    return DaemonWorkerSupervisor(
-        tmp_path,
-        (
-            shutdown_requested
-            if shutdown_requested is not None
-            else threading.Event()
-        ),
-        publisher,
-    )
-
 
 class StaticResponseService:
     def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
@@ -117,34 +87,6 @@ class RepeatedChainFailingResponseService:
     ) -> ChatStructuredOutput:
         del state
         return draft
-
-
-def test_daemon_state_owns_worker_event_and_audit_composition(
-    tmp_path: Path,
-) -> None:
-    state = DaemonState(tmp_path)
-    received: list[RuntimeEnvelope] = []
-    state.event_publisher.attach_projection(received.append)
-    state.shutdown_requested.set()
-
-    state.start_background_memory_curator()
-    state.stop_background_memory_curator()
-
-    assert [event.name for event in received] == [
-        "worker.started",
-        "worker.stopped",
-    ]
-    audit = [
-        event
-        for event in read_log_events(
-            project_root=tmp_path,
-            component="daemon",
-        )
-        if event.event.startswith("worker.")
-    ]
-    assert [event.event_id for event in audit] == [
-        event.message_id for event in received
-    ]
 
 
 def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
@@ -417,9 +359,9 @@ def test_memory_curator_worker_coalesces_requested_thread_ids(
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
     state.request_memory_curation("project")
     state.request_memory_curation("project")
-    state.start_background_memory_curator()
+    state.scheduler.start()
     assert state.shutdown_requested.wait(timeout=1)
-    state.stop_background_memory_curator()
+    state.stop_background_tasks()
 
     assert calls == ["project"]
 
@@ -441,9 +383,12 @@ def test_memory_curator_periodic_scan_recovers_all_stored_threads(
                 state.shutdown_requested.set()
 
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
-    state.start_background_memory_curator()
+    state.scheduler.start()
+    state._schedule_periodic(  # pyright: ignore[reportPrivateUsage]
+        "memory.scan", state.memory_curator_interval_seconds
+    )
     assert state.shutdown_requested.wait(timeout=1)
-    state.stop_background_memory_curator()
+    state.stop_background_tasks()
 
     assert set(calls) == {"active", "archived"}
 
@@ -459,403 +404,21 @@ def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
     assert response.payload["authority_id"] == state.authority_id
 
 
-def test_daemon_health_returns_worker_snapshots(tmp_path: Path) -> None:
+
+def test_daemon_health_returns_scheduler_snapshot(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     response = handle_request(
         DaemonRequest(type="health", payload={}, request_id="health1"),
         state,
     )
     assert response.status == "ok"
-    workers = response.payload["workers"]
-    assert isinstance(workers, list)
-    names: set[str] = set()
-    for item in workers:
-        if isinstance(item, dict):
-            name = item.get("name")
-            if isinstance(name, str):
-                names.add(name)
-    assert names == {
-        "memory_curator",
-        "reflection_scheduler",
-        "reason_scheduler",
-        "export_worker",
-        "notification_delivery",
-    }
-
-
-def test_reason_scheduler_uses_public_agent_capability_snapshot(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    state = DaemonState(tmp_path)
-    snapshot_calls = 0
-
-    class CapabilityRuntime:
-        def capability_snapshot(self) -> AgentCapabilitySnapshot:
-            nonlocal snapshot_calls
-            snapshot_calls += 1
-            return AgentCapabilitySnapshot(
-                endpoints=(),
-                readonly_tools=(),
-            )
-
-    captured: dict[str, object] = {}
-
-    def build_advancer(
-        application: object,
-        **kwargs: object,
-    ) -> object:
-        captured["advancer_application"] = application
-        captured.update(kwargs)
-        return object()
-
-    def build_scheduler(
-        project_root: Path,
-        **kwargs: object,
-    ) -> object:
-        captured["project_root"] = project_root
-        captured.update(kwargs)
-        return object()
-
-    def start_worker(name: str) -> None:
-        captured["started"] = name
-
-    state.conversation_runtime = cast(Any, CapabilityRuntime())
-    monkeypatch.setattr(
-        "nuself.daemon.state.ReasonScheduler",
-        build_scheduler,
-    )
-    monkeypatch.setattr(
-        "nuself.daemon.state.compose_reason_advancer",
-        build_advancer,
-    )
-    monkeypatch.setattr(
-        cast(Any, state)._worker_supervisor,
-        "start",
-        start_worker,
-    )
-
-    state.start_background_reason_scheduler()
-
-    assert snapshot_calls == 1
-    assert captured["project_root"] == tmp_path
-    assert captured["advancer_application"] is state.application
-    assert captured["readonly_tools"] == ()
-    assert captured["langchain_models"] == ()
-    assert captured["advancer"] is not None
-    assert captured["started"] == "reason_scheduler"
-
-
-def test_memory_curator_worker_survives_unexpected_error(
-    tmp_path: Path,
-) -> None:
-    state = DaemonState(tmp_path)
-    state.memory_curator_interval_seconds = 0.01
-
-    class BrokenCurator:
-        def run_once(self, thread_id: str) -> None:
-            assert thread_id == "project"
-            raise ValueError("bad curator data")
-
-    state.memory_curator = BrokenCurator()  # type: ignore[assignment]
-    state.request_memory_curation("project")
-    state.start_background_memory_curator()
-    deadline = time.monotonic() + 1.0
-    health = state.worker_health()[0]
-    while health.consecutive_failures == 0 and time.monotonic() < deadline:
-        time.sleep(0.01)
-        health = state.worker_health()[0]
-
-    assert health.alive is True
-    assert health.consecutive_failures >= 1
-    assert health.last_error == "bad curator data"
-    state.shutdown_requested.set()
-    state.stop_background_memory_curator()
-
-
-def test_worker_supervisor_records_escaping_target_and_context(
-    tmp_path: Path,
-) -> None:
-    shutdown_requested = threading.Event()
-    supervisor = _worker_supervisor(tmp_path, shutdown_requested)
-    observed: list[RuntimeContext] = []
-
-    def fail_target() -> None:
-        observed.append(current_runtime_context())
-        raise ValueError("target escaped")
-
-    supervisor.register(
-        "memory_curator",
-        thread_name="test-supervised-worker",
-        target=fail_target,
-    )
-    supervisor.seal()
-
-    supervisor.start("memory_curator")
-    supervisor.join("memory_curator", timeout=1)
-
-    assert observed[0].source == "daemon.worker.memory_curator"
-    health = next(
-        item for item in supervisor.health() if item.name == "memory_curator"
-    )
-    assert health.alive is False
-    assert health.consecutive_failures == 1
-    assert health.last_error == "target escaped"
-    lifecycle = [
-        event
-        for event in read_log_events(
-            project_root=tmp_path,
-            component="daemon",
-        )
-        if event.event.startswith("worker.")
-    ]
-    assert [event.event for event in lifecycle] == [
-        "worker.started",
-        "worker.failed",
-        "worker.stopped",
-    ]
-    failed = lifecycle[1]
-    assert failed.source == "daemon.worker.memory_curator"
-    assert failed.metadata == {
-        "worker": "memory_curator",
-        "operation_event": "worker_exited_unexpectedly",
-        "error_type": "ValueError",
-    }
-    assert failed.error == "target escaped"
-
-
-def test_worker_error_log_failure_does_not_stop_scheduled_loop(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from nuself import logs
-    from nuself.runtime import observability
-
-    state = DaemonState(tmp_path)
-    state.memory_curator_interval_seconds = 0.01
-    calls = 0
-
-    class FailOnceCurator:
-        def run_once(self, thread_id: str) -> None:
-            nonlocal calls
-            assert thread_id == "default"
-            calls += 1
-            if calls == 1:
-                state.request_memory_curation("default")
-                raise ValueError("first iteration failed")
-            state.shutdown_requested.set()
-
-    state.memory_curator = FailOnceCurator()  # type: ignore[assignment]
-    state.request_memory_curation("default")
-
-    def fail_error_log(
-        *args: object,
-        **kwargs: object,
-    ) -> object:
-        raise OSError("worker log unavailable")
-
-    monkeypatch.setattr(
-        logs,
-        "write_runtime_event",
-        fail_error_log,
-    )
-    monkeypatch.setattr(
-        observability,
-        "write_log_event",
-        fail_error_log,
-    )
-
-    with pytest.warns(
-        RuntimeWarning,
-        match="internal_event_delivery_failed.*worker log unavailable",
-    ):
-        state.start_background_memory_curator()
-        state.stop_background_memory_curator()
-
-    assert calls == 2
-    health = next(
-        item for item in state.worker_health() if item.name == "memory_curator"
-    )
-    assert health.alive is False
-    assert health.consecutive_failures == 0
-    assert health.last_success_at is not None
-
-
-def test_worker_iterations_have_isolated_job_contexts(
-    tmp_path: Path,
-) -> None:
-    supervisor = _worker_supervisor(tmp_path)
-    supervisor.register(
-        "memory_curator",
-        thread_name="test-memory-curator",
-        target=lambda: None,
-    )
-    supervisor.seal()
-    observed: list[RuntimeContext] = []
-
-    def first_operation() -> None:
-        observed.append(current_runtime_context())
-        with runtime_context(thread_id="tick-thread"):
-            observed.append(current_runtime_context())
-
-    def second_operation() -> None:
-        observed.append(current_runtime_context())
-
-    with runtime_context(
-        request_id="ambient-request",
-        thread_id="ambient-thread",
-        trace_id="ambient-trace",
-        source="test",
-    ):
-        assert supervisor.run_iteration(
-            "memory_curator",
-            first_operation,
-            error_event="memory_curator_error",
-            error_message="memory curator iteration failed",
-        )
-        assert supervisor.run_iteration(
-            "memory_curator",
-            second_operation,
-            error_event="memory_curator_error",
-            error_message="memory curator iteration failed",
-        )
-        assert current_runtime_context() == RuntimeContext(
-            request_id="ambient-request",
-            thread_id="ambient-thread",
-            trace_id="ambient-trace",
-            source="test",
-        )
-
-    first, nested, second = observed
-    assert first.source == "daemon.worker.memory_curator"
-    assert first.job_id is not None
-    assert first.request_id is None
-    assert first.thread_id is None
-    assert first.trace_id is None
-    assert nested.job_id == first.job_id
-    assert nested.thread_id == "tick-thread"
-    assert second.source == "daemon.worker.memory_curator"
-    assert second.job_id is not None
-    assert second.job_id != first.job_id
-    assert second.thread_id is None
-
-
-def test_worker_failure_log_uses_iteration_job_context(
-    tmp_path: Path,
-) -> None:
-    supervisor = _worker_supervisor(tmp_path)
-    supervisor.register(
-        "reflection_scheduler",
-        thread_name="test-reflection-scheduler",
-        target=lambda: None,
-    )
-    supervisor.seal()
-    observed: list[RuntimeContext] = []
-
-    def fail() -> None:
-        observed.append(current_runtime_context())
-        raise ValueError("tick failed")
-
-    assert not supervisor.run_iteration(
-        "reflection_scheduler",
-        fail,
-        error_event="reflection_scheduler_error",
-        error_message="reflection scheduler iteration failed",
-    )
-
-    event = next(
-        item
-        for item in read_log_events(
-            project_root=tmp_path,
-            component="daemon",
-        )
-        if item.event == "worker.failed"
-    )
-    assert observed[0].job_id is not None
-    assert event.job_id == observed[0].job_id
-    assert event.source == "daemon.worker.reflection_scheduler"
-    assert event.metadata == {
-        "worker": "reflection_scheduler",
-        "operation_event": "reflection_scheduler_error",
-        "error_type": "ValueError",
-    }
-    assert current_runtime_context() == RuntimeContext()
-
-
-def test_export_worker_initialization_fails_before_thread_start(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from nuself.daemon import state as daemon_state
-
-    def fail_store(*args: object, **kwargs: object) -> object:
-        raise OSError("workspace unavailable")
-
-    monkeypatch.setattr(
-        daemon_state,
-        "PrivateWorkspaceStore",
-        fail_store,
-    )
-
-    with pytest.raises(OSError, match="workspace unavailable"):
-        DaemonState(tmp_path)
-
-
-def test_daemon_worker_join_timeout_is_logged_and_remains_live(
-    tmp_path: Path,
-) -> None:
-    shutdown_requested = threading.Event()
-    supervisor = _worker_supervisor(tmp_path, shutdown_requested)
-    release = threading.Event()
-
-    def wait_for_release() -> None:
-        release.wait()
-
-    supervisor.register(
-        "memory_curator",
-        thread_name="test-memory-curator",
-        target=wait_for_release,
-    )
-    supervisor.seal()
-    supervisor.start("memory_curator")
-    with pytest.raises(
-        DaemonWorkerJoinTimeoutError,
-        match="memory_curator did not stop",
-    ):
-        supervisor.join(
-            "memory_curator",
-            timeout=0,
-        )
-
-    health = next(
-        item for item in supervisor.health() if item.name == "memory_curator"
-    )
-    assert health.alive is True
-    [event] = [
-        item
-        for item in read_log_events(
-            project_root=tmp_path,
-            component="daemon",
-        )
-        if item.event == "thread_timeout"
-    ]
-    assert event.event == "thread_timeout"
-    assert event.status == "timed_out"
-    assert event.metadata == {
-        "worker": "memory_curator",
-        "timeout_seconds": 0,
-    }
-
-    release.set()
-    supervisor.join(
-        "memory_curator",
-        timeout=1,
-    )
-    health = next(
-        item for item in supervisor.health() if item.name == "memory_curator"
-    )
-    assert health.alive is False
-
+    scheduler = response.payload["scheduler"]
+    assert isinstance(scheduler, dict)
+    assert scheduler["running"] is False
+    assert scheduler["accepting"] is True
+    assert scheduler["pending"] == 0
+    assert scheduler["in_flight"] == 0
+    assert scheduler["capacity"] == 4
 
 def test_daemon_echo_returns_payload(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
@@ -1001,12 +564,15 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
             return True
 
     state.reflection_scheduler = MockScheduler()  # type: ignore[assignment]
-    state.start_background_reflection_scheduler()
+    state.scheduler.start()
+    state._schedule_periodic(  # pyright: ignore[reportPrivateUsage]
+        "reflection.check", state.reflection_check_interval_seconds
+    )
     try:
         assert reflected.wait(timeout=1)
     finally:
         state.shutdown_requested.set()
-        state.stop_background_reflection_scheduler()
+        state.stop_background_tasks()
 
     outbox = notification_outbox(tmp_path)
     entries = outbox.list()

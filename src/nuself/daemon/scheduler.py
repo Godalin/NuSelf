@@ -7,6 +7,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 import threading
 import time
+from pathlib import Path
 from typing import Literal
 
 from nuself.runtime.context import (
@@ -14,6 +15,10 @@ from nuself.runtime.context import (
     current_runtime_context,
     use_runtime_context,
 )
+from nuself.runtime.diagnostics import diagnostic_exception_chain
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.events import EventPublisher
+from nuself.runtime.observability import publish_observed_event
 
 TaskHandler = Callable[["DaemonTask"], object]
 TaskAdmission = Literal["admitted", "coalesced"]
@@ -93,6 +98,8 @@ class DaemonScheduler:
         max_concurrency: int = 4,
         queue_capacity: int = 256,
         clock: Callable[[], float] = time.monotonic,
+        event_publisher: EventPublisher | None = None,
+        project_root: Path | None = None,
     ) -> None:
         if not handlers:
             raise ValueError("daemon scheduler requires at least one handler")
@@ -106,6 +113,8 @@ class DaemonScheduler:
         self._max_concurrency = max_concurrency
         self._queue_capacity = queue_capacity
         self._clock = clock
+        self._event_publisher = event_publisher
+        self._project_root = project_root
         self._condition = threading.Condition()
         self._pending: list[_QueuedTask] = []
         self._active: dict[str, _QueuedTask] = {}
@@ -113,8 +122,11 @@ class DaemonScheduler:
         self._running_count = 0
         self._sequence = 0
         self._started = False
-        self._accepting = False
+        # Composition and startup recovery may admit work before the
+        # dispatcher starts. Shutdown is the only transition that closes it.
+        self._accepting = True
         self._stopping = False
+        self._shutdown_complete = False
         self._last_error: str | None = None
         self._dispatcher: threading.Thread | None = None
         self._executor = ThreadPoolExecutor(
@@ -126,10 +138,13 @@ class DaemonScheduler:
         """Start the sole dispatcher and open admission."""
 
         with self._condition:
+            if self._shutdown_complete or self._stopping:
+                raise DaemonSchedulerStoppedError(
+                    "daemon scheduler has already stopped"
+                )
             if self._started:
                 return
             self._started = True
-            self._accepting = True
             self._dispatcher = threading.Thread(
                 target=self._dispatch,
                 name="nuself-scheduler",
@@ -151,7 +166,7 @@ class DaemonScheduler:
         if interval_seconds is not None and interval_seconds <= 0:
             raise ValueError("task interval must be positive")
         with self._condition:
-            if not self._started or not self._accepting:
+            if not self._accepting:
                 raise DaemonSchedulerStoppedError(
                     "daemon scheduler is not accepting tasks"
                 )
@@ -207,7 +222,7 @@ class DaemonScheduler:
             raise ValueError("scheduler shutdown timeout must not be negative")
         deadline = self._clock() + timeout
         with self._condition:
-            if not self._started:
+            if self._shutdown_complete:
                 return
             self._accepting = False
             self._stopping = True
@@ -226,6 +241,8 @@ class DaemonScheduler:
                     "daemon scheduler did not stop within its deadline"
                 )
         self._executor.shutdown(wait=True, cancel_futures=False)
+        with self._condition:
+            self._shutdown_complete = True
 
     def _dispatch(self) -> None:
         while True:
@@ -282,7 +299,49 @@ class DaemonScheduler:
             source=f"daemon.task.{task.kind}",
         )
         with use_runtime_context(context):
-            return self._handlers[task.kind](task)
+            self._publish_task_event(task, "task.started", "started")
+            try:
+                result = self._handlers[task.kind](task)
+            except Exception as exc:
+                self._publish_task_event(
+                    task,
+                    "task.failed",
+                    "error",
+                    error=diagnostic_exception_chain(exc),
+                )
+                raise
+            self._publish_task_event(task, "task.completed", "completed")
+            return result
+
+    def _publish_task_event(
+        self,
+        task: DaemonTask,
+        name: str,
+        status: str,
+        *,
+        error: str | None = None,
+    ) -> None:
+        publisher = self._event_publisher
+        if publisher is None:
+            return
+        publish_observed_event(
+            publisher,
+            name=name,
+            producer="daemon",
+            payload=RuntimeLogEventPayload(
+                message=f"daemon task {status}",
+                level="error" if error is not None else "info",
+                status=status,
+                error=error,
+                metadata={
+                    "task_kind": task.kind,
+                    "task_identity": task.identity,
+                    "resource": task.resource,
+                },
+            ).to_mapping(),
+            project_root=self._project_root,
+            failure_component="daemon",
+        )
 
     def _complete(
         self,
@@ -290,10 +349,7 @@ class DaemonScheduler:
         executed: Future[object],
     ) -> None:
         error = executed.exception()
-        if error is None:
-            queued.completion.set_result(executed.result())
-        else:
-            queued.completion.set_exception(error)
+        result = executed.result() if error is None else None
         with self._condition:
             self._running_count -= 1
             self._busy_resources.remove(queued.task.resource)
@@ -315,3 +371,7 @@ class DaemonScheduler:
                 self._pending.append(repeated)
                 self._active[queued.task.identity] = repeated
             self._condition.notify_all()
+        if error is None:
+            queued.completion.set_result(result)
+        else:
+            queued.completion.set_exception(error)

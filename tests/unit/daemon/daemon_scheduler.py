@@ -193,3 +193,16 @@ def test_scheduler_bounds_admission_and_cancels_pending_shutdown() -> None:
     assert stopped.is_set()
     with pytest.raises(DaemonSchedulerStoppedError):
         scheduler.submit(DaemonTask("test", "late", "resource:late"))
+
+
+def test_scheduler_shutdown_before_start_cancels_recovery_tasks() -> None:
+    scheduler = DaemonScheduler({"test": lambda task: None})
+    pending = scheduler.submit(DaemonTask("test", "recovery", "resource:a"))
+
+    scheduler.shutdown()
+    scheduler.shutdown()
+
+    assert pending.completion.cancelled()
+    assert not scheduler.snapshot().accepting
+    with pytest.raises(DaemonSchedulerStoppedError):
+        scheduler.start()

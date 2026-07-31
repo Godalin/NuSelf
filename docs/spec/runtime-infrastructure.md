@@ -211,7 +211,7 @@ so passing its payload through unchanged is the typed behavior of that request.
 Success response payload field sets are also exact:
 
 - `ping` and `shutdown` return one string `message`;
-- `health` returns `workers`, a list of complete typed worker-health records;
+- `health` returns one complete typed `scheduler` snapshot;
 - `chat` returns string `answer`, `reply`, and non-blank `thread_id`, a string
   list `evidence_references`, nullable string `epistemic_status`, and optional
   numeric `confidence`;
@@ -464,16 +464,11 @@ this pattern and deliberately does not add a redundant `RuntimeEnvelope`.
 Delivery installs the saved entry context per record under the notification
 worker source, using the same exact replacement/restoration semantics.
 
-Scheduled worker iterations are ephemeral jobs.
-`DaemonWorkerSupervisor.run_iteration()` creates one fresh `job_id` and
-exactly installs a context containing only that identity plus
-`source="daemon.worker.<name>"` for each tick. Nested scheduler and domain
-scopes inherit the tick job id while adding their own thread, turn, or trace
-ownership. Success and failure both restore the prior ambient context; the
-next tick never inherits correlation left by the previous one.
-
-The continuously blocking reason export worker is not tick-scoped: each of its
-operations is scoped by the dequeued `JobMessage` as specified above.
+Every scheduler task exactly installs its submitted correlation context and a
+`source="daemon.task.<kind>"` value. Reason export additionally projects the
+durable resource and job identities into that context. Success and failure both
+restore the executor thread's prior context; reused slots never inherit the
+previous task's correlation.
 
 ## Client Chat Scope
 
@@ -534,10 +529,8 @@ Ownership rules:
 - correlation inheritance does not itself grant presentation ownership:
   interactive sessions capture only activity allowed by the CLI visibility
   contract, even when other synchronous work inherits the same turn identity;
-- long-lived `OwnedWorker` targets do not inherit their creator's context;
-  their supervisor and per-tick/message boundaries own context explicitly;
-- queue wake-up Timers do not inherit context when the queued `JobMessage`
-  already carries an immutable context envelope.
+- daemon tasks carry an immutable captured context; the scheduler installs a
+  task-owned source and never inherits dispatcher-thread state.
 
 Implicit or blanket thread-context propagation is forbidden because it can
 attach startup requests or previous operations to unrelated background work.
@@ -615,7 +608,7 @@ registration, unknown names, and producer/name ownership mismatches fail before
 delivery. Runtime producers are lowercase slugs beginning with a letter and
 containing only lowercase letters, digits, and underscores. Runtime event names
 contain at least two dot-separated segments under the same slug grammar, such
-as `worker.started` or `reason.output.export`. Definitions reject invalid
+as `task.started` or `reason.output.export`. Definitions reject invalid
 identities at construction, before registry composition or publication.
 
 A registered `(producer, name)` pair is an immutable semantic contract.
@@ -661,33 +654,13 @@ Events that can trigger durable or destructive state changes require a
 request/job path with idempotency and explicit user approval. Replaying an
 audit log must never repeat the action.
 
-Daemon worker lifecycle is the first production event boundary. `DaemonState`
-owns one `EventPublisher`, attaches `runtime_event_log_sink(...)` as a
-synchronous projection, and injects
-the publisher into `DaemonWorkerSupervisor`.
-
-- Every registered worker target publishes `daemon/worker.started` immediately
-  before entering its target and `daemon/worker.stopped` in the target
-  wrapper's `finally` block.
-- An expected scheduled-iteration failure and an exception escaping the
-  complete target each publish `daemon/worker.failed`. The payload preserves
-  the worker name, compact error chain, and domain operation event where one
-  exists.
-- Worker event envelopes inherit the active worker or job `RuntimeContext`.
-  Their audit projections retain the same message ID and correlation fields.
-- Event publication is observational. A failed audit or future projection is
-  reported through the shared best-effort observability boundary and cannot
-  skip the target, terminate a schedule, replace worker health updates, or
-  prevent the stopped event attempt.
-- Join timeout remains the direct `daemon/thread_timeout` audit record because
-  a timed-out worker is still alive and has not emitted a stopped transition.
-  It and `shutdown_cleanup_failed` resolve through the sealed
-  `daemon/operations_audit.py` registry.
-- Public stop/restart allows one 30-second monotonic graceful-shutdown budget,
-  covering the declared five-second cleanup attempt for each owned worker plus
-  ownership release. Startup remains a short two-second readiness check.
-  Timeout never implies a second daemon may start: the stable authority lock
-  continues to enforce exactly one operating-system daemon process.
+Daemon task lifecycle is the first production event boundary. `DaemonState`
+injects its one `EventPublisher` into `DaemonScheduler`. Each handler publishes
+`daemon/task.started` and exactly one of `task.completed` or `task.failed` under
+the installed task context. Event delivery is observational and cannot skip a
+handler, change completion, retain a resource, or terminate recurrence. Public
+stop/restart uses one 30-second scheduler shutdown budget before authority
+ownership is released.
 
 Chat-turn lifecycle is the second production event boundary.
 `ConversationGraphRuntime`
@@ -779,84 +752,22 @@ blanket-propagated into new threads or long-lived workers.
 
 ## Durable Jobs
 
-Retryable background work uses typed job records, not tuples:
+Retryable domain work keeps its authoritative state in repositories, outboxes,
+or manifests. `RuntimeEnvelope(kind="job")` and `JobMessage` remain the strict
+wake-up contract: stable job identity lives in context, while resource identity
+and validated hints live in `JobPayload`. Producers receive a `JobSink` through
+composition and never install process-global callbacks.
 
-- stable job id and job kind;
-- owner/resource ids;
-- attempt count and timestamps;
-- explicit pending/running/completed/failed state;
-- serialized payload and last error;
-- idempotent worker claim/completion transitions.
+`JobDefinitionRegistry` owns allowed names, producers, and exact domain payload
+validation. Local producers create through the registry; decoded external
+messages are validated again before scheduler admission.
 
-The reason-output export queue is the first migration target. Its existing
-durable manifest remains authoritative while the in-memory queue becomes a
-typed wake-up mechanism rather than the job record itself.
-
-`nuself.runtime.jobs.JobMessage` is that immutable wake-up contract. It is a
-typed view over one versioned `kind="job"` envelope, not a second routing
-container. `job_id` is derived from the envelope context; `resource_id` and
-optional domain wake-up data are decoded from one strict job payload. The
-payload rejects missing, blank, or unknown routing fields. Serializing only the
-envelope and decoding it again therefore retains every value required to route
-the wake-up. Producers receive a `JobSink` through composition; domain modules
-must not install process-global enqueue callbacks.
-
-Every local producer creates a `JobMessage` through
-`JobDefinitionRegistry.create(...)`; `JobMessage` has no unchecked field-based
-factory. The registry constructs the common envelope and strict routing payload,
-then validates the dotted job name, producer, and domain data before returning.
-Construction on an unsealed registry fails before an envelope is created, so
-runtime producers cannot race with late definition mutation.
-Decoded `JobMessage` values remain structurally representable because an
-external record cannot be trusted merely because it parsed. Every queue owner
-therefore validates again at ingress before mutation.
-
-A job definition owns one dotted job name, its allowed producer identities,
-and an exact validator for the domain wake-up `data`. Definitions and
-registries use the same shared `DefinitionRegistry` mechanics as runtime events
-while remaining distinct semantic types:
-
-- job names use the registered dotted runtime-name grammar;
-- producer identities use the lowercase identity-segment grammar;
-- duplicate definitions and mutation after sealing fail during composition;
-- unknown job names, disallowed producers, and invalid data fail before the
-  queue changes;
-- workers consume only definition-validated messages and do not retain an
-  `if name != ...: ignore` compatibility branch.
-
-`JobMessage` remains responsible for decoding the common envelope and routing
-payload shape. A job definition validates domain meaning rather than
-duplicating `RuntimeEnvelope` or `JobPayload` decoding. Event, job, and audit
-boundaries therefore share one immutable wire envelope while retaining
-domain-specific construction and trust-boundary validation.
-
-The durable job record is authoritative and queue delivery is a best-effort
-wake-up. If wake-up delivery fails, the producer keeps the durable record,
-reports the compact exception chain through the shared observability boundary,
-and does not claim that the job was enqueued. Recovery may rediscover the
-durable non-terminal record later.
-
-In-memory wake-up admission uses the shared bounded
-`JobAdmissionQueue`. Its identity is `(name, job_id, resource_id)`, deliberately
-excluding producer and hint data because initial, retry, and reconciliation
-messages all wake the same durable job. Pending and currently processing
-identities coalesce. Consumers explicitly complete an acquired message before
-that identity can be admitted again.
-
-Admission never blocks a producer. A full queue does not invalidate the durable
-manifest; the owner records that online reconciliation is required. After a
-consumer releases capacity, the owner scans authoritative non-terminal
-manifests and admits missing identities until pressure clears. Jobs owned by a
-live retry timer are excluded from online reconciliation so backoff cannot be
-bypassed. Startup reconciliation remains the crash-recovery boundary.
-
-Delayed in-process callbacks use `runtime.scheduling.DelayedTaskScheduler`.
-The scheduler owns timers by a caller-supplied hashable identity, rejects
-duplicate or post-close scheduling, marks timers daemon-only, and rolls back
-ownership if construction or start fails. Ownership is removed as the callback
-begins, while `close()` atomically prevents new callbacks and cancels every
-still-owned timer exactly once. The scheduler owns no retry counts, intervals,
-logging, job payloads, or durable recovery policy.
+Reason-export wake-ups use `DaemonScheduler` identity and resource admission.
+Initial and reconciliation messages coalesce. Retry identities include their
+durable attempt number so an active failed attempt can schedule its successor
+without overlap. Delays use scheduler `run_at`, not a separate Timer owner.
+Queue pressure never invalidates a durable manifest; startup reconciliation
+rediscovers every non-terminal export after a crash.
 
 ## Logging
 
@@ -976,40 +887,11 @@ daemon/chat composition root into the owning service. Domain modules must not
 install process-global callback setters whose value can leak across projects,
 tests, or concurrent runtimes.
 
-## Owned Worker Lifecycle
-
-`nuself.runtime.workers.OwnedWorker` owns one daemon thread and its lifecycle
-state.
-
-- Lifecycle states are `new`, `running`, `stopped`, and `timed_out`.
-- `start()` is duplicate-safe and creates at most one thread for the owner's
-  lifetime. A naturally exited or stopped worker is not implicitly restarted.
-- The target wrapper records `stopped` in `finally`, including unexpected
-  target exit.
-- Daemon composition wraps each target in a supervisor that establishes its
-  runtime source context and records any escaping `Exception` in daemon health.
-  It also records a target that returns before daemon shutdown as an unexpected
-  exit rather than a healthy stop.
-  `OwnedWorker` itself remains domain-neutral and does not own logging.
-- `join(timeout)` returns a typed snapshot. A live thread after the timeout is
-  `timed_out`; later target exit transitions it to `stopped`.
-- The primitive does not own domain intervals, retries, queues, timers, or the
-  daemon-wide shutdown event.
-- Daemon health reads liveness from owned workers rather than parallel thread
-  fields. Domain success/error counters remain separate health data.
-- Scheduled daemon workers share one iteration boundary for success/failure
-  health transitions and observable error reporting. Reporting failure cannot
-  terminate the loop; the shutdown-aware interval remains the only retry
-  boundary.
-- Export queue/timer cancellation remains an explicit export-worker cleanup
-  performed before join.
-
 ## Owned One-Shot Execution
 
 `nuself.runtime.execution.OwnedCall` owns one result-producing thread whose
-callable runs exactly once. It is distinct from `OwnedWorker`: a worker exposes
-long-lived lifecycle state to a supervisor, while a call transports one value
-or one escaping `BaseException` back to its initiating thread.
+callable runs exactly once. Unlike daemon tasks, a call transports one value or
+one escaping `BaseException` directly back to its initiating thread.
 
 - Construction rejects a non-callable target.
 - `start()` is duplicate-safe. Thread-start failure atomically restores the
@@ -1053,7 +935,7 @@ existing exception contract. If flock/unlock and close both fail,
 Handle cleanup never silently masks the lock ownership failure, and no lock or
 close operation is retried.
 
-The owner holds the lock until request serving and all background-worker
+The owner holds the lock until request serving and scheduler
 shutdown are complete. Only that owner may:
 
 - reconcile stale authority socket and `nuself.pid` before initialization;
@@ -1076,7 +958,7 @@ lifecycle operations, not permanent module-level side effects.
 If the lock is already held, the contender writes
 `daemon/instance_lock_contended`, returns a non-zero exit status, and must not
 construct daemon state or modify socket/PID resources. Unix-server binding must
-complete before PID publication and before background workers start. The PID
+complete before PID publication and before the scheduler starts. The PID
 record therefore never claims a daemon whose socket failed to bind. Any
 reconciliation, bind, PID-publication, or partial-start failure still runs every
 owner cleanup step before the lock is released. Cleanup failures are named and
@@ -1088,14 +970,13 @@ Daemon readiness has one ordered publication boundary:
 
 1. bind the Unix socket;
 2. publish the current PID;
-3. start every owned background worker;
-4. require shutdown to remain unrequested and every registered worker to remain
-   running and alive;
+3. start the unified scheduler and admit recurring tasks;
+4. require the scheduler dispatcher to remain running;
 5. project `daemon/started` and mark the lifecycle ready;
 6. begin accepting socket requests.
 
-The `started` projection is best-effort and cannot prevent readiness. A worker
-startup or startup-health failure before step 5 is a startup failure: it runs
+The `started` projection is best-effort and cannot prevent readiness. A scheduler
+startup or readiness failure before step 5 is a startup failure: it runs
 full cleanup but must not publish `started` or the matching successful
 `stopped` lifecycle record. A daemon ping can succeed only after this boundary
 because request handling begins last.

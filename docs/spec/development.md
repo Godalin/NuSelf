@@ -311,10 +311,9 @@ calling `resolve()` or injecting its semantic adapter into a runtime owner.
 Composition-time inspection uses `definitions`; runtime owners must not retain
 a registry that remains open to late registration.
 
-Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
-`queue.Queue` or `SimpleQueue`. Capacity, identity coalescing, in-flight
-ownership, and explicit completion are shared transport mechanics; manifest
-reconciliation and retry policy remain domain-owned.
+Daemon-owned work uses `daemon.scheduler.DaemonScheduler`. Stable identity,
+bounded admission, resource serialization, delayed execution, and completion
+are shared mechanics; durable recovery and retry policy remain domain-owned.
 
 Owned delayed callbacks execute after the scheduler releases its lifecycle
 lock. A scheduled task may define one callback-error observer; callback
@@ -343,11 +342,9 @@ synchronous projections. Projection callbacks must not perform network calls,
 retries, or unbounded waits. The logging core owns attachment identity and
 reentrancy suppression; callers must not build parallel recursion guards.
 
-Delayed callbacks use `runtime.scheduling.DelayedTaskScheduler` rather than
-domain-owned `threading.Timer` collections. Domains supply stable identities,
-delay values, callbacks, diagnostics, and recovery policy; the shared scheduler
-owns atomic start rollback, completion removal, duplicate suppression, and
-close/cancel lifecycle.
+Daemon domains express delayed work as scheduler tasks rather than owning
+`threading.Timer` collections. Domains supply stable identities, resources,
+delay values, diagnostics, and recovery policy.
 
 ## CLI Module Boundaries
 

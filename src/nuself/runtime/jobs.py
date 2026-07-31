@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-import queue
-import time
-from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from threading import Condition
-from typing import Literal, cast
+from typing import cast
 
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.runtime.validation import validate_timeout
-
 JobSink = Callable[["JobMessage"], None]
-JobAdmissionResult = Literal["admitted", "duplicate", "full"]
 _JOB_PAYLOAD_FIELDS = frozenset({"resource_id", "data"})
 
 
@@ -103,91 +96,3 @@ class JobMessage:
     @property
     def payload(self) -> Mapping[str, object]:
         return self._payload.data
-
-class JobAdmissionQueue:
-    """Bounded wake-up admission with pending and in-flight coalescing."""
-
-    def __init__(self, capacity: int) -> None:
-        if type(capacity) is not int or capacity < 1:
-            raise ValueError("job admission capacity must be a positive integer")
-        self._capacity = capacity
-        self._condition = Condition()
-        self._pending: deque[JobMessage] = deque()
-        self._active: set[tuple[str, str, str]] = set()
-
-    def admit(self, message: JobMessage) -> JobAdmissionResult:
-        """Admit one distinct durable identity without blocking."""
-
-        identity = _job_identity(message)
-        with self._condition:
-            if identity in self._active:
-                return "duplicate"
-            if len(self._pending) >= self._capacity:
-                return "full"
-            self._pending.append(message)
-            self._active.add(identity)
-            self._condition.notify()
-            return "admitted"
-
-    def get(self, *, timeout: float | None = None) -> JobMessage:
-        """Acquire one message while retaining its identity as in-flight."""
-
-        checked_timeout = validate_timeout(
-            timeout,
-            field_name="job admission timeout",
-            allow_none=True,
-        )
-        deadline = (
-            None
-            if checked_timeout is None
-            else time.monotonic() + checked_timeout
-        )
-        with self._condition:
-            while not self._pending:
-                if deadline is None:
-                    self._condition.wait()
-                    continue
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise queue.Empty
-                self._condition.wait(remaining)
-            return self._pending.popleft()
-
-    def get_nowait(self) -> JobMessage:
-        """Acquire one immediately available message."""
-
-        return self.get(timeout=0)
-
-    def complete(self, message: JobMessage) -> None:
-        """Release one acquired identity after processing."""
-
-        identity = _job_identity(message)
-        with self._condition:
-            if identity not in self._active:
-                raise ValueError("job admission identity is not active")
-            self._active.remove(identity)
-
-    def drain(self) -> tuple[JobMessage, ...]:
-        """Remove every pending message while preserving in-flight ownership."""
-
-        with self._condition:
-            drained = tuple(self._pending)
-            self._pending.clear()
-            for message in drained:
-                self._active.remove(_job_identity(message))
-            return drained
-
-    def empty(self) -> bool:
-        """Return whether no pending message is waiting."""
-
-        with self._condition:
-            return not self._pending
-
-    @property
-    def pending_count(self) -> int:
-        with self._condition:
-            return len(self._pending)
-
-
-def _job_identity(message: JobMessage) -> tuple[str, str, str]:
-    return (message.name, message.job_id, message.resource_id)

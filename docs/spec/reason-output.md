@@ -110,12 +110,11 @@ It must record:
 Export state lives in two places with different persistence semantics:
 
 - **Job data** — per-thread user-facing files under `<authority-root>/exports/reason/{thread_id}/jobs/{job_id}/`
-- **Queue signal** — daemon-global, bounded and identity-deduplicated in memory
+- **Task signal** — daemon-global, bounded and identity-deduplicated in memory
 
-The queue is in-memory because the manifest is the real persistent state. A
-queue event is just a "go check the manifest" signal. The daemon worker is a
-single process-global event loop that reads from a bounded
-`JobAdmissionQueue` and processes jobs by looking up their manifests.
+The signal is in-memory because the manifest is the real persistent state. A
+task is only a "go check the manifest" wake-up. The unified daemon scheduler
+processes it by looking up the durable manifest.
 
 ### Job data layout (per-thread)
 
@@ -234,10 +233,10 @@ Progress is a read-friendly summary of the manifest state. The manifest is alway
 - Recovery diagnostics identify the thread and job but do not include chunk
   contents or the raw manifest/progress payload.
 
-### Queue model: typed in-memory job wake-ups
+### Scheduler model: typed in-memory job wake-ups
 
-The export queue is **not** a filesystem directory or a general event bus. It
-is a bounded `JobAdmissionQueue` owned by the daemon composition root.
+The export wake-up is **not** a filesystem directory or a general event bus.
+It is a `DaemonTask` owned by the unified daemon scheduler.
 
 **Rationale**: The `manifest.json` in the job directory is the real persistent state. The queue event is purely a signal — "there is a pending job, go look at its manifest". Writing that signal to a file is unnecessary I/O that introduces its own failure modes (duplicate events, partial writes, stale processing claims). An in-memory queue eliminates the `queue/`, `processing/`, and `failed/` directory tree entirely.
 
@@ -260,8 +259,8 @@ startup. Allowed producers are `reasoning`, `daemon_retry`, and
 - `daemon_reconciliation` sends no hints.
 
 Mode and format use the same declared Reason Output enums as the manifest.
-`ReasonExportWorker.enqueue(...)` validates the complete typed message before
-mutating the queue. Unknown names, test-only/arbitrary producers, extra hints,
+`ReasonExportService.enqueue(...)` validates the complete typed message before
+admission. Unknown names, test-only/arbitrary producers, extra hints,
 and invalid values are programming errors; they are never queued and therefore
 do not produce an `export_job_type_ignored` audit.
 
@@ -334,8 +333,8 @@ directories, while in-memory admission is independently bounded.
 | Concept | Where | Persistent? |
 |---|---|---|
 | Job data (manifest, chunks, artifacts) | Per-thread workspace (`jobs/{job_id}/`) | Yes |
-| Queue signal | bounded `JobAdmissionQueue` in daemon process | No (rebuilt from manifests on startup) |
-| Retry delay | owned delayed scheduler in daemon process | No (rebuilt from manifest attempts on startup) |
+| Task signal | bounded `DaemonScheduler` in daemon process | No (rebuilt from manifests on startup) |
+| Retry delay | delayed scheduler task in daemon process | No (rebuilt from manifest attempts on startup) |
 | Compose lock | `.lock` file in job subdirectory | Yes (but cleared on startup) |
 
 ## Output Modes
@@ -385,29 +384,22 @@ Chat must not need to store the full long-form result in the chat context to com
 
 The first chat-facing export tool call must be approval-gated, but the agent should call it directly when the user asks for an export rather than waiting for a separate confirmation turn. During the call, it prompts the user for confirmation, then plans the job, writes the manifest, pushes to the in-memory queue, and returns structured JSON that includes whether the user approved and, when approved, the queued job metadata. The daemon worker is a single process-global event loop responsible for composing chunks and writing the final artifact, and it must reconcile on startup (re-enqueue incomplete jobs from manifests) before entering its event loop.
 
-### Daemon worker ownership
+### Daemon service ownership
 
-`nuself.daemon.reason_export.ReasonExportWorker` owns the daemon-side lifecycle
-of reason export jobs. It exposes four composition capabilities:
+`nuself.daemon.reason_export.ReasonExportService` owns reason-export domain
+behavior while `DaemonScheduler` owns execution lifecycle. The service exposes:
 
 - `enqueue(JobMessage)` accepts an already-typed job envelope;
-- `prepare()` constructs workspace and output-service dependencies before the
-  owned thread starts, so initialization failure cannot create a live worker;
-- `run()` performs startup reconciliation and then consumes the in-memory
-  queue until daemon shutdown;
-- `stop()` cancels retry timers and drains queued work before the supervisor
-  joins the owned thread.
+- `prepare()` constructs workspace and output-service dependencies before
+  readiness;
+- `recover()` admits incomplete durable manifests during startup;
+- `process(JobMessage)` performs one scheduler-owned task.
 
-The worker restores each dequeued envelope context and replaces its thread,
-job, and source with the authoritative export resource identity. It reports
-operation success/failure through `DaemonWorkerSupervisor`, but owns manifest
-inspection, failure persistence, retry scheduling, reconciliation, and export
-audit events itself. `DaemonState` must not retain parallel export queues,
-timers, stores, services, or processor helpers.
-
-`stop()` closes the in-memory enqueue boundary before draining it. A concurrent
-or later enqueue/retry callback is ignored because the already-persisted
-manifest remains authoritative and will be recovered by the next startup
+The scheduler restores the task envelope context and replaces its thread, job,
+and source with the authoritative export identity. The service owns manifest
+inspection, failure persistence, reconciliation, and export audit events, but
+submits retry delays back to the same scheduler. `DaemonState` must not retain
+parallel export queues, timers, stores, services, or processor helpers.
 reconciliation; no in-memory work may appear after the drain.
 
 All export worker lifecycle and caught-failure audit writes use the shared
