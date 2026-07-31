@@ -85,6 +85,8 @@ In progress:
   0 errors and 0 warnings. The notification cross-module slice passed 1117
   tests, followed by the complete 2465-test suite, with Pyright still at 0
   errors and 0 warnings. The persona/curator/CLI slice passed 908 tests and its
-  focused persistence slice passed 56 tests; Pyright remained clean.
+  focused persistence slice passed 56 tests; Pyright remained clean. The
+  shared CLI/daemon runtime lifecycle slice passed 742 tests, followed by the
+  complete 2467-test suite; Pyright again reported 0 errors and 0 warnings.
   The shared CLI/daemon runtime integration slice passed 533 tests, and its
   focused lifecycle slice passed 27 tests.
