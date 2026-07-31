@@ -21,6 +21,8 @@ from nuself.daemon.types import WorkerHealth
 from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.logs import runtime_event_log_sink
 from nuself.memory.curator import MemoryCurator
+from nuself.memory.query import MemoryQueryService
+from nuself.agent.chat import ThreadStore
 from nuself.notification import (
     NotificationDeliveryLoop,
 )
@@ -66,6 +68,20 @@ class DaemonState:
         )
         self.conversation_runtime = ConversationGraphRuntime(
             project_root,
+            memory_query_service=MemoryQueryService(
+                self.application.memory.entries,
+                self.application.memory.sources,
+                self.application.memory.profile,
+            ),
+            memory_repository=self.application.memory.entries,
+            source_repository=self.application.memory.sources,
+            profile_repository=self.application.memory.profile,
+            reflection_repository=self.application.reflection,
+            trace_recorder=self.application.trace.recorder,
+            thread_store=ThreadStore(
+                paths.project_root,
+                backend=self.application.backend,
+            ),
             job_sink=self.reason_export_worker.enqueue,
             section_planner=build_reason_export_section_planner(
                 project_root

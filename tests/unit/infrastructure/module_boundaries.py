@@ -78,6 +78,22 @@ def test_agent_does_not_depend_on_process_or_terminal_adapters() -> None:
     assert _violations(("agent",), _OUTER_ADAPTERS) == ()
 
 
+def test_chat_tool_runtime_does_not_compose_persistence() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+        (
+            "nuself.application.reflection",
+            "compose_reflection_repository",
+        ),
+    }
+
+    assert {
+        imported for imported in _from_imports(path) if imported in forbidden
+    } == set()
+
+
 def test_migrated_trace_package_does_not_resolve_authority() -> None:
     violations: list[str] = []
     forbidden = {

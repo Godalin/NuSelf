@@ -120,6 +120,11 @@ workers borrow the graph; they neither rebuild it nor close its resources.
 Interrupt and exceptional exits follow the same outer cleanup path as normal
 completion.
 
+Daemon chat receives its memory, profile, reflection, trace, and thread-storage
+collaborators from that graph. Nested chat/tool constructors may accept those
+narrow collaborators, but must not resolve a backend or compose a second
+repository graph after injection.
+
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.

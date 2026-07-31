@@ -51,6 +51,9 @@ In progress:
 - CLI handlers reuse the invocation-scoped graph, while daemon state receives
   the process-owned runtime explicitly; normal, interrupt, startup-failure, and
   cleanup-failure paths converge on the same idempotent close operation;
+- daemon chat now receives the graph-owned memory, profile, reflection, trace,
+  and thread-storage collaborators; its tool runtime cannot rebuild reflection
+  persistence from a project root;
 - trace repositories and services no longer resolve a default backend;
   application-owned composition receives resolved paths and the selected
   authority backend explicitly, and an AST gate prevents the repository from
@@ -96,4 +99,6 @@ In progress:
   complete 2467-test suite; Pyright again reported 0 errors and 0 warnings.
   The shared CLI/daemon runtime integration slice passed 533 tests, and its
   focused lifecycle slice passed 27 tests.
+  The daemon-to-chat graph injection slice passed 156 tests; Pyright remained
+  clean.
   The profile-port memory slice passed 232 tests with Pyright clean.

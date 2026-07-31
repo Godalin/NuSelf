@@ -42,6 +42,7 @@ from nuself.application import (
     compose_trace_services,
 )
 from nuself.application.memory import compose_memory_repositories
+from nuself.application.reflection import compose_reflection_repository
 from nuself.config import ConfigSystem, runtime_paths
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -50,7 +51,11 @@ from nuself.llm import (
 from nuself.logs import runtime_event_log_sink
 from nuself.memory.audit import run_memory_observed
 from nuself.memory.query import MemoryQueryService
+from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.source_repository import SourceRepository
+from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output import SectionPlanner
+from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
     RuntimeLogEventPayload,
@@ -63,6 +68,7 @@ from nuself.runtime.observability import (
     publish_observed_event,
 )
 from nuself.storage import get_default_backend
+from nuself.trace.service import TraceRecorder
 
 LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +114,11 @@ class ConversationGraphRuntime:
         event_publisher: EventPublisher | None = None,
         response_service: ConversationResponseService | None = None,
         compression_agent: TextAgent | None = None,
+        memory_repository: MemoryEntryRepository | None = None,
+        source_repository: SourceRepository | None = None,
+        profile_repository: ProfileItemRepository | None = None,
+        reflection_repository: ReflectionRepository | None = None,
+        trace_recorder: TraceRecorder | None = None,
     ) -> None:
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
             langchain_models
@@ -121,20 +132,26 @@ class ConversationGraphRuntime:
             if event_publisher is not None
             else self._build_event_publisher(project_root)
         )
-        self._thread_store = thread_store or ThreadStore(project_root)
-        system_config = ConfigSystem.load(project_root=project_root)
-        self._language_preference = system_config.chat.language_preference
-        self._trace_recorder = compose_trace_services(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).recorder
         paths = runtime_paths(project_root)
         backend = get_default_backend(project_root)
+        self._thread_store = thread_store or ThreadStore(
+            paths.project_root,
+            backend=backend,
+        )
+        system_config = ConfigSystem.load(project_root=project_root)
+        self._language_preference = system_config.chat.language_preference
+        self._trace_recorder = trace_recorder or compose_trace_services(
+            paths,
+            backend,
+        ).recorder
         memory_repositories = compose_memory_repositories(paths, backend)
+        entries = memory_repository or memory_repositories.entries
+        sources = source_repository or memory_repositories.sources
+        profile = profile_repository or memory_repositories.profile
         self._memory_query_service = memory_query_service or MemoryQueryService(
-            memory_repositories.entries,
-            memory_repositories.sources,
-            memory_repositories.profile,
+            entries,
+            sources,
+            profile,
         )
         self._context_preparer = ConversationContextPreparer(
             self._memory_query_service
@@ -169,7 +186,11 @@ class ConversationGraphRuntime:
         self._tool_runtime = ConversationToolRuntime(
             project_root=project_root,
             query_service=self._memory_query_service,
-            memory_repository=memory_repositories.entries,
+            memory_repository=entries,
+            reflection_repository=(
+                reflection_repository
+                or compose_reflection_repository(paths, backend)
+            ),
             selves_consult=self._consult_selves_tool,
             job_sink=job_sink,
             section_planner=section_planner,

@@ -11,7 +11,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   establishing the first enforced adapter boundary for the v0.3.1 decoupling.
   A shared, lazy `ApplicationRuntime` now owns resolved paths, storage lifetime,
   and one application graph for both CLI and daemon process surfaces, including
-  normal, interrupted, and exceptional teardown. Trace
+  normal, interrupted, and exceptional teardown. Daemon chat and its tool
+  runtime now receive graph-owned memory, profile, reflection, trace, and
+  thread-storage collaborators instead of rebuilding them. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile
