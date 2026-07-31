@@ -214,6 +214,22 @@ def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
     assert violations == []
 
 
+def test_notification_delivery_is_not_implemented_in_package_root() -> None:
+    root = ast.parse(
+        (_SOURCE_ROOT / "notification" / "__init__.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    root_classes = {
+        node.name for node in root.body if isinstance(node, ast.ClassDef)
+    }
+
+    assert "NotificationDeliveryLoop" not in root_classes
+    assert (
+        _SOURCE_ROOT / "notification" / "delivery.py"
+    ).is_file()
+
+
 def test_remaining_persistence_stores_do_not_resolve_authority() -> None:
     forbidden = {
         ("nuself.storage", "get_default_backend"),
