@@ -100,7 +100,10 @@ def test_persona_instruction_descriptor_summarizes() -> None:
 
 
 def test_load_persona_definitions_falls_back_to_defaults(tmp_path: Path) -> None:
-    personas = load_persona_definitions(tmp_path)
+    personas = load_persona_definitions(
+        memory_entry_repository(tmp_path),
+        project_root=tmp_path,
+    )
     ids = {p.id for p in personas}
     assert "analyst_self" in ids
     assert "skeptic_self" in ids
@@ -121,7 +124,10 @@ def test_load_persona_definitions_from_memory(tmp_path: Path) -> None:
         )
     )
 
-    personas = load_persona_definitions(tmp_path)
+    personas = load_persona_definitions(
+        memory_entry_repository(tmp_path),
+        project_root=tmp_path,
+    )
     ids = {p.id for p in personas}
     assert "custom_self" in ids
     custom = next(p for p in personas if p.id == "custom_self")
@@ -137,7 +143,10 @@ def test_load_persona_definitions_observes_storage_fallback(
 
     monkeypatch.setattr(MemoryEntryRepository, "search", fail_search)
 
-    personas = load_persona_definitions(tmp_path)
+    personas = load_persona_definitions(
+        memory_entry_repository(tmp_path),
+        project_root=tmp_path,
+    )
 
     assert personas == BUILTIN_PERSONAS
     [event] = read_log_events(
@@ -171,7 +180,10 @@ def test_persona_definition_diagnostic_failure_preserves_fallback(
         RuntimeWarning,
         match="runtime/observability_sink_failed",
     ):
-        personas = load_persona_definitions(tmp_path)
+        personas = load_persona_definitions(
+        memory_entry_repository(tmp_path),
+        project_root=tmp_path,
+    )
 
     assert personas == BUILTIN_PERSONAS
 

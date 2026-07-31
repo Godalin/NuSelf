@@ -7,6 +7,7 @@ from nuself.agent.chat.response import ConversationResponseService
 from nuself.application.composition import ApplicationGraph
 from nuself.memory.query import MemoryQueryService
 from nuself.persona.tools import build_persona_tools
+from nuself.persona.definition import load_persona_definitions
 from nuself.reason.output import SectionPlanner
 from nuself.application.reason import compose_reason_service
 from nuself.runtime.events import EventPublisher
@@ -40,6 +41,10 @@ def compose_conversation_runtime(
             paths.project_root,
             repository=application.persona_prompts,
             trace_recorder=application.trace.recorder,
+        ),
+        persona_definitions=load_persona_definitions(
+            application.memory.entries,
+            project_root=paths.project_root,
         ),
         thread_store=ThreadStore(
             paths.project_root,

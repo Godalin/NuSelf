@@ -18,7 +18,6 @@ from nuself.persona import (
     PersonaInput,
     PersonaTurnState,
     SharedPersonaDiscussionService,
-    load_persona_definitions,
     persona_graph_agents,
 )
 from nuself.persona.audit import (
@@ -39,10 +38,11 @@ class ConversationPersonaOrchestrator:
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         language_preference: str,
         memory_query_service: MemoryQueryService,
+        persona_definitions: tuple[PersonaDefinition, ...],
     ) -> None:
         self._project_root = project_root
         self._memory_query_service = memory_query_service
-        self._persona_definitions = load_persona_definitions(project_root)
+        self._persona_definitions = persona_definitions
         graph_agents = (
             persona_graph_agents(
                 langchain_models,

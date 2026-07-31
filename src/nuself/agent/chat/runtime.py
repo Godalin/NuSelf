@@ -50,6 +50,7 @@ from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.output import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
+from nuself.persona.definition import PersonaDefinition
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
     RuntimeLogEventPayload,
@@ -114,6 +115,7 @@ class ConversationGraphRuntime:
         reason_service: ReasonService,
         trace_query_service: TraceQueryService,
         persona_tools: Sequence[BaseTool],
+        persona_definitions: tuple[PersonaDefinition, ...],
     ) -> None:
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
             langchain_models
@@ -161,6 +163,7 @@ class ConversationGraphRuntime:
             langchain_models=self._langchain_models,
             language_preference=self._language_preference,
             memory_query_service=self._memory_query_service,
+            persona_definitions=persona_definitions,
         )
         self._tool_runtime = ConversationToolRuntime(
             project_root=project_root,

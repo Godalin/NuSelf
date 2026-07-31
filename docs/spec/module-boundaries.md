@@ -105,6 +105,9 @@ and per-thread locks cannot drift across authorities. Persona prompt
 persistence likewise receives its collection and resolved paths explicitly;
 outer tools and adapters may compose those resources but the repository may
 not select them.
+Memory-backed persona definition loading receives the graph-owned memory
+repository. Chat orchestration receives the resulting immutable definitions;
+neither layer may resolve storage from a project root.
 
 `ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
 one selected `StorageBackend`. It retains those exact resources and the shared
@@ -164,6 +167,9 @@ make teardown responsibility ambiguous.
 composition root. Memory query/repository, thread storage, reflection, reason,
 trace, and persona-tool capabilities are mandatory inputs. Production and
 evaluation surfaces obtain the concrete graph from `application.chat`.
+Persona definitions are loaded from an explicitly supplied memory repository
+at that application boundary and passed into chat persona orchestration;
+persona policy must not resolve the active authority itself.
 
 `NotificationOutbox` is persistence and follows the same rule: it receives
 resolved paths and the selected backend, derives its entry-lock directory only

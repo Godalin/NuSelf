@@ -22,6 +22,10 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.persona.tools import build_persona_tools
+from nuself.persona.definition import (
+    PersonaDefinition,
+    load_persona_definitions,
+)
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output import SectionPlanner
 from nuself.reason.service import ReasonService
@@ -56,6 +60,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         reason_service: ReasonService | None = None,
         trace_query_service: TraceQueryService | None = None,
         persona_tools: Sequence[BaseTool] | None = None,
+        persona_definitions: tuple[PersonaDefinition, ...] | None = None,
     ) -> None:
         application = compose_application(
             runtime_paths(project_root),
@@ -90,5 +95,10 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 project_root,
                 repository=application.persona_prompts,
                 trace_recorder=application.trace.recorder,
+            ),
+            persona_definitions=persona_definitions
+            or load_persona_definitions(
+                application.memory.entries,
+                project_root=project_root,
             ),
         )

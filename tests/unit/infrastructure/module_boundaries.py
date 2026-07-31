@@ -104,6 +104,19 @@ def test_conversation_runtime_does_not_compose_authority() -> None:
     ] == []
 
 
+def test_persona_definition_loader_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "persona" / "definition.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+    }
+    assert [
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ] == []
+
+
 def test_chat_tool_collection_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "agent" / "tools" / "__init__.py"
     forbidden = {
@@ -321,6 +334,19 @@ def test_migrated_persona_repository_does_not_resolve_authority() -> None:
     ]
 
     assert violations == []
+
+
+def test_persona_definition_loading_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "persona" / "definition.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
 
 
 def test_migrated_notification_outbox_does_not_resolve_authority() -> None:

@@ -89,6 +89,11 @@ Current working branch for v0.3.1.
   is the sole production and evaluation composition boundary.
 - Logging terminal-warning schemas and validation now live in
   `runtime.log_warning_contracts`, separate from the durable log engine.
+- Persona definition loading now requires the graph-owned memory repository;
+  application chat composition injects the resulting definitions into persona
+  orchestration.
+- Memory-backed persona definitions now load from an injected memory
+  repository and are supplied to chat by application composition.
 
 ## Completion Standard
 
