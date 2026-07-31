@@ -17,6 +17,7 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.persona.audit import run_persona_observed
 from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, WorkspaceCollection
+from nuself.trace.service import TraceRecorder
 
 
 def _persona_tool(
@@ -39,11 +40,13 @@ def build_persona_tools(
     project_root: Path | None = None,
     *,
     text_agent: TextAgent | None = None,
+    repository: PersonaPromptRepository | None = None,
+    trace_recorder: TraceRecorder | None = None,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
     paths = runtime_paths(project_root)
-    repo = PersonaPromptRepository(
+    repo = repository or PersonaPromptRepository(
         get_default_backend(project_root).collection("persona_prompts"),
         paths,
     )
@@ -84,7 +87,11 @@ def build_persona_tools(
                 updated_at=persona.updated_at,
             )
         repo.save(persona)
-        _record_prompt_trace(persona, project_root=project_root)
+        _record_prompt_trace(
+            persona,
+            project_root=project_root,
+            recorder=trace_recorder,
+        )
         result = f"Created thinking persona '{name}' (id={persona.id}). Use persona_think to consult it."
         return result
 
@@ -154,7 +161,11 @@ def build_persona_tools(
         if prompt.disabled:
             return f"Persona '{prompt.name}' is already disabled."
         repo.set_disabled(prompt.id, True)
-        _record_prompt_disabled_trace(prompt, project_root=project_root)
+        _record_prompt_disabled_trace(
+            prompt,
+            project_root=project_root,
+            recorder=trace_recorder,
+        )
         return f"Disabled persona: {prompt.name}"
 
     def persona_enable(persona: str) -> str:
@@ -168,7 +179,11 @@ def build_persona_tools(
         if not prompt.disabled:
             return f"Persona '{prompt.name}' is already enabled."
         repo.set_disabled(prompt.id, False)
-        _record_prompt_enabled_trace(prompt, project_root=project_root)
+        _record_prompt_enabled_trace(
+            prompt,
+            project_root=project_root,
+            recorder=trace_recorder,
+        )
         return f"Enabled persona: {prompt.name}"
 
     return (
@@ -202,12 +217,17 @@ def build_persona_tools(
     )
 
 
-def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
+def _record_prompt_trace(
+    prompt: PersonaPrompt,
+    *,
+    project_root: Path | None = None,
+    recorder: TraceRecorder | None = None,
+) -> None:
     def record() -> object:
-        return compose_trace_services(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).recorder.record_persona_prompt_created(
+        selected = recorder or compose_trace_services(
+            runtime_paths(project_root), get_default_backend(project_root)
+        ).recorder
+        return selected.record_persona_prompt_created(
             persona_prompt_id=prompt.id,
             name=prompt.name,
         )
@@ -220,12 +240,17 @@ def _record_prompt_trace(prompt: PersonaPrompt, *, project_root: Path | None = N
     )
 
 
-def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
+def _record_prompt_disabled_trace(
+    prompt: PersonaPrompt,
+    *,
+    project_root: Path | None = None,
+    recorder: TraceRecorder | None = None,
+) -> None:
     def record() -> object:
-        return compose_trace_services(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).recorder.record_persona_disabled(
+        selected = recorder or compose_trace_services(
+            runtime_paths(project_root), get_default_backend(project_root)
+        ).recorder
+        return selected.record_persona_disabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],
@@ -239,12 +264,17 @@ def _record_prompt_disabled_trace(prompt: PersonaPrompt, *, project_root: Path |
     )
 
 
-def _record_prompt_enabled_trace(prompt: PersonaPrompt, *, project_root: Path | None = None) -> None:
+def _record_prompt_enabled_trace(
+    prompt: PersonaPrompt,
+    *,
+    project_root: Path | None = None,
+    recorder: TraceRecorder | None = None,
+) -> None:
     def record() -> object:
-        return compose_trace_services(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).recorder.record_persona_enabled(
+        selected = recorder or compose_trace_services(
+            runtime_paths(project_root), get_default_backend(project_root)
+        ).recorder
+        return selected.record_persona_enabled(
             persona_prompt_id=prompt.id,
             name=prompt.name,
             participants=["agent"],

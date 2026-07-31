@@ -6,7 +6,9 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.agent.chat import ConversationGraphRuntime
+from nuself.application.chat import compose_conversation_runtime
+from nuself.application.curator import compose_memory_curator
+from nuself.cli.composition import compose_cli_application
 from nuself.agent.chat.audit import (
     report_chat_failure,
     write_chat_audit,
@@ -17,7 +19,6 @@ from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem
 from nuself.daemon import client
 from nuself.memory.audit import report_memory_failure
-from nuself.memory.curator import MemoryCurator
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
@@ -195,7 +196,9 @@ def run_memory_curator(project_root: Path | None) -> None:
     """Run post-turn curation and present its optional status."""
 
     try:
-        result = MemoryCurator(project_root).run_once()
+        result = compose_memory_curator(
+            compose_cli_application(project_root)
+        ).run_once()
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
         report_memory_failure(
@@ -224,7 +227,9 @@ def one_shot_reply(
     """Invoke the local conversation runtime and return its reply text."""
 
     return (
-        ConversationGraphRuntime(project_root)
+        compose_conversation_runtime(
+            compose_cli_application(project_root)
+        )
         .respond(message, thread_id=thread_id, turn_id=turn_id)
         .reply
     )

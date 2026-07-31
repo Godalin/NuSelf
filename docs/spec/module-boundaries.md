@@ -124,6 +124,10 @@ Daemon chat receives its memory, profile, reflection, trace, and thread-storage
 collaborators from that graph. Nested chat/tool constructors may accept those
 narrow collaborators, but must not resolve a backend or compose a second
 repository graph after injection.
+Direct and daemon chat use the same application-owned conversation factory.
+Transport-specific job sinks, planners, and event publishers are parameters;
+memory/profile/reflection/trace repositories and thread storage always come
+from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
 
 Daemon curation, reflection, reasoning, and notification workers follow the
 same rule: process composition supplies their backend, repositories, outbox,

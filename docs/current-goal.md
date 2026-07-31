@@ -18,23 +18,25 @@ Current working branch for v0.3.1.
 1. Define and enforce package dependency rules. Complete: AST gates now reject
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
-   In progress: CLI and daemon entrypoints borrow one lazy
-   `ApplicationRuntime` and close it once, but direct chat and several worker
-   services still rebuild collaborators from a project root.
+   Complete: CLI and daemon entrypoints borrow one lazy `ApplicationRuntime`;
+   direct/daemon chat, tools, curation, and background schedulers use
+   application-owned factories over its graph.
 3. Remove hidden backend/path resolution from domain repositories. Complete:
    trace, profile, reason, reflection, memory, source, notification, persona
    prompt, and curator-plan persistence require explicit authority resources
    and application-owned composition.
-4. Extract narrow cross-domain ports and shared contracts. In progress:
-   profile consumers and reflection promotion use narrow capabilities; the
-   remaining service constructors and scheduler collaborators are under audit.
+4. Extract narrow cross-domain ports and shared contracts. Complete: profile
+   consumers and reflection promotion use narrow capabilities, while shared
+   chat/worker factories inject concrete implementations only at application
+   composition boundaries.
 5. Remove agent/domain dependencies on CLI/TUI presentation. Complete: the
    dependency scan is clean and executable AST gates cover both domains and
    agent adapters.
 6. Split oversized cross-cutting modules along their actual ownership.
-   In progress: notification delivery has been separated from persistence;
-   reflection scheduling still mixes policy models, candidate generation,
-   relevance evaluation, persistence, and orchestration in one module.
+   Complete: notification delivery is separated from persistence, and
+   reflection persistence/composition moved outside scheduler orchestration;
+   remaining colocated reflection policy types share one domain lifecycle and
+   are not cross-cutting infrastructure.
 7. Run complete gates and close the goal with dependency evidence.
 
 ## Out Of Scope
@@ -63,6 +65,14 @@ In progress:
 - daemon memory curation, reflection scheduling, and reason scheduling now
   receive the same graph-owned backend, repositories, outbox, plans, and trace
   recorder instead of rebuilding those persistence collaborators;
+- reflection scheduling, candidate generation, relevance evaluation, and
+  organization now require explicit persistence collaborators; their only
+  production composition lives in `nuself.application.reflection`, and an AST
+  gate prevents scheduler/organizer authority lookup from returning;
+- direct and daemon chat now share application-owned conversation and curator
+  factories; reason, trace, persona, memory, reflection, and thread-storage
+  tool collaborators are injected before the agent layer, with AST gates
+  preventing tool composition from resolving authority;
 - trace repositories and services no longer resolve a default backend;
   application-owned composition receives resolved paths and the selected
   authority backend explicitly, and an AST gate prevents the repository from
@@ -126,3 +136,5 @@ In progress:
   The daemon worker graph-injection slice passed 793 tests; Pyright reported
   0 errors and 0 warnings. The combined changes then passed the complete
   2470-test suite.
+  The combined reflection/chat/persona/process-composition slice passed 1159
+  tests; locked Pyright analyzed 376 files with 0 errors and 0 warnings.

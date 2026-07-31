@@ -5,7 +5,8 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from nuself.agent.chat import ConversationGraphRuntime
+from nuself.application.chat import compose_conversation_runtime
+from nuself.application.curator import compose_memory_curator
 from nuself.application.runtime import (
     ApplicationRuntime,
     current_application_runtime,
@@ -21,15 +22,11 @@ from nuself.daemon.reason_export import (
 from nuself.daemon.types import WorkerHealth
 from nuself.daemon.workers import DaemonWorkerSupervisor
 from nuself.logs import runtime_event_log_sink
-from nuself.memory.curator import MemoryCurator
-from nuself.memory.query import MemoryQueryService
-from nuself.agent.chat import ThreadStore
 from nuself.notification import (
     NotificationDeliveryLoop,
 )
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler, ReasonService
-from nuself.reflection import ReflectionScheduler
 from nuself.runtime.events import EventPublisher
 
 
@@ -67,22 +64,8 @@ class DaemonState:
             self.shutdown_requested,
             self._worker_supervisor,
         )
-        self.conversation_runtime = ConversationGraphRuntime(
-            project_root,
-            memory_query_service=MemoryQueryService(
-                self.application.memory.entries,
-                self.application.memory.sources,
-                self.application.memory.profile,
-            ),
-            memory_repository=self.application.memory.entries,
-            source_repository=self.application.memory.sources,
-            profile_repository=self.application.memory.profile,
-            reflection_repository=self.application.reflection,
-            trace_recorder=self.application.trace.recorder,
-            thread_store=ThreadStore(
-                paths.project_root,
-                backend=self.application.backend,
-            ),
+        self.conversation_runtime = compose_conversation_runtime(
+            self.application,
             job_sink=self.reason_export_worker.enqueue,
             section_planner=build_reason_export_section_planner(
                 project_root
@@ -91,19 +74,7 @@ class DaemonState:
         )
 
         config = ConfigSystem.load(project_root=project_root)
-        self.memory_curator = MemoryCurator(
-            project_root,
-            thread_store=ThreadStore(
-                paths.project_root,
-                backend=self.application.backend,
-            ),
-            repository=self.application.memory.entries,
-            candidate_repository=self.application.memory.candidates,
-            profile_repository=self.application.memory.profile,
-            trace_recorder=self.application.trace.recorder,
-            plan_store=self.application.memory.curator_plans,
-            backend=self.application.backend,
-        )
+        self.memory_curator = compose_memory_curator(self.application)
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
         )

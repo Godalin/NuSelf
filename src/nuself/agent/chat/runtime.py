@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 import logging
 import time
@@ -54,7 +54,9 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.persona.tools import build_persona_tools
 from nuself.reason.output import SectionPlanner
+from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
@@ -69,6 +71,7 @@ from nuself.runtime.observability import (
 )
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceRecorder
+from nuself.trace.service import TraceQueryService
 
 LOGGER = logging.getLogger(__name__)
 
@@ -119,6 +122,9 @@ class ConversationGraphRuntime:
         profile_repository: ProfileItemRepository | None = None,
         reflection_repository: ReflectionRepository | None = None,
         trace_recorder: TraceRecorder | None = None,
+        reason_service: ReasonService | None = None,
+        trace_query_service: TraceQueryService | None = None,
+        persona_tools: Sequence[BaseTool] | None = None,
     ) -> None:
         self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
             langchain_models
@@ -191,6 +197,12 @@ class ConversationGraphRuntime:
                 reflection_repository
                 or compose_reflection_repository(paths, backend)
             ),
+            reason_service=reason_service or ReasonService(project_root),
+            trace_query_service=(
+                trace_query_service
+                or compose_trace_services(paths, backend).query
+            ),
+            persona_tools=persona_tools or build_persona_tools(project_root),
             selves_consult=self._consult_selves_tool,
             job_sink=job_sink,
             section_planner=section_planner,

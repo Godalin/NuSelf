@@ -16,7 +16,6 @@ from nuself.config import ConfigSystem, ReflectionSettings
 from nuself.clock import utc_now_iso
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType, RelevanceScore
 from nuself.memory.repository import (
-    MemoryCandidateRepository,
     MemoryEntryRepository,
 )
 from nuself.memory.source_repository import SourceRepository

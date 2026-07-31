@@ -15,7 +15,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   runtime now receive graph-owned memory, profile, reflection, trace, and
   thread-storage collaborators instead of rebuilding them. Daemon curation,
   reflection, and reasoning workers reuse that graph's backend, repositories,
-  outbox, recovery plans, and trace recorder. Trace
+  outbox, recovery plans, and trace recorder. Reflection candidate generation,
+  relevance evaluation, organization, and scheduling now receive explicit
+  graph resources through application-owned composition. Direct and daemon
+  chat also share one application-owned factory; reason, trace, persona,
+  memory, reflection, and thread-storage tool collaborators are injected
+  before the agent layer. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

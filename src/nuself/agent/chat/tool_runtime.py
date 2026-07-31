@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import cast
 
@@ -23,7 +23,9 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reason.output import SectionPlanner
+from nuself.reason.service import ReasonService
 from nuself.runtime.jobs import JobSink
+from nuself.trace.service import TraceQueryService
 from nuself.runtime.observability import (
     report_observability_projection_failure,
 )
@@ -39,6 +41,9 @@ class ConversationToolRuntime:
         query_service: MemoryQueryService,
         memory_repository: MemoryEntryRepository,
         reflection_repository: ReflectionRepository,
+        reason_service: ReasonService,
+        trace_query_service: TraceQueryService,
+        persona_tools: Sequence[BaseTool],
         selves_consult: Callable[..., str],
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
@@ -48,6 +53,9 @@ class ConversationToolRuntime:
             query_service=query_service,
             memory_repository=memory_repository,
             reflection_repository=reflection_repository,
+            reason_service=reason_service,
+            trace_query_service=trace_query_service,
+            persona_tools=persona_tools,
             project_root=project_root,
             selves_consult=selves_consult,
             job_sink=job_sink,

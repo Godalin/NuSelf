@@ -94,6 +94,36 @@ def test_chat_tool_runtime_does_not_compose_persistence() -> None:
     } == set()
 
 
+def test_chat_tool_collection_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "agent" / "tools" / "__init__.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+        ("nuself.application", "compose_trace_services"),
+    }
+
+    assert {
+        imported for imported in _from_imports(path) if imported in forbidden
+    } == set()
+
+
+def test_process_surfaces_use_application_chat_factory() -> None:
+    paths = (
+        _SOURCE_ROOT / "cli" / "chat.py",
+        _SOURCE_ROOT / "daemon" / "state.py",
+    )
+
+    forbidden = {
+        "nuself.agent.chat",
+        "nuself.memory.curator",
+    }
+
+    assert all(
+        not forbidden.intersection(_imports(path))
+        for path in paths
+    )
+
+
 def test_migrated_trace_package_does_not_resolve_authority() -> None:
     violations: list[str] = []
     forbidden = {
@@ -162,6 +192,25 @@ def test_migrated_reflection_repository_does_not_resolve_authority() -> None:
 
 def test_reflection_domain_does_not_import_application_composition() -> None:
     assert _violations(("reflection",), ("nuself.application",)) == ()
+
+
+def test_reflection_orchestration_does_not_resolve_authority() -> None:
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    paths = (
+        _SOURCE_ROOT / "reflection" / "scheduler.py",
+        _SOURCE_ROOT / "reflection" / "organizer.py",
+    )
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for path in paths
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []
 
 
 def test_migrated_memory_repositories_do_not_resolve_authority() -> None:

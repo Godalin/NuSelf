@@ -221,7 +221,14 @@ def test_chat_uses_one_shot_when_daemon_is_missing(
 def test_one_shot_chat_runs_memory_curator_after_reply(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    monkeypatch.setattr("nuself.cli.chat.MemoryCurator", FakeChangedCurator)
+    def compose_fake_curator(application: object) -> FakeChangedCurator:
+        del application
+        return FakeChangedCurator()
+
+    monkeypatch.setattr(
+        "nuself.cli.chat.compose_memory_curator",
+        compose_fake_curator,
+    )
 
     result = main(
         [

@@ -28,6 +28,7 @@ from nuself.agent.chat import (
 )
 from nuself.agent.chat import ConversationGraphRuntimeError
 from nuself.agent.tool_utils import tool_service_component
+from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
@@ -37,6 +38,7 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
+from nuself.reason.service import ReasonService
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.storage import get_default_backend
@@ -69,6 +71,12 @@ def _chat_tool(
         query_service=query_service or MemoryQueryService(memory_repository),
         memory_repository=memory_repository,
         reflection_repository=repo,
+        reason_service=ReasonService(tmp_path),
+        trace_query_service=compose_trace_services(
+            runtime_paths(tmp_path),
+            get_default_backend(tmp_path),
+        ).query,
+        persona_tools=(),
         project_root=tmp_path,
     )
     return {tool.name: tool for tool in tools}[name]
