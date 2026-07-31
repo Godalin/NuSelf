@@ -53,7 +53,9 @@ Current working branch for v0.3.1.
 - Model-backed relevance evaluation and candidate generation now live in
   `reflection.relevance` and `reflection.candidates`; the scheduler is reduced
   to lifecycle policy and publication orchestration, and cold CLI plus
-  cross-process storage imports pass without a reflection/chat cycle.
+  cross-process storage imports pass without a reflection/chat cycle. The
+  focused split/cold-start slice passed 133 tests and the complete suite passed
+  2476 tests with Pyright clean.
 
 ## Completion Standard
 
