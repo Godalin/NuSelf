@@ -9,6 +9,7 @@ import time
 from typing import cast
 
 from nuself.cli.commands.output import print_ansi, resolve_handle
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.exit_codes import CliExitCode
 from nuself.notification import (
     NotificationOutbox,
@@ -23,7 +24,7 @@ from nuself.tui.render import render_outbox_detail, render_outbox_summary
 def _resolve_entry_id(args: argparse.Namespace) -> str | None:
     return resolve_handle(
         args.entry_id,
-        NotificationOutbox(args.project_root).list(),
+        _outbox(args).list(),
         label="notification",
         get_id=lambda entry: entry.id,
     )
@@ -31,7 +32,7 @@ def _resolve_entry_id(args: argparse.Namespace) -> str | None:
 
 def handle_notify_list(args: argparse.Namespace) -> int:
     status = args.status
-    entries = NotificationOutbox(args.project_root).list(status=status)
+    entries = _outbox(args).list(status=status)
     if not entries:
         filter_msg = f" with status '{status}'" if status else ""
         print(f"No outbox entries{filter_msg}.")
@@ -46,7 +47,7 @@ def handle_notify_show(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        entry = NotificationOutbox(args.project_root).get(entry_id)
+        entry = _outbox(args).get(entry_id)
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
@@ -55,7 +56,7 @@ def handle_notify_show(args: argparse.Namespace) -> int:
 
 
 def handle_notify_stats(args: argparse.Namespace) -> int:
-    entries = NotificationOutbox(args.project_root).list()
+    entries = _outbox(args).list()
     counts: dict[str, int] = {
         "pending": 0,
         "sent": 0,
@@ -73,7 +74,7 @@ def handle_notify_stats(args: argparse.Namespace) -> int:
 
 
 def handle_notify_watch(args: argparse.Namespace) -> int:
-    outbox = NotificationOutbox(args.project_root)
+    outbox = _outbox(args)
     interval: float = max(1, args.interval)
     print(
         f"Watching outbox every {int(interval)}s. "
@@ -112,7 +113,7 @@ def handle_notify_send(args: argparse.Namespace) -> int:
     entry_id = _resolve_entry_id(args)
     if entry_id is None:
         return 1
-    outbox = NotificationOutbox(args.project_root)
+    outbox = _outbox(args)
     try:
         entry = outbox.get(entry_id)
     except OutboxEntryNotFound:
@@ -121,7 +122,9 @@ def handle_notify_send(args: argparse.Namespace) -> int:
     updated = deliver_entry_once(
         outbox,
         entry_id,
-        build_notification_adapters(args.project_root),
+        build_notification_adapters(
+            compose_cli_application(args.project_root).paths
+        ),
     )
     if updated.status == "sent":
         print(f"Sent: {entry.id}")
@@ -135,7 +138,7 @@ def handle_notify_dismiss(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        NotificationOutbox(args.project_root).dismiss(entry_id)
+        _outbox(args).dismiss(entry_id)
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
@@ -145,6 +148,10 @@ def handle_notify_dismiss(args: argparse.Namespace) -> int:
 
 def handle_notify_clear(args: argparse.Namespace) -> int:
     selection = cast(NotificationClearStatus, args.status)
-    count = NotificationOutbox(args.project_root).clear(selection)
+    count = _outbox(args).clear(selection)
     print(f"Cleared {count} {selection} notification(s).")
     return 0
+
+
+def _outbox(args: argparse.Namespace) -> NotificationOutbox:
+    return compose_cli_application(args.project_root).notifications

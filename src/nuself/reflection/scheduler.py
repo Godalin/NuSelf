@@ -159,7 +159,7 @@ class ReflectionScheduler:
             paths,
             backend=backend,
         )
-        self._outbox = NotificationOutbox(project_root)
+        self._outbox = NotificationOutbox(paths, backend)
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
         if now is None:

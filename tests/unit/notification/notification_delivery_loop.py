@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from notification_fixtures import notification_outbox
+
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime, timedelta
 import multiprocessing
@@ -14,10 +16,10 @@ import pytest
 
 import nuself.notification as notification_module
 from nuself.logs import read_log_events
+from nuself.config import runtime_paths
 from nuself.notification import (
     LogOnlyNotificationAdapter,
     NotificationDeliveryLoop,
-    NotificationOutbox,
     OutboxEntry,
     deliver_entry_once,
 )
@@ -92,7 +94,7 @@ def _deliver_in_process(
 ) -> None:
     if not start.wait(timeout=10):
         raise RuntimeError("parent did not start notification delivery")
-    outbox = NotificationOutbox(Path(project_root))
+    outbox = notification_outbox(Path(project_root))
     deliver_entry_once(
         outbox,
         entry_id,
@@ -113,7 +115,7 @@ def _dismiss_in_process(
     done: Event,
 ) -> None:
     attempted.set()
-    NotificationOutbox(Path(project_root)).dismiss(entry_id)
+    notification_outbox(Path(project_root)).dismiss(entry_id)
     done.set()
 
 
@@ -155,12 +157,12 @@ class DeleteFailingBackend:
 
 
 def test_delivery_loop_sends_pending_entries(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(OutboxEntry(id="e1", title="T1", body="B1", status="pending", idempotency_key="k1"))
     outbox.add(OutboxEntry(id="e2", title="T2", body="B2", status="pending", idempotency_key="k2"))
 
     adapter = FakeAdapter(succeed=True)
-    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+    loop = NotificationDeliveryLoop(notification_outbox(tmp_path), adapters=[adapter])
     delivered = loop.run_once()
 
     assert delivered == 2
@@ -186,7 +188,7 @@ def test_outbox_context_round_trip_and_legacy_decode(
             idempotency_key="context",
         )
 
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(entry)
     stored = outbox.get(entry.id)
 
@@ -219,9 +221,9 @@ def test_delivery_activates_entry_context_and_restores_ambient(
             status="pending",
             idempotency_key="correlated",
         )
-    NotificationOutbox(tmp_path).add(entry)
+    notification_outbox(tmp_path).add(entry)
     adapter = FakeAdapter()
-    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+    loop = NotificationDeliveryLoop(notification_outbox(tmp_path), adapters=[adapter])
 
     with runtime_context(
         request_id="ambient-request",
@@ -258,11 +260,11 @@ def test_delivery_log_projects_origin_correlation(
             status="pending",
             idempotency_key="logged",
         )
-    NotificationOutbox(tmp_path).add(entry)
+    notification_outbox(tmp_path).add(entry)
 
     NotificationDeliveryLoop(
-        tmp_path,
-        adapters=[LogOnlyNotificationAdapter(tmp_path)],
+        notification_outbox(tmp_path),
+        adapters=[LogOnlyNotificationAdapter(runtime_paths(tmp_path))],
     ).run_once()
 
     event = read_log_events(
@@ -287,7 +289,7 @@ def test_delivery_restores_context_when_adapter_raises(
             del entry
             raise RuntimeError("adapter crashed")
 
-    NotificationOutbox(tmp_path).add(
+    notification_outbox(tmp_path).add(
         OutboxEntry(
             id="raising",
             title="T",
@@ -298,7 +300,7 @@ def test_delivery_restores_context_when_adapter_raises(
         )
     )
     loop = NotificationDeliveryLoop(
-        tmp_path,
+        notification_outbox(tmp_path),
         adapters=[RaisingAdapter()],
     )
 
@@ -311,11 +313,11 @@ def test_delivery_restores_context_when_adapter_raises(
 
 
 def test_delivery_loop_marks_failed_on_adapter_failure(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(OutboxEntry(id="e1", title="T1", body="B1", status="pending", idempotency_key="k1"))
 
     adapter = FakeAdapter(succeed=False)
-    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+    loop = NotificationDeliveryLoop(notification_outbox(tmp_path), adapters=[adapter])
     delivered = loop.run_once()
 
     assert delivered == 0
@@ -340,7 +342,7 @@ def test_failure_diagnostic_store_cannot_prevent_failed_transition(
         "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(
             id="email-no-config",
@@ -351,7 +353,7 @@ def test_failure_diagnostic_store_cannot_prevent_failed_transition(
         )
     )
     loop = NotificationDeliveryLoop(
-        tmp_path,
+        notification_outbox(tmp_path),
         adapters=[
             EmailNotificationAdapter(tmp_path, dry_run=False)
         ],
@@ -371,11 +373,11 @@ def test_failure_diagnostic_store_cannot_prevent_failed_transition(
 
 
 def test_delivery_loop_skips_non_pending(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(OutboxEntry(id="e1", title="T1", body="B1", status="sent", idempotency_key="k1"))
 
     adapter = FakeAdapter(succeed=True)
-    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+    loop = NotificationDeliveryLoop(notification_outbox(tmp_path), adapters=[adapter])
     delivered = loop.run_once()
 
     assert delivered == 0
@@ -383,12 +385,12 @@ def test_delivery_loop_skips_non_pending(tmp_path: Path) -> None:
 
 
 def test_delivery_loop_all_adapters_must_succeed(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(OutboxEntry(id="e1", title="T1", body="B1", status="pending", idempotency_key="k1"))
 
     good = FakeAdapter(succeed=True, delivery_id="good")
     bad = FakeAdapter(succeed=False, delivery_id="bad")
-    loop = NotificationDeliveryLoop(tmp_path, adapters=[good, bad])
+    loop = NotificationDeliveryLoop(notification_outbox(tmp_path), adapters=[good, bad])
     delivered = loop.run_once()
 
     assert delivered == 0
@@ -412,7 +414,7 @@ def test_delivery_loop_marks_crash_after_send_uncertain_without_replay(
             del entry
             raise RuntimeError("second adapter crashed")
 
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(
             id="resume",
@@ -426,7 +428,7 @@ def test_delivery_loop_marks_crash_after_send_uncertain_without_replay(
 
     with pytest.raises(RuntimeError, match="second adapter crashed"):
         NotificationDeliveryLoop(
-            tmp_path,
+            notification_outbox(tmp_path),
             adapters=[first, RaisingAdapter()],
         ).run_once()
 
@@ -438,7 +440,7 @@ def test_delivery_loop_marks_crash_after_send_uncertain_without_replay(
 
     recovered_second = FakeAdapter(delivery_id="second")
     delivered = NotificationDeliveryLoop(
-        tmp_path,
+        notification_outbox(tmp_path),
         adapters=[first, recovered_second],
     ).run_once()
 
@@ -455,7 +457,7 @@ def test_delivery_loop_marks_crash_after_send_uncertain_without_replay(
 def test_cross_process_delivery_sends_one_external_effect(
     tmp_path: Path,
 ) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(
             id="one-effect",
@@ -499,7 +501,7 @@ def test_cross_process_delivery_sends_one_external_effect(
 def test_dismiss_waits_for_delivery_entry_lock(
     tmp_path: Path,
 ) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(
             id="dismiss-race",
@@ -563,7 +565,7 @@ def test_dismiss_waits_for_delivery_entry_lock(
 def test_delivery_loop_finalizes_without_repeating_failed_adapter(
     tmp_path: Path,
 ) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(
             id="failed-before-finalize",
@@ -590,7 +592,7 @@ def test_delivery_loop_finalizes_without_repeating_failed_adapter(
     remaining = FakeAdapter(succeed=True, delivery_id="remaining")
 
     delivered = NotificationDeliveryLoop(
-        tmp_path,
+        notification_outbox(tmp_path),
         adapters=[failed, remaining],
     ).run_once()
 
@@ -607,7 +609,7 @@ def test_delivery_loop_finalizes_without_repeating_failed_adapter(
 def test_delivery_loop_rejects_duplicate_adapter_ids_before_sending(
     tmp_path: Path,
 ) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(
             id="duplicate-adapters",
@@ -622,7 +624,7 @@ def test_delivery_loop_rejects_duplicate_adapter_ids_before_sending(
 
     with pytest.raises(ValueError, match="duplicate"):
         NotificationDeliveryLoop(
-            tmp_path,
+            notification_outbox(tmp_path),
             adapters=[first, second],
         ).run_once()
 
@@ -632,7 +634,7 @@ def test_delivery_loop_rejects_duplicate_adapter_ids_before_sending(
 
 
 def test_outbox_clear_dismissed_older_than_removes_old_entries(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     old = OutboxEntry(
         id="old",
         title="Old",
@@ -682,7 +684,7 @@ def test_outbox_list_isolates_invalid_persisted_timestamps(
     ).to_wire()
     wire[field_name] = value
     backend.collection("notification_outbox").put("corrupt-time", wire)
-    outbox = NotificationOutbox(tmp_path, backend=backend)
+    outbox = notification_outbox(tmp_path, backend=backend)
 
     assert outbox.list() == []
 
@@ -714,7 +716,7 @@ def test_outbox_list_isolates_invalid_present_context(
         "corrupt-context",
         wire,
     )
-    outbox = NotificationOutbox(tmp_path, backend=backend)
+    outbox = notification_outbox(tmp_path, backend=backend)
 
     assert outbox.list() == []
     with pytest.raises(ValueError, match="unknown fields"):
@@ -726,7 +728,7 @@ def test_outbox_clear_rejects_invalid_retention_days(
     tmp_path: Path,
     days: object,
 ) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
 
     with pytest.raises(
         ValueError,
@@ -737,7 +739,7 @@ def test_outbox_clear_rejects_invalid_retention_days(
 
 def test_outbox_clear_propagates_delete_failure(tmp_path: Path) -> None:
     backend: StorageBackend = DeleteFailingBackend(tmp_path / "private")
-    outbox = NotificationOutbox(tmp_path, backend=backend)
+    outbox = notification_outbox(tmp_path, backend=backend)
     outbox.add(
         OutboxEntry(
             id="old",
@@ -761,7 +763,7 @@ def test_outbox_clear_retains_entry_exactly_at_cutoff(
 ) -> None:
     now = datetime(2026, 7, 28, 12, tzinfo=UTC)
     monkeypatch.setattr(notification_module, "utc_now", lambda: now)
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     at_cutoff = OutboxEntry(
         id="at-cutoff",
         title="At cutoff",
@@ -788,7 +790,7 @@ def test_outbox_clear_retains_entry_exactly_at_cutoff(
 
 
 def test_delivery_loop_auto_clears_old_dismissed_entries(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(OutboxEntry(id="pending1", title="P", body="B", status="pending", idempotency_key="p1"))
     old_dismissed = OutboxEntry(
         id="old_dismissed",
@@ -801,7 +803,7 @@ def test_delivery_loop_auto_clears_old_dismissed_entries(tmp_path: Path) -> None
     outbox.add(old_dismissed)
 
     adapter = FakeAdapter(succeed=True)
-    loop = NotificationDeliveryLoop(tmp_path, adapters=[adapter])
+    loop = NotificationDeliveryLoop(notification_outbox(tmp_path), adapters=[adapter])
     loop.run_once()
 
     assert outbox.list(status="dismissed") == []

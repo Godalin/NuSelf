@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from notification_fixtures import notification_outbox
+
 # pyright: reportUnusedImport=false
 
 from memory_fixtures import (
@@ -31,6 +33,7 @@ import pytest
 
 import nuself.storage_sqlite as sqlite_storage
 from nuself.logs import read_log_events
+from nuself.notification import NotificationOutbox
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -38,7 +41,6 @@ from nuself.memory.repository import (
 from nuself.memory.source_repository import SourceRepository
 from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
-from nuself.notification import NotificationOutbox
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
@@ -625,25 +627,13 @@ def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
         reset_default_backend()
 
 
-def test_unmigrated_notification_uses_the_project_default_backend(
+def test_notification_outbox_uses_explicit_authority_backend(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     backend = auto_backend(tmp_path)
-    calls: list[Path | None] = []
+    outbox = NotificationOutbox(runtime_paths(tmp_path), backend)
 
-    def default_backend(project_root: Path | None = None) -> StorageBackend:
-        calls.append(project_root)
-        return backend
-
-    monkeypatch.setattr(
-        "nuself.notification.get_default_backend",
-        default_backend,
-    )
-
-    NotificationOutbox(tmp_path)
-
-    assert calls == [tmp_path]
+    assert outbox._backend is backend
 
 
 def test_reset_closes_backend_used_by_default_repository(

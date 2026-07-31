@@ -106,6 +106,11 @@ memory, reason, reflection, and trace graph. Process adapters may choose
 transport and lifecycle, but must not rebuild domain dependencies after a
 graph has been supplied.
 
+`NotificationOutbox` is persistence and follows the same rule: it receives
+resolved paths and the selected backend, derives its entry-lock directory only
+from those paths, and never resolves authority itself. The application graph
+owns the concrete outbox used by outer adapters and notification workflows.
+
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete
 repository merely to call one capability.

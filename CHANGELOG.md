@@ -19,7 +19,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   domains no longer import outward application composition. Memory entries,
   candidates, profiles, and sources now form one authority-scoped application
   graph with shared collaborator instances instead of resolving storage inside
-  repositories.
+  repositories. The notification outbox and its lock paths are now part of the
+  same graph and likewise receive explicit authority resources.
 - Schema v4 replaces per-collection dynamic-column tables with one compact
   strict-JSON `records` table and makes namespaced workspace state part of the
   main authority. Its v3↔v4 migration is reversible. Reason exports now live

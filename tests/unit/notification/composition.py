@@ -5,6 +5,7 @@ from nuself.config import (
     EmailSmtpConfig,
     MacosNotificationConfig,
     SystemConfig,
+    runtime_paths,
 )
 from nuself.notification.composition import build_notification_adapters
 
@@ -25,7 +26,9 @@ def test_composition_builds_configured_adapters_in_canonical_order(
         macos_notification=MacosNotificationConfig(enabled=True),
     )
 
-    adapters = build_notification_adapters(tmp_path, config=config)
+    adapters = build_notification_adapters(
+        runtime_paths(tmp_path), config=config
+    )
 
     assert [adapter.delivery_id for adapter in adapters] == [
         "email",
@@ -41,6 +44,8 @@ def test_composition_uses_log_only_when_no_external_adapter_enabled(
         macos_notification=MacosNotificationConfig(enabled=False),
     )
 
-    adapters = build_notification_adapters(tmp_path, config=config)
+    adapters = build_notification_adapters(
+        runtime_paths(tmp_path), config=config
+    )
 
     assert [adapter.delivery_id for adapter in adapters] == ["log"]

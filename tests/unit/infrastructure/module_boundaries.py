@@ -167,5 +167,20 @@ def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
     assert violations == []
 
 
+def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "notification" / "__init__.py"
+    forbidden = {
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.config", "runtime_paths"),
+    }
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
+        for imported in _from_imports(path)
+        if imported in forbidden
+    ]
+
+    assert violations == []
+
+
 def test_memory_domain_does_not_import_application_composition() -> None:
     assert _violations(("memory",), ("nuself.application",)) == ()

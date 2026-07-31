@@ -4,7 +4,7 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.logs import LogComponent, read_log_events
-from nuself.notification import NotificationOutbox
+from notification_fixtures import notification_outbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
@@ -49,7 +49,7 @@ def test_repository_lists_report_corrupt_records(
             backend=backend,
         ).list()
     elif collection == "notification_outbox":
-        result = NotificationOutbox(tmp_path, backend=backend).list()
+        result = notification_outbox(tmp_path, backend=backend).list()
     elif collection == "trace_nodes":
         result = TraceRepository(
             runtime_paths(tmp_path),

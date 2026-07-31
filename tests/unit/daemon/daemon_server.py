@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from notification_fixtures import notification_outbox
+
 import threading
 import time
 from pathlib import Path
@@ -24,7 +26,7 @@ from nuself.daemon.workers import (
 )
 from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.curator import MemoryCuratorResult
-from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.notification import OutboxEntry
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
@@ -975,7 +977,7 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
             return True
 
         def reflect(self, now: object = None) -> bool:
-            outbox = NotificationOutbox(tmp_path)
+            outbox = notification_outbox(tmp_path)
             outbox.add(
                 OutboxEntry(
                     id="reflection-test-001",
@@ -996,7 +998,7 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
         state.shutdown_requested.set()
         state.stop_background_reflection_scheduler()
 
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     entries = outbox.list()
     assert len(entries) >= 1
     assert any(e.title == "test reflection idea" for e in entries)

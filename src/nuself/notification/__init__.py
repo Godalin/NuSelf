@@ -12,7 +12,7 @@ from types import MappingProxyType
 from typing import Literal, Protocol, cast
 
 from nuself.clock import utc_now, utc_now_iso
-from nuself.config import runtime_paths
+from nuself.config import RuntimePaths
 from nuself.notification.audit import write_notification_audit
 from nuself.runtime.context import (
     RuntimeContext,
@@ -26,7 +26,6 @@ from nuself.private_fs import (
 )
 from nuself.storage import (
     StorageBackend,
-    get_default_backend,
     validate_storage_key,
 )
 
@@ -188,10 +187,7 @@ class LogOnlyNotificationAdapter:
 
     delivery_id = "log"
 
-    def __init__(self, project_root: Path | None = None) -> None:
-        from nuself.config import runtime_paths
-
-        paths = runtime_paths(project_root)
+    def __init__(self, paths: RuntimePaths) -> None:
         self._project_root = paths.project_root
 
     def send(self, entry: OutboxEntry) -> bool:
@@ -207,26 +203,18 @@ class LogOnlyNotificationAdapter:
 
 
 class NotificationOutbox:
-    """File-backed notification outbox in the selected authority."""
+    """Persistent outbox in one explicitly selected authority."""
 
     def __init__(
         self,
-        project_root: Path | None = None,
-        *,
-        backend: StorageBackend | None = None,
+        paths: RuntimePaths,
+        backend: StorageBackend,
     ) -> None:
-        be = (
-            backend
-            if backend is not None
-            else get_default_backend(project_root)
-        )
-        self._backend = be
-        self._col = be.collection("notification_outbox")
-        self._project_root = runtime_paths(project_root).project_root
+        self._backend = backend
+        self._col = backend.collection("notification_outbox")
+        self._project_root = paths.project_root
         self._entry_lock_directory = (
-            runtime_paths(project_root).authority_root
-            / "notifications"
-            / "locks"
+            paths.authority_root / "notifications" / "locks"
         )
 
     def lock_entry(
@@ -453,16 +441,10 @@ class NotificationDeliveryLoop:
 
     def __init__(
         self,
-        project_root: Path | None = None,
-        adapters: list[NotificationAdapter] | None = None,
+        outbox: NotificationOutbox,
+        adapters: list[NotificationAdapter],
     ) -> None:
-        self._outbox = NotificationOutbox(project_root)
-        if adapters is None:
-            from nuself.notification.composition import (
-                build_notification_adapters,
-            )
-
-            adapters = build_notification_adapters(project_root)
+        self._outbox = outbox
         self._adapters = adapters
 
     def run_once(self) -> int:

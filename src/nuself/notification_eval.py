@@ -13,6 +13,7 @@ from nuself.config import (
     ReflectionModeratorConfig,
     ReflectionSchedulerConfig,
     ReflectionSettings,
+    runtime_paths,
 )
 from nuself.eval import EvalResult
 from nuself.notification import NotificationOutbox, OutboxEntry
@@ -180,7 +181,8 @@ def _evaluate_outbox(
 ) -> None:
     storage_root.mkdir(parents=True, exist_ok=True)
     outbox = NotificationOutbox(
-        backend=auto_backend(storage_root)
+        runtime_paths(storage_root),
+        auto_backend(storage_root),
     )
     for action in _required_objects(scenario, "actions"):
         action_name = _required_str(action, "action")

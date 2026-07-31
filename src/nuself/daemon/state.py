@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 
 from nuself.agent.chat import ConversationGraphRuntime
+from nuself.application.composition import compose_application
 from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
 from nuself.daemon.activity import ActivityBroker
@@ -24,6 +25,7 @@ from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.reflection import ReflectionScheduler
 from nuself.runtime.events import EventPublisher
+from nuself.storage import get_default_backend
 
 
 class DaemonState:
@@ -31,7 +33,12 @@ class DaemonState:
 
     def __init__(self, project_root: Path) -> None:
         self.project_root = project_root
-        self.authority_id = runtime_paths(project_root).scope.authority_id
+        paths = runtime_paths(project_root)
+        self.authority_id = paths.scope.authority_id
+        self.application = compose_application(
+            paths,
+            get_default_backend(project_root),
+        )
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()
@@ -68,9 +75,9 @@ class DaemonState:
         )
 
         self.notification_delivery_loop = NotificationDeliveryLoop(
-            project_root,
-            adapters=build_notification_adapters(
-                project_root,
+            self.application.notifications,
+            build_notification_adapters(
+                paths,
                 config=config,
             ),
         )

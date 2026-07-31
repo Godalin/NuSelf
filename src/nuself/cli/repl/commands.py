@@ -597,10 +597,11 @@ def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: 
 
 
 def handle_interactive_notify_command(project_root: Path | None) -> str:
-    from nuself.notification import NotificationOutbox
     from nuself.tui.render import render_outbox_summary
 
-    entries = NotificationOutbox(project_root).list(status="pending")
+    entries = compose_cli_application(project_root).notifications.list(
+        status="pending"
+    )
     if not entries:
         return "No pending notifications."
     lines = ["Pending notifications:"]
@@ -610,10 +611,9 @@ def handle_interactive_notify_command(project_root: Path | None) -> str:
 
 
 def handle_interactive_notify_list_command(project_root: Path | None) -> str:
-    from nuself.notification import NotificationOutbox
     from nuself.tui.render import render_outbox_summary
 
-    entries = NotificationOutbox(project_root).list()
+    entries = compose_cli_application(project_root).notifications.list()
     if not entries:
         return "No notifications."
     lines = ["All notifications:"]
@@ -623,11 +623,13 @@ def handle_interactive_notify_list_command(project_root: Path | None) -> str:
 
 
 def handle_interactive_notify_show_command(project_root: Path | None, entry_id: str) -> str:
-    from nuself.notification import NotificationOutbox, OutboxEntryNotFound
+    from nuself.notification import OutboxEntryNotFound
     from nuself.tui.render import render_outbox_detail
 
     try:
-        entry = NotificationOutbox(project_root).get(entry_id)
+        entry = compose_cli_application(project_root).notifications.get(
+            entry_id
+        )
     except OutboxEntryNotFound:
         return f"Outbox entry not found: {entry_id}"
     return render_outbox_detail(entry)
@@ -635,7 +637,6 @@ def handle_interactive_notify_show_command(project_root: Path | None, entry_id: 
 
 def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
     from nuself.notification import (
-        NotificationOutbox,
         OutboxEntryNotFound,
         deliver_entry_once,
     )
@@ -643,7 +644,8 @@ def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str,
         build_notification_adapters,
     )
 
-    outbox = NotificationOutbox(project_root)
+    application = compose_cli_application(project_root)
+    outbox = application.notifications
     try:
         outbox.get(entry_id)
     except OutboxEntryNotFound:
@@ -652,7 +654,7 @@ def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str,
         updated = deliver_entry_once(
             outbox,
             entry_id,
-            build_notification_adapters(project_root),
+            build_notification_adapters(application.paths),
         )
         if updated.status == "sent":
             return f"Sent: {entry_id}"
@@ -666,10 +668,9 @@ def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str,
 def handle_interactive_watch_command(project_root: Path | None) -> None:
     import time
 
-    from nuself.notification import NotificationOutbox
     from nuself.tui.render import render_outbox_summary
 
-    outbox = NotificationOutbox(project_root)
+    outbox = compose_cli_application(project_root).notifications
     seen: set[str] = set()
     for entry in outbox.list():
         seen.add(entry.id)

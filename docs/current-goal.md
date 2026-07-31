@@ -19,9 +19,9 @@ Current working branch for v0.3.1.
    runtime/domain/agent imports that point back to outer adapters.
 2. Establish one runtime composition root shared by daemon and direct mode.
 3. Remove hidden backend/path resolution from domain repositories. In
-   progress: trace, profile, reason, reflection, memory, and source persistence
-   now require explicit authority resources and application-owned composition;
-   notification persistence remains.
+   progress: trace, profile, reason, reflection, memory, source, and
+   notification persistence now require explicit authority resources and
+   application-owned composition; persona prompts and curator plans remain.
 4. Extract narrow cross-domain ports and shared contracts.
 5. Remove agent/domain dependencies on CLI/TUI presentation.
 6. Split oversized cross-cutting modules along their actual ownership.
@@ -64,6 +64,9 @@ In progress:
   Trace graph; memory candidates and sources reuse its entry/profile/candidate
   collaborators, memory/source repositories cannot restore authority lookup,
   and CLI memory adapters compose through the application boundary;
+- notification persistence and per-entry lock paths now receive the graph's
+  explicit paths/backend, with CLI, daemon, reflection, and delivery workflows
+  sharing the injected outbox and an authority-resolution regression gate;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
   regression coverage passed 307 tests; the trace integration slice passed
   600 tests after moving trace composition into the application layer; the
@@ -71,4 +74,5 @@ In progress:
   passed 966 tests including subprocess cold starts; the reflection integration
   slice passed 815 tests and cold imports; the memory/source cross-module slice
   passed 1280 tests, followed by the complete 2464-test suite; Pyright reported
-  0 errors and 0 warnings.
+  0 errors and 0 warnings. The notification cross-module slice passed 1117
+  tests with Pyright still at 0 errors and 0 warnings.

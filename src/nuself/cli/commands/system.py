@@ -7,6 +7,7 @@ import sys
 
 from nuself.agent.chat import ThreadStore
 from nuself.cli.commands.output import print_ansi
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.config import ConfigSystem, runtime_paths
 from nuself.logs import (
@@ -14,7 +15,6 @@ from nuself.logs import (
     LogComponent,
     read_log_events,
 )
-from nuself.notification import NotificationOutbox
 from nuself.tui.render import render_log_event, render_log_event_json
 
 
@@ -24,7 +24,7 @@ def handle_status(args: argparse.Namespace) -> int:
         return 1
     threads = ThreadStore(args.project_root).list()
     pending = len(
-        NotificationOutbox(args.project_root).list(
+        compose_cli_application(args.project_root).notifications.list(
             status="pending"
         )
     )

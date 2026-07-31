@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from notification_fixtures import notification_outbox
+
 import multiprocessing
 from multiprocessing.context import SpawnContext
 from multiprocessing.synchronize import Event
@@ -15,6 +17,8 @@ from nuself.notification import (
     OutboxEntry,
     OutboxEntryNotFound,
 )
+from nuself.config import runtime_paths
+from nuself.storage import get_default_backend
 
 
 class _PausingNotificationOutbox(NotificationOutbox):
@@ -25,7 +29,10 @@ class _PausingNotificationOutbox(NotificationOutbox):
         scanned: Event,
         release: Event,
     ) -> None:
-        super().__init__(project_root)
+        super().__init__(
+            runtime_paths(project_root),
+            get_default_backend(project_root),
+        )
         self._scanned = scanned
         self._release = release
 
@@ -64,7 +71,7 @@ def _add_competing_outbox_entry(
     done: Event,
 ) -> None:
     attempted.set()
-    NotificationOutbox(Path(project_root)).add(
+    notification_outbox(Path(project_root)).add(
         OutboxEntry(
             id="second",
             title="Second",
@@ -81,7 +88,7 @@ def _spawn_context() -> SpawnContext:
 
 
 def test_outbox_add_and_list(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     entry = outbox.add(
         OutboxEntry(
             id="e1",
@@ -96,7 +103,7 @@ def test_outbox_add_and_list(tmp_path: Path) -> None:
 
 
 def test_outbox_add_deduplicates_by_idempotency_key(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     first = outbox.add(
         OutboxEntry(
             id="e1",
@@ -150,7 +157,7 @@ def test_outbox_add_is_idempotent_across_processes(tmp_path: Path) -> None:
 
     assert first.exitcode == 0
     assert second.exitcode == 0
-    entries = NotificationOutbox(tmp_path).list()
+    entries = notification_outbox(tmp_path).list()
     assert len(entries) == 1
     assert entries[0].id == "first"
 
@@ -158,7 +165,7 @@ def test_outbox_add_is_idempotent_across_processes(tmp_path: Path) -> None:
 def test_outbox_terminal_adapter_result_cannot_be_overwritten(
     tmp_path: Path,
 ) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
@@ -182,7 +189,7 @@ def test_outbox_terminal_adapter_result_cannot_be_overwritten(
 
 
 def test_outbox_dismiss_preserves_adapter_history(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
@@ -202,7 +209,7 @@ def test_outbox_dismiss_preserves_adapter_history(tmp_path: Path) -> None:
 
 
 def test_outbox_get_missing_raises(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     try:
         outbox.get("missing")
         raise AssertionError("expected OutboxEntryNotFound")
@@ -211,7 +218,7 @@ def test_outbox_get_missing_raises(tmp_path: Path) -> None:
 
 
 def test_outbox_list_filters_by_status(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     outbox.add(
         OutboxEntry(id="e1", title="A", body="B", status="pending", idempotency_key="k1")
     )
@@ -224,11 +231,11 @@ def test_outbox_list_filters_by_status(tmp_path: Path) -> None:
 
 
 def test_log_only_adapter_sends(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     entry = outbox.add(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
-    adapter = LogOnlyNotificationAdapter(tmp_path)
+    adapter = LogOnlyNotificationAdapter(runtime_paths(tmp_path))
     assert adapter.send(entry)
     log_path = tmp_path / "logs" / "outbox.log"
     assert log_path.exists()
@@ -242,7 +249,7 @@ def test_log_only_adapter_sends(tmp_path: Path) -> None:
 
 
 def test_outbox_round_trip_wire_format(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     original = OutboxEntry(
         id="e1",
         title="Title",
@@ -259,7 +266,7 @@ def test_outbox_round_trip_wire_format(tmp_path: Path) -> None:
 
 
 def test_outbox_round_trips_adapter_delivery_state(tmp_path: Path) -> None:
-    outbox = NotificationOutbox(tmp_path)
+    outbox = notification_outbox(tmp_path)
     original = OutboxEntry(
         id="delivery-state",
         title="Title",

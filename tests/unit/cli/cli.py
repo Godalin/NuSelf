@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from notification_fixtures import notification_outbox
+
 # pyright: reportUnusedImport=false
 
 from memory_fixtures import (
@@ -3406,7 +3408,7 @@ def test_open_with_message_sends_then_enters_repl(
 
 
 def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
     private = _authority(tmp_path)
     private.mkdir(exist_ok=True)
@@ -3414,7 +3416,7 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
         "macos_notification:\n  enabled: false\n",
         encoding="utf-8",
     )
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     entry = outbox.add(
         OutboxEntry(
             id="test-001",
@@ -3454,7 +3456,7 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     assert "Test Notification" in show_output
     assert f"Sent: {entry.id}" in send_output
     assert f"Dismissed: {entry.id}" in dismiss_output
-    dismissed = NotificationOutbox(_authority(tmp_path)).get(entry.id)
+    dismissed = notification_outbox(_authority(tmp_path)).get(entry.id)
     assert dismissed.required_adapters == ("log",)
     assert dismissed.deliveries["log"].status == "sent"
 
@@ -3463,9 +3465,9 @@ def test_notify_send_preserves_existing_adapter_plan_and_history(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="existing-plan",
@@ -3502,7 +3504,7 @@ def test_notify_send_preserves_existing_adapter_plan_and_history(
 
     assert result == 1
     assert "Failed to send: existing-plan" in capsys.readouterr().err
-    preserved = NotificationOutbox(_authority(tmp_path)).get("existing-plan")
+    preserved = notification_outbox(_authority(tmp_path)).get("existing-plan")
     assert preserved.status == "failed"
     assert preserved.required_adapters == ("email", "macos")
     assert preserved.deliveries["email"].status == "sent"
@@ -3539,9 +3541,9 @@ def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) ->
 
 
 def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
@@ -3562,9 +3564,9 @@ def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -
 def test_notify_dismiss_by_numeric_handle(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
@@ -3585,9 +3587,9 @@ def test_notify_dismiss_by_numeric_handle(
 def test_notify_numeric_handle_out_of_range(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
@@ -3608,9 +3610,9 @@ def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
 
 
 def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"
@@ -3646,9 +3648,9 @@ def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -
 
 
 def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1",
@@ -3670,9 +3672,9 @@ def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> N
 
 
 def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="A", body="B", status="pending", idempotency_key="k1"
@@ -3701,9 +3703,9 @@ def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
 def test_repl_notify_list_shows_all(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"
@@ -3727,9 +3729,9 @@ def test_repl_notify_list_shows_all(
 def test_repl_notify_show_detail(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="Test", body="Body", status="pending", idempotency_key="k1"
@@ -3851,9 +3853,9 @@ def test_interactive_whoami_shows_profile_items(
 def test_interactive_notify_lists_pending(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="n-001",
@@ -3879,9 +3881,9 @@ def test_interactive_notify_lists_pending(
 def test_interactive_notify_send_and_dismiss(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="n-002",
@@ -4623,12 +4625,11 @@ def test_notify_clear_defaults_to_all_terminal(
     capsys: CaptureFixture,
 ) -> None:
     from nuself.notification import (
-        NotificationOutbox,
         OutboxEntry,
         OutboxStatus,
     )
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     statuses: tuple[tuple[str, OutboxStatus], ...] = (
         ("pending", "pending"),
         ("sent", "sent"),
@@ -4651,7 +4652,7 @@ def test_notify_clear_defaults_to_all_terminal(
 
     assert result == 0
     assert "Cleared 3 all-terminal" in captured.out
-    remaining = NotificationOutbox(_authority(tmp_path)).list()
+    remaining = notification_outbox(_authority(tmp_path)).list()
     assert [entry.id for entry in remaining] == ["pending"]
 
 
@@ -4666,7 +4667,7 @@ def test_notify_clear_selects_failed_including_uncertain_plan(
         OutboxStatus,
     )
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="uncertain",
@@ -4714,7 +4715,7 @@ def test_notify_clear_selects_failed_including_uncertain_plan(
 
     assert result == 0
     assert "Cleared 1 failed" in captured.out
-    remaining = NotificationOutbox(_authority(tmp_path)).list()
+    remaining = notification_outbox(_authority(tmp_path)).list()
     assert {entry.id for entry in remaining} == {
         "sent",
         "dismissed",
@@ -6082,9 +6083,9 @@ def test_third_level_subcommand_help(argv: list[str]) -> None:
 def test_notify_watch_detects_new_entries(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B", status="pending", idempotency_key="k1"
@@ -6174,9 +6175,9 @@ def test_notify_watch_stops_on_q_or_eof(
 def test_repl_watch_detects_new_entries(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B", status="pending", idempotency_key="k1"
@@ -6219,9 +6220,9 @@ def test_repl_watch_detects_new_entries(
 def test_repl_notify_watch_subcommand(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification import NotificationOutbox, OutboxEntry
+    from nuself.notification import OutboxEntry
 
-    outbox = NotificationOutbox(_authority(tmp_path))
+    outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B", status="pending", idempotency_key="k1"
