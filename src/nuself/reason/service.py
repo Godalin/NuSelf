@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.clock import utc_now_iso
-from nuself.config import runtime_paths
 from nuself.reason.audit import run_reason_observed, write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.errors import (
@@ -17,9 +16,7 @@ from nuself.reason.errors import (
 )
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
-from nuself.storage import get_default_backend
 from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 
@@ -70,32 +67,27 @@ class ReasonService:
 
     def __init__(
         self,
-        project_root: Path | None = None,
-        repository: ReasonRepository | None = None,
-        workspace_store: PrivateWorkspaceStore | None = None,
-        trace_recorder: TraceRecorder | None = None,
+        project_root: Path,
+        *,
+        repository: ReasonRepository,
+        workspace_store: PrivateWorkspaceStore,
+        trace_recorder: TraceRecorder,
         advancer: ReasonAdvancerProtocol | None = None,
         prompt_generator: Callable[..., str] | None = None,
     ) -> None:
-        self._repository = repository or ReasonRepository(
-            runtime_paths(project_root),
-            backend=get_default_backend(project_root),
-        )
-        repo_root = self._repository.project_root
-        effective_root = repo_root if repo_root is not None else runtime_paths(project_root).project_root
-        self._project_root = effective_root
-        self._workspace_store = workspace_store or PrivateWorkspaceStore(effective_root, scope="reason")
-        self._trace_recorder: TraceRecorder | None = trace_recorder if trace_recorder is not None else (
-            TraceRecorder(
-                TraceRepository(
-                    runtime_paths(effective_root),
-                    backend=get_default_backend(effective_root),
-                )
-            )
-        )
+        self._repository = repository
+        self._project_root = project_root
+        self._workspace_store = workspace_store
+        self._trace_recorder: TraceRecorder | None = trace_recorder
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer
         self._prompt_generator = prompt_generator or generate_reasoning_prompt
+
+    @property
+    def repository(self) -> ReasonRepository:
+        """Return the repository supplied by the composition root."""
+
+        return self._repository
 
     # ── Read ───────────────────────────────────────────────────────
 

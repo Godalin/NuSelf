@@ -16,7 +16,7 @@ from nuself.reason.output import (
 )
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.storage import get_default_backend
 from nuself.storage import write_json_atomic
 

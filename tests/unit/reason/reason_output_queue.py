@@ -19,7 +19,7 @@ from nuself.reason.output import (
     ReasonOutputService,
 )
 from nuself.reason.repository import ReasonRepository
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.runtime.jobs import JobMessage
 
 

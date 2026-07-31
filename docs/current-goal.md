@@ -72,6 +72,9 @@ Current working branch for v0.3.1.
 - CLI, REPL, chat, reflection, and daemon reason operations now use
   `application.reason.compose_reason_service`; MemoryOptimizer also requires
   graph-owned entry, candidate, and profile repositories.
+- `ReasonService` now requires repository, workspace, and trace dependencies;
+  ReasonScheduler, ReasonOutputService, and the daemon export worker receive an
+  existing service instead of constructing a fallback service graph.
 
 ## Completion Standard
 

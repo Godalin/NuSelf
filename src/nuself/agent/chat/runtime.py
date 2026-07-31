@@ -56,6 +56,7 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.persona.tools import build_persona_tools
 from nuself.reason.output import SectionPlanner
+from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.runtime.context import runtime_context
@@ -72,6 +73,7 @@ from nuself.runtime.observability import (
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceRecorder
 from nuself.trace.service import TraceQueryService
+from nuself.workspace import PrivateWorkspaceStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -197,7 +199,16 @@ class ConversationGraphRuntime:
                 reflection_repository
                 or compose_reflection_repository(paths, backend)
             ),
-            reason_service=reason_service or ReasonService(project_root),
+            reason_service=reason_service
+            or ReasonService(
+                paths.project_root,
+                repository=ReasonRepository(paths, backend=backend),
+                workspace_store=PrivateWorkspaceStore(
+                    paths.project_root,
+                    scope="reason",
+                ),
+                trace_recorder=self._trace_recorder,
+            ),
             trace_query_service=(
                 trace_query_service
                 or compose_trace_services(paths, backend).query

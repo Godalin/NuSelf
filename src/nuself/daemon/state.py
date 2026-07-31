@@ -64,6 +64,7 @@ class DaemonState:
             project_root,
             self.shutdown_requested,
             self._worker_supervisor,
+            reason_service=compose_reason_service(self.application),
         )
         self.conversation_runtime = compose_conversation_runtime(
             self.application,

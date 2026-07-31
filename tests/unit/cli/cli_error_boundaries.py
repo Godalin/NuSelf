@@ -16,7 +16,7 @@ from nuself.config import ConfigSystem
 from nuself.logs import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 
 
 def test_chat_timeout_uses_default_after_malformed_yaml(

@@ -9,6 +9,7 @@ from pathlib import Path
 from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.common import structured_tool_factory
+from nuself.config import runtime_paths
 from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.reason.audit import write_reason_audit
 from nuself.reason.domain import ReasoningStep, ReasoningThread
@@ -220,7 +221,8 @@ def build_reason_tools(
             return "Error: thread_id must be a non-empty string"
         try:
             output_service = ReasonOutputService(
-                project_root,
+                runtime_paths(project_root).project_root,
+                reason_service=service,
                 job_sink=job_sink,
                 section_planner=section_planner,
             )

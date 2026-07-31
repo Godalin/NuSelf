@@ -9,7 +9,6 @@ from pathlib import Path
 from langchain_core.tools import BaseTool
 
 from nuself.clock import utc_now
-from nuself.config import runtime_paths
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.advancer import (
     ReasonAdvancer,
@@ -20,7 +19,6 @@ from nuself.reason.domain import ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.runtime.context import runtime_context
-from nuself.storage import get_default_backend
 
 
 class ReasonScheduler:
@@ -30,20 +28,17 @@ class ReasonScheduler:
         self,
         project_root: Path | None = None,
         advancer: ReasonAdvancer | None = None,
-        service: ReasonService | None = None,
         interval_seconds: int = 600,
         *,
+        service: ReasonService,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         repository: ReasonRepository | None = None,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
-        self._service = service or ReasonService(project_root)
-        self._repository = repository or ReasonRepository(
-            runtime_paths(project_root),
-            backend=get_default_backend(project_root),
-        )
+        self._service = service
+        self._repository = repository or service.repository
         self._interval_seconds = interval_seconds
 
         if advancer is None and project_root is not None:

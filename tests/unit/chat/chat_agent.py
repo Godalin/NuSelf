@@ -38,7 +38,7 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.storage import get_default_backend
@@ -1395,7 +1395,7 @@ def test_reason_propose_creates_thread_when_proposal_audit_is_unavailable(
 def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reason.output import ReasonOutputService
     from nuself.reason.repository import ReasonRepository
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
     from nuself.reason.domain import ReasoningStep
 
     def _should_not_compose(*args: object, **kwargs: object) -> str:
@@ -1560,7 +1560,7 @@ def test_memory_count_tool_with_tag_filter(tmp_path: Path) -> None:
 
 
 def test_reason_list_active_tool(tmp_path: Path) -> None:
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
     service.start_thread("How should this be remembered?")
@@ -1576,7 +1576,7 @@ def test_reason_list_active_tool(tmp_path: Path) -> None:
 
 
 def test_reason_count_tool(tmp_path: Path) -> None:
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
     service.start_thread("Count this reason thread")
@@ -1588,7 +1588,7 @@ def test_reason_count_tool(tmp_path: Path) -> None:
 
 
 def test_reason_show_tool(tmp_path: Path) -> None:
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
 
     thread = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread("Inspect this reason thread")
     tool = _chat_tool(tmp_path, "reason_show")
@@ -1603,7 +1603,7 @@ def test_reason_show_tool(tmp_path: Path) -> None:
 
 
 def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) -> None:
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
 
     thread = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator).start_thread(
         "Context-only reason thread",
@@ -1627,7 +1627,7 @@ def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) ->
 
 def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) -> None:
     from nuself.reason.domain import ReasoningStep
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
     thread = service.start_thread("Step reason thread")
@@ -1666,7 +1666,7 @@ def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) 
 
 def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
     from nuself.reason.domain import ReasoningStep
-    from nuself.reason.service import ReasonService
+    from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
     thread = service.start_thread("Show reason thread")

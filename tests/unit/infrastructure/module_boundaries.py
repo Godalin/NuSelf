@@ -394,18 +394,25 @@ def test_memory_optimizer_does_not_resolve_authority() -> None:
     } == set()
 
 
-def test_memory_optimizer_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "memory" / "optimizer.py"
+def test_reason_service_does_not_compose_infrastructure() -> None:
+    path = _SOURCE_ROOT / "reason" / "service.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
         ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+        ("nuself.trace.repository", "TraceRepository"),
     }
-
-    assert {
+    assert [
         imported
         for imported in _from_imports(path)
         if imported in forbidden
-    } == set()
+    ] == []
+
+
+def test_reason_consumers_require_injected_service() -> None:
+    for relative in ("reason/output.py", "reason/scheduler.py"):
+        source = (_SOURCE_ROOT / relative).read_text(encoding="utf-8")
+        assert "reason_service or ReasonService" not in source
+        assert "service or ReasonService" not in source
 
 
 def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:

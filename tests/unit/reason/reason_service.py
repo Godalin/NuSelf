@@ -21,7 +21,7 @@ from nuself.reason.errors import (
     ReasonTransitionError,
 )
 from nuself.reason.repository import ReasonRepository
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.storage import get_default_backend
 
 

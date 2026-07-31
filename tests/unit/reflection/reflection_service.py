@@ -7,7 +7,7 @@ from pathlib import Path
 
 from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.service import ReflectionService
 from nuself.storage import get_default_backend

@@ -190,6 +190,10 @@ application graph rather than create a second authority graph.
 Reason operations are composed by `application.reason`. Process surfaces must
 reuse that factory so repository, workspace, trace, prompt, and optional
 advancer dependencies originate at one application boundary.
+`ReasonService` itself receives repository, workspace store, and trace recorder
+as required dependencies. Reason scheduling and output export must receive an
+existing reason service; daemon workers may own queues and workspace adapters,
+but must not create a second reason service graph.
 
 Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require

@@ -399,6 +399,7 @@ def test_reason_export_worker_composes_with_injected_text_agent(
         tmp_path,
         shutdown,
         _export_supervisor(tmp_path, shutdown),
+        reason_service=ReasonService(tmp_path),
         text_agent=agent,
     )
     steps = _reason_steps()
@@ -442,6 +443,7 @@ def test_reason_export_worker_propagates_text_agent_failure(
         tmp_path,
         shutdown,
         _export_supervisor(tmp_path, shutdown),
+        reason_service=ReasonService(tmp_path),
         text_agent=_FailingTextAgent(),
     )
     steps = _reason_steps()
@@ -714,6 +716,7 @@ def test_full_export_admission_recovers_from_durable_manifests_online(
         tmp_path,
         shutdown,
         _export_supervisor(tmp_path, shutdown),
+        reason_service=ReasonService(tmp_path),
         text_agent=_TextAgent(),
         queue_capacity=1,
     )
@@ -760,6 +763,7 @@ def test_reconciliation_does_not_bypass_live_retry_timer(
         tmp_path,
         shutdown,
         _export_supervisor(tmp_path, shutdown),
+        reason_service=ReasonService(tmp_path),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -1002,6 +1006,7 @@ def test_retry_callback_failure_requests_delayed_reconciliation(
         tmp_path,
         shutdown,
         _export_supervisor(tmp_path, shutdown),
+        reason_service=ReasonService(tmp_path),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -1393,6 +1398,7 @@ def test_worker_recovers_state_persistence_failure_online(
         tmp_path,
         shutdown,
         _export_supervisor(tmp_path, shutdown),
+        reason_service=ReasonService(tmp_path),
         text_agent=_TextAgent(),
     )
     worker.prepare()
@@ -1421,3 +1427,4 @@ def test_worker_recovers_state_persistence_failure_online(
     assert replayed.job_id == "job_1"
     worker._queue.complete(replayed)
     worker.stop()
+from reason_fixtures import ReasonService

@@ -66,7 +66,7 @@ from nuself.logs import (
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
 from nuself.runtime.execution import current_cancellation

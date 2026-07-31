@@ -14,7 +14,7 @@ from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.scheduler import ReasonScheduler
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.storage import auto_backend, get_default_backend
 
 

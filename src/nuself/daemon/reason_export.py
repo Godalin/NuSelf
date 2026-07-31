@@ -35,6 +35,7 @@ from nuself.reason.output import (
     ReasonOutputSection,
     ReasonOutputService,
 )
+from nuself.reason.service import ReasonService
 from nuself.reason.audit import (
     report_reason_failure,
     write_reason_audit,
@@ -267,6 +268,7 @@ class ReasonExportWorker:
         shutdown_requested: threading.Event,
         supervisor: DaemonWorkerSupervisor,
         *,
+        reason_service: ReasonService,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
         queue_capacity: int = EXPORT_QUEUE_CAPACITY,
@@ -274,6 +276,7 @@ class ReasonExportWorker:
         self._project_root = project_root
         self._shutdown_requested = shutdown_requested
         self._supervisor = supervisor
+        self._reason_service = reason_service
         self._text_agent = (
             text_agent
             if text_agent is not None
@@ -319,7 +322,11 @@ class ReasonExportWorker:
         if self._store is not None or self._service is not None:
             return
         store = PrivateWorkspaceStore(self._project_root, scope="reason")
-        service = ReasonOutputService(self._project_root)
+        service = ReasonOutputService(
+            self._project_root,
+            reason_service=self._reason_service,
+            workspace_store=store,
+        )
         self._store = store
         self._service = service
 

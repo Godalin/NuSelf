@@ -21,7 +21,7 @@ from nuself.agent.tools.workspace import build_workspace_tools
 from nuself.config import runtime_paths
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.reason.service import ReasonService
+from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.storage import get_default_backend
