@@ -43,6 +43,7 @@ class ConversationStateManager:
                 + len(state.saved_messages)
             ),
             archived=state.persisted_state.archived,
+            pending_turns=state.persisted_state.pending_turns,
         )
         return ConversationNodeResult(
             state=replace(
@@ -92,6 +93,7 @@ class ConversationStateManager:
             ),
             next_message_index=state.next_message_index,
             archived=state.archived,
+            pending_turns=state.pending_turns,
         )
 
     def _summarize(

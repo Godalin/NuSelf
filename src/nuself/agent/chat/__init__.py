@@ -8,6 +8,8 @@ from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.thread import (
+    ConversationTurnConflictError,
+    ConversationTurnIncompleteError,
     ThreadMessage,
     ThreadState,
     ThreadStore,
@@ -17,7 +19,6 @@ from nuself.agent.chat.types import (
     ChatResult,
     ChatStructuredOutput,
     ConversationGraphRuntimeError,
-    ConversationTurnConflictError,
     ConversationNodeName,
     ConversationNodeResult,
     ConversationTurnState,
@@ -31,6 +32,7 @@ __all__ = [
     "ConversationGraphRuntime",
     "ConversationGraphRuntimeError",
     "ConversationTurnConflictError",
+    "ConversationTurnIncompleteError",
     "ConversationNodeName",
     "ConversationNodeResult",
     "ConversationResponseService",

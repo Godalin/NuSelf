@@ -39,11 +39,15 @@ design.
   it now fails before execution.
 - Chat state reconstruction dropped the persisted archived flag; update and
   compression now preserve it.
-- A remaining reliability boundary needs explicit treatment: a mutating tool
-  can commit before the final thread save. If that save fails, no completed
-  turn record exists to prevent a client retry from invoking the mutation
-  again. Endpoint retry suppression only protects the current agent invocation
-  and does not close this cross-request commit gap.
+- A mutating tool could commit before the final thread save. If that save
+  failed, no completed turn record existed to prevent a client retry from
+  invoking the mutation again; endpoint retry suppression protected only the
+  current agent invocation.
+- The cross-request gap is now closed conservatively for stable turns: a
+  pending marker commits before execution, successful reply persistence clears
+  it atomically, and an unfinished retry fails closed. This prevents automatic
+  replay without pretending that a generic checkpoint makes arbitrary domain
+  side effects exactly-once.
 - The outer four-node `StateGraph` supplied no routing, checkpoint, interrupt,
   or recovery behavior and duplicated the real `create_agent` graph. It has
   been reduced to a direct typed NuSelf pipeline while the framework retains

@@ -784,6 +784,13 @@ Retry idempotency:
 - A persisted `turn_id` is permanently bound to its original user input. A
   retry that reuses the ID with different input fails with an explicit turn
   conflict before model or tool execution.
+- Before model or tool execution, a stable turn writes an internal pending
+  marker containing its ID and input digest into the locked thread state. The
+  completed thread write removes that marker in the same transaction that
+  saves the assistant reply. A retry that finds a matching unfinished marker
+  fails closed instead of replaying a possibly committed tool side effect; a
+  mismatched digest is a turn conflict. A process crash or final thread-write
+  failure intentionally leaves the marker as recovery evidence.
 - If the daemon completed the first attempt after the client timed out, the retry must return the already-persisted assistant reply for that `turn_id`.
 - Already-produced logs, including persona activation and persona discussion logs, remain the record of the logical turn. A retry that resolves from an already-completed `turn_id` must not rerun persona work just to recreate those logs.
 

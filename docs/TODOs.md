@@ -48,6 +48,15 @@ same change.
   values. Use a distinct missing sentinel for legacy derivation so internal
   construction rejects inconsistent indexes as strictly as wire decoding.
 
+## Durable Agent Tools
+
+- [ ] Give non-idempotent domain tools stable operation identities independent
+  of one chat transport retry. Start with reflection mutations that use
+  shifting numeric handles and reason-thread creation/export. Specify replay
+  results and domain-level atomicity before considering a persistent LangGraph
+  checkpointer; framework checkpoints do not make an already-started external
+  side effect exactly-once by themselves.
+
 ## Test Runtime Hygiene
 
 - [ ] Isolate daemon socket-path adversarial tests under a test-owned temporary

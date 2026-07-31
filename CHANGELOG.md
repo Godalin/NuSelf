@@ -16,7 +16,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   update and compression also preserve archived thread state instead of
   implicitly unarchiving it. The redundant branch-free outer `StateGraph` was
   removed; LangChain `create_agent` remains the single framework-native
-  model/tool loop while NuSelf stages run as a direct typed pipeline.
+  model/tool loop while NuSelf stages run as a direct typed pipeline. Stable
+  turns now persist an internal pending marker before model/tool execution and
+  clear it with the completed reply; interrupted or failed commits fail closed
+  on retry instead of replaying a possibly committed mutation.
 - Agent tools now use one orthogonal declarative policy path for identity,
   ownership, effects, confirmation, observation, and audit. The old
   effectful approval wrapper and ad-hoc StructuredTool factories are removed.

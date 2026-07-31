@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from nuself.agent.chat import ThreadMessage, ThreadState
+from nuself.agent.chat.thread import _PendingTurn
 from thread_fixtures import ThreadStore
 from nuself.storage import get_default_backend
 
@@ -514,6 +515,27 @@ def test_branch_out_of_range_raises(tmp_path: Path) -> None:
         raise AssertionError("expected ValueError")
     except ValueError as exc:
         assert "out of range" in str(exc)
+
+
+def test_thread_lifecycle_preserves_or_excludes_pending_turns(
+    tmp_path: Path,
+) -> None:
+    store = ThreadStore(tmp_path)
+    pending = _PendingTurn.from_message("turn-1", "unfinished")
+    store.save(
+        ThreadState(
+            thread_id="source",
+            messages=[ThreadMessage(role="user", content="earlier")],
+            pending_turns=(pending,),
+        )
+    )
+
+    store.rename("source", "renamed")
+    assert store.load("renamed").pending_turns == (pending,)
+    branch = store.branch("renamed", "branch")
+    assert branch.pending_turns == ()
+    store.archive("renamed")
+    assert store.load("renamed").pending_turns == (pending,)
 
 
 def test_archive_moves_thread_to_subdir(tmp_path: Path) -> None:

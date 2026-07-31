@@ -29,6 +29,7 @@ from thread_fixtures import ThreadStore
 from nuself.agent.chat import (
     ConversationGraphRuntimeError,
     ConversationTurnConflictError,
+    ConversationTurnIncompleteError,
 )
 from nuself.agent.tool_utils import tool_service_component
 from nuself.application import compose_trace_services
@@ -779,8 +780,9 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
 ) -> None:
     class FailingSaveThreadStore(ThreadStore):
         def _save_unlocked(self, state: ThreadState) -> None:
-            del state
-            raise OSError("thread storage unavailable")
+            if state.messages:
+                raise OSError("thread storage unavailable")
+            super()._save_unlocked(state)
 
     agent = ConversationGraphRuntime(
         tmp_path,
@@ -804,6 +806,49 @@ def test_chat_persistence_failure_publishes_failed_not_completed(
         "turn.failed",
     ]
     assert lifecycle[-1].error == "thread storage unavailable"
+    [pending] = ThreadStore(tmp_path).load("default").pending_turns
+    assert pending.turn_id == "turn-1"
+
+
+def test_chat_does_not_replay_unfinished_stable_turn(
+    tmp_path: Path,
+) -> None:
+    class FailingOnceResponseService(FakeResponseService):
+        def complete(
+            self,
+            prompt: list[BaseMessage],
+        ) -> ChatStructuredOutput:
+            self.calls.append(prompt)
+            raise RuntimeError("turn interrupted")
+
+    response = FailingOnceResponseService()
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=response,
+    )
+
+    with pytest.raises(ConversationGraphRuntimeError):
+        runtime.respond("mutate once", turn_id="turn-1")
+    with pytest.raises(
+        ConversationTurnIncompleteError,
+        match="unfinished prior execution",
+    ):
+        runtime.respond("mutate once", turn_id="turn-1")
+
+    assert len(response.calls) == 1
+
+
+def test_completed_stable_turn_removes_pending_marker(
+    tmp_path: Path,
+) -> None:
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FakeResponseService(),
+    )
+
+    runtime.respond("complete", turn_id="turn-1")
+
+    assert ThreadStore(tmp_path).load("default").pending_turns == ()
 
 
 def test_chat_reused_event_does_not_rerun_graph(

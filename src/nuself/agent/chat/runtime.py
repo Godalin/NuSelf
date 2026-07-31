@@ -22,7 +22,6 @@ from nuself.agent.chat.types import (
     ChatResult,
     ChatStructuredOutput,
     ConversationGraphRuntimeError,
-    ConversationTurnConflictError,
     ConversationNodeName,
     ConversationNodeResult,
     ConversationTurnState,
@@ -36,7 +35,11 @@ from nuself.agent.chat.response import (
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
-from nuself.agent.chat.thread import ThreadMessage, ThreadState
+from nuself.agent.chat.thread import (
+    ConversationTurnConflictError,
+    ThreadMessage,
+    ThreadState,
+)
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.config import ConfigSystem
 from nuself.llm import (
@@ -226,7 +229,12 @@ class ConversationGraphRuntime:
             source="chat_runtime",
         ):
             try:
-                result = self._thread_store.update(thread_id, update)
+                result = self._thread_store.update(
+                    thread_id,
+                    update,
+                    turn_id=turn_id,
+                    user_message=(message if turn_id is not None else None),
+                )
             except Exception as exc:
                 self._publish_turn_event(
                     event="turn.failed",

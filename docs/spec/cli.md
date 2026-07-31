@@ -243,6 +243,9 @@ interactive input state.
   delete hold the active thread lock for their complete mutation. Lifecycle
   state changes only through those explicit operations; chat state update and
   compression preserve the existing archived flag.
+  Internal pending-turn markers remain attached when a thread is renamed or
+  archived, are not copied into a new branch, and disappear only with a
+  successful matching assistant commit or deletion of the whole thread.
   operations re-check source and destination state only after acquiring every
   required lock. Lock files are stable coordination inodes and are never
   removed by rename, archive, or delete.
