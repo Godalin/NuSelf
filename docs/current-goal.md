@@ -23,8 +23,9 @@ Current working branch for v0.3.1.
 4. Extract narrow cross-domain ports and shared contracts. In progress.
 5. Remove agent/domain dependencies on CLI/TUI presentation. Complete.
 6. Split oversized cross-cutting modules along actual ownership. In progress:
-   notification delivery is separated; reflection scheduling still combines
-   candidate generation and relevance evaluation.
+   notification delivery, reflection schedule state, candidate generation,
+   and relevance evaluation are now separated; the remaining oversized-module
+   audit is pending.
 7. Run complete gates and close the goal with requirement-by-requirement
    dependency evidence.
 
@@ -49,6 +50,10 @@ Current working branch for v0.3.1.
   `reflection.schedule_state`; its focused slice passed 129 tests and the
   complete suite passed 2474 tests with Pyright clean. Candidate/relevance
   module splitting remains.
+- Model-backed relevance evaluation and candidate generation now live in
+  `reflection.relevance` and `reflection.candidates`; the scheduler is reduced
+  to lifecycle policy and publication orchestration, and cold CLI plus
+  cross-process storage imports pass without a reflection/chat cycle.
 
 ## Completion Standard
 

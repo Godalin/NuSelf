@@ -21,6 +21,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
+from nuself.agent.chat import ThreadStore
 from nuself.application.composition import compose_application
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
@@ -33,11 +34,9 @@ from nuself.reflection import (
     ReflectionScheduler,
 )
 from nuself.reflection.repository import ReflectionEntry
-from nuself.reflection.scheduler import (
-    CandidateListOutput,
-    ReflectionScheduleStateError,
-    RelevanceScoreOutput,
-)
+from nuself.reflection.candidates import CandidateListOutput
+from nuself.reflection.relevance import RelevanceScoreOutput
+from nuself.reflection.schedule_state import ReflectionScheduleStateError
 from nuself.storage import get_default_backend
 
 
@@ -202,6 +201,10 @@ def _generator(
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
+        thread_context=ThreadStore(
+            project_root,
+            backend=application.backend,
+        ),
     )
 
 
@@ -253,7 +256,11 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     (tmp_path / "logs").mkdir(parents=True)
     (tmp_path / "outbox").mkdir(parents=True)
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.default_structured_agent",
+        "nuself.reflection.candidates.default_structured_agent",
+        _fake_structured_agent,
+    )
+    monkeypatch.setattr(
+        "nuself.reflection.relevance.default_structured_agent",
         _fake_structured_agent,
     )
     # Seed data so generator has context

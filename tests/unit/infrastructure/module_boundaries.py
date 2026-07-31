@@ -231,6 +231,37 @@ def test_reflection_schedule_state_is_not_defined_by_scheduler() -> None:
     ).is_file()
 
 
+def test_reflection_relevance_is_a_separate_responsibility() -> None:
+    scheduler = ast.parse(
+        (_SOURCE_ROOT / "reflection" / "scheduler.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    public_classes = {
+        node.name
+        for node in scheduler.body
+        if isinstance(node, ast.ClassDef)
+        and not node.name.startswith("_")
+    }
+
+    assert "LLMRelevanceGate" not in public_classes
+    assert "RelevanceScoreOutput" not in public_classes
+    assert (
+        _SOURCE_ROOT / "reflection" / "relevance.py"
+    ).is_file()
+
+
+def test_reflection_candidates_depend_on_thread_context_port() -> None:
+    path = _SOURCE_ROOT / "reflection" / "candidates.py"
+
+    assert not {
+        imported
+        for imported in _imports(path)
+        if imported == "nuself.agent.chat"
+        or imported.startswith("nuself.agent.chat.")
+    }
+
+
 def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
     forbidden = {
         ("nuself.storage", "get_default_backend"),

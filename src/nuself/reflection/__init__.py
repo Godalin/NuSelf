@@ -1,10 +1,8 @@
 """Reflection subsystem: scheduler, repository, and proactive idea generation."""
 
-from nuself.reflection.scheduler import (
-    IdeaCandidateGenerator,
-    ReflectionScheduler,
-    LLMRelevanceGate,
-)
+from nuself.reflection.candidates import IdeaCandidateGenerator
+from nuself.reflection.scheduler import ReflectionScheduler
+from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.repository import (
     ReflectionEntry,
     ReflectionEntryNotFound,

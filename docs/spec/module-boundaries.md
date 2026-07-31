@@ -142,6 +142,13 @@ must not rediscover storage after explicit resources are provided.
 The persisted schedule schema and strict codec belong to
 `reflection.schedule_state`; orchestration imports that contract and does not
 define storage records inline.
+Model-backed relevance evaluation belongs to `reflection.relevance`.
+Scheduling receives the gate as a collaborator and must not own its structured
+output schema, prompt construction, failure policy, or cooldown-state decode.
+Proactive context collection and candidate generation belong to
+`reflection.candidates`. Conversation history is supplied through its
+consumer-owned `ThreadContextProvider`; the reflection domain must not import
+the concrete chat runtime or thread store.
 
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they

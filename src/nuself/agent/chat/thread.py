@@ -367,6 +367,23 @@ class ThreadStore:
                 raise ValueError(f"thread not found: {thread_id}")
             self._collection.delete(thread_id)
 
+    def recent_context(
+        self,
+        max_threads: int,
+        max_messages: int,
+    ) -> str:
+        """Render bounded model context for cross-domain consumers."""
+
+        lines: list[str] = []
+        for thread_id in reversed(self.list()[-max_threads:]):
+            state = self.load(thread_id)
+            lines.append(f"Thread {thread_id}:")
+            lines.extend(
+                f"  {message.role}: {message.content[:120]}"
+                for message in state.messages[-max_messages:]
+            )
+        return "\n".join(lines)
+
 
 def _with_archived(state: ThreadState, archived: bool) -> ThreadState:
     return ThreadState(

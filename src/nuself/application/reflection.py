@@ -9,12 +9,10 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.notification import NotificationOutbox
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reflection.organizer import ReflectionOrganizer
+from nuself.reflection.candidates import IdeaCandidateGenerator
+from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.repository import ReflectionRepository
-from nuself.reflection.scheduler import (
-    IdeaCandidateGenerator,
-    LLMRelevanceGate,
-    ReflectionScheduler,
-)
+from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 
@@ -42,6 +40,8 @@ def compose_reflection_scheduler(
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
 
+    from nuself.agent.chat import ThreadStore
+
     schedule_collection = backend.collection("scheduler_state")
     generator = IdeaCandidateGenerator(
         paths.project_root,
@@ -49,6 +49,7 @@ def compose_reflection_scheduler(
         memory_repository=memory_repository,
         source_repository=source_repository,
         profile_repository=profile_repository,
+        thread_context=ThreadStore(paths.project_root, backend=backend),
     )
     gate = LLMRelevanceGate(
         paths.project_root,
