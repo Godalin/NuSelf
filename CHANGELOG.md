@@ -15,7 +15,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile
   persistence and aggregation now use the same explicit composition boundary,
-  as does reason thread and step persistence.
+  as does reason thread and step persistence; the reason domain no longer
+  imports outward application composition.
 - Schema v4 replaces per-collection dynamic-column tables with one compact
   strict-JSON `records` table and makes namespaced workspace state part of the
   main authority. Its v3↔v4 migration is reversible. Reason exports now live

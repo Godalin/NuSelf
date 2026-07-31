@@ -51,7 +51,9 @@ In progress:
   assembled by the application layer; their domain package has the same
   authority-resolution gate as trace;
 - reason persistence now receives explicit paths and storage and has its own
-  application-owned constructor plus an authority-resolution regression gate;
+  application-owned constructor plus authority-resolution and inward
+  dependency regression gates; the reason domain no longer imports application
+  composition;
   cold application and CLI imports pass after removing the resulting
   reason-to-application cycle;
 - the first focused boundary gate passed 74 tests; infrastructure and storage
