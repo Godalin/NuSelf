@@ -28,7 +28,6 @@ class IdeaCandidate:
     urgency: float
     interruption_cost: float
     evidence_refs: tuple[str, ...]
-    suggested_conversation_id: str | None
     source_summary: str
     created_at: str
 
@@ -46,8 +45,6 @@ class IdeaCandidate:
             "source_summary": self.source_summary,
             "created_at": self.created_at,
         }
-        if self.suggested_conversation_id is not None:
-            wire["suggested_conversation_id"] = self.suggested_conversation_id
         return wire
 
     @classmethod
@@ -62,7 +59,6 @@ class IdeaCandidate:
             urgency=_expect_float(data, "urgency"),
             interruption_cost=_expect_float(data, "interruption_cost"),
             evidence_refs=_string_tuple(data.get("evidence_refs")),
-            suggested_conversation_id=_optional_str(data, "suggested_conversation_id"),
             source_summary=_expect_str(data, "source_summary"),
             created_at=_expect_str(data, "created_at"),
         )
@@ -115,11 +111,6 @@ def _expect_str(data: dict[str, object], field_name: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"field '{field_name}' must be a string")
     return value
-
-
-def _optional_str(data: dict[str, object], field_name: str) -> str | None:
-    value = data.get(field_name)
-    return value if isinstance(value, str) else None
 
 
 def _expect_float(data: dict[str, object], field_name: str) -> float:

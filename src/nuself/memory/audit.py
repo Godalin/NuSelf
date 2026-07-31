@@ -20,7 +20,6 @@ from nuself.runtime.observability import (
 )
 
 MemoryAuditEvent = Literal[
-    "curator_history_gap",
     "curator_contended",
     "curator_deferred",
     "curator_completed",
@@ -84,24 +83,12 @@ def _integer(metadata: Mapping[str, object], field: str) -> int:
     return value
 
 
-def _history_gap(metadata: Mapping[str, object]) -> None:
-    _require_exact(
-        metadata,
-        frozenset({"conversation_id", "cursor", "visible_start"}),
-    )
-    _string(metadata, "conversation_id")
-    cursor = _integer(metadata, "cursor")
-    visible_start = _integer(metadata, "visible_start")
-    if cursor >= visible_start:
-        raise AuditSchemaError("curator history gap range is invalid")
-
-
 def _deferred(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
-        frozenset({"conversation_id", "source_ref", "processed_messages"}),
+        frozenset({"observation_id", "source_ref", "processed_messages"}),
     )
-    _string(metadata, "conversation_id")
+    _string(metadata, "observation_id")
     _string(metadata, "source_ref")
     if _integer(metadata, "processed_messages") != 0:
         raise AuditSchemaError(
@@ -110,8 +97,8 @@ def _deferred(metadata: Mapping[str, object]) -> None:
 
 
 def _curator_contended(metadata: Mapping[str, object]) -> None:
-    _require_exact(metadata, frozenset({"conversation_id"}))
-    _string(metadata, "conversation_id")
+    _require_exact(metadata, frozenset({"observation_id"}))
+    _string(metadata, "observation_id")
 
 
 def _curator_completed(metadata: Mapping[str, object]) -> None:
@@ -119,7 +106,7 @@ def _curator_completed(metadata: Mapping[str, object]) -> None:
         metadata,
         frozenset(
             {
-                "conversation_id",
+                "observation_id",
                 "source_ref",
                 "processed_messages",
                 "created",
@@ -128,7 +115,7 @@ def _curator_completed(metadata: Mapping[str, object]) -> None:
             }
         ),
     )
-    _string(metadata, "conversation_id")
+    _string(metadata, "observation_id")
     _string(metadata, "source_ref")
     if _integer(metadata, "processed_messages") < 1:
         raise AuditSchemaError(
@@ -218,10 +205,6 @@ def _trace_failed(metadata: Mapping[str, object]) -> None:
 
 def _build_registry() -> AuditDefinitionRegistry:
     definitions = (
-        AuditEventDefinition(
-            "memory", "curator_history_gap", "warning", "degraded",
-            metadata_validator=_history_gap,
-        ),
         AuditEventDefinition(
             "memory", "curator_contended", "info", "deferred",
             metadata_validator=_curator_contended,

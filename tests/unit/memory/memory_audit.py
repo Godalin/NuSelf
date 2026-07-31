@@ -12,24 +12,20 @@ from nuself.runtime.audit_definitions import (
 )
 
 _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
-    (
-        "curator_history_gap",
-        {"conversation_id": "conversation-1", "cursor": 2, "visible_start": 5},
-    ),
-    ("curator_contended", {"conversation_id": "conversation-1"}),
+    ("curator_contended", {"observation_id": "obs_1"}),
     (
         "curator_deferred",
         {
-            "conversation_id": "conversation-1",
-            "source_ref": "conversation:conversation-1:2-5",
+            "observation_id": "obs_1",
+            "source_ref": "interaction:opaque",
             "processed_messages": 0,
         },
     ),
     (
         "curator_completed",
         {
-            "conversation_id": "conversation-1",
-            "source_ref": "conversation:conversation-1:2-5",
+            "observation_id": "obs_1",
+            "source_ref": "interaction:opaque",
             "processed_messages": 3,
             "created": 1,
             "updated": 1,

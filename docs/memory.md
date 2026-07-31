@@ -47,9 +47,10 @@ stale type list into scripts.
 
 ## Curator And Review Queue
 
-The memory curator examines eligible conversation ranges and produces typed
-actions. Depending on configuration and confidence, candidates may be promoted
-automatically or remain available for review.
+Producers such as conversation submit selected evidence through the generic
+memory observation API. The curator examines pending observations and produces
+typed actions. Depending on configuration and confidence, candidates may be
+promoted automatically or remain available for review.
 
 Run one curation cycle:
 

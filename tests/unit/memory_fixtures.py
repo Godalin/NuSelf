@@ -22,6 +22,7 @@ from nuself.memory.curator_contract import (
     MemoryCuratorSettings,
 )
 from nuself.memory.curator import MemoryCurator as _MemoryCurator
+from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import StorageBackend, get_default_backend
@@ -138,6 +139,11 @@ class MemoryCurator(_MemoryCurator):
         backend: StorageBackend | None = None,
     ) -> None:
         paths, selected_backend = _resources(project_root, backend)
+        self._test_paths = paths
+        self._test_conversations = conversation_store or ConversationStore(
+            paths.project_root, backend=selected_backend
+        )
+        self._test_observations = MemoryObservationRepository(selected_backend)
         entries = repository or memory_entry_repository(
             paths,
             backend=selected_backend,
@@ -157,8 +163,7 @@ class MemoryCurator(_MemoryCurator):
             paths,
             agent=agent,
             settings=settings,
-            conversation_store=conversation_store
-            or ConversationStore(paths.project_root, backend=selected_backend),
+            observation_repository=self._test_observations,
             repository=entries,
             candidate_repository=candidates,
             profile_repository=profile,
@@ -173,3 +178,58 @@ class MemoryCurator(_MemoryCurator):
             ),
             backend=selected_backend,
         )
+
+    def run_once(
+        self,
+        observation_id: str = "default",
+        *,
+        source_trace_id: str | None = None,
+    ):
+        observation = self.prepare_observation(
+            observation_id,
+            source_trace_id=source_trace_id,
+        )
+        if observation is None:
+            from nuself.memory.curator_contract import MemoryCuratorResult
+            return MemoryCuratorResult(0, 0, 0, 0, self._test_paths.logs_dir / "memory.log")
+        return super().run_once(observation.id)
+
+    def prepare_observation(
+        self,
+        conversation_id: str = "default",
+        *,
+        source_trace_id: str | None = None,
+    ) -> MemoryObservation | None:
+        prefix = f"test-interaction:{conversation_id}:"
+        pending = [
+            item for item in self._test_observations.pending()
+            if item.source_ref.startswith(prefix)
+        ]
+        if pending:
+            return pending[0]
+        processed_end = 0
+        for item in self._test_observations.list():
+            source_ref = item.source_ref
+            if not source_ref.startswith(prefix):
+                continue
+            try:
+                processed_end = max(processed_end, int(source_ref.rsplit("-", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+        state = self._test_conversations.load(conversation_id)
+        start = max(processed_end, state.message_start_index)
+        offset = start - state.message_start_index
+        messages = state.messages[offset:]
+        if not messages:
+            return None
+        source_ref = f"{prefix}{start}-{state.next_message_index}"
+        observation = self._test_observations.observe(
+            MemoryObservation.create(
+                source_ref=source_ref,
+                fragments=tuple(
+                    f"{message.role}: {message.content}" for message in messages
+                ),
+                source_trace_id=source_trace_id,
+            )
+        )
+        return observation

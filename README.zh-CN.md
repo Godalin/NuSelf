@@ -27,7 +27,7 @@ NuSelf 仍在激进开发中。v0.3 系列建立了运行时、存储、Agent �
 - 支持审核、搜索、关系和符号图视图的长期记忆
 - 导入 Markdown 与纯文本，并提取带来源的 profile 信息
 - 长期推理线程和可追踪的思考来源
-- 按会话执行的后台记忆整理与主动反思
+- 通过独立 API 连接的会话历史、持久记忆观察与主动反思
 - 支持日志、邮件和 macOS 的持久通知 outbox
 - 本地 SQLite authority、迁移工具和可移植 thought pack
 - 瞬时重试及有序 OpenAI-compatible / Anthropic 端点切换

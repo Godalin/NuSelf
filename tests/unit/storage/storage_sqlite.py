@@ -908,7 +908,7 @@ def test_readonly_inspection_closes_source_connection(
 
     inspection = inspect_sqlite_thought_pack(database)
 
-    assert inspection.schema_version == 6
+    assert inspection.schema_version == 7
     assert inspection.total_items == 0
     assert len(connections) == 1
     assert connections[0].close_calls == 1
@@ -1841,7 +1841,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "6",
+            "7",
             "--dry-run",
         ],
         check=True,
@@ -1854,6 +1854,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
         "upgrade v003_to_v004",
         "upgrade v004_to_v005",
         "upgrade v005_to_v006",
+        "upgrade v006_to_v007",
     ]
     subprocess.run(
         [
@@ -1862,7 +1863,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "6",
+            "7",
         ],
         check=True,
         capture_output=True,
@@ -1871,7 +1872,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
     backend = SqliteStorageBackend(db_path)
 
     assert backend.collection("memory_entries").get("mem_legacy") == wire
-    assert (tmp_path / "nuself.sqlite.pre-v1-to-v6.bak").exists()
+    assert (tmp_path / "nuself.sqlite.pre-v1-to-v7.bak").exists()
     assert backend.collection("memory_entries").get("mem_legacy") == wire
     backend.close()
 
@@ -2139,7 +2140,7 @@ def test_v6_migration_round_trip_preserves_records(tmp_path: Path) -> None:
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "6",
+            "7",
         ],
         check=True,
         capture_output=True,
@@ -2282,13 +2283,21 @@ def test_v5_v6_conversation_migration_is_reversible_and_payload_safe(
             text=True,
         )
 
-    reopened = SqliteStorageBackend(db_path)
+    connection = sqlite3.connect(db_path)
     try:
-        conversation = reopened.collection("conversations").get("default")
-        assert conversation is not None
+        def record(collection: str, record_id: str) -> dict[str, object]:
+            row = connection.execute(
+                "SELECT payload FROM records WHERE collection = ? AND id = ?",
+                (collection, record_id),
+            ).fetchone()
+            assert row is not None
+            value = cast(object, json.loads(row[0]))
+            assert isinstance(value, dict)
+            return cast(dict[str, object], value)
+
+        conversation = record("conversations", "default")
         assert conversation["conversation_id"] == "default"
-        memory = reopened.collection("memory_entries").get("mem-1")
-        assert memory is not None
+        memory = record("memory_entries", "mem-1")
         assert memory["body"] == "conversation"
         assert memory["source_refs"] == [
             "conversation:default:0-1",
@@ -2301,22 +2310,94 @@ def test_v5_v6_conversation_migration_is_reversible_and_payload_safe(
                 "summary": "conversation",
             }
         ]
-        assert reopened.collection("trace_nodes").get("trace-1") == {
-            "id": "trace-1",
+        assert record("trace_nodes", "trace-1") == {
             "conversation_id": "default",
         }
-        assert reopened.collection("reflection_entries").get(
-            "reflection-1"
-        ) == {
-            "id": "reflection-1",
+        assert record("reflection_entries", "reflection-1") == {
             "suggested_conversation_id": "default",
         }
-        assert reopened.collection("notification_outbox").get(
-            "notification-1"
-        ) == {
-            "id": "notification-1",
+        assert record("notification_outbox", "notification-1") == {
             "deep_link": "nuself://conversation/default?message=hello",
         }
+    finally:
+        connection.close()
+
+
+def test_v6_v7_migration_projects_unprocessed_chat_into_memory_observation(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.collection("conversations").put(
+        "default",
+        {
+            "conversation_id": "default",
+            "summary": "",
+            "messages": [
+                {"role": "user", "content": "remember this decision"},
+                {"role": "assistant", "content": "understood"},
+            ],
+            "message_start_index": 0,
+            "next_message_index": 2,
+            "archived": False,
+        },
+    )
+    backend.close()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "6",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO records(collection, id, payload) VALUES (?, ?, ?)",
+            (
+                "memory_curator_cursors",
+                "default",
+                json.dumps(
+                    {
+                        "conversation_id": "default",
+                        "processed_message_count": 0,
+                    }
+                ),
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "7",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    reopened = SqliteStorageBackend(db_path)
+    try:
+        [observation] = reopened.collection("memory_observations").list()
+        assert observation["status"] == "pending"
+        assert observation["fragments"] == [
+            "user: remember this decision",
+            "assistant: understood",
+        ]
+        assert str(observation["source_ref"]).startswith("interaction:")
     finally:
         reopened.close()
 
@@ -2602,7 +2683,7 @@ def test_v4_downgrade_requires_workspace_export(tmp_path: Path) -> None:
     try:
         assert connection.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone() == (6,)
+        ).fetchone() == (7,)
         assert connection.execute(
             "SELECT value FROM workspace_entries"
         ).fetchone() == ('{"value":1}',)
@@ -2651,7 +2732,7 @@ def test_v4_downgrade_failure_rolls_back_all_schema_changes(
         }
         assert connection.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone() == (6,)
+        ).fetchone() == (7,)
         assert connection.execute(
             "SELECT payload FROM records WHERE id='mem_invalid_column'"
         ).fetchone() == ('{"\\u0000":"value"}',)

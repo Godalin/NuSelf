@@ -208,9 +208,9 @@ class FakeChangedCurator:
 
     def run_once(
         self,
-        conversation_id: str = "default",
+        observation_id: str,
     ) -> FakeChangedCuratorResult:
-        assert conversation_id == "default"
+        assert observation_id.startswith("obs_")
         return FakeChangedCuratorResult()
 
 
@@ -417,7 +417,7 @@ def test_interactive_memory_show_uses_readable_detail(
             tags=["display"],
             evidence=[
                 MemoryEvidence(
-                    source_type="conversation",
+                    source_type="observation",
                     source_ref="conversation:default:1-2",
                     summary="chat",
                 )
@@ -1899,9 +1899,9 @@ def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> 
         ],
         ("memory", "plan"): [
             "show",
-            "Show payload-safe recovery metadata for one conversation.",
+                "Show payload-safe recovery metadata for one observation.",
             "discard",
-                "Discard one conversation recovery plan.",
+                    "Discard one observation recovery plan.",
         ],
     }
 
@@ -1920,9 +1920,8 @@ def test_memory_plan_show_is_payload_safe(
     capsys: CaptureFixture,
 ) -> None:
     plan = MemoryCuratorPlan(
-        conversation_id="default",
-        source_start=2,
-        source_end=5,
+        observation_id="obs_default",
+        source_ref="test:default:2-5",
         observed_at="2026-07-29T00:00:00+00:00",
         actions=(
             MemoryAction(
@@ -1946,14 +1945,14 @@ def test_memory_plan_show_is_payload_safe(
             "memory",
             "plan",
             "show",
-            "default",
+            "obs_default",
         ]
     )
     captured = capsys.readouterr()
 
     assert result == 0
     assert (
-        "Curator plan: conversation=default source=2-5 "
+        "Curator plan: observation=obs_default source_ref=test:default:2-5 "
         "observed_at=2026-07-29T00:00:00+00:00 actions=1"
         in captured.out
     )
@@ -1974,15 +1973,8 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
 ) -> None:
     backend = get_default_backend(_authority(tmp_path))
     backend.collection("memory_curator_plans").put(
-        "default",
-        {"conversation_id": "default"},
-    )
-    backend.collection("memory_curator_cursors").put(
-        "default",
-        {
-            "conversation_id": "default",
-            "processed_message_count": 3,
-        },
+        "obs_default",
+        {"observation_id": "wrong"},
     )
     candidate_repo = memory_candidate_repository(_authority(tmp_path))
     candidate = candidate_repo.save(
@@ -2000,7 +1992,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
             "memory",
             "plan",
             "show",
-            "default",
+            "obs_default",
         ]
     )
     show_output = capsys.readouterr()
@@ -2011,7 +2003,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
             "memory",
             "plan",
             "discard",
-            "default",
+            "obs_default",
             "--force",
         ]
     )
@@ -2021,17 +2013,12 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
     assert "Curator plan unavailable" in show_output.err
     assert discard_result == 0
     assert (
-        "Discarded curator plan for conversation default. "
-        "Cursor and candidates were not changed."
+        "Discarded curator plan for observation obs_default. "
+        "Observation and candidates were not changed."
         in discard_output.out
     )
     backend = get_default_backend(_authority(tmp_path))
-    assert backend.collection("memory_curator_plans").get("default") is None
-    assert backend.collection("memory_curator_cursors").get("default") == {
-        "id": "default",
-        "conversation_id": "default",
-        "processed_message_count": 3,
-    }
+    assert backend.collection("memory_curator_plans").get("obs_default") is None
     assert memory_candidate_repository(_authority(tmp_path)).get(candidate.id) == candidate
 
 
@@ -2051,9 +2038,8 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
     store = memory_curator_plan_store(_authority(tmp_path))
     plan = store.save(
         MemoryCuratorPlan(
-            conversation_id="default",
-            source_start=0,
-            source_end=1,
+            observation_id="obs_default",
+            source_ref="test:default:0-1",
             observed_at="2026-07-29T00:00:00+00:00",
             actions=(
                 MemoryAction(
@@ -2066,7 +2052,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
         )
     )
 
-    with store.exclusive("default"):
+    with store.exclusive("obs_default"):
         result = main(
             [
                 "--workspace",
@@ -2074,7 +2060,7 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
                 "memory",
                 "plan",
                 "discard",
-                "default",
+                "obs_default",
                 "--force",
             ]
         )
@@ -2084,10 +2070,10 @@ def test_memory_plan_discard_fails_without_deleting_when_busy(
     assert captured.out == ""
     assert (
         captured.err
-        == "Curator plan is busy for conversation: default; "
+        == "Curator plan is busy for observation: obs_default; "
         "no plan was discarded.\n"
     )
-    assert memory_curator_plan_store(_authority(tmp_path)).get("default") == plan
+    assert memory_curator_plan_store(_authority(tmp_path)).get("obs_default") == plan
 
 
 def test_memory_plan_show_missing_is_an_explicit_error(
@@ -2110,7 +2096,7 @@ def test_memory_plan_show_missing_is_an_explicit_error(
     assert captured.out == ""
     assert (
         captured.err
-        == "Curator plan not found for conversation: missing\n"
+        == "Curator plan not found for observation: missing\n"
     )
 
 
@@ -2259,7 +2245,7 @@ def test_memory_update_defers_without_agent_decision(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Memory curator: processed=0 created=0 updated=0 ignored=0" in captured.out
+    assert "Memory curator: processed_observations=0" in captured.out
     assert main_memory_preview(_authority(tmp_path)) == ""
 
 
@@ -2425,7 +2411,7 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(
             body="Memory should preserve when a view was observed.",
             evidence=[
                 MemoryEvidence(
-                    source_type="conversation",
+                    source_type="observation",
                     source_ref="conversation:default:4-6",
                     summary="Discussed thought evolution.",
                     observed_at="2026-05-07",
@@ -2455,7 +2441,7 @@ def test_memory_candidate_review_flow_accepts_temporal_candidate(
     assert "[candidate] [0]" in list_output
     assert "Temporal memory" in list_output
     assert f"id={candidate.id}" in show_output
-    assert "conversation:conversation:default:4-6" in show_output
+    assert "observation:conversation:default:4-6" in show_output
     assert "Accepted memory candidate:" in accept_output
     assert entries[0].observed_at == "2026-05-07"
     assert entries[0].evidence[0].source_ref == "conversation:default:4-6"

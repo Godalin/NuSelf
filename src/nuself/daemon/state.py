@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from nuself.application.chat import ChatResult, compose_conversation_runtime
 from nuself.application.curator import compose_memory_curator
+from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.application.runtime import (
     ApplicationRuntime,
     current_application_runtime,
@@ -33,7 +34,6 @@ from nuself.notification import (
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.runtime.events import EventPublisher
-from nuself.runtime.context import runtime_context
 from nuself.runtime.jobs import JobMessage
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -88,7 +88,6 @@ class DaemonState:
 
         config = ConfigSystem.load(project_root=project_root)
         self.memory_curator = compose_memory_curator(self.application)
-        self.conversation_store = self.application.conversations
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
         )
@@ -102,7 +101,7 @@ class DaemonState:
             memory_repository=self.application.memory.entries,
             source_repository=self.application.memory.sources,
             profile_repository=self.application.memory.profile,
-            conversation_store=self.application.conversations,
+            conversation_history=self.application.conversation_history,
         )
         self.reflection_check_interval_seconds: float = (
             config.daemon.reflection_scheduler.check_interval_seconds
@@ -136,8 +135,8 @@ class DaemonState:
         )
         self.scheduler = DaemonScheduler(
             {
-                "memory.scan": self._scan_memory_conversations,
-                "memory.curate": self._curate_memory_conversation,
+                "memory.scan": self._scan_memory_observations,
+                "memory.curate": self._curate_memory_observation,
                 "chat.turn": self._run_chat_task,
                 "conversation.compress": self._compress_conversation,
                 "reflection.check": self._check_reflection,
@@ -189,15 +188,15 @@ class DaemonState:
     def stop_background_tasks(self) -> None:
         self.scheduler.shutdown()
 
-    def request_memory_curation(self, conversation_id: str) -> None:
-        """Admit one coalesced curator task for a persisted conversation."""
+    def request_memory_curation(self, observation_id: str) -> None:
+        """Admit one coalesced curator task for a durable observation."""
 
         self.scheduler.submit(
             DaemonTask(
                 "memory.curate",
-                f"memory.curate:{conversation_id}",
-                f"conversation:{conversation_id}",
-                payload=conversation_id,
+                f"memory.curate:{observation_id}",
+                f"memory-observation:{observation_id}",
+                payload=observation_id,
             )
         )
 
@@ -216,7 +215,13 @@ class DaemonState:
                 conversation_id=conversation_id,
                 turn_id=turn_id,
             )
-            self.request_memory_curation(result.conversation_id)
+            observation = publish_chat_observation(
+                self.application,
+                result=result,
+                user_message=message,
+                turn_id=turn_id,
+            )
+            self.request_memory_curation(observation.id)
             return result
         identity = (
             f"chat.turn:{conversation_id}:{turn_id}"
@@ -244,20 +249,16 @@ class DaemonState:
             interval_seconds=interval,
         )
 
-    def _scan_memory_conversations(self, task: DaemonTask) -> None:
+    def _scan_memory_observations(self, task: DaemonTask) -> None:
         del task
-        conversation_ids = sorted(
-            {*self.conversation_store.list(), *self.conversation_store.list_archived()}
-        )
-        for conversation_id in conversation_ids:
-            self.request_memory_curation(conversation_id)
+        for observation in self.application.memory.observations.pending():
+            self.request_memory_curation(observation.id)
 
-    def _curate_memory_conversation(self, task: DaemonTask) -> None:
-        conversation_id = task.payload
-        if not isinstance(conversation_id, str):
-            raise TypeError("memory curator task requires a conversation ID")
-        with runtime_context(conversation_id=conversation_id):
-            self.memory_curator.run_once(conversation_id)
+    def _curate_memory_observation(self, task: DaemonTask) -> None:
+        observation_id = task.payload
+        if not isinstance(observation_id, str):
+            raise TypeError("memory curator task requires an observation ID")
+        self.memory_curator.run_once(observation_id)
 
     def _run_chat_task(self, task: DaemonTask) -> ChatResult:
         payload = task.payload
@@ -268,14 +269,19 @@ class DaemonState:
             conversation_id=payload.conversation_id,
             turn_id=payload.turn_id,
         )
-        self.request_memory_curation(result.conversation_id)
+        observation = publish_chat_observation(
+            self.application,
+            result=result,
+            user_message=payload.message,
+            turn_id=payload.turn_id,
+        )
+        self.request_memory_curation(observation.id)
         self.scheduler.submit(
             DaemonTask(
                 "conversation.compress",
                 f"conversation.compress:{result.conversation_id}",
                 f"conversation:{result.conversation_id}",
                 payload=result.conversation_id,
-                # Preserve raw committed turns for memory curation first.
                 priority=120,
             )
         )

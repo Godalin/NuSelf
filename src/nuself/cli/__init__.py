@@ -61,7 +61,7 @@ from nuself.cli.entrypoints import (
     EntrypointController,
 )
 from nuself.cli.handlers import dispatch_cli
-from nuself.cli.composition import use_cli_application_runtime
+from nuself.cli.composition import compose_cli_application, use_cli_application_runtime
 from nuself.cli.parser import (
     EntrypointHandlers,
 )
@@ -237,8 +237,10 @@ def _interactive_loop(
     ) -> None:
         if daemon_activity:
             return
-        for conversation_id in conversation_ids:
-            _run_memory_curator(root, conversation_id)
+        del conversation_ids
+        application = compose_cli_application(root)
+        for observation in application.memory.observations.pending():
+            _run_memory_curator(root, observation.id)
 
     def send_turn(
         turn_sender: Callable[

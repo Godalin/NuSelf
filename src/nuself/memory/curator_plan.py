@@ -25,19 +25,12 @@ from nuself.storage import StorageBackend
 
 @dataclass(frozen=True)
 class MemoryCuratorPlan:
-    """One durable structured decision awaiting cursor completion."""
+    """One durable structured decision awaiting observation completion."""
 
-    conversation_id: str
-    source_start: int
-    source_end: int
+    observation_id: str
+    source_ref: str
     observed_at: str
     actions: tuple[MemoryAction, ...]
-
-    @property
-    def source_ref(self) -> str:
-        return (
-            f"conversation:{self.conversation_id}:{self.source_start}-{self.source_end}"
-        )
 
     def candidate_id(self, action_index: int) -> str:
         if action_index < 0 or action_index >= len(self.actions):
@@ -48,9 +41,8 @@ class MemoryCuratorPlan:
 
     def to_wire(self) -> dict[str, object]:
         return {
-            "conversation_id": self.conversation_id,
-            "source_start": self.source_start,
-            "source_end": self.source_end,
+            "observation_id": self.observation_id,
+            "source_ref": self.source_ref,
             "observed_at": self.observed_at,
             "actions": [
                 {
@@ -72,33 +64,24 @@ class MemoryCuratorPlan:
         cls,
         data: dict[str, object],
         *,
-        expected_conversation_id: str,
+        expected_observation_id: str,
         allowed_types: tuple[str, ...],
     ) -> MemoryCuratorPlan:
         expected_fields = {
-            "conversation_id",
-            "source_start",
-            "source_end",
+            "observation_id",
+            "source_ref",
             "observed_at",
             "actions",
         }
         if set(data) != expected_fields:
             raise ValueError("curator plan fields differ from schema")
-        conversation_id = data["conversation_id"]
-        if conversation_id != expected_conversation_id:
-            raise ValueError("curator plan conversation identity mismatch")
-        source_start = data["source_start"]
-        source_end = data["source_end"]
+        observation_id = data["observation_id"]
+        if observation_id != expected_observation_id:
+            raise ValueError("curator plan observation identity mismatch")
+        source_ref = data["source_ref"]
         observed_at = data["observed_at"]
-        if (
-            isinstance(source_start, bool)
-            or not isinstance(source_start, int)
-            or isinstance(source_end, bool)
-            or not isinstance(source_end, int)
-            or source_start < 0
-            or source_end <= source_start
-        ):
-            raise ValueError("curator plan source range is invalid")
+        if not isinstance(source_ref, str) or source_ref == "":
+            raise ValueError("curator plan source reference is invalid")
         if not isinstance(observed_at, str) or observed_at == "":
             raise ValueError("curator plan observed_at is invalid")
         raw_actions = data["actions"]
@@ -115,16 +98,15 @@ class MemoryCuratorPlan:
             for raw_action in action_values
         )
         return cls(
-            conversation_id=expected_conversation_id,
-            source_start=source_start,
-            source_end=source_end,
+            observation_id=expected_observation_id,
+            source_ref=source_ref,
             observed_at=observed_at,
             actions=actions,
         )
 
 
 class MemoryCuratorPlanNotFound(KeyError):
-    """Raised when one conversation has no curator recovery plan."""
+    """Raised when one observation has no curator recovery plan."""
 
 
 class MemoryCuratorPlanCorruptError(ValueError):
@@ -132,7 +114,7 @@ class MemoryCuratorPlanCorruptError(ValueError):
 
 
 class MemoryCuratorPlanLockContended(RuntimeError):
-    """Raised when another process is mutating one conversation's curator state."""
+    """Raised when another process is mutating one observation's curator state."""
 
 
 class MemoryCuratorPlanLockCleanupError(RuntimeError):
@@ -174,7 +156,7 @@ class MemoryCuratorPlanLock:
             flock(handle.fileno(), LOCK_EX | LOCK_NB)
         except BlockingIOError:
             primary_error = MemoryCuratorPlanLockContended(
-                "another process is mutating this conversation's curator state"
+                "another process is mutating this observation's curator state"
             )
             try:
                 handle.close()
@@ -231,7 +213,7 @@ class MemoryCuratorPlanLock:
 
 
 class MemoryCuratorPlanStore:
-    """Typed cursor-adjacent storage for curator recovery plans."""
+    """Typed storage for recoverable observation decisions."""
 
     def __init__(
         self,
@@ -247,106 +229,90 @@ class MemoryCuratorPlanStore:
             "memory_curator_plans"
         )
 
-    def get(self, conversation_id: str) -> MemoryCuratorPlan | None:
+    def get(self, observation_id: str) -> MemoryCuratorPlan | None:
         try:
-            raw = self._collection.get(conversation_id)
+            raw = self._collection.get(observation_id)
             if raw is None:
                 return None
             return MemoryCuratorPlan.from_wire(
                 _without_storage_id(raw),
-                expected_conversation_id=conversation_id,
+                expected_observation_id=observation_id,
                 allowed_types=self._registry.names(),
             )
         except (
             TypeError,
             ValueError,
         ) as exc:
-            self._raise_corrupt(conversation_id, exc)
+            self._raise_corrupt(observation_id, exc)
 
     def resumable(
         self,
-        conversation_id: str,
-        *,
-        cursor: int,
-        next_message_index: int,
+        observation_id: str,
     ) -> MemoryCuratorPlan | None:
         try:
-            raw = self._collection.get(conversation_id)
+            raw = self._collection.get(observation_id)
             if raw is None:
                 return None
             raw_mapping = _without_storage_id(raw)
-            stored_conversation_id = raw_mapping.get("conversation_id")
-            stored_source_end = raw_mapping.get("source_end")
-            if (
-                stored_conversation_id == conversation_id
-                and not isinstance(stored_source_end, bool)
-                and isinstance(stored_source_end, int)
-                and stored_source_end <= cursor
-            ):
-                return None
             plan = MemoryCuratorPlan.from_wire(
                 raw_mapping,
-                expected_conversation_id=conversation_id,
+                expected_observation_id=observation_id,
                 allowed_types=self._registry.names(),
             )
-            if plan.source_start != cursor:
-                raise ValueError(
-                    "curator plan does not start at the durable cursor"
-                )
-            if plan.source_end > next_message_index:
-                raise ValueError(
-                    "curator plan extends beyond the current conversation"
-                )
             return plan
         except (
             TypeError,
             ValueError,
         ) as exc:
-            self._raise_corrupt(conversation_id, exc)
+            self._raise_corrupt(observation_id, exc)
 
     def save(self, plan: MemoryCuratorPlan) -> MemoryCuratorPlan:
-        self._collection.put(plan.conversation_id, plan.to_wire())
+        self._collection.put(plan.observation_id, plan.to_wire())
         return plan
 
-    def discard(self, conversation_id: str) -> None:
-        with self.exclusive(conversation_id):
+    def complete(self, observation_id: str) -> None:
+        """Remove a completed plan while the caller holds its exclusive lock."""
+        self._collection.delete(observation_id)
+
+    def discard(self, observation_id: str) -> None:
+        with self.exclusive(observation_id):
             with self._backend.transaction():
-                if self._collection.get(conversation_id) is None:
-                    raise MemoryCuratorPlanNotFound(conversation_id)
-                self._collection.delete(conversation_id)
+                if self._collection.get(observation_id) is None:
+                    raise MemoryCuratorPlanNotFound(observation_id)
+                self._collection.delete(observation_id)
 
-    def exclusive(self, conversation_id: str) -> MemoryCuratorPlanLock:
-        """Return the authoritative mutation lock for one curator conversation."""
+    def exclusive(self, observation_id: str) -> MemoryCuratorPlanLock:
+        """Return the authoritative mutation lock for one observation."""
 
-        validate_curator_conversation_id(conversation_id)
+        validate_observation_id(observation_id)
         return MemoryCuratorPlanLock(
             self._paths.runtime_dir
             / "curator-locks"
-            / f"{conversation_id}.lock"
+            / f"{observation_id}.lock"
         )
 
     def _raise_corrupt(
         self,
-        conversation_id: str,
+        observation_id: str,
         exc: Exception,
     ) -> Never:
         report_corrupt_record(
             exc,
             component="memory",
             collection="memory_curator_plans",
-            record_id=conversation_id,
+            record_id=observation_id,
             project_root=self._paths.project_root,
         )
         raise MemoryCuratorPlanCorruptError(
-            f"invalid memory curator plan for conversation {conversation_id!r}; "
-            "inspect with 'nuself memory plan show CONVERSATION' or explicitly "
-            "discard with 'nuself memory plan discard CONVERSATION --force'"
+            f"invalid memory curator plan for observation {observation_id!r}; "
+            "inspect with 'nuself memory plan show OBSERVATION' or explicitly "
+            "discard with 'nuself memory plan discard OBSERVATION --force'"
         ) from exc
 
 
-def validate_curator_conversation_id(conversation_id: str) -> None:
-    if conversation_id == "" or "/" in conversation_id or conversation_id in {".", ".."}:
-        raise ValueError(f"invalid conversation id: {conversation_id}")
+def validate_observation_id(observation_id: str) -> None:
+    if not observation_id.startswith("obs_") or "/" in observation_id:
+        raise ValueError(f"invalid observation id: {observation_id}")
 
 
 def _without_storage_id(

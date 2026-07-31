@@ -6,10 +6,11 @@ from scripts.database_migrations import (
     v003_to_v004,
     v004_to_v005,
     v005_to_v006,
+    v006_to_v007,
 )
 from scripts.database_migrations.model import Migration, Plan, plan, validate_registry
 
-CURRENT_VERSION = 6
+CURRENT_VERSION = 7
 MIGRATIONS = (
     Migration("v001_to_v002", 1, 2, v001_to_v002.upgrade, None),
     Migration("v002_to_v003", 2, 3, v002_to_v003.upgrade, None),
@@ -33,6 +34,13 @@ MIGRATIONS = (
         6,
         v005_to_v006.upgrade,
         v005_to_v006.downgrade,
+    ),
+    Migration(
+        "v006_to_v007",
+        6,
+        7,
+        v006_to_v007.upgrade,
+        v006_to_v007.downgrade,
     ),
 )
 validate_registry(MIGRATIONS, current_version=CURRENT_VERSION)

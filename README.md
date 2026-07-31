@@ -35,7 +35,7 @@ locks and Unix-domain sockets.
 - Durable memory with review, search, relations, and symbolic graph views
 - Markdown and plain-text source ingestion with cited profile extraction
 - Long-run reasoning threads and traceable thought provenance
-- Per-thread background memory curation and proactive reflection
+- API-separated conversation history, durable memory observations, and proactive reflection
 - Durable notification outbox with log, email, and macOS adapters
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover

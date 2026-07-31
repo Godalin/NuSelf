@@ -161,7 +161,6 @@ class ReflectionScheduler:
                 candidate_type=entry.candidate_type,
                 composite_score=entry.composite_score,
                 discussion_approved=entry.discussion_approved,
-                conversation_id="reflections",
                 decision_points=decision_points,
             )
         except Exception as exc:
@@ -316,8 +315,11 @@ class ReflectionScheduler:
         discussion_trace: tuple[str, ...] = (),
     ) -> ReflectionEntry:
 
-        conversation_id = candidate.suggested_conversation_id or "reflections"
-        deep_link = DeepLink(action="open_conversation", conversation_id=conversation_id).to_url()
+        deep_link = DeepLink.for_new_conversation(
+            title=candidate.title,
+            message=candidate.body,
+            candidate_id=candidate.id,
+        ).to_url()
         return ReflectionEntry(
             id=f"reflection-{candidate.id}",
             title=title if title is not None else candidate.title,

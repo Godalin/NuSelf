@@ -191,9 +191,9 @@ Reflection user-intent operations receive repository, reason-start, and
 promotion-recording ports as required constructor dependencies. They must not
 resolve authority or construct concrete reason and trace services.
 Proactive context collection and candidate generation belong to
-`reflection.candidates`. Conversation history is supplied through its
-consumer-owned `ConversationContextProvider`; the reflection domain must not
-import the concrete chat runtime or agent package.
+`reflection.candidates`. Conversation history is supplied through the
+read-only `ConversationHistoryReader` contract; the reflection domain must not
+import the concrete store, chat runtime, or agent package.
 
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
@@ -243,14 +243,14 @@ Memory optimization likewise receives paths, entry/candidate repositories, and
 the profile port explicitly; CLI and daemon composition must reuse the active
 application graph rather than create a second authority graph.
 Memory curation receives the complete authority resource set explicitly:
-runtime paths, backend, conversation store, entry/candidate/profile repositories,
+runtime paths, backend, observation inbox, entry/candidate/profile repositories,
 recovery-plan store, and trace recorder. Defaults are limited to curation
 policy and model adapters, never persistence or authority selection.
-Daemon request handling may only request curation for a completed conversation.
+Daemon request handling may only request curation for a durable observation.
 The unified daemon scheduler owns execution, retry isolation, and periodic
-recovery across stored conversation IDs; request handlers must not invoke the curator
+recovery across pending observation IDs; request handlers must not invoke the curator
 model loop synchronously.
-Its structured model contract, cursor wire format, settings, and result DTO
+Its structured model contract, observation/plan wire formats, settings, and result DTO
 belong to `memory.curator_contract`; `memory.curator` owns only workflow
 orchestration and may re-export nothing merely for legacy import convenience.
 Reason-output section, chunk, manifest, progress, path, and planner contracts

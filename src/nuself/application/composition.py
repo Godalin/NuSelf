@@ -14,7 +14,7 @@ from nuself.application.reason import compose_reason_repository
 from nuself.application.reflection import compose_reflection_repository
 from nuself.application.trace import TraceServices, compose_trace_services
 from nuself.config import RuntimePaths
-from nuself.conversation import ConversationStore
+from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification import NotificationOutbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
@@ -29,6 +29,7 @@ class ApplicationGraph:
     paths: RuntimePaths
     backend: StorageBackend
     conversations: ConversationStore
+    conversation_history: ConversationHistoryService
     memory: MemoryRepositories
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
@@ -43,10 +44,12 @@ def compose_application(
 ) -> ApplicationGraph:
     """Build the application graph from already-owned authority resources."""
 
+    conversations = ConversationStore(paths, backend=backend)
     return ApplicationGraph(
         paths=paths,
         backend=backend,
-        conversations=ConversationStore(paths, backend=backend),
+        conversations=conversations,
+        conversation_history=ConversationHistoryService(conversations),
         memory=compose_memory_repositories(paths, backend),
         notifications=compose_notification_outbox(paths, backend),
         persona_prompts=compose_persona_prompt_repository(paths, backend),

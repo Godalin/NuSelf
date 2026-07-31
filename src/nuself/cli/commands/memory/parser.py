@@ -219,20 +219,20 @@ def add_memory_parser(
     )
     plan_show_parser = plan_subparsers.add_parser(
         "show",
-        help="Show payload-safe recovery metadata for one conversation.",
+        help="Show payload-safe recovery metadata for one observation.",
     )
-    plan_show_parser.add_argument("conversation_id")
+    plan_show_parser.add_argument("observation_id")
     bind_handler(plan_show_parser, handle_memory_plan_show)
     plan_discard_parser = plan_subparsers.add_parser(
         "discard",
-        help="Discard one conversation recovery plan.",
+        help="Discard one observation recovery plan.",
     )
-    plan_discard_parser.add_argument("conversation_id")
+    plan_discard_parser.add_argument("observation_id")
     plan_discard_parser.add_argument(
         "--force",
         action="store_true",
         required=True,
-        help="Acknowledge that the source range may be modeled again.",
+        help="Acknowledge that the observation may be modeled again.",
     )
     bind_handler(plan_discard_parser, handle_memory_plan_discard)
     optimize_parser = memory_subparsers.add_parser(

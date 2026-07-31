@@ -120,3 +120,12 @@ preserving record identity, message order/content, summaries, pending turns,
 archive state, cursor positions, timestamps, and references. The downgrade is
 the exact inverse and rejects a destination collision before mutation. Runtime
 startup never performs this migration implicitly.
+
+Schema v7 replaces conversation-backed curator cursors with the generic
+`memory_observations` inbox. Upgrade projects every unprocessed visible v6
+range into an opaque, deterministic observation; existing recovery plans are
+rewritten to observation ownership, evidence becomes observation-sourced, and
+the obsolete cursor records are removed. Downgrade retains observation records
+as forward-compatible data and parks v7 recovery plans in an ignored holding
+collection; re-upgrade restores them exactly. The v6 runtime does not process
+those retained observations, but no observation content is discarded.

@@ -338,9 +338,9 @@ def test_one_shot_success_runs_curator_after_reply(
         calls.append(f"reply:{message}:{conversation_id}:{turn_id}")
         return "done"
 
-    def curate(project_root: Path | None, conversation_id: str) -> None:
+    def curate(project_root: Path | None, observation_id: str) -> None:
         assert project_root == tmp_path
-        assert conversation_id == "thread-1"
+        assert observation_id.startswith("obs_")
         contexts.append(current_runtime_context())
         calls.append("curator")
         write_log_event(

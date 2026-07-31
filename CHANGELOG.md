@@ -6,6 +6,13 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Conversation and memory now meet through explicit domain APIs instead of
+  shared storage. A committed chat turn is projected through memory's generic,
+  durable `observe()` inbox; the curator scans only pending observations and
+  never opens conversation state. Conversation also exposes a bounded,
+  read-only history API so reflection or reasoning can request chat evidence
+  without receiving `ConversationStore`, locks, or persistence records. Schema
+  v7 migrates unprocessed v6 curator ranges into durable observations.
 - Persistent chat streams are now consistently named `conversation` across
   the CLI (`nuself conversation`, `:conversation`/`:c`), daemon protocol,
   storage, logs, traces, memory evidence, notifications, and internal APIs.
@@ -22,11 +29,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   serialize conflicting work without per-module locks, and one health snapshot
   replaces worker-specific lifecycle state. Dedicated worker supervisors,
   admission queues, timer schedulers, and export-worker threads were removed.
-- Daemon chat now returns immediately after persisting the reply and requests
-  per-thread memory curation from the unified scheduler instead of
-  running a second model call in the request path. Requested thread IDs are
-  coalesced, periodic scans recover missed in-memory wake-ups, and non-default
-  daemon and local conversations are curated under their correct thread.
+- Daemon chat now returns immediately after persisting the reply and publishes
+  a durable memory observation for the unified scheduler instead of running a
+  second model call in the request path. Requested observation IDs are
+  coalesced, and periodic scans of the memory inbox recover missed in-memory
+  wake-ups without opening conversation storage.
   Reusing a persisted chat `turn_id` with different input now fails before the
   model or tools run instead of creating a second conflicting turn. Chat state
   update and compression also preserve archived thread state instead of
@@ -75,7 +82,7 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   optimization receives the graph-owned entry, candidate, and profile
   repositories. Memory curation likewise requires the graph-owned backend,
   stores, repositories, recovery plans, and trace recorder; its structured
-  actions, cursor schema, settings, and result DTO now live in a dedicated
+  actions, observation schema, settings, and result DTO now live in a dedicated
   contract module. Reason operations
   used by CLI, REPL, chat, reflection, and
   daemon workers now share application-owned composition; the core reason

@@ -6,8 +6,9 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.application.chat import compose_conversation_runtime
+from nuself.application.chat import ChatResult, compose_conversation_runtime
 from nuself.application.curator import compose_memory_curator
+from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.cli.composition import compose_cli_application
 from nuself.agent.chat.audit import (
     report_chat_failure,
@@ -169,14 +170,22 @@ def send_one_shot_chat_interactive(
                 conversation_id,
                 turn_id=turn_id,
             )
+            application = compose_cli_application(project_root)
+            result = ChatResult(answer=reply, conversation_id=conversation_id)
+            observation = publish_chat_observation(
+                application,
+                result=result,
+                user_message=message,
+                turn_id=turn_id,
+            )
             write_chat_audit(
                 "one_shot_chat_completed",
                 project_root=project_root,
             )
-            run_memory_curator(project_root, conversation_id)
+            run_memory_curator(project_root, observation.id)
             return InteractiveChatResult(
                 code=CliExitCode.SUCCESS,
-                reply=reply,
+                reply=result.reply,
                 after_reply=lambda: _compress_after_reply(
                     conversation_id,
                     project_root,
@@ -195,14 +204,14 @@ def send_one_shot_chat_interactive(
 
 def run_memory_curator(
     project_root: Path | None,
-    conversation_id: str = "default",
+    observation_id: str,
 ) -> None:
     """Run post-turn curation and present its optional status."""
 
     try:
         result = compose_memory_curator(
             compose_cli_application(project_root)
-        ).run_once(conversation_id)
+        ).run_once(observation_id)
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
         report_memory_failure(

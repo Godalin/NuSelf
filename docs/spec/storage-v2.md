@@ -103,7 +103,7 @@ Internal collections:
 
 | Collection | Content |
 | --- | --- |
-| `memory_curator_cursors` | curator replay cursor |
+| `memory_observations` | producer-neutral durable curation inbox |
 | `memory_curator_plans` | durable curator plans |
 | `scheduler_state` | background scheduler cursors |
 

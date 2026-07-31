@@ -48,6 +48,12 @@ adapters over those contracts; backend modules do not import terminal UI code.
 Persistent conversation state and its repository live in the isolated
 `nuself.conversation` domain and are owned once by `ApplicationGraph`.
 Conversation execution lives under `nuself.agent.chat` and borrows that store.
+A separate read-only history service returns bounded immutable excerpts to
+reflection, reasoning, or future consumers; those domains never receive the
+conversation store, state records, locks, or schema. After a completed turn
+commits, an application projector may submit selected text through memory's
+generic durable observation API. Memory owns that inbox and never scans
+conversation persistence.
 A persistent conversation is distinct from a transient interactive session
 and contains ordered turns, a bounded summary, and branch/archive state. A
 direct typed NuSelf pipeline coordinates context, response, and state update;
@@ -108,8 +114,9 @@ those policies while domain functions remain directly testable callables.
 
 Major domains are:
 
-- **Memory and ingestion** — authoritative personal records, sources,
-  candidates, profile items, relations, and rebuildable search projections.
+- **Memory and ingestion** — producer-neutral durable observations,
+  authoritative personal records, sources, candidates, profile items,
+  relations, and rebuildable search projections.
   See [`spec/memory.md`](spec/memory.md) and
   [`spec/storage-v2.md`](spec/storage-v2.md).
 - **Conversation and persona** — context preparation, tool execution, bounded

@@ -44,7 +44,7 @@ def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_pa
             source_refs=["thread:default:4-6"],
             evidence=[
                 MemoryEvidence(
-                    source_type="conversation",
+                    source_type="observation",
                     source_ref="thread:default:4-6",
                     summary="User asked for realistic temporal memory.",
                     observed_at="2026-05-07",
@@ -143,7 +143,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
             title="Memory timing model",
             body="Memory should preserve real-world timing so changes in thought remain visible.",
             source_refs=["thread:default:4-6"],
-            evidence=[MemoryEvidence(source_type="conversation", source_ref="thread:default:4-6", summary="Follow-up")],
+            evidence=[MemoryEvidence(source_type="observation", source_ref="thread:default:4-6", summary="Follow-up")],
             observed_at="2026-05-07",
             relations={"related_to": [existing.id]},
         )
@@ -763,7 +763,7 @@ def test_memory_candidate_to_memory_object_round_trip() -> None:
         tags=["tag1"],
         source_refs=["ref1"],
         confidence=0.8,
-        evidence=[MemoryEvidence(source_type="conversation", source_ref="t:1", summary="s")],
+        evidence=[MemoryEvidence(source_type="observation", source_ref="t:1", summary="s")],
     )
     obj = candidate.to_memory_object()
 

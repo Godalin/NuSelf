@@ -14,6 +14,7 @@ from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import ConfigSystem, ReflectionSettings
+from nuself.conversation import ConversationHistoryExcerpt
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -39,14 +40,13 @@ class CandidateListOutput(BaseModel):
     candidates: list[CandidateItemOutput] = Field(max_length=3)
 
 
-class ConversationContextProvider(Protocol):
-    """Provide recent conversation context without exposing chat storage."""
-
-    def recent_context(
+class ConversationHistoryReader(Protocol):
+    def recent(
         self,
-        max_conversations: int,
-        max_messages: int,
-    ) -> str: ...
+        *,
+        limit: int = 5,
+        messages_per_conversation: int = 10,
+    ) -> tuple[ConversationHistoryExcerpt, ...]: ...
 
 
 class IdeaCandidateGenerator:
@@ -60,14 +60,14 @@ class IdeaCandidateGenerator:
         memory_repository: MemoryEntryRepository,
         source_repository: SourceRepository,
         profile_repository: ProfileItemRepository,
-        conversation_context: ConversationContextProvider,
+        conversation_history: ConversationHistoryReader,
         agent: StructuredAgent[CandidateListOutput] | None = None,
     ) -> None:
         self._project_root = project_root
         self._memory_repository = memory_repository
         self._source_repository = source_repository
         self._profile_repository = profile_repository
-        self._conversation_context = conversation_context
+        self._conversation_history = conversation_history
         self._agent = agent or default_structured_agent(
             CandidateListOutput,
             project_root=project_root,
@@ -120,7 +120,7 @@ class IdeaCandidateGenerator:
 
     def _collect_context(self) -> _ThinkingContext:
         return _ThinkingContext(
-            conversations=self._conversation_context.recent_context(5, 10),
+            conversations=_render_history(self._conversation_history.recent()),
             memories="\n".join(
                 f"- [{entry.type}] {entry.title}: {entry.body[:120]}"
                 for entry in self._memory_repository.list()[-8:]
@@ -169,7 +169,6 @@ class IdeaCandidateGenerator:
                 urgency=item.urgency,
                 interruption_cost=item.interruption_cost,
                 evidence_refs=(),
-                suggested_conversation_id=None,
                 source_summary="llm-generated",
                 created_at=utc_now_iso(),
             )
@@ -199,3 +198,14 @@ class _ThinkingContext:
         return "\n\n".join(
             f"## {title}\n{body}" for title, body in named if body
         )
+
+
+def _render_history(excerpts: tuple[ConversationHistoryExcerpt, ...]) -> str:
+    lines: list[str] = []
+    for excerpt in excerpts:
+        lines.append(f"Conversation {excerpt.id}:")
+        lines.extend(
+            f"  {message.role}: {message.content[:120]}"
+            for message in excerpt.messages
+        )
+    return "\n".join(lines)

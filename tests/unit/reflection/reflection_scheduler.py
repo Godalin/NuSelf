@@ -201,7 +201,7 @@ def _generator(
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
-        conversation_context=application.conversations,
+        conversation_history=application.conversation_history,
     )
 
 
@@ -286,7 +286,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
-        conversation_store=application.conversations,
+        conversation_history=application.conversation_history,
     )
 
 
@@ -391,7 +391,7 @@ def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> Non
     assert entries[0].status == "pending"
     assert entries[0].id.startswith("reflection-candidate-")
     assert entries[0].deep_link is not None
-    assert entries[0].deep_link.startswith("nuself://conversation/reflections")
+    assert entries[0].deep_link.startswith("nuself://new-conversation?")
 
 
 def test_reflect_result_survives_unavailable_auxiliary_logs(
@@ -911,7 +911,6 @@ def _make_candidate(
         urgency=urgency,
         interruption_cost=interruption_cost,
         evidence_refs=(),
-        suggested_conversation_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )

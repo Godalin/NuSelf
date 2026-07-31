@@ -297,7 +297,6 @@ class ConversationPersonaOrchestrator:
             urgency=0.2,
             interruption_cost=0.1,
             evidence_refs=(),
-            suggested_conversation_id=conversation_id,
             source_summary=source_summary,
             created_at=now.isoformat(),
         )

@@ -461,24 +461,49 @@ class ConversationStore:
                 raise ValueError(f"conversation not found: {conversation_id}")
             self._collection.delete(conversation_id)
 
-    def recent_context(
-        self,
-        max_conversations: int,
-        max_messages: int,
-    ) -> str:
-        """Render bounded model context for cross-domain consumers."""
+@dataclass(frozen=True)
+class ConversationHistoryMessage:
+    """Immutable public message view returned by the conversation API."""
 
-        lines: list[str] = []
-        for conversation_id in reversed(
-            self.list()[-max_conversations:]
-        ):
-            state = self.load(conversation_id)
-            lines.append(f"Conversation {conversation_id}:")
-            lines.extend(
-                f"  {message.role}: {message.content[:120]}"
-                for message in state.messages[-max_messages:]
+    role: ConversationRole
+    content: str
+
+
+@dataclass(frozen=True)
+class ConversationHistoryExcerpt:
+    """Bounded public history view with no persistence details."""
+
+    id: str
+    messages: tuple[ConversationHistoryMessage, ...]
+
+
+class ConversationHistoryService:
+    """Read-only API for domains that explicitly need chat evidence."""
+
+    def __init__(self, store: ConversationStore) -> None:
+        self._store = store
+
+    def recent(
+        self,
+        *,
+        limit: int = 5,
+        messages_per_conversation: int = 10,
+    ) -> tuple[ConversationHistoryExcerpt, ...]:
+        if limit < 1 or messages_per_conversation < 1:
+            raise ValueError("conversation history limits must be positive")
+        excerpts: list[ConversationHistoryExcerpt] = []
+        for conversation_id in reversed(self._store.list()[-limit:]):
+            state = self._store.load(conversation_id)
+            excerpts.append(
+                ConversationHistoryExcerpt(
+                    id=conversation_id,
+                    messages=tuple(
+                        ConversationHistoryMessage(message.role, message.content)
+                        for message in state.messages[-messages_per_conversation:]
+                    ),
+                )
             )
-        return "\n".join(lines)
+        return tuple(excerpts)
 
 
 def _with_archived(state: ConversationState, archived: bool) -> ConversationState:

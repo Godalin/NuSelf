@@ -20,13 +20,12 @@ from nuself.memory.optimizer import (
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
-    result = compose_memory_curator(
-        compose_cli_application(args.project_root)
-    ).run_once()
-    print(
-        f"Memory curator: {result.summary()} "
-        f"log={result.log_path}"
-    )
+    application = compose_cli_application(args.project_root)
+    curator = compose_memory_curator(application)
+    pending = application.memory.observations.pending()
+    for observation in pending:
+        curator.run_once(observation.id)
+    print(f"Memory curator: processed_observations={len(pending)}")
     return 0
 
 

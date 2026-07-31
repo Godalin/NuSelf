@@ -70,7 +70,7 @@ COLLECTION_NAMES: tuple[str, ...] = (
     "notification_outbox",
     "reflection_entries",
     "conversations",
-    "memory_curator_cursors",
+    "memory_observations",
     "memory_curator_plans",
     "scheduler_state",
 )
@@ -89,7 +89,7 @@ COLLECTION_LOG_COMPONENTS: dict[str, LogComponent] = {
     "reflection_entries": "reflection",
     "notification_outbox": "outbox",
     "conversations": "chat",
-    "memory_curator_cursors": "memory",
+    "memory_observations": "memory",
     "memory_curator_plans": "memory",
     "scheduler_state": "reflection",
 }

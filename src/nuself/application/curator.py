@@ -18,7 +18,7 @@ def compose_memory_curator(
     paths = application.paths
     return MemoryCurator(
         paths,
-        conversation_store=application.conversations,
+        observation_repository=application.memory.observations,
         repository=application.memory.entries,
         candidate_repository=application.memory.candidates,
         profile_repository=application.memory.profile,

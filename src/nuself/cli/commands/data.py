@@ -41,7 +41,7 @@ _PUBLIC_ALIASES: dict[str, str] = {
     "reflections": "reflection_entries",
 }
 _INTERNAL_COLLECTIONS = {
-    "memory_curator_cursors",
+    "memory_observations",
     "memory_curator_plans",
     "scheduler_state",
 }

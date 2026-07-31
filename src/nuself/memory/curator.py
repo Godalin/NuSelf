@@ -7,10 +7,8 @@ from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from nuself.conversation import ConversationMessage, ConversationState, ConversationStore
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.clock import utc_now_iso
 from nuself.config import RuntimePaths
 from nuself.domain.memory import (
     MemoryCandidate,
@@ -28,7 +26,6 @@ from nuself.memory.curator_contract import (
     CuratorActionsOutput,
     MemoryAction,
     MemoryActionType,
-    MemoryCuratorCursor,
     MemoryCuratorResult,
     MemoryCuratorSettings,
     MemoryDecision,
@@ -39,7 +36,10 @@ from nuself.memory.curator_plan import (
     MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLockContended,
     MemoryCuratorPlanStore,
-    validate_curator_conversation_id,
+)
+from nuself.memory.observation import (
+    MemoryObservation,
+    MemoryObservationRepository,
 )
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
@@ -49,7 +49,6 @@ from nuself.memory.repository import (
 )
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 
@@ -126,7 +125,7 @@ class MemoryCurator:
         *,
         agent: StructuredAgent[CuratorActionsOutput] | None = None,
         settings: MemoryCuratorSettings | None = None,
-        conversation_store: ConversationStore,
+        observation_repository: MemoryObservationRepository,
         repository: MemoryEntryRepository,
         candidate_repository: MemoryCandidateRepository,
         profile_repository: ProfileRepositoryPort,
@@ -143,10 +142,7 @@ class MemoryCurator:
         )
         self._settings = settings or MemoryCuratorSettings()
         self._backend = backend
-        self._cursor_collection = self._backend.collection(
-            "memory_curator_cursors"
-        )
-        self._conversation_store = conversation_store
+        self._observations = observation_repository
         self._repository = repository
         self._profile_repository = profile_repository
         self._candidate_repository = candidate_repository
@@ -156,22 +152,17 @@ class MemoryCurator:
 
     def run_once(
         self,
-        conversation_id: str = "default",
-        *,
-        source_trace_id: str | None = None,
+        observation_id: str,
     ) -> MemoryCuratorResult:
         try:
-            with self._plan_store.exclusive(conversation_id):
-                return self._run_once_locked(
-                    conversation_id,
-                    source_trace_id=source_trace_id,
-                )
+            with self._plan_store.exclusive(observation_id):
+                return self._run_once_locked(observation_id)
         except MemoryCuratorPlanLockContended:
             write_curator_audit(
                 "curator_contended",
-                "Memory curator found the source conversation busy",
+                "Memory curator found the source observation busy",
                 project_root=self._paths.project_root,
-                metadata={"conversation_id": conversation_id},
+                metadata={"observation_id": observation_id},
             )
             return MemoryCuratorResult(
                 processed_messages=0,
@@ -183,15 +174,10 @@ class MemoryCurator:
 
     def _run_once_locked(
         self,
-        conversation_id: str,
-        *,
-        source_trace_id: str | None,
+        observation_id: str,
     ) -> MemoryCuratorResult:
-        state = self._conversation_store.load(conversation_id)
-        cursor = self._load_cursor(conversation_id)
-        visible_start = state.message_start_index
-        visible_end = state.next_message_index
-        if cursor >= visible_end:
+        observation = self._observations.get(observation_id)
+        if observation.status == "processed":
             return MemoryCuratorResult(
                 processed_messages=0,
                 created=0,
@@ -199,30 +185,13 @@ class MemoryCurator:
                 ignored=0,
                 log_path=self._memory_log_path(),
             )
-        plan = self._load_plan(
-            conversation_id,
-            cursor=cursor,
-            next_message_index=visible_end,
-        )
-        if cursor < visible_start:
-            write_curator_audit(
-                "curator_history_gap",
-                "Older unprocessed turns were already compressed",
-                project_root=self._paths.project_root,
-                metadata={
-                    "conversation_id": conversation_id,
-                    "cursor": cursor,
-                    "visible_start": visible_start,
-                },
-            )
+        plan = self._load_plan(observation_id)
         if plan is None:
-            source_start = max(cursor, visible_start)
-            offset = source_start - visible_start
-            new_messages = state.messages[offset:]
             if not _has_memory_worthy_signal(
-                new_messages,
+                observation.fragments,
                 self._settings.min_quality_chars,
             ):
+                self._observations.mark_processed(observation_id)
                 return MemoryCuratorResult(
                     processed_messages=0,
                     created=0,
@@ -232,13 +201,7 @@ class MemoryCurator:
                 )
 
             decision = self._decide_actions(
-                conversation_id,
-                state,
-                source_start,
-                new_messages,
-            )
-            source_ref = (
-                f"conversation:{conversation_id}:{source_start}-{visible_end}"
+                observation,
             )
             if decision.status == "deferred":
                 write_curator_audit(
@@ -246,8 +209,8 @@ class MemoryCurator:
                     "Memory curator deferred the source range",
                     project_root=self._paths.project_root,
                     metadata={
-                        "conversation_id": conversation_id,
-                        "source_ref": source_ref,
+                        "observation_id": observation_id,
+                        "source_ref": observation.source_ref,
                         "processed_messages": 0,
                     },
                 )
@@ -259,17 +222,14 @@ class MemoryCurator:
                     log_path=self._memory_log_path(),
                 )
             plan = MemoryCuratorPlan(
-                conversation_id=conversation_id,
-                source_start=source_start,
-                source_end=visible_end,
-                observed_at=utc_now_iso(),
+                observation_id=observation_id,
+                source_ref=observation.source_ref,
+                observed_at=observation.observed_at,
                 actions=decision.actions,
             )
             self._plan_store.save(plan)
-        source_start = plan.source_start
-        visible_end = plan.source_end
         source_ref = plan.source_ref
-        processed_messages = visible_end - source_start
+        processed_messages = len(observation.fragments)
 
         created = 0
         updated = 0
@@ -282,7 +242,7 @@ class MemoryCurator:
                     source_ref,
                     candidate_id=candidate_id,
                     observed_at=plan.observed_at,
-                    source_trace_id=source_trace_id,
+                    source_trace_id=observation.source_trace_id,
                 )
                 if outcome == "create":
                     created += 1
@@ -296,20 +256,21 @@ class MemoryCurator:
                     source_ref,
                     candidate_id=candidate_id,
                     observed_at=plan.observed_at,
-                    source_trace_id=source_trace_id,
+                    source_trace_id=observation.source_trace_id,
                 ):
                     updated += 1
                 else:
                     ignored += 1
             else:
                 ignored += 1
-        self._save_cursor(conversation_id, visible_end)
+        self._observations.mark_processed(observation_id)
+        self._plan_store.complete(observation_id)
         write_curator_audit(
             "curator_completed",
             "Memory curator processed a source range",
             project_root=self._paths.project_root,
             metadata={
-                "conversation_id": conversation_id,
+                "observation_id": observation_id,
                 "source_ref": source_ref,
                 "processed_messages": processed_messages,
                 "created": created,
@@ -327,10 +288,7 @@ class MemoryCurator:
 
     def _decide_actions(
         self,
-        conversation_id: str,
-        state: ConversationState,
-        cursor: int,
-        messages: list[ConversationMessage],
+        observation: MemoryObservation,
     ) -> MemoryDecision:
         prompt = [
             SystemMessage(
@@ -349,11 +307,10 @@ class MemoryCurator:
             ),
             HumanMessage(
                 content=(
-                    f"Conversation: {conversation_id}\n"
-                    f"Existing summary:\n{state.summary or '(none)'}\n\n"
+                    f"Evidence source: {observation.source_ref}\n"
                     f"Existing memories:\n{self._existing_memory_context() or '(none)'}\n\n"
                     f"Existing profile items:\n{self._existing_profile_context() or '(none)'}\n\n"
-                    f"New turns {cursor}-{cursor + len(messages)}:\n{_render_transcript(messages)}\n\n"
+                    f"New observations:\n{_render_observation(observation.fragments)}\n\n"
                     "Return the required structured action batch. For "
                     "low-value chat, choose one ignore action and explain why."
                 ),
@@ -438,7 +395,7 @@ class MemoryCurator:
                     source_refs=[source_ref],
                     evidence=[
                         MemoryEvidence(
-                            source_type="conversation",
+                            source_type="observation",
                             source_ref=source_ref,
                             summary=action.reason,
                             observed_at=observed_at,
@@ -480,7 +437,7 @@ class MemoryCurator:
             source_refs=[source_ref],
             evidence=[
                 MemoryEvidence(
-                    source_type="conversation",
+                    source_type="observation",
                     source_ref=source_ref,
                     summary=action.reason,
                     observed_at=observed_at,
@@ -537,7 +494,7 @@ class MemoryCurator:
             source_refs=[source_ref],
             evidence=[
                 MemoryEvidence(
-                    source_type="conversation",
+                    source_type="observation",
                     source_ref=source_ref,
                     summary=action.reason,
                     observed_at=observed_at,
@@ -654,70 +611,28 @@ class MemoryCurator:
             },
         )
 
-    def _load_cursor(self, conversation_id: str) -> int:
-        try:
-            validate_curator_conversation_id(conversation_id)
-            raw = self._cursor_collection.get(conversation_id)
-            if raw is None:
-                return 0
-            cursor = MemoryCuratorCursor.from_wire(
-                {
-                    key: value
-                    for key, value in raw.items()
-                    if key != "id"
-                },
-                expected_conversation_id=conversation_id,
-            )
-        except ValueError as exc:
-            report_corrupt_record(
-                exc,
-                component="memory",
-                collection="memory_curator_cursors",
-                record_id=conversation_id,
-                project_root=self._paths.project_root,
-            )
-            raise ValueError(
-                f"invalid memory curator cursor for conversation {conversation_id!r}"
-            ) from exc
-        return cursor.processed_message_count
-
     def _load_plan(
         self,
-        conversation_id: str,
-        *,
-        cursor: int,
-        next_message_index: int,
+        observation_id: str,
     ) -> MemoryCuratorPlan | None:
         try:
-            return self._plan_store.resumable(
-                conversation_id,
-                cursor=cursor,
-                next_message_index=next_message_index,
-            )
+            return self._plan_store.resumable(observation_id)
         except MemoryCuratorPlanCorruptError as exc:
             raise ValueError(
                 diagnostic_exception_message(exc)
             ) from exc
 
-    def _save_cursor(self, conversation_id: str, processed_message_count: int) -> None:
-        cursor = MemoryCuratorCursor(
-            conversation_id=conversation_id,
-            processed_message_count=processed_message_count,
-        )
-        validate_curator_conversation_id(conversation_id)
-        self._cursor_collection.put(conversation_id, cursor.to_wire())
-
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"
 
 
-def _render_transcript(messages: list[ConversationMessage]) -> str:
-    return "\n".join(f"{message.role}: {message.content}" for message in messages)
+def _render_observation(fragments: tuple[str, ...]) -> str:
+    return "\n".join(fragments)
 
 
-def _has_memory_worthy_signal(messages: list[ConversationMessage], min_quality_chars: int) -> bool:
-    user_text = "\n".join(message.content for message in messages if message.role == "user")
-    if len(user_text.strip()) >= min_quality_chars:
+def _has_memory_worthy_signal(fragments: tuple[str, ...], min_quality_chars: int) -> bool:
+    text = "\n".join(fragments)
+    if len(text.strip()) >= min_quality_chars:
         return True
-    normalized = user_text.casefold()
+    normalized = text.casefold()
     return any(marker in normalized for marker in DURABLE_SIGNAL_MARKERS)

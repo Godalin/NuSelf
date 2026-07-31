@@ -396,8 +396,9 @@ def test_reflection_relevance_is_a_separate_responsibility() -> None:
     ).is_file()
 
 
-def test_reflection_candidates_depend_on_thread_context_port() -> None:
+def test_reflection_candidates_depend_only_on_conversation_history_api() -> None:
     path = _SOURCE_ROOT / "reflection" / "candidates.py"
+    source = path.read_text(encoding="utf-8")
 
     assert not {
         imported
@@ -405,6 +406,12 @@ def test_reflection_candidates_depend_on_thread_context_port() -> None:
         if imported == "nuself.agent.chat"
         or imported.startswith("nuself.agent.chat.")
     }
+    assert "ConversationStore" not in source
+    assert "ConversationState" not in source
+
+
+def test_memory_domain_does_not_import_conversation() -> None:
+    assert _violations(("memory",), ("nuself.conversation",)) == ()
 
 
 def test_reflection_service_does_not_compose_infrastructure() -> None:

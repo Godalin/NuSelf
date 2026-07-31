@@ -48,7 +48,6 @@ def test_shared_persona_discussion_service_delegates_to_engine(tmp_path: Path) -
         urgency=0.4,
         interruption_cost=0.2,
         evidence_refs=(),
-        suggested_conversation_id=None,
         source_summary="summary",
         created_at="2026-05-12T00:00:00Z",
     )

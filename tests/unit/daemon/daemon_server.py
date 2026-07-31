@@ -12,13 +12,13 @@ from langchain_core.messages import BaseMessage
 from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
-    ConversationState,
 )
 from conversation_fixtures import ConversationStore
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState
 from nuself.logs import read_log_events
+from nuself.memory.observation import MemoryObservation
 from nuself.notification import OutboxEntry
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
@@ -319,7 +319,8 @@ def test_daemon_chat_requests_curation_without_running_it_inline(
 
     assert response.status == "ok"
     assert "memory_update" not in response.payload
-    assert requested == ["default"]
+    assert len(requested) == 1
+    assert requested[0].startswith("obs_")
 
 
 def test_daemon_chat_requests_curation_for_non_default_thread(
@@ -342,44 +343,52 @@ def test_daemon_chat_requests_curation_for_non_default_thread(
 
     assert response.status == "ok"
     assert "memory_update" not in response.payload
-    assert requested == ["project"]
+    assert len(requested) == 1
+    assert requested[0].startswith("obs_")
 
 
-def test_memory_curator_worker_coalesces_requested_conversation_ids(
+def test_memory_curator_worker_coalesces_requested_observation_ids(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
     calls: list[str] = []
 
     class RecordingCurator:
-        def run_once(self, conversation_id: str) -> None:
-            calls.append(conversation_id)
+        def run_once(self, observation_id: str) -> None:
+            calls.append(observation_id)
             state.shutdown_requested.set()
 
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
-    state.request_memory_curation("project")
-    state.request_memory_curation("project")
+    state.request_memory_curation("obs_project")
+    state.request_memory_curation("obs_project")
     state.scheduler.start()
     assert state.shutdown_requested.wait(timeout=1)
     state.stop_background_tasks()
 
-    assert calls == ["project"]
+    assert calls == ["obs_project"]
 
 
-def test_memory_curator_periodic_scan_recovers_all_stored_threads(
+def test_memory_curator_periodic_scan_recovers_pending_observations(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
     state.memory_curator_interval_seconds = 0.01
-    state.conversation_store.save(ConversationState(conversation_id="active"))
-    state.conversation_store.save(ConversationState(conversation_id="archived"))
-    state.conversation_store.archive("archived")
+    for source_ref in ("test:active", "test:archived"):
+        state.application.memory.observations.observe(
+            MemoryObservation.create(
+                source_ref=source_ref,
+                fragments=("user: remember this",),
+            )
+        )
+    expected_ids = {
+        item.id for item in state.application.memory.observations.pending()
+    }
     calls: list[str] = []
 
     class RecordingCurator:
-        def run_once(self, conversation_id: str) -> None:
-            calls.append(conversation_id)
-            if set(calls) == {"active", "archived"}:
+        def run_once(self, observation_id: str) -> None:
+            calls.append(observation_id)
+            if set(calls) == expected_ids:
                 state.shutdown_requested.set()
 
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
@@ -390,7 +399,7 @@ def test_memory_curator_periodic_scan_recovers_all_stored_threads(
     assert state.shutdown_requested.wait(timeout=1)
     state.stop_background_tasks()
 
-    assert set(calls) == {"active", "archived"}
+    assert set(calls) == expected_ids
 
 
 def test_daemon_ping_returns_pong(tmp_path: Path) -> None:

@@ -19,11 +19,10 @@ from nuself.memory.curator_plan import (
 from memory_fixtures import memory_curator_plan_store
 
 
-def _plan(conversation_id: str = "default") -> MemoryCuratorPlan:
+def _plan(observation_id: str = "obs_default") -> MemoryCuratorPlan:
     return MemoryCuratorPlan(
-        conversation_id=conversation_id,
-        source_start=0,
-        source_end=1,
+        observation_id=observation_id,
+        source_ref=f"test:{observation_id}",
         observed_at="2026-07-29T00:00:00+00:00",
         actions=(
             MemoryAction(
@@ -38,12 +37,12 @@ def _plan(conversation_id: str = "default") -> MemoryCuratorPlan:
 
 def _hold_curator_lock(
     project_root: str,
-    conversation_id: str,
+    observation_id: str,
     ready: Event,
     release: Event,
 ) -> None:
     store = memory_curator_plan_store(Path(project_root))
-    with store.exclusive(conversation_id):
+    with store.exclusive(observation_id):
         ready.set()
         if not release.wait(timeout=10):
             raise RuntimeError("parent did not release curator lock test child")
@@ -59,14 +58,14 @@ def test_plan_lock_excludes_other_process_and_retains_plan(
     release = context.Event()
     process = context.Process(
         target=_hold_curator_lock,
-        args=(str(tmp_path), "default", ready, release),
+        args=(str(tmp_path), "obs_default", ready, release),
     )
     process.start()
     try:
         assert ready.wait(timeout=10)
         with pytest.raises(MemoryCuratorPlanLockContended):
-            store.discard("default")
-        assert store.get("default") == plan
+            store.discard("obs_default")
+        assert store.get("obs_default") == plan
     finally:
         release.set()
         process.join(timeout=10)
@@ -75,16 +74,16 @@ def test_plan_lock_excludes_other_process_and_retains_plan(
             process.join(timeout=10)
 
     assert process.exitcode == 0
-    store.discard("default")
-    assert store.get("default") is None
+    store.discard("obs_default")
+    assert store.get("obs_default") is None
 
 
 def test_plan_locks_are_per_thread_and_stable_after_exception(
     tmp_path: Path,
 ) -> None:
     store = memory_curator_plan_store(tmp_path)
-    default_lock = store.exclusive("default")
-    other_lock = store.exclusive("other")
+    default_lock = store.exclusive("obs_default")
+    other_lock = store.exclusive("obs_other")
 
     with pytest.raises(RuntimeError, match="operation failed"):
         with default_lock:
@@ -95,7 +94,7 @@ def test_plan_locks_are_per_thread_and_stable_after_exception(
     assert other_lock.acquired is False
     assert default_lock.path.exists()
     assert other_lock.path.exists()
-    with store.exclusive("default"):
+    with store.exclusive("obs_default"):
         pass
 
 

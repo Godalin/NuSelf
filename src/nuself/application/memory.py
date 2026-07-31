@@ -14,6 +14,7 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.memory.curator_plan import MemoryCuratorPlanStore
+from nuself.memory.observation import MemoryObservationRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import StorageBackend
@@ -27,6 +28,7 @@ class MemoryRepositories:
     candidates: MemoryCandidateRepository
     sources: SourceRepository
     profile: ProfileItemRepository
+    observations: MemoryObservationRepository
     curator_plans: MemoryCuratorPlanStore
 
 
@@ -80,5 +82,6 @@ def compose_memory_repositories(
         candidates=candidates,
         sources=sources,
         profile=profile,
+        observations=MemoryObservationRepository(backend),
         curator_plans=MemoryCuratorPlanStore(paths, backend),
     )

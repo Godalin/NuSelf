@@ -44,14 +44,6 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import get_default_backend
 
 
-def _stored_record(
-    root: Path,
-    collection: str,
-    record_id: str,
-) -> dict[str, object] | None:
-    return get_default_backend(root).collection(collection).get(record_id)
-
-
 class FakeCuratorAgent:
     def __init__(self, output: CuratorActionsOutput) -> None:
         self.output = output
@@ -173,10 +165,10 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert candidates[0].type == "episode"
     assert candidates[0].tags == ("memory",)
     assert candidates[0].review_state == "pending"
-    assert candidates[0].source_refs == ("conversation:default:0-2",)
+    assert candidates[0].source_refs == ("test-interaction:default:0-2",)
     assert candidates[0].observed_at is not None
-    assert candidates[0].evidence[0].source_type == "conversation"
-    assert candidates[0].evidence[0].source_ref == "conversation:default:0-2"
+    assert candidates[0].evidence[0].source_type == "observation"
+    assert candidates[0].evidence[0].source_ref == "test-interaction:default:0-2"
     assert candidates[0].evidence[0].observed_at == candidates[0].observed_at
     assert candidates[0].evidence[0].summary == "important memory model decision"
     events = read_log_events(
@@ -196,183 +188,6 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         encoding="utf-8"
     ).splitlines():
         assert isinstance(json.loads(line), dict)
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "conversation_id": "default",
-        "processed_message_count": 2,
-    }
-
-
-@pytest.mark.parametrize(
-    "cursor_record",
-    [
-        {"conversation_id": "other", "processed_message_count": 0},
-        {"conversation_id": "default", "processed_message_count": True},
-        {"conversation_id": "default", "processed_message_count": -1},
-    ],
-)
-def test_memory_curator_rejects_corrupt_cursor_without_replay(
-    tmp_path: Path,
-    cursor_record: dict[str, object],
-) -> None:
-    conversation_store = ConversationStore(tmp_path)
-    conversation_store.save(
-        ConversationState(
-            conversation_id="default",
-            messages=[
-                ConversationMessage(
-                    role="user",
-                    content=(
-                        "We decided that malformed cursor state must never "
-                        "replay already processed durable conversation history."
-                    ),
-                )
-            ],
-        )
-    )
-    get_default_backend(tmp_path).collection(
-        "memory_curator_cursors"
-    ).put("default", cursor_record)
-    agent = _curator_agent('{"actions":[]}')
-    curator = MemoryCurator(
-        tmp_path,
-        agent=agent,
-        conversation_store=conversation_store,
-        settings=MemoryCuratorSettings(auto_accept=False),
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="invalid memory curator cursor",
-    ):
-        curator.run_once()
-
-    assert agent.calls == []
-    assert memory_candidate_repository(tmp_path).list() == []
-    event = read_log_events(
-        project_root=tmp_path,
-        component="memory",
-    )[-1]
-    assert event.event == "record_decode_failed"
-    assert event.metadata == {
-        "collection": "memory_curator_cursors",
-        "record_id": "default",
-    }
-
-
-@pytest.mark.parametrize(
-    ("auto_accept", "candidate_state"),
-    [(False, "pending"), (True, "accepted")],
-)
-def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    auto_accept: bool,
-    candidate_state: str,
-) -> None:
-    first_message = ConversationMessage(
-        role="user",
-        content=(
-            "Remember that a failed curator cursor write must resume the "
-            "saved decision without invoking the model again."
-        ),
-    )
-    conversation_store = ConversationStore(tmp_path)
-    conversation_store.save(
-        ConversationState(conversation_id="default", messages=[first_message])
-    )
-    agent = _curator_agent(
-        '{"actions":[{"action":"create","type":"episode",'
-        '"title":"Resumable curator plan",'
-        '"body":"Cursor failure resumes the exact saved decision.",'
-        '"tags":["memory"],"confidence":0.9,'
-        '"reason":"explicit replay-safety requirement"}]}'
-    )
-    curator = MemoryCurator(
-        tmp_path,
-        agent=agent,
-        conversation_store=conversation_store,
-        settings=MemoryCuratorSettings(auto_accept=auto_accept),
-    )
-    real_cursor_put = curator._cursor_collection.put  # pyright: ignore[reportPrivateUsage]
-    fail_cursor = True
-
-    def fail_first_cursor_write(
-        key: str,
-        payload: dict[str, object],
-    ) -> None:
-        nonlocal fail_cursor
-        if fail_cursor:
-            fail_cursor = False
-            raise OSError("cursor store unavailable")
-        real_cursor_put(key, payload)
-
-    monkeypatch.setattr(
-        curator._cursor_collection,  # pyright: ignore[reportPrivateUsage]
-        "put",
-        fail_first_cursor_write,
-    )
-
-    with pytest.raises(OSError, match="cursor store unavailable"):
-        curator.run_once()
-
-    candidate_repo = memory_candidate_repository(tmp_path)
-    [first_candidate] = candidate_repo.list(include_reviewed=True)
-    conversation_store.save(
-        ConversationState(
-            conversation_id="default",
-            messages=[
-                first_message,
-                ConversationMessage(
-                    role="user",
-                    content=(
-                        "Remember that messages arriving during recovery "
-                        "belong to the next curator range."
-                    ),
-                ),
-            ],
-        )
-    )
-
-    resumed = curator.run_once()
-
-    assert resumed.processed_messages == 1
-    assert resumed.created == 1
-    assert len(agent.calls) == 1
-    [resumed_candidate] = candidate_repo.list(include_reviewed=True)
-    assert resumed_candidate == first_candidate
-    assert resumed_candidate.review_state == candidate_state
-    assert resumed_candidate.source_refs == ("conversation:default:0-1",)
-    assert len(memory_entry_repository(tmp_path).list()) == int(auto_accept)
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "conversation_id": "default",
-        "processed_message_count": 1,
-    }
-
-    later = curator.run_once()
-
-    assert later.processed_messages == 1
-    assert len(agent.calls) == 2
-    candidates = candidate_repo.list(include_reviewed=True)
-    assert len(candidates) == 2
-    assert {candidate.source_refs for candidate in candidates} == {
-        ("conversation:default:0-1",),
-        ("conversation:default:1-2",),
-    }
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "conversation_id": "default",
-        "processed_message_count": 2,
-    }
-
-
 def test_memory_curator_plan_write_fails_before_candidate_effects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -426,77 +241,6 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
 
     assert len(agent.calls) == 1
     assert memory_candidate_repository(tmp_path).list() == []
-    assert (
-        get_default_backend(tmp_path)
-        .collection("memory_curator_cursors")
-        .get("default")
-        is None
-    )
-
-
-def test_memory_curator_rejects_incompatible_plan_without_model_replay(
-    tmp_path: Path,
-) -> None:
-    conversation_store = ConversationStore(tmp_path)
-    conversation_store.save(
-        ConversationState(
-            conversation_id="default",
-            messages=[
-                ConversationMessage(
-                    role="user",
-                    content=(
-                        "Remember that incompatible curator plans require "
-                        "repair instead of speculative model replay."
-                    ),
-                )
-            ],
-        )
-    )
-    get_default_backend(tmp_path).collection(
-        "memory_curator_plans"
-    ).put(
-        "default",
-        {
-                "conversation_id": "default",
-                "source_start": 0,
-                "source_end": 2,
-                "observed_at": "2026-07-29T00:00:00+00:00",
-                "actions": [
-                    {
-                        "action": "ignore",
-                        "title": "",
-                        "body": "",
-                        "type": "episode",
-                        "tags": [],
-                        "entry_id": None,
-                        "confidence": 0.6,
-                        "reason": "no durable signal",
-                    }
-                ],
-            },
-    )
-    agent = _curator_agent('{"actions":[]}')
-    curator = MemoryCurator(
-        tmp_path,
-        agent=agent,
-        conversation_store=conversation_store,
-        settings=MemoryCuratorSettings(auto_accept=False),
-    )
-
-    with pytest.raises(ValueError, match="invalid memory curator plan"):
-        curator.run_once()
-
-    assert agent.calls == []
-    assert memory_candidate_repository(tmp_path).list() == []
-    event = read_log_events(
-        project_root=tmp_path,
-        component="memory",
-    )[-1]
-    assert event.event == "record_decode_failed"
-    assert event.metadata == {
-        "collection": "memory_curator_plans",
-        "record_id": "default",
-    }
 
 
 def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None:
@@ -535,7 +279,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     assert candidates[0].tags == ("memory", "preview")
     assert candidates[0].action == "update"
     assert candidates[0].target_entry_id == existing.id
-    assert candidates[0].source_refs == ("conversation:default:0-2",)
+    assert candidates[0].source_refs == ("test-interaction:default:0-2",)
     assert candidates[0].observed_at is not None
     assert repo.get(existing.id).body == "The user likes memory previews."
 
@@ -628,7 +372,9 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
-    with memory_curator_plan_store(tmp_path).exclusive("default"):
+    observation = curator.prepare_observation()
+    assert observation is not None
+    with memory_curator_plan_store(tmp_path).exclusive(observation.id):
         result = curator.run_once()
 
     assert result.processed_messages == 0
@@ -637,9 +383,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     assert result.ignored == 0
     assert agent.calls == []
     assert memory_candidate_repository(tmp_path).list() == []
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) is None
+    assert curator._test_observations.get(observation.id).status == "pending"  # pyright: ignore[reportPrivateUsage]
     events = [
         event
         for event in read_log_events(
@@ -650,7 +394,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     ]
     assert len(events) == 1
     assert events[0].status == "deferred"
-    assert events[0].metadata == {"conversation_id": "default"}
+    assert events[0].metadata == {"observation_id": observation.id}
 
 
 @pytest.mark.parametrize(
@@ -797,10 +541,10 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
     assert result.processed_messages == 1
     assert result.created == 1
     assert candidates[0].type == "belief"
-    assert candidates[0].source_refs == ("conversation:default:0-1",)
+    assert candidates[0].source_refs == ("test-interaction:default:0-1",)
 
 
-def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: Path) -> None:
+def test_memory_curator_accepts_projected_content_after_conversation_compression(tmp_path: Path) -> None:
     conversation_store = ConversationStore(tmp_path)
     conversation_store.save(
         ConversationState(
@@ -817,15 +561,6 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
             next_message_index=6,
         )
     )
-    get_default_backend(tmp_path).collection(
-        "memory_curator_cursors"
-    ).put(
-        "default",
-        {
-            "conversation_id": "default",
-            "processed_message_count": 4,
-        },
-    )
     agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Compressed cursor continuity",'
         '"body":"Memory curation should continue after conversation compression by using absolute message indexes.",'
@@ -841,7 +576,7 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
     assert result.processed_messages == 2
     assert result.created == 1
     assert second_result.processed_messages == 0
-    assert candidates[0].source_refs == ("conversation:default:4-6",)
+    assert candidates[0].source_refs == ("test-interaction:default:4-6",)
 
 
 def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
@@ -1419,13 +1154,8 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
     assert len(agent.calls) == 1
     [candidate] = candidate_repo.list()
     assert candidate.review_state == "pending"
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "conversation_id": "default",
-        "processed_message_count": 1,
-    }
+    [observation] = curator._test_observations.list()  # pyright: ignore[reportPrivateUsage]
+    assert observation.status == "processed"
     event = [
         item
         for item in read_log_events(
