@@ -94,6 +94,16 @@ def test_chat_tool_runtime_does_not_compose_persistence() -> None:
     } == set()
 
 
+def test_conversation_runtime_does_not_compose_authority() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+    forbidden_prefixes = ("nuself.application", "nuself.storage")
+    assert [
+        imported
+        for imported in _imports(path)
+        if imported.startswith(forbidden_prefixes)
+    ] == []
+
+
 def test_chat_tool_collection_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "agent" / "tools" / "__init__.py"
     forbidden = {
@@ -426,6 +436,32 @@ def test_reason_consumers_require_injected_service() -> None:
         source = (_SOURCE_ROOT / relative).read_text(encoding="utf-8")
         assert "reason_service or ReasonService" not in source
         assert "service or ReasonService" not in source
+
+
+def test_memory_curator_contract_is_separate_from_orchestration() -> None:
+    source = (_SOURCE_ROOT / "memory" / "curator.py").read_text(
+        encoding="utf-8"
+    )
+    for declaration in (
+        "class MemoryCuratorSettings",
+        "class MemoryCuratorCursor",
+        "class MemoryCuratorResult",
+        "class CuratorActionsOutput",
+    ):
+        assert declaration not in source
+
+
+def test_conversation_runtime_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "get_default_backend"),
+    }
+    assert {
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden
+    } == set()
 
 
 def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:

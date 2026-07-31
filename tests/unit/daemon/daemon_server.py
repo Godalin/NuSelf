@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from notification_fixtures import notification_outbox
+from chat_fixtures import ConversationGraphRuntime
 
 import threading
 import time
@@ -13,7 +14,6 @@ from langchain_core.messages import BaseMessage
 from nuself.agent.capabilities import AgentCapabilitySnapshot
 from nuself.agent.chat import (
     ChatStructuredOutput,
-    ConversationGraphRuntime,
     ConversationTurnState,
     ThreadStore,
 )
@@ -25,7 +25,7 @@ from nuself.daemon.workers import (
     DaemonWorkerSupervisor,
 )
 from nuself.logs import read_log_events, runtime_event_log_sink
-from nuself.memory.curator import MemoryCuratorResult
+from nuself.memory.curator_contract import MemoryCuratorResult
 from nuself.notification import OutboxEntry
 from nuself.runtime.context import (
     RuntimeContext,

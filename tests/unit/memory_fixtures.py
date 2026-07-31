@@ -17,11 +17,11 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.memory.curator_plan import MemoryCuratorPlanStore
-from nuself.memory.curator import (
+from nuself.memory.curator_contract import (
     CuratorActionsOutput,
-    MemoryCurator as _MemoryCurator,
     MemoryCuratorSettings,
 )
+from nuself.memory.curator import MemoryCurator as _MemoryCurator
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import StorageBackend, get_default_backend

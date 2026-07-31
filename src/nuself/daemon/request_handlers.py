@@ -43,7 +43,8 @@ from nuself.daemon.request_audit import (
 from nuself.daemon.types import WorkerHealth
 from nuself.logs import project_log_events
 from nuself.memory.audit import run_memory_observed
-from nuself.memory.curator import MemoryCurator, MemoryCuratorResult
+from nuself.memory.curator import MemoryCurator
+from nuself.memory.curator_contract import MemoryCuratorResult
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message

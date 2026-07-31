@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,6 +16,77 @@ from nuself.memory.text import looks_like_raw_transcript
 
 MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
 DecisionStatus: TypeAlias = Literal["ready", "deferred"]
+
+
+@dataclass(frozen=True)
+class MemoryCuratorSettings:
+    """Policy for one background memory curation run."""
+
+    min_quality_chars: int = 120
+    existing_memory_limit: int = 12
+    auto_accept: bool = True
+
+
+@dataclass(frozen=True)
+class MemoryCuratorCursor:
+    """Authoritative absolute position for one curated thread."""
+
+    thread_id: str
+    processed_message_count: int
+
+    @classmethod
+    def from_wire(
+        cls,
+        data: dict[str, object],
+        *,
+        expected_thread_id: str,
+    ) -> MemoryCuratorCursor:
+        thread_id = data.get("thread_id")
+        if not isinstance(thread_id, str):
+            raise ValueError("cursor field 'thread_id' must be a string")
+        if thread_id != expected_thread_id:
+            raise ValueError(
+                "cursor thread identity mismatch: "
+                f"expected {expected_thread_id!r}, got {thread_id!r}"
+            )
+        count = data.get("processed_message_count")
+        if isinstance(count, bool) or not isinstance(count, int):
+            raise ValueError(
+                "cursor field 'processed_message_count' must be an integer"
+            )
+        if count < 0:
+            raise ValueError(
+                "cursor field 'processed_message_count' must be non-negative"
+            )
+        return cls(thread_id=thread_id, processed_message_count=count)
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "thread_id": self.thread_id,
+            "processed_message_count": self.processed_message_count,
+        }
+
+
+@dataclass(frozen=True)
+class MemoryCuratorResult:
+    """Summary of a memory curator run."""
+
+    processed_messages: int
+    created: int
+    updated: int
+    ignored: int
+    log_path: Path
+
+    @property
+    def changed(self) -> bool:
+        return self.created > 0 or self.updated > 0
+
+    def summary(self) -> str:
+        return (
+            f"processed={self.processed_messages} "
+            f"created={self.created} updated={self.updated} "
+            f"ignored={self.ignored}"
+        )
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from chat_fixtures import ConversationGraphRuntime
+
 # pyright: reportUnusedImport=false
 
 from memory_fixtures import (
@@ -18,7 +20,6 @@ from langchain_core.messages import BaseMessage
 
 from nuself.agent.chat import (
     ChatStructuredOutput,
-    ConversationGraphRuntime,
     ConversationTurnState,
     ThreadState,
 )

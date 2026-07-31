@@ -78,6 +78,14 @@ Current working branch for v0.3.1.
 - `MemoryCurator` now requires paths, backend, thread store, repositories,
   recovery-plan store, and trace recorder; only application composition creates
   its concrete authority graph.
+- Curator settings, structured actions, durable cursor schema, and result DTO
+  now live in `memory.curator_contract`, separate from workflow orchestration.
+- `ConversationGraphRuntime` no longer resolves paths, storage, repositories,
+  reason, trace, or persona dependencies; application composition supplies the
+  complete production runtime and tests use an explicit fixture composition.
+- `ConversationGraphRuntime` now requires its complete memory, thread,
+  reflection, reason, trace, and persona capability set; `application.chat`
+  is the sole production and evaluation composition boundary.
 
 ## Completion Standard
 

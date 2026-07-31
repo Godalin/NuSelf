@@ -123,7 +123,10 @@ completion.
 Daemon chat receives its memory, profile, reflection, trace, and thread-storage
 collaborators from that graph. Nested chat/tool constructors may accept those
 narrow collaborators, but must not resolve a backend or compose a second
-repository graph after injection.
+repository graph. `ConversationGraphRuntime` requires its query service,
+thread store, memory and reflection repositories, reason service, trace
+services, and persona tools; only `application.chat` assembles production
+instances.
 Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
 memory/profile/reflection/trace repositories and thread storage always come
@@ -156,6 +159,11 @@ the concrete chat runtime or thread store.
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.
+
+`ConversationGraphRuntime` is an agent orchestration consumer, not a
+composition root. Memory query/repository, thread storage, reflection, reason,
+trace, and persona-tool capabilities are mandatory inputs. Production and
+evaluation surfaces obtain the concrete graph from `application.chat`.
 
 `NotificationOutbox` is persistence and follows the same rule: it receives
 resolved paths and the selected backend, derives its entry-lock directory only
@@ -190,6 +198,9 @@ Memory curation receives the complete authority resource set explicitly:
 runtime paths, backend, thread store, entry/candidate/profile repositories,
 recovery-plan store, and trace recorder. Defaults are limited to curation
 policy and model adapters, never persistence or authority selection.
+Its structured model contract, cursor wire format, settings, and result DTO
+belong to `memory.curator_contract`; `memory.curator` owns only workflow
+orchestration and may re-export nothing merely for legacy import convenience.
 
 Reason operations are composed by `application.reason`. Process surfaces must
 reuse that factory so repository, workspace, trace, prompt, and optional

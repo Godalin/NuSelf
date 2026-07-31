@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from nuself.agent.chat import ConversationGraphRuntime, ThreadStore
+from nuself.agent.chat.response import ConversationResponseService
 from nuself.application.composition import ApplicationGraph
 from nuself.memory.query import MemoryQueryService
 from nuself.persona.tools import build_persona_tools
@@ -18,6 +19,7 @@ def compose_conversation_runtime(
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,
     event_publisher: EventPublisher | None = None,
+    response_service: ConversationResponseService | None = None,
 ) -> ConversationGraphRuntime:
     """Build chat from one authority graph plus surface-owned adapters."""
 
@@ -30,8 +32,6 @@ def compose_conversation_runtime(
             application.memory.profile,
         ),
         memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
-        profile_repository=application.memory.profile,
         reflection_repository=application.reflection,
         trace_recorder=application.trace.recorder,
         reason_service=compose_reason_service(application),
@@ -48,4 +48,5 @@ def compose_conversation_runtime(
         job_sink=job_sink,
         section_planner=section_planner,
         event_publisher=event_publisher,
+        response_service=response_service,
     )

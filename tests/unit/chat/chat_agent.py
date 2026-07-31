@@ -7,6 +7,7 @@ from memory_fixtures import (
     memory_entry_repository,
     source_repository,
 )
+from chat_fixtures import ConversationGraphRuntime
 
 import json
 from collections.abc import Callable, Sequence
@@ -20,7 +21,6 @@ from langchain_core.tools import BaseTool
 from nuself.agent.chat import (
     ChatAgentSettings,
     ChatStructuredOutput,
-    ConversationGraphRuntime,
     ConversationTurnState,
     ThreadMessage,
     ThreadState,
@@ -1250,8 +1250,6 @@ def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
 
 
 def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -> None:
-    from nuself.agent.chat import ConversationGraphRuntime
-
     llm = FakeResponseService()
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
     agent.respond("test")
@@ -1803,8 +1801,6 @@ def test_chat_trace_diagnostics_cannot_replace_completed_answer(
 
 
 def test_chat_agent_includes_memory_tools_in_system_prompt(tmp_path: Path) -> None:
-    from nuself.agent.chat import ConversationGraphRuntime
-
     llm = FakeResponseService()
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
     agent.respond("test")

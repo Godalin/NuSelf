@@ -30,10 +30,10 @@ from nuself.domain.memory import (
 )
 from nuself.domain.profile import ProfileItem
 from nuself.logs import read_log_events
-from nuself.memory.curator import (
+from nuself.memory.curator_contract import (
     CuratorActionsOutput,
     MemoryCuratorSettings,
-    _actions_from_output,  # pyright: ignore[reportPrivateUsage]
+    actions_from_output as _actions_from_output,
 )
 from nuself.memory.repository import (
     MemoryCandidateRepository,

@@ -20,7 +20,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   graph resources through application-owned composition. Direct and daemon
   chat also share one application-owned factory; reason, trace, persona,
   memory, reflection, and thread-storage tool collaborators are injected
-  before the agent layer. Reflection schedule-state persistence is separated
+  before the agent layer, and the conversation runtime no longer contains a
+  root-based fallback composition path. Reflection schedule-state persistence is separated
   from orchestration into its own strict codec module, and model-backed
   relevance evaluation and candidate generation now have dedicated modules
   with injected gate and thread-context boundaries. Reflection promotion
@@ -29,11 +30,16 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   its profile context explicitly instead of opening storage, and memory
   optimization receives the graph-owned entry, candidate, and profile
   repositories. Memory curation likewise requires the graph-owned backend,
-  stores, repositories, recovery plans, and trace recorder. Reason operations
+  stores, repositories, recovery plans, and trace recorder; its structured
+  actions, cursor schema, settings, and result DTO now live in a dedicated
+  contract module. Reason operations
   used by CLI, REPL, chat, reflection, and
   daemon workers now share application-owned composition; the core reason
   service requires explicit repository, workspace, and trace dependencies,
-  while schedulers and export workers receive that existing service. Trace
+  while schedulers and export workers receive that existing service. The
+  conversation graph runtime now requires its complete memory, thread,
+  reflection, reason, trace, and persona capability set instead of rebuilding
+  authority resources inside the agent layer. Trace
   repositories and services now require explicitly composed storage instead
   of resolving a hidden default backend or paths, and their concrete assembly
   is owned by the application layer rather than the trace domain. Profile

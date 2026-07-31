@@ -12,7 +12,6 @@ from langchain_core.messages import BaseMessage
 from nuself.agent.chat import (
     ChatResult,
     ChatStructuredOutput,
-    ConversationGraphRuntime,
     ConversationTurnState,
 )
 from nuself.domain.memory import MemoryEntry
@@ -148,19 +147,21 @@ class FixtureResponseService:
 
 def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     """Run one golden fixture and return the eval result."""
+    from nuself.application.chat import compose_conversation_runtime
     from nuself.application.composition import compose_application
     from nuself.config import runtime_paths
     from nuself.storage import get_default_backend
 
-    repo = compose_application(
+    application = compose_application(
         runtime_paths(project_root),
         get_default_backend(project_root),
-    ).memory.entries
+    )
+    repo = application.memory.entries
     for entry in fixture.memory_entries:
         repo.save(entry.to_domain())
 
-    agent = ConversationGraphRuntime(
-        project_root,
+    agent = compose_conversation_runtime(
+        application,
         response_service=FixtureResponseService(fixture.response),
     )
     result = agent.respond(fixture.user_message, fixture.thread_id)
