@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit remaining one-line module helpers for redundant pass-through behavior.
-Keep identity generation, validation, normalization, codecs, and dependency
-direction boundaries; remove only wrappers that add no contract.
+Audit repeated exception translation and DTO mapping across CLI/daemon
+adapters. Preserve intentional transport/domain separation; consolidate only
+identical mappings whose ownership is already shared.
 
 ## Constraints
 
@@ -202,6 +202,16 @@ direction boundaries; remove only wrappers that add no contract.
 - Affected memory/profile/trace/notification/reason/session focused suite:
   604 passed. Post-domain-factory cleanup `uv run --locked pytest -q`: 2455
   passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- `EntrypointController._status_or_report()` only forwarded four same-class
+  calls to `observe_daemon_status()` and added no contract or seam. Those paths
+  now call the existing shared observation/error-rendering boundary directly.
+- CLI/readiness focused suite: 327 passed; EntrypointController suite: 6
+  passed. Post-pass-through cleanup `uv run --locked pytest -q`: 2455 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Remaining visible one-line adapter calls retain concrete contracts:
+  daemon-status observation translates lifecycle errors, data resolution
+  enforces internal visibility, and activity opening owns optional transport
+  degradation. They are not pass-throughs and remain intact.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

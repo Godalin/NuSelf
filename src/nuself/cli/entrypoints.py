@@ -83,7 +83,7 @@ class EntrypointController:
         self._callbacks = callbacks
 
     def handle_default(self, args: argparse.Namespace) -> int:
-        result = self._status_or_report(args.project_root)
+        result = observe_daemon_status(args.project_root)
         if result is None:
             return CliExitCode.TEMPORARY_FAILURE
         if result.running:
@@ -112,7 +112,7 @@ class EntrypointController:
         return self._run_daemon_interactive(args.project_root)
 
     def handle_chat(self, args: argparse.Namespace) -> int:
-        daemon_status = self._status_or_report(args.project_root)
+        daemon_status = observe_daemon_status(args.project_root)
         if daemon_status is None:
             return CliExitCode.TEMPORARY_FAILURE
         if daemon_status.running:
@@ -140,7 +140,7 @@ class EntrypointController:
         return self._run_one_shot_interactive(args.project_root)
 
     def handle_attach(self, args: argparse.Namespace) -> int:
-        daemon_status = self._status_or_report(args.project_root)
+        daemon_status = observe_daemon_status(args.project_root)
         if daemon_status is None:
             return CliExitCode.TEMPORARY_FAILURE
         if not daemon_status.running:
@@ -166,7 +166,7 @@ class EntrypointController:
         if target is None:
             return CliExitCode.FAILURE
 
-        daemon_status = self._status_or_report(args.project_root)
+        daemon_status = observe_daemon_status(args.project_root)
         if daemon_status is None:
             return CliExitCode.TEMPORARY_FAILURE
         if daemon_status.running:
@@ -200,12 +200,6 @@ class EntrypointController:
             args.project_root,
             initial_conversation_id=target.conversation_id,
         )
-
-    @staticmethod
-    def _status_or_report(
-        project_root: Path | None,
-    ) -> lifecycle.DaemonStatus | None:
-        return observe_daemon_status(project_root)
 
     def _prepare_open_conversation(
         self,
