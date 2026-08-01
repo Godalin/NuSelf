@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
 from nuself.config import runtime_paths
 from nuself.logs import read_log_events
-from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
+from nuself.reason.service import ReasonAdvancerProtocol
 from reason_fixtures import ReasonScheduler
 from reason_fixtures import ReasonService
 from nuself.storage import auto_backend
@@ -89,14 +89,15 @@ def test_run_once_never_advances_corrupt_cooldown_record(
     called = False
 
     class RecordingAdvancer:
-        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+        def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
+            del thread
             nonlocal called
             called = True
             return None
 
     scheduler = ReasonScheduler(
         project_root=tmp_path,
-        advancer=cast(ReasonAdvancer, RecordingAdvancer()),
+        advancer=RecordingAdvancer(),
         service=service,
         interval_seconds=600,
     )
@@ -135,11 +136,11 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
     called = False
 
     class RecordingAdvancer:
-        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+        def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
             nonlocal called
             called = True
             return ReasoningStep(
-                thread_id=t.id,
+                thread_id=thread.id,
                 kind="progress",
                 summary="Advanced",
                 delta="Delta",
@@ -147,7 +148,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
 
     scheduler = ReasonScheduler(
         project_root=tmp_path,
-        advancer=cast(ReasonAdvancer, RecordingAdvancer()),
+        advancer=RecordingAdvancer(),
         service=service,
         interval_seconds=600,
     )
@@ -164,9 +165,9 @@ def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
     thread = service.start_thread("Test cooldown")
 
     class Advancer:
-        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+        def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
             return ReasoningStep(
-                thread_id=t.id,
+                thread_id=thread.id,
                 kind="progress",
                 summary="s",
                 delta="d",
@@ -174,7 +175,7 @@ def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
 
     scheduler = ReasonScheduler(
         project_root=tmp_path,
-        advancer=cast(ReasonAdvancer, Advancer()),
+        advancer=Advancer(),
         service=service,
         interval_seconds=600,
     )
@@ -191,12 +192,13 @@ def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
     thread = service.start_thread("Test failure")
 
     class FailingAdvancer:
-        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+        def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
+            del thread
             raise FileNotFoundError("missing tmp")
 
     scheduler = ReasonScheduler(
         project_root=tmp_path,
-        advancer=cast(ReasonAdvancer, FailingAdvancer()),
+        advancer=FailingAdvancer(),
         service=service,
         interval_seconds=600,
     )
@@ -224,7 +226,8 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
     thread = service.start_thread("Test failure")
 
     class FailingAdvancer:
-        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+        def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
+            del thread
             raise FileNotFoundError("missing tmp")
 
     def fail_log(*args: object, **kwargs: object) -> None:
@@ -240,7 +243,7 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
     )
     scheduler = ReasonScheduler(
         project_root=tmp_path,
-        advancer=cast(ReasonAdvancer, FailingAdvancer()),
+        advancer=FailingAdvancer(),
         service=service,
         interval_seconds=600,
     )
@@ -257,8 +260,9 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
     assert service.list_steps(thread.id) == []
 
 
-def _null_advancer() -> ReasonAdvancer:
+def _null_advancer() -> ReasonAdvancerProtocol:
     class NullAdvancer:
-        def advance(self, t: ReasoningThread) -> ReasoningStep | None:
+        def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
+            del thread
             return None
-    return cast(ReasonAdvancer, NullAdvancer())
+    return NullAdvancer()

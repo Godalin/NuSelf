@@ -8,7 +8,6 @@ from pathlib import Path
 from nuself.application.trace import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.reason.repository import ReasonRepository
-from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.scheduler import ReasonScheduler as _ReasonScheduler
 from nuself.reason.service import (
     ReasonAdvancerProtocol,
@@ -67,7 +66,7 @@ class ReasonScheduler(_ReasonScheduler):
     def __init__(
         self,
         project_root: Path | None = None,
-        advancer: ReasonAdvancer | None = None,
+        advancer: ReasonAdvancerProtocol | None = None,
         interval_seconds: int = 600,
         *,
         service: _ReasonService,

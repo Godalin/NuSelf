@@ -9,23 +9,24 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make background Reason scheduling depend on the existing one-operation
-advancer protocol instead of its concrete agent implementation.
+Remove the stale concrete-advancer coupling and forced casts from Reason
+scheduler test composition.
 
 ## Ordered Steps
 
-1. Confirm `ReasonScheduler` only calls `advance(thread)` and that the reason
-   service already defines this structural capability.
-2. Replace the concrete `ReasonAdvancer` annotation/import without adding a
-   second interface or changing composition.
-3. Run focused reason/daemon tests and the complete verification gates; update
+1. Confirm the scheduler fixture still requires `ReasonAdvancer` even though
+   production now accepts `ReasonAdvancerProtocol`.
+2. Align the fixture and structural test doubles with that protocol; remove
+   concrete imports and forced casts.
+3. Run focused reason tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not alter model-backed advancer construction or LangChain execution.
-- Do not narrow the complete `ReasonService` use-case API.
-- Do not create a new contracts module or duplicate protocol.
+- Do not change production scheduler behavior.
+- Keep concrete `ReasonAdvancer` typing in tests that exercise its actual
+  model-backed implementation.
+- Do not weaken Pyright checks with ignores or broader types.
 
 ## Constraints
 
@@ -37,6 +38,11 @@ advancer protocol instead of its concrete agent implementation.
 
 ## Phase Evidence
 
+- Reason scheduler test composition now accepts `ReasonAdvancerProtocol`, and
+  six structural test doubles satisfy its named `thread` parameter directly.
+  Removed the concrete advancer import and all forced casts that previously hid
+  the fixture's stale coupling. Focused scheduler tests: 7 passed; full suite:
+  2443 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `ReasonScheduler` now types its injected advancer as the existing
   `ReasonAdvancerProtocol` rather than the concrete model-backed class. It still
   receives the same production object, but its declared dependency now matches
