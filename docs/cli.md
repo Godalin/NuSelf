@@ -23,14 +23,14 @@ uv run nuself --workspace /path/to/workspace init
 uv run nuself dev paths
 ```
 
-Legacy v0.3.0 checkout-local state is migrated only by an explicit command.
+Legacy v0.3.0 checkout-local state is migrated only by a source-checkout script.
 The source is validated and preserved, and an existing target is never merged
 or overwritten:
 
 ```bash
-uv run nuself migrate-layout --from ./private --to user
-uv run nuself migrate-layout --from ./private --to-local
-uv run nuself migrate-layout --from ./private --workspace /path/to/workspace
+uv run python scripts/migrate_legacy_layout.py --from ./private --to user
+uv run python scripts/migrate_legacy_layout.py --from ./private --to-local
+uv run python scripts/migrate_legacy_layout.py --from ./private --workspace /path/to/workspace
 ```
 
 ## Chat
@@ -181,8 +181,9 @@ Schema inspection is a developer operation:
 uv run nuself dev db-schema
 ```
 
-Use `nuself migrate-layout` for an explicit legacy directory move. It accepts
-only a valid SQLite authority; file-backed collection migration is retired.
+Use `scripts/migrate_legacy_layout.py` from a source checkout for an explicit
+legacy directory move. It accepts only a valid SQLite authority; file-backed
+collection migration is retired and the installed CLI carries no migration.
 
 ## Discoverability
 

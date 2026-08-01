@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Legacy v0.3.0 authority-layout migration now runs only from
+  `scripts/migrate_legacy_layout.py`; removed the installed module and
+  top-level `nuself migrate-layout` command.
 - Configuration loading now accepts only the current strict schema; removed
   runtime mutation/warnings for `experimental.langmem_adapter` and the special
   v0.2.5 email migration error.

@@ -129,12 +129,12 @@ The v0.3.0 checkout-local layout:
 is never an implicit v0.3.1 authority. Detection may print a migration hint,
 but must not copy, merge, rename, delete, chmod, open, or upgrade legacy data.
 
-An explicit migration command selects one source and one target:
+The source-checkout migration script selects one source and one target:
 
 ```text
-nuself migrate-layout --from PATH --to user
-nuself migrate-layout --from PATH --to-local
-nuself migrate-layout --from PATH --workspace PATH
+uv run python scripts/migrate_legacy_layout.py --from PATH --to user
+uv run python scripts/migrate_legacy_layout.py --from PATH --to-local
+uv run python scripts/migrate_legacy_layout.py --from PATH --workspace PATH
 ```
 
 Migration runs under an exclusive target lease, validates the source before
@@ -142,6 +142,9 @@ publication, refuses a non-empty or conflicting target, and publishes a
 complete target atomically where the filesystem permits. Failure preserves
 the source and leaves no partial authority. Success also preserves the source
 unless a future separately approved command adds destructive cleanup.
+
+The script is not packaged into the NuSelf runtime and there is no installed
+`migrate-layout` command.
 
 Configuration is copied as configuration, SQLite as its single authority, and
 managed non-database artifacts into their corresponding target paths. It is

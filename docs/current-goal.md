@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove runtime v0.2.5 configuration migration.
+Move legacy authority-layout migration out of the installed runtime.
 
 ## Ordered Steps
 
-1. Confirm the loader still mutates retired `langmem_adapter` input and raises
-   a legacy-email-specific error before current schema validation.
-2. Remove the compatibility function, warning cache, dedicated exception, and
-   frozen v0.2.5 fixture; require current configuration fields directly.
-3. Update user documentation and changelog, run focused Config tests and full
-   verification gates, then commit without pushing.
+1. Confirm `layout_migration.py` and the top-level `migrate-layout` parser still
+   package a one-time v0.3.0 authority move in every installation.
+2. Move the atomic migration implementation and tests into `scripts/`; remove
+   the runtime module, CLI handler, parser surface, and installed documentation.
+3. Verify the source-checkout script, wheel exclusion, focused migration/CLI
+   tests and full gates, then commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve current list-shaped LLM normalization, strict Pydantic/schema parity,
-  credential redaction, configuration layering, and managed-file hardening.
+- Preserve source validation, WAL-consistent backup, exclusive publication,
+  source retention, permission hardening, and target authority selection.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,15 @@ Remove runtime v0.2.5 configuration migration.
 
 ## Phase Evidence
 
+- Legacy authority-layout publication now lives only in
+  `scripts/migrate_legacy_layout.py`; removed the installed module, top-level
+  CLI command/handler/parser, and runtime test location. The moved eight-test
+  suite still covers atomic publication, concurrent exclusion, WAL backup,
+  transient-file filtering, symlink rejection, and source preservation; CLI
+  help explicitly excludes the command. Focused script/CLI/release tests: 342
+  passed plus 9 final regressions; full suite: 2439 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded, and all 244 wheel entries exclude
+  layout migration code.
 - Configuration loading now validates only the current schema. Removed the
   v0.2.5 mutation function, one-time warning cache, legacy-email exception,
   obsolete fixture, and the normalization path parameter used only by that

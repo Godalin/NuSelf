@@ -168,8 +168,8 @@ uv run nuself data export threads --format json
 ```
 
 `data check` 会无修改地找出无效记录，并为每条记录给出准确的 `edit`
-或需确认的 `delete` 命令。一次性旧格式迁移位于 `scripts/`，不进入安装后的
-运行时。通用编辑会校验完整记录、显示 diff、要求确认，
+或需确认的 `delete` 命令。一次性旧格式迁移仅位于 `scripts/`，安装后的 CLI
+不携带迁移逻辑。通用编辑会校验完整记录、显示 diff、要求确认，
 并拒绝覆盖并发修改。内部运行状态默认隐藏，只有显式使用 `--internal`
 才能查看。
 

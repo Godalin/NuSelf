@@ -5736,6 +5736,7 @@ def test_top_level_help_describes_commands(capsys: CaptureFixture) -> None:
     assert "Manage long-run reasoning threads." in captured.out
     assert "dev" in captured.out
     assert "Run diagnostics, logs, config inspection, and evals." in captured.out
+    assert "migrate-layout" not in captured.out
 
 
 def test_reason_cli_start_list_show_and_advance(

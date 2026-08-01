@@ -466,8 +466,8 @@ application runtime.
 - `cli/commands/persona.py` owns dynamic persona list/create/show/delete/enable/
   disable handlers and visible-handle resolution shared with persona REPL
   shortcuts.
-- `cli/commands/dev.py` owns storage migration, SQLite schema inspection, and active
-  storage backend diagnostics.
+- `cli/commands/dev.py` owns SQLite schema inspection and active storage backend
+  diagnostics. One-time migrations live under source-checkout `scripts/`.
 - `cli/commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
 - `cli/commands/eval.py` owns conversation and notification fixture evaluation

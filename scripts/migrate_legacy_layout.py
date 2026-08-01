@@ -1,7 +1,8 @@
-"""Explicit publication of a legacy checkout-local NuSelf layout."""
+"""Explicitly publish a legacy checkout-local NuSelf layout."""
 
 from __future__ import annotations
 
+import argparse
 from contextlib import contextmanager
 import fcntl
 import os
@@ -16,7 +17,7 @@ from nuself.private_fs import (
     PRIVATE_FILE_MODE,
     ensure_managed_directory,
 )
-from nuself.scope import NuSelfScope
+from nuself.scope import NuSelfScope, resolve_scope
 from nuself.storage import (
     COLLECTION_NAMES,
     open_sqlite_backend,
@@ -179,3 +180,53 @@ def _target_migration_lease(target: Path) -> Generator[None]:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
     finally:
         os.close(descriptor)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Migrate a legacy private/ layout to one NuSelf authority."
+    )
+    parser.add_argument(
+        "--from",
+        dest="source",
+        type=Path,
+        required=True,
+        metavar="PATH",
+    )
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument(
+        "--to",
+        choices=("user",),
+        help="Migrate to the default user authority.",
+    )
+    target.add_argument(
+        "--to-local",
+        action="store_true",
+        help="Migrate to ./.nuself.",
+    )
+    target.add_argument(
+        "--workspace",
+        type=Path,
+        metavar="PATH",
+        help="Migrate to PATH/.nuself.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    target_scope = resolve_scope(
+        local=args.to_local,
+        workspace=args.workspace,
+    )
+    target = migrate_legacy_layout(args.source, target_scope)
+    print(
+        f"Migrated legacy layout to {target_scope.kind} authority: "
+        f"{target}"
+    )
+    print(f"Source preserved: {args.source.expanduser().absolute()}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -181,7 +181,7 @@ uv run nuself data export threads --format json
 
 `data check` finds invalid records without changing them and prints the exact
 `edit` or confirmed `delete` command for each one. One-time legacy migrations
-live under `scripts/`, outside the installed runtime. Generic editing validates
+live under `scripts/`; the installed CLI carries none. Generic editing validates
 full records and rejects concurrent overwrites.
 
 Schema v5 keeps domain records and namespaced workspace state in one compact

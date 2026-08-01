@@ -8,8 +8,11 @@ import stat
 
 import pytest
 
-from nuself.cli import main
-from nuself.layout_migration import LayoutMigrationError, migrate_legacy_layout
+from scripts.migrate_legacy_layout import (
+    LayoutMigrationError,
+    main as migrate_main,
+    migrate_legacy_layout,
+)
 from nuself.scope import resolve_scope
 from nuself.storage import (
     _create_sqlite_backend,
@@ -218,7 +221,7 @@ def test_nested_source_symlink_is_rejected(tmp_path: Path) -> None:
     assert not (workspace / ".nuself").exists()
 
 
-def test_cli_migrates_to_explicit_workspace_and_reports_preserved_source(
+def test_script_migrates_to_explicit_workspace_and_reports_preserved_source(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -229,9 +232,8 @@ def test_cli_migrates_to_explicit_workspace_and_reports_preserved_source(
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    result = main(
+    result = migrate_main(
         [
-            "migrate-layout",
             "--from",
             str(source),
             "--workspace",

@@ -6,9 +6,8 @@ import argparse
 
 from nuself.config import ConfigSystem
 from nuself.cli.composition import compose_cli_backend
-from nuself.layout_migration import migrate_legacy_layout
 from nuself.private_fs import ensure_managed_directory
-from nuself.scope import NuSelfScope, resolve_runtime_paths, resolve_scope
+from nuself.scope import NuSelfScope, resolve_runtime_paths
 
 
 def handle_init(args: argparse.Namespace) -> int:
@@ -70,20 +69,6 @@ def handle_dev_config(args: argparse.Namespace) -> int:
     ):
         print(f"  {key}: {value}")
     print(f"selected_config: {paths.config_file}")
-    return 0
-
-
-def handle_migrate_layout(args: argparse.Namespace) -> int:
-    target_scope = resolve_scope(
-        local=args.to_local,
-        workspace=args.migration_workspace,
-    )
-    target = migrate_legacy_layout(args.source, target_scope)
-    print(
-        f"Migrated legacy layout to {target_scope.kind} authority: "
-        f"{target}"
-    )
-    print(f"Source preserved: {args.source.expanduser().absolute()}")
     return 0
 
 
