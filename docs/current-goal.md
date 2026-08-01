@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing test-only presentation entry points duplicated by live CLI
-renderers. Keep shared rendering primitives private and one public entry point
-per user workflow.
+Continue reconciling specifications with live presentation paths and removing
+parallel test-only renderers.
 
 ## Constraints
 
@@ -358,6 +357,13 @@ per user workflow.
   terminal-status assertion now exercises the live watch renderer.
 - TUI/Reason/CLI focused suite: 600 passed. Post-renderer cleanup
   `uv run --locked pytest -q`: 2446 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `render_host_decision()` produced a second format and was called only by its
+  own test. It is gone; production `render_log_event()` remains the sole host-
+  decision path and already covers escalation metadata without repetition.
+  The LLM specification now describes that actual shared renderer.
+- TUI/persona/Chat focused suite: 335 passed. Post-host-renderer cleanup
+  `uv run --locked pytest -q`: 2445 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

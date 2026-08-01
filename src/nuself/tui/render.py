@@ -825,16 +825,6 @@ def _color_persona_trace_tag(tag: str, speaker: str, theme: TerminalTheme) -> st
     return padded
 
 
-def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[str]:
-    """Render a structured host discussion decision event for REPL display."""
-    theme = TerminalTheme(color=color)
-    header = theme.tag("[host decision]", "persona")
-    lines = [_render_log_header(header, event.event, event, theme, inline_status=False)]
-    lines.extend(_render_status_body(event, theme))
-    lines.extend(render_record_body(event.message))
-    return lines
-
-
 # ---------------------------------------------------------------------------
 # Shared Rich utilities — used by reason.py, trace.py, and other renderers
 # ---------------------------------------------------------------------------

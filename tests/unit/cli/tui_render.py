@@ -16,7 +16,6 @@ from nuself.tui.reason import render_step_watch_entry
 from nuself.tui.render import (
     format_display_timestamp,
     render_discussion_trace,
-    render_host_decision,
     render_log_event,
     render_outbox_detail,
     render_outbox_summary,
@@ -197,27 +196,6 @@ def test_render_discussion_trace_formats_block() -> None:
         "",
         "  [turn-1]",
         "    [analyst]          considered the idea",
-    ]
-
-
-def test_render_host_decision_formats_block() -> None:
-    event = LogEvent(
-        time="2026-05-12T10:00:00Z",
-        level="info",
-        component="persona",
-        event="host_discussion_decision",
-        message="user asked for multi-perspective discussion",
-        conversation_id="default",
-        status="approved",
-        metadata={"should_escalate": True, "escalation_reason": "multi-perspective request"},
-    )
-
-    lines = render_host_decision(event)
-
-    assert lines == [
-        "[host decision] host_discussion_decision conversation=default should_escalate=true",
-        "  approved",
-        "  user asked for multi-perspective discussion",
     ]
 
 
