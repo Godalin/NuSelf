@@ -84,8 +84,8 @@ class DataAdminService:
     def get(self, resource: DataResource, record_id: str) -> Record | None:
         return self._backend.collection(resource.collection).get(record_id)
 
-    def validate(self, resource: DataResource, record: Record) -> object:
-        return self._decoder(resource)(record)
+    def validate(self, resource: DataResource, record: Record) -> None:
+        self._decoder(resource)(record)
 
     def update(
         self,

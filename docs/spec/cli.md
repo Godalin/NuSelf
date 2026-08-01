@@ -198,6 +198,10 @@ with `nuself data edit <collection> <record-id>`, which validates the complete
 edited record before committing, or removable with the existing confirmed
 `nuself data delete` command. Collections without a declared generic validator
 remain read-only and cannot claim a meaningful generic repair contract.
+The administration validation API is command-shaped: success returns no
+decoded domain object, while invalid input raises the owning domain error. Raw
+administration callers must not use validation as a back door to obtain memory
+or conversation model instances.
 
 One-time legacy-record migrations are not installed CLI behavior. They live in
 the repository `scripts/` directory, default to dry-run, require an explicit

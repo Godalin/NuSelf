@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing duplicated adapter branches only after confirming their
-effects and output are identical. Preserve domain-specific exception and audit
-paths below presentation boundaries.
+Continue narrowing command-shaped service methods that expose unused internal
+results. Preserve query results and domain objects wherever callers actually
+compose further work from them.
 
 ## Constraints
 
@@ -752,6 +752,13 @@ paths below presentation boundaries.
 - CLI/lifecycle focused suite: 377 passed. Post-restart-branch cleanup
   `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `DataAdminService.validate()` now returns no decoded domain model. Every
+  production caller used it only as a validation command; invalid records still
+  raise through the owning memory/conversation codec, while update validates
+  again at the mutation boundary.
+- Application/data focused check plus full type gate passed. Post-validation-
+  result cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
 
