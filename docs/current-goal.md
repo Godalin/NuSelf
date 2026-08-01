@@ -9,27 +9,30 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit daemon lifecycle and Reason export after scheduler unification. Preserve
-their typed composable boundaries, remove duplicated polling branches, and
-correct specifications that still describe the deleted export-worker queue.
+Unify daemon lifecycle audit definitions with the shared runtime audit
+infrastructure already used by daemon request and transport events. Preserve
+the lifecycle taxonomy and exact semantic validators while deleting its
+parallel registry, definition, schema-error, and field-set implementation.
 
 ## Ordered Steps
 
-1. Trace lifecycle result models and Reason export service methods through all
-   production consumers; retain typed boundaries with real semantic use.
-2. Correct Reason output and hardcoded-constant specifications to describe the
-   unified daemon scheduler rather than the removed private worker queue.
-3. Simplify duplicated monotonic deadline branches in daemon start/stop without
-   changing ownership checks, error causes, or polling policy.
-4. Run lifecycle, export scheduler, specification, Pyright, full pytest, and
-   package build gates; commit the complete reduction without pushing.
+1. Update runtime/development contracts so all direct persisted daemon audits
+   use `runtime.audit_definitions` and retain domain-owned validators/messages.
+2. Replace the lifecycle-only definition and registry types with the shared
+   `AuditEventDefinition` and `AuditDefinitionRegistry`.
+3. Remove lifecycle-only schema and exact-field helpers; update tests to assert
+   the shared contract and sealed-registry errors.
+4. Run daemon audit/lifecycle, infrastructure, Pyright, full pytest, and package
+   build gates; commit the complete reduction without pushing.
 
 ## Exclusions
 
-- Do not collapse typed lifecycle results into dictionaries or tuples.
-- Do not merge Reason domain composition with daemon scheduling ownership.
-- Do not add a generic job adapter, queue, timer, worker, lock, or compatibility
-  path.
+- Do not weaken event-specific transition, failure-stage, PID, phase, or outcome
+  validation.
+- Do not merge audit events with runtime event publication or change stored
+  event identities/presentation.
+- Do not add an adapter or compatibility alias for the deleted lifecycle-only
+  infrastructure.
 
 ## Constraints
 
@@ -41,6 +44,15 @@ correct specifications that still describe the deleted export-worker queue.
 
 ## Phase Evidence
 
+- Daemon lifecycle audits now compose the same sealed
+  `AuditDefinitionRegistry`/`AuditEventDefinition` contract as daemon request
+  and transport audits. The lifecycle-only definition class, registry adapter,
+  schema error, exact-field validator, and compatibility aliases were removed;
+  domain messages and transition/failure validators remain local.
+- This audit-infrastructure unification removes 200 lines while adding 154
+  across code, tests, and governing specifications. Focused audit/lifecycle/
+  infrastructure tests: 111 passed; full suite: 2437 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 - Lifecycle/result and Reason-export call-graph audit found both typed boundaries
   semantically active: lifecycle transitions feed CLI audit/rendering, while the
   export service owns durable recovery/retry policy and delegates execution to

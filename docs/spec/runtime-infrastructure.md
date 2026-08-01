@@ -671,9 +671,10 @@ Definition storage mechanics have one owner:
 `runtime.definitions.DefinitionRegistry`. It provides ordered registration,
 duplicate rejection, explicit sealing, lookup, and immutable definition
 snapshots for any hashable key. `EventDefinitionRegistry` is a semantic adapter
-using `(producer, name)` keys; persisted lifecycle audits use event-slug keys.
-The shared primitive does not merge their definition types, namespaces,
-extension rules, or delivery behavior.
+using `(producer, name)` keys; `AuditDefinitionRegistry` is the shared adapter
+for direct persisted audits using `(component, event)` keys. Domains retain
+their own identity taxonomies, metadata validators, messages, and delivery
+functions rather than defining parallel registry mechanics.
 
 `resolve()` is a runtime operation and rejects an unsealed
 `DefinitionRegistry`; composition code uses registration and immutable

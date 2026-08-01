@@ -7,7 +7,12 @@ import pytest
 
 from nuself.daemon import audit
 from nuself.logs import read_log_events
-from nuself.runtime.definitions import DefinitionRegistrySealedError
+from nuself.runtime.audit_definitions import (
+    AuditDefinitionRegistrySealedError,
+    AuditEventDefinition,
+    AuditSchemaError,
+    UnknownAuditDefinitionError,
+)
 
 
 def _start_completed_metadata() -> dict[str, object]:
@@ -41,11 +46,13 @@ def test_lifecycle_audit_registry_is_closed_and_immutable() -> None:
         "restart_failed",
     }
 
-    with pytest.raises(DefinitionRegistrySealedError):
+    with pytest.raises(AuditDefinitionRegistrySealedError):
         audit.DAEMON_LIFECYCLE_AUDIT_REGISTRY.register(
-            audit.DaemonLifecycleAuditDefinition(
+            AuditEventDefinition(
+                component="daemon",
                 event="started",
-                message="replacement",
+                level="info",
+                status=None,
             ),
         )
 
@@ -58,9 +65,11 @@ def test_lifecycle_audit_definition_rejects_invalid_event_slug(
     event: str,
 ) -> None:
     with pytest.raises(ValueError, match="audit event name"):
-        audit.DaemonLifecycleAuditDefinition(
+        AuditEventDefinition(
+            component="daemon",
             event=cast(audit.DaemonLifecycleAuditEvent, event),
-            message="invalid lifecycle event",
+            level="info",
+            status=None,
         )
 
 
@@ -77,8 +86,8 @@ def test_lifecycle_audit_rejects_unknown_event_before_sink(
     monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
 
     with pytest.raises(
-        audit.DaemonLifecycleAuditSchemaError,
-        match="unknown daemon lifecycle audit event",
+        UnknownAuditDefinitionError,
+        match="direct audit is not registered",
     ):
         audit.write_lifecycle_audit(
             cast(audit.DaemonLifecycleAuditEvent, "start_compeleted"),
@@ -137,7 +146,7 @@ def test_lifecycle_audit_rejects_invalid_transition_metadata_before_sink(
     monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
 
     with pytest.raises(
-        audit.DaemonLifecycleAuditSchemaError,
+        AuditSchemaError,
         match=message,
     ):
         audit.write_lifecycle_audit(
@@ -162,8 +171,8 @@ def test_lifecycle_audit_enforces_error_policy_before_sink(
     monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
 
     with pytest.raises(
-        audit.DaemonLifecycleAuditSchemaError,
-        match="requires a non-empty error",
+        AuditSchemaError,
+        match="requires an error",
     ):
         audit.write_lifecycle_audit(
             "start_failed",
@@ -177,7 +186,7 @@ def test_lifecycle_audit_enforces_error_policy_before_sink(
             },
         )
     with pytest.raises(
-        audit.DaemonLifecycleAuditSchemaError,
+        AuditSchemaError,
         match="forbids an error",
     ):
         audit.write_lifecycle_audit(
@@ -215,7 +224,7 @@ def test_restart_failure_rejects_mixed_or_unknown_stage_schema(
     tmp_path: Path,
     metadata: dict[str, object],
 ) -> None:
-    with pytest.raises(audit.DaemonLifecycleAuditSchemaError):
+    with pytest.raises(AuditSchemaError):
         audit.write_lifecycle_audit(
             "restart_failed",
             project_root=tmp_path,
