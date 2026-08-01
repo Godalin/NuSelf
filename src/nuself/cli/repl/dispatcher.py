@@ -16,13 +16,11 @@ from nuself.cli.repl.commands import (
     handle_interactive_inbox_command,
     handle_interactive_memory_command,
     handle_interactive_notify_command,
-    handle_interactive_notify_list_command,
     handle_interactive_notify_show_command,
     handle_interactive_notify_subcommand,
     handle_interactive_persona_command,
     handle_interactive_reason_command,
     handle_interactive_reflection_command,
-    handle_interactive_reflection_list_command,
     handle_interactive_reflection_show_command,
     handle_interactive_reflection_subcommand,
     handle_interactive_restart_command,
@@ -423,7 +421,12 @@ def _handle_inbox_command(
     elif body.startswith("reflection "):
         parts = body.removeprefix("reflection ").split(maxsplit=1)
         if parts[0] == "list":
-            print_ansi(handle_interactive_reflection_list_command(project_root))
+            print_ansi(
+                handle_interactive_reflection_command(
+                    project_root,
+                    include_all=True,
+                )
+            )
         elif parts[0] == "show" and len(parts) == 2:
             print_ansi(
                 handle_interactive_reflection_show_command(
@@ -446,7 +449,12 @@ def _handle_inbox_command(
     elif body.startswith("notify "):
         parts = body.removeprefix("notify ").split(maxsplit=1)
         if parts[0] == "list":
-            print_ansi(handle_interactive_notify_list_command(project_root))
+            print_ansi(
+                handle_interactive_notify_command(
+                    project_root,
+                    include_all=True,
+                )
+            )
         elif parts[0] == "show" and len(parts) == 2:
             print_ansi(
                 handle_interactive_notify_show_command(

@@ -499,6 +499,10 @@ REPL commands mirror the same model:
 | `:restart`, `:r`        | Restart daemon and reconnect |
 | `:export`, `:e`         | Transcript export            |
 
+Interactive inbox reflection and notification handlers each own one rendering
+path parameterized by pending versus all entries; command dispatch selects the
+view without maintaining duplicate list handlers.
+
 ## Command Group Reference
 
 ### Reflection

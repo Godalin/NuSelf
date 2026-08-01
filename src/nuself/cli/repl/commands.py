@@ -458,15 +458,27 @@ def handle_interactive_whoami_command(project_root: Path | None) -> str:
     return "\n".join(lines)
 
 
-def handle_interactive_reflection_command(project_root: Path | None) -> str:
+def handle_interactive_reflection_command(
+    project_root: Path | None,
+    *,
+    include_all: bool = False,
+) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
     entries = _reflection_service(project_root).list_entries(
-        status="pending"
+        status=None if include_all else "pending"
     )
     if not entries:
-        return "No pending reflection ideas."
-    lines = ["Pending reflection ideas:"]
+        return (
+            "No reflection ideas."
+            if include_all
+            else "No pending reflection ideas."
+        )
+    lines = [
+        "All reflection ideas:"
+        if include_all
+        else "Pending reflection ideas:"
+    ]
     for idx, entry in enumerate(entries):
         lines.extend(indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
     return "\n".join(lines)
@@ -478,18 +490,6 @@ def handle_interactive_inbox_command(project_root: Path | None) -> str:
         handle_interactive_notify_command(project_root),
     ]
     return "\n\n".join(sections)
-
-
-def handle_interactive_reflection_list_command(project_root: Path | None) -> str:
-    from nuself.tui.render import render_reflection_entry_summary
-
-    entries = _reflection_service(project_root).list_entries()
-    if not entries:
-        return "No reflection ideas."
-    lines = ["All reflection ideas:"]
-    for idx, entry in enumerate(entries):
-        lines.extend(indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
-    return "\n".join(lines)
 
 
 def handle_interactive_reflection_show_command(project_root: Path | None, entry_id: str) -> str:
@@ -523,27 +523,30 @@ def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: 
     return f"Unknown :inbox reflection subcommand: {subcmd}"
 
 
-def handle_interactive_notify_command(project_root: Path | None) -> str:
+def handle_interactive_notify_command(
+    project_root: Path | None,
+    *,
+    include_all: bool = False,
+) -> str:
     from nuself.tui.render import render_outbox_summary
 
-    entries = compose_cli_application(project_root).notifications.list(
-        status="pending"
+    outbox = compose_cli_application(project_root).notifications
+    entries = (
+        outbox.list()
+        if include_all
+        else outbox.list(status="pending")
     )
     if not entries:
-        return "No pending notifications."
-    lines = ["Pending notifications:"]
-    for index, entry in enumerate(entries):
-        lines.append("  " + render_outbox_summary(entry, index=index))
-    return "\n".join(lines)
-
-
-def handle_interactive_notify_list_command(project_root: Path | None) -> str:
-    from nuself.tui.render import render_outbox_summary
-
-    entries = compose_cli_application(project_root).notifications.list()
-    if not entries:
-        return "No notifications."
-    lines = ["All notifications:"]
+        return (
+            "No notifications."
+            if include_all
+            else "No pending notifications."
+        )
+    lines = [
+        "All notifications:"
+        if include_all
+        else "Pending notifications:"
+    ]
     for index, entry in enumerate(entries):
         lines.append("  " + render_outbox_summary(entry, index=index))
     return "\n".join(lines)

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Interactive reflection and notification pending/all views now share one
+  domain handler each, replacing two duplicate public list handlers.
 - Interactive Reason commands now name their ID/index inputs as Reason thread
   references instead of carrying misleading conversation terminology.
 - Interactive memory entry, review-candidate, and source commands now use the

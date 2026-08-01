@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove conversation terminology from REPL Reason handle variables so the
-adapter reflects the independent ReasoningThread domain.
+Collapse duplicate pending/all reflection and notification REPL list handlers
+into one parameterized handler per domain.
 
 ## Ordered Steps
 
-1. Inventory every `conversation_id` local in the Reason REPL command and
-   confirm each carries a Reason thread ID/index rather than chat state.
-2. Rename those locals consistently to `thread_ref` without changing service
-   calls, errors, or rendering.
-3. Run Reason/REPL tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Confirm reflection pending/all and notification pending/all pairs differ
+   only in repository filter and empty/header text.
+2. Add `include_all` to each domain handler, delete two public list handlers,
+   and let dispatcher select the requested view.
+3. Run REPL/CLI tests, Pyright, full pytest, and package build; update evidence
+   and commit without pushing.
 
 ## Exclusions
 
-- Do not rename the `ReasoningThread` domain concept.
-- Do not change user-visible command syntax or messages.
-- Do not touch conversation IDs in actual chat/history handlers.
+- Do not create a cross-domain generic list renderer.
+- Do not change pending/all filtering, visible indexes, or exact text.
+- Do not move repository access into the dispatcher.
 
 ## Constraints
 
@@ -37,6 +37,12 @@ adapter reflects the independent ReasoningThread domain.
 
 ## Phase Evidence
 
+- Interactive reflection pending/all views now share one reflection handler,
+  and notification pending/all views share one notification handler. Dispatcher
+  selects `include_all`; removed two public list functions and duplicate
+  repository/render loops without a cross-domain renderer. Focused REPL/CLI
+  tests: 570 passed; full suite: 2443 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Interactive Reason show/advance/pause/resume/resolve/archive/delete now name
   their ID-or-index input `thread_ref`; removed seven misleading
   `conversation_id` locals while leaving actual chat-history conversation IDs
