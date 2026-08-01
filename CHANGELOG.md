@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Trace CLI composition now borrows only the read-only query service instead of
+  receiving the recorder-bearing trace service bundle.
 - REPL exit curation now receives only the selected authority and scans pending
   memory observations, removing an ignored conversation-ID dependency.
 - Authority ID generation now accepts only its canonical-root identity input,

@@ -9,23 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove conversation IDs from the REPL exit-curator callback so memory cleanup
-depends only on pending observations in the selected authority.
+Narrow the read-only trace CLI composition helper from the complete trace
+service bundle to `TraceQueryService`.
 
 ## Ordered Steps
 
-1. Confirm production exit curation discards the supplied conversation tuple
-   and scans the authority's pending observation repository.
-2. Narrow `ReplCallbacks.run_curator` and cleanup composition to the authority
-   root, then simplify callback tests.
-3. Run REPL lifecycle tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Confirm every trace command uses only the graph-owned query capability.
+2. Return `TraceQueryService` from the adapter composition helper and remove
+   the recorder-bearing bundle import and `.query` forwarding at call sites.
+3. Run trace/CLI tests, Pyright, full pytest, and package build; update evidence
+   and commit without pushing.
 
 ## Exclusions
 
-- Do not change transcript-before-curation ordering or cleanup aggregation.
-- Do not skip pending observations created outside the active conversation.
-- Do not couple the memory repository back to conversation storage.
+- Do not reconstruct a trace repository or query service in the CLI.
+- Do not change trace visibility, lookup, rendering, or JSON behavior.
+- Do not merge read and write trace capabilities.
 
 ## Constraints
 
@@ -37,6 +36,12 @@ depends only on pending observations in the selected authority.
 
 ## Phase Evidence
 
+- Trace CLI composition now returns the graph-owned `TraceQueryService`
+  directly. Removed the recorder-bearing `TraceServices` import and repeated
+  `.query` forwarding while keeping the single authority composition entry;
+  list/show/search/related behavior is unchanged. Focused trace/CLI tests: 512
+  passed; full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - REPL exit curation now accepts only the selected authority root and scans its
   pending memory observations. Removed the unused session conversation-ID tuple
   from `ReplCallbacks`, cleanup composition, production callback, and tests;

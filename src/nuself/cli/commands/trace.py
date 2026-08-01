@@ -7,11 +7,11 @@ from pathlib import Path
 import sys
 from typing import cast
 
-from nuself.application.trace import TraceServices
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
+from nuself.trace.service import TraceQueryService
 from nuself.tui.trace import render_trace_detail, render_trace_row
 
 
@@ -29,12 +29,12 @@ def _trace_visibility_filter(
     return "default"
 
 
-def _trace_services(project_root: Path | None) -> TraceServices:
-    return compose_cli_application(project_root).trace
+def _trace_query(project_root: Path | None) -> TraceQueryService:
+    return compose_cli_application(project_root).trace.query
 
 
 def handle_trace_list(args: argparse.Namespace) -> int:
-    traces = _trace_services(args.project_root).query.list_traces(
+    traces = _trace_query(args.project_root).list_traces(
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
     )
@@ -50,7 +50,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 
 
 def handle_trace_show(args: argparse.Namespace) -> int:
-    service = _trace_services(args.project_root).query
+    service = _trace_query(args.project_root)
     try:
         trace = service.show_trace(args.trace_id)
     except TraceNotFound:
@@ -67,7 +67,7 @@ def handle_trace_show(args: argparse.Namespace) -> int:
 
 
 def handle_trace_search(args: argparse.Namespace) -> int:
-    traces = _trace_services(args.project_root).query.search_traces(
+    traces = _trace_query(args.project_root).search_traces(
         args.query,
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
@@ -84,7 +84,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
 
 
 def handle_trace_related(args: argparse.Namespace) -> int:
-    service = _trace_services(args.project_root).query
+    service = _trace_query(args.project_root)
     traces = service.traces_for_artifact(
         args.artifact_ref,
         visibility=_trace_visibility_filter(args.visibility),

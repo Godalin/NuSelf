@@ -338,6 +338,8 @@ nuself trace related <artifact_ref> [--visibility private|shareable|internal|all
 Output rules:
 
 - Human-readable output uses the shared record renderer style from `cli.md`.
+- Trace command composition borrows only `TraceQueryService`; it does not
+  receive the recorder capability.
 - List rows show index, kind tag, visibility, title, and local display timestamp.
 - Show output includes summary, inputs, evidence refs, derived_from, outputs, participants, decision points, and related links.
 - Related output lists traces and direct links that mention the exact artifact reference.
