@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Hide Source chunk replacement behind the complete ingest operation.
+Hide raw Source document writes behind the complete ingest operation.
 
 ## Ordered Steps
 
-1. Confirm `replace_chunks()` is called only by `ingest_path()` and exposing it
-   permits document/chunk updates to be split externally.
-2. Make chunk replacement an internal ingestion step without adding a facade
-   or compatibility alias.
+1. Confirm production `save_document()` is called only by `ingest_path()` and
+   its remaining callers are test fixtures that can use real source ingestion.
+2. Make document persistence internal and migrate those tests to temporary
+   source files; do not retain a raw-write alias.
 3. Run focused Source/CLI tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve source parsing, chunk IDs/order, re-ingestion replacement, search,
-  deletion, candidate extraction, and CLI behavior.
+- Preserve source IDs, parsing, document/chunk persistence, re-ingestion,
+  listing, display, deletion, and CLI behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,11 @@ Hide Source chunk replacement behind the complete ingest operation.
 
 ## Phase Evidence
 
+- Source document persistence is now private to `ingest_path()`, matching the
+  already-private chunk replacement operation. Four CLI fixtures now ingest
+  real temporary files instead of constructing partial stored documents; no
+  raw-write alias remains. Focused Source/CLI tests: 322 passed; full suite:
+  2444 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Source chunk replacement is now private to `ingest_path()`, its sole
   consumer. Removed an independently exposed partial-write API while preserving
   complete document/chunk ingestion, re-ingestion replacement, queries,

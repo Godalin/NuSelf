@@ -68,13 +68,13 @@ class SourceRepository:
         chunks = 0
         for source_path in paths:
             document, document_chunks = load_source_file(source_path, tags=tags or [], privacy=privacy)
-            self.save_document(document)
+            self._save_document(document)
             self._replace_chunks(document.id, document_chunks)
             documents += 1
             chunks += len(document_chunks)
         return SourceIngestResult(documents=documents, chunks=chunks)
 
-    def save_document(self, document: SourceDocument) -> SourceDocument:
+    def _save_document(self, document: SourceDocument) -> SourceDocument:
         self._documents.put(document.id, document.to_wire())
         return document
 

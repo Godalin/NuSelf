@@ -136,6 +136,9 @@ API. Legacy object-shaped records remain a decoding concern.
 Source ingestion is the public document/chunk write operation. Replacing one
 document's chunks is an internal ingestion step, not an independently exposed
 repository capability that callers may separate from document persistence.
+Writing the document record is likewise internal to ingestion; callers provide
+a source path rather than assembling a partial stored document without its
+chunks.
 
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records

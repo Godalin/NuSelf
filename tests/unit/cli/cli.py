@@ -4567,13 +4567,10 @@ def test_interactive_restart_stop_failure_keeps_repl_alive(
 def test_interactive_sources_lists_documents(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.domain.source import SourceDocument
-    from nuself.memory.source_repository import SourceRepository
-
+    source_path = tmp_path / "notes.txt"
+    source_path.write_text("Notes\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.save_document(
-        SourceDocument(id="doc-001", title="Notes", path="notes.txt", kind="text")
-    )
+    repo.ingest_path(source_path)
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem sources\n:q\n"))
     monkeypatch.setattr(
@@ -4985,15 +4982,10 @@ def test_memory_search_no_match_shows_message(
 def test_memory_source_list_shows_documents(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.source import SourceDocument
-    from nuself.memory.source_repository import SourceRepository
-
+    source_path = tmp_path / "test.txt"
+    source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.save_document(
-        SourceDocument(
-            id="src-001", path="/tmp/test.txt", title="Test Source", kind="text"
-        )
-    )
+    repo.ingest_path(source_path)
 
     result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
     captured = capsys.readouterr()
@@ -5014,14 +5006,11 @@ def test_memory_source_list_empty_shows_message(
 def test_memory_source_show_displays_document(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.source import SourceDocument
-    from nuself.memory.source_repository import SourceRepository
-
+    source_path = tmp_path / "test.txt"
+    source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    doc = SourceDocument(
-        id="src-002", path="/tmp/test.txt", title="Test Source", kind="text"
-    )
-    repo.save_document(doc)
+    repo.ingest_path(source_path)
+    doc = repo.list_documents()[0]
 
     result = main(["--workspace", str(tmp_path), "memory", "source", "show", doc.id])
     captured = capsys.readouterr()
@@ -5043,14 +5032,11 @@ def test_memory_source_show_missing_document(
 def test_memory_source_delete_removes_document(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.source import SourceDocument
-    from nuself.memory.source_repository import SourceRepository
-
+    source_path = tmp_path / "test.txt"
+    source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    doc = SourceDocument(
-        id="src-003", path="/tmp/test.txt", title="Test Source", kind="text"
-    )
-    repo.save_document(doc)
+    repo.ingest_path(source_path)
+    doc = repo.list_documents()[0]
 
     result = main(
         ["--workspace", str(tmp_path), "memory", "source", "delete", doc.id]
