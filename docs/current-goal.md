@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove trivial Conversation persistence forwarding helpers.
+Remove hidden Notification configuration resolution.
 
 ## Ordered Steps
 
-1. Confirm `_load_unlocked()` only wraps collection get/decode for `load()` and
-   `_with_archived()` only wraps immutable dataclass replacement.
-2. Inline both operations while retaining public Conversation and history APIs,
-   lock/transaction boundaries, strict decoding, and archive semantics.
-3. Run focused Conversation/CLI/Reflection tests and full gates, then commit
-   without pushing.
+1. Confirm adapter composition's optional config fallback is used only by
+   CLI/REPL callers that already own an `ApplicationGraph` configuration.
+2. Require explicit `SystemConfig`, remove the hidden `ConfigSystem.load()`, and
+   pass the application-owned value from every runtime surface.
+3. Run focused Notification/CLI/REPL/composition tests and full gates, then
+   commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve stored conversation decoding, stable IDs/indexes, turn idempotency,
-  archive transitions, cross-process locks, and history isolation.
+- Preserve adapter ordering, platform/email enablement, log-only fallback,
+  frozen delivery plans, and outbox recovery semantics.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove trivial Conversation persistence forwarding helpers.
 
 ## Phase Evidence
 
+- Notification adapter composition now requires the application-owned
+  `SystemConfig`. Removed its optional config type, hidden
+  `ConfigSystem.load()`, and fallback branch; CLI and REPL pass the same graph
+  configuration already used by daemon composition. Focused
+  Notification/CLI/REPL tests: 456 passed; full suite: 2439 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Conversation `load()` now directly owns collection lookup and strict decode;
   archive/unarchive directly use immutable dataclass replacement. Removed the
   single-call `_load_unlocked()` and two-call `_with_archived()` forwarding

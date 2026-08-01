@@ -128,7 +128,8 @@ def handle_notify_send(args: argparse.Namespace) -> int:
         outbox,
         entry_id,
         build_notification_adapters(
-            application.paths
+            application.paths,
+            config=application.config,
         ),
     )
     if updated.status == "sent":

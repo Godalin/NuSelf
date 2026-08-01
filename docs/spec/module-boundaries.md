@@ -253,6 +253,9 @@ Daemon curation, reflection, reasoning, and notification workers follow the
 same rule: process composition supplies their backend, repositories, outbox,
 plans, and trace recorder from the existing graph. A worker must not select a
 second authority after those collaborators have been supplied.
+Notification adapter composition likewise receives the graph's resolved
+configuration explicitly; it must not reload configuration as an optional
+fallback for CLI, REPL, or daemon callers.
 
 Reflection scheduling is orchestration, not a composition root. Candidate
 generation, relevance evaluation, organization, schedule-state storage, and

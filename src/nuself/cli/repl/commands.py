@@ -584,7 +584,10 @@ def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str,
         updated = deliver_entry_once(
             outbox,
             entry_id,
-            build_notification_adapters(application.paths),
+            build_notification_adapters(
+                application.paths,
+                config=application.config,
+            ),
         )
         if updated.status == "sent":
             return f"Sent: {entry_id}"
