@@ -8,11 +8,11 @@ from nuself.config import runtime_paths
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def test_save_and_get_thread(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     t = ReasoningThread(topic="What is the meaning of life?")
     saved = repo.save_thread(t)
     loaded = repo.get_thread(t.id)
@@ -21,7 +21,7 @@ def test_save_and_get_thread(tmp_path: Path) -> None:
 
 
 def test_get_missing_thread_raises(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     try:
         repo.get_thread("nonexistent")
         assert False, "expected ReasonNotFound"
@@ -30,7 +30,7 @@ def test_get_missing_thread_raises(tmp_path: Path) -> None:
 
 
 def test_list_threads(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     t1 = ReasoningThread(topic="Question 1")
     t2 = ReasoningThread(topic="Question 2", status="paused")
     t3 = ReasoningThread(topic="Question 3", status="resolved")
@@ -59,7 +59,7 @@ def test_list_threads(tmp_path: Path) -> None:
 
 
 def test_resolve_thread_by_id(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     resolved = repo.resolve_thread(t.id)
@@ -67,7 +67,7 @@ def test_resolve_thread_by_id(tmp_path: Path) -> None:
 
 
 def test_resolve_thread_by_numeric_handle(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     t1 = ReasoningThread(topic="First")
     t2 = ReasoningThread(topic="Second")
     repo.save_thread(t1)
@@ -77,7 +77,7 @@ def test_resolve_thread_by_numeric_handle(tmp_path: Path) -> None:
 
 
 def test_save_and_list_steps(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     s1 = ReasoningStep(thread_id=t.id, summary="Step 1")
@@ -90,7 +90,7 @@ def test_save_and_list_steps(tmp_path: Path) -> None:
 
 
 def test_get_step(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     t = ReasoningThread(topic="Test")
     repo.save_thread(t)
     s = ReasoningStep(thread_id=t.id, summary="Step")
@@ -100,10 +100,10 @@ def test_get_step(tmp_path: Path) -> None:
 
 
 def test_list_empty_threads(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     assert repo.list_threads() == []
 
 
 def test_list_empty_steps(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     assert repo.list_steps("reason-nonexistent") == []

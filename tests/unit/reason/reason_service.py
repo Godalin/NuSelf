@@ -21,7 +21,7 @@ from nuself.reason.errors import (
 )
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -260,7 +260,7 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
     traces = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == (f"reason:{thread.id}",)
@@ -268,13 +268,13 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
-    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)))
 
     thread = service.start_thread("Injected repository should still trace")
 
     traces = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == (f"reason:{thread.id}",)
@@ -470,7 +470,7 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
     steps = service.list_steps(thread.id)
     traces = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(kind="reason_step")
     assert len(traces) == 1
     assert traces[0].outputs == (
@@ -561,7 +561,7 @@ def test_delete_failure_does_not_emit_success_audit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repository = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repository = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     service = _reason_service(
         project_root=tmp_path,
         repository=repository,

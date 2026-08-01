@@ -24,7 +24,7 @@ from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from reason_fixtures import ReasonService
 from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 from nuself.workspace import PrivateWorkspaceStore
@@ -53,7 +53,7 @@ def test_subsystem_tool_builders_own_their_registries(
         build_reflection_tools(
             compose_application(
                 runtime_paths(tmp_path),
-                get_default_backend(tmp_path),
+                owned_backend(tmp_path),
             ).reflection_service
         )
     ) == {
@@ -85,7 +85,7 @@ def test_subsystem_tool_builders_own_their_registries(
             TraceQueryService(
                 TraceRepository(
                     runtime_paths(tmp_path),
-                    backend=get_default_backend(tmp_path),
+                    backend=owned_backend(tmp_path),
                 )
             )
         )

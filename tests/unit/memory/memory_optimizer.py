@@ -28,7 +28,7 @@ from nuself.memory.optimizer import (
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 class FakeOptimizerAgent:
@@ -60,7 +60,7 @@ def _optimizer(
 ) -> MemoryOptimizer:
     profile = profile_repository or ProfileItemRepository(
         runtime_paths(project_root),
-        backend=get_default_backend(project_root),
+        backend=owned_backend(project_root),
     )
     return MemoryOptimizer(
         runtime_paths(project_root),
@@ -151,7 +151,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
 def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> None:
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Keep memory concise", body="The user wants concise memory entries."))
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",

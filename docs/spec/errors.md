@@ -364,11 +364,10 @@ Storage teardown uses one sealed storage operations audit contract:
 | `backend_close_failed` | warning | `degraded` | non-empty `backend_type` |
 | `cli_cleanup_failed` | error | `error` | non-empty ordered `failures` records containing non-empty `step` and canonical `error`, boolean `primary_failed` |
 
-Both events require a canonical top-level error and forbid duration. Each
-backend close failure is recorded against its project root before the complete
-`DefaultBackendResetError` is raised. CLI cleanup preserves every retained
-step/error chain before raising `CliLifecycleError`; it does not reduce nested
-reset failures to step names.
+Both events require a canonical top-level error and forbid duration. A runtime
+records its backend close failure against the authority root and re-raises that
+same failure into outer cleanup aggregation. CLI cleanup preserves every
+retained step/error chain before raising `CliLifecycleError`.
 
 Daemon lifecycle operations and their typed transition results are
 authoritative. The server's contention/started/stopped records and the one-shot

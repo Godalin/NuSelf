@@ -16,6 +16,7 @@ from nuself.memory.curator_plan import (
     MemoryCuratorPlanLockCleanupError,
     MemoryCuratorPlanLockContended,
 )
+from nuself.storage import auto_backend
 from memory_fixtures import memory_curator_plan_store
 
 
@@ -41,11 +42,18 @@ def _hold_curator_lock(
     ready: Event,
     release: Event,
 ) -> None:
-    store = memory_curator_plan_store(Path(project_root))
-    with store.exclusive(observation_id):
-        ready.set()
-        if not release.wait(timeout=10):
-            raise RuntimeError("parent did not release curator lock test child")
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        store = memory_curator_plan_store(root, backend=backend)
+        with store.exclusive(observation_id):
+            ready.set()
+            if not release.wait(timeout=10):
+                raise RuntimeError(
+                    "parent did not release curator lock test child"
+                )
+    finally:
+        backend.close()
 
 
 def test_plan_lock_excludes_other_process_and_retains_plan(

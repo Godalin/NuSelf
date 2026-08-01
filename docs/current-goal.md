@@ -9,29 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make `ApplicationRuntime` the actual owner of its one storage backend rather
-than an indirect borrower of the process-global default-backend cache. CLI
-storage administration must borrow that same runtime-owned backend before the
-remaining legacy cache API can be removed.
+Delete the now production-unused default-backend cache, global lock, reset
+aggregate, and override API. Manual scripts and tests must use explicit scoped
+backend ownership rather than preserving the obsolete service-locator model.
 
 ## Ordered Steps
 
-1. Correct module/storage contracts to state direct lazy backend ownership and
-   one close boundary in `ApplicationRuntime`.
-2. Store the selected closable backend in the runtime; close it exactly once on
-   normal, interrupted, exceptional, and composition-failure paths.
-3. Add one CLI-only backend accessor with authority validation; migrate init,
-   dev storage/schema, and pack export away from the global cache.
-4. Move evaluation composition onto `ApplicationRuntime`, run focused and full
-   gates, update evidence, and commit without pushing.
+1. Correct storage/error/API contracts to remove the default-cache lifecycle.
+2. Migrate the manual legacy-memory script to `auto_backend()` plus `finally`
+   close, then delete cache state, lock, get/set/reset functions, and reset error.
+3. Replace test reliance with a pytest-scoped backend owner that closes every
+   selected backend after each test; remove cache-behavior tests.
+4. Run storage/scripts/boundary, Pyright, full pytest, and package build gates;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
+- Do not retain deprecated aliases or a process-global test cache in production.
 - Do not expose raw backend state on `ApplicationGraph` or to domain modules.
-- Do not add a second lifecycle owner, fallback runtime, backend wrapper, or
-  lock.
-- Do not remove the legacy cache until all remaining migration/test consumers
-  have explicit ownership in a subsequent complete change.
+- Do not add a replacement lock, wrapper, service locator, or compatibility
+  path.
 
 ## Constraints
 
@@ -43,6 +40,16 @@ remaining legacy cache API can be removed.
 
 ## Phase Evidence
 
+- Removed the production `_default_backends` registry, global backend lock,
+  `get/set/reset_default_backend`, and `DefaultBackendResetError`. The manual
+  migration script now owns `auto_backend()` with `finally` close; no source,
+  script, specification, or boundary rule references the deleted API.
+- Direct repository tests use one pytest-scoped backend owner that closes after
+  each test. Scheduler threads receive parent-composed resources; spawned
+  processes explicitly open and close their own backend instead of inheriting
+  hidden state. Focused storage/script/CLI/boundary tests: 204 passed; full
+  suite: 2435 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `ApplicationRuntime` now lazily stores and closes its one
   `ClosableStorageBackend`; graph composition, CLI init/dev/pack operations,
   evaluation, and daemon cleanup all use that same owner. `ApplicationGraph`

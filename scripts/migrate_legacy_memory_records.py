@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from nuself.domain.memory import MemoryEntry
-from nuself.storage import get_default_backend, reset_default_backend
+from nuself.storage import auto_backend
 
 
 def migrate_record(record: dict[str, object]) -> dict[str, object] | None:
@@ -31,7 +31,7 @@ def migrate_record(record: dict[str, object]) -> dict[str, object] | None:
 
 
 def run(authority_root: Path, *, apply: bool) -> int:
-    backend = get_default_backend(authority_root)
+    backend = auto_backend(authority_root)
     collection = backend.collection("memory_entries")
     originals: dict[str, dict[str, object]] = {}
     migrations: dict[str, dict[str, object]] = {}
@@ -75,7 +75,7 @@ def run(authority_root: Path, *, apply: bool) -> int:
         print(f"Migrated {len(migrations)} record(s).")
         return 1 if unresolved else 0
     finally:
-        reset_default_backend(authority_root)
+        backend.close()
 
 
 def main() -> int:

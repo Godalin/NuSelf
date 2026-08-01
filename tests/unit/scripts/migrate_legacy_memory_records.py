@@ -7,7 +7,7 @@ from typing import Callable, cast
 import pytest
 
 from nuself.domain.memory import MemoryEntry
-from nuself.storage import get_default_backend, reset_default_backend
+from tests.backend import owned_backend, close_owned_backend
 _SCRIPT = (
     Path(__file__).resolve().parents[3]
     / "scripts"
@@ -22,11 +22,11 @@ run = cast(
 def _put(authority: Path, record: dict[str, object]) -> None:
     record_id = record["id"]
     assert isinstance(record_id, str)
-    get_default_backend(authority).collection("memory_entries").put(
+    owned_backend(authority).collection("memory_entries").put(
         record_id,
         record,
     )
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
 
 def test_dry_run_then_apply_lossless_legacy_memory(
@@ -42,17 +42,17 @@ def test_dry_run_then_apply_lossless_legacy_memory(
     assert run(tmp_path, apply=False) == 0
     assert "1 migratable, 0 unresolved" in capsys.readouterr().out
     assert (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("memory_entries")
         .get(entry.id)
         == legacy
     )
-    reset_default_backend(tmp_path)
+    close_owned_backend(tmp_path)
 
     assert run(tmp_path, apply=True) == 0
     assert "Migrated 1 record(s)." in capsys.readouterr().out
     repaired = (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("memory_entries")
         .get(entry.id)
     )
@@ -74,7 +74,7 @@ def test_refuses_nonempty_legacy_relations(
     assert run(tmp_path, apply=True) == 1
     assert "0 migratable, 1 unresolved" in capsys.readouterr().out
     assert (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("memory_entries")
         .get(entry.id)
         == legacy
@@ -91,7 +91,7 @@ def test_adds_missing_empty_relations(
 
     assert run(tmp_path, apply=True) == 0
     repaired = (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("memory_entries")
         .get(entry.id)
     )

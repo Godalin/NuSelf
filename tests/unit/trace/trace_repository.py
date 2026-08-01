@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.trace.domain import ThoughtTrace, TraceLink
 from nuself.trace.repository import TraceNotFound, TraceRepository
 from nuself.trace.service import TraceRecorder
@@ -15,7 +15,7 @@ from nuself.trace.service import TraceRecorder
 def _repository(root: Path) -> TraceRepository:
     return TraceRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 
@@ -50,13 +50,13 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
     assert matches == [trace]
     assert links == [link]
     assert (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("trace_nodes")
         .get(trace.id)
         == trace.to_wire()
     )
     assert (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("trace_edges")
         .get(link.id)
         == link.to_wire()
@@ -123,17 +123,17 @@ def test_trace_repository_resolves_numeric_handle(tmp_path: Path) -> None:
 
 
 def test_trace_repository_concurrent_saves(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
     traces = tuple(
         ThoughtTrace(kind="decision", title=f"Trace {index}", summary=f"Summary {index}.")
         for index in range(16)
     )
 
     def save_trace(index: int) -> None:
-        _repository(tmp_path).save_trace(traces[index])
+        repo.save_trace(traces[index])
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         list(executor.map(save_trace, range(len(traces))))
 
-    repo = _repository(tmp_path)
     stored = repo.list_traces()
     assert {trace.id for trace in stored} == {trace.id for trace in traces}

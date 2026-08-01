@@ -29,8 +29,8 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import (
     AtomicDeleteDurabilityError,
     AtomicWriteDurabilityError,
-    get_default_backend,
 )
+from tests.backend import owned_backend
 
 
 def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_path: Path) -> None:
@@ -176,7 +176,7 @@ def test_memory_candidate_repository_accepts_profile_fact_into_profile_repositor
     )
 
     accepted = repo.accept(candidate.id)
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_item = profile_repo.list()[0]
 
     assert profile_item.title == "Prefers concise output"
@@ -214,7 +214,7 @@ def test_accept_create_rolls_back_target_when_candidate_commit_fails(
     assert captured.value is operation_error
     assert repo.get(candidate.id).review_state == "pending"
     assert memory_entry_repository(tmp_path).list() == []
-    assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list() == []
+    assert ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)).list() == []
 
 
 def test_accept_create_rolls_back_when_review_promotion_fails(

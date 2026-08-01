@@ -46,13 +46,8 @@ from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
 from nuself.storage import (
     _create_sqlite_backend as create_sqlite_backend,
-    DefaultBackendResetError,
     auto_backend,
-    StorageBackend,
-    get_default_backend,
     open_sqlite_backend,
-    reset_default_backend,
-    set_default_backend,
 )
 from nuself.storage_sqlite import (
     COLLECTION_NAMES,
@@ -288,23 +283,6 @@ class BackupFailingConnectionProxy:
     def backup(self, target: sqlite3.Connection) -> None:
         del target
         raise self.error
-
-
-class CloseBackend:
-    def __init__(self, *, error: Exception | None = None) -> None:
-        self.error = error
-        self.close_calls = 0
-
-    def collection(self, name: str) -> object:
-        raise AssertionError(f"unexpected collection access: {name}")
-
-    def transaction(self) -> object:
-        raise AssertionError("unexpected transaction access")
-
-    def close(self) -> None:
-        self.close_calls += 1
-        if self.error is not None:
-            raise self.error
 
 
 def _set_raw_sqlite_column(
@@ -607,26 +585,6 @@ def test_sqlite_put_rejects_record_id_mismatch(
         backend.close()
 
 
-def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
-    first_root = tmp_path / "first"
-    second_root = tmp_path / "second"
-    try:
-        first = get_default_backend(first_root)
-        second = get_default_backend(second_root)
-        assert first is get_default_backend(first_root)
-        assert second is get_default_backend(second_root)
-        assert first is not second
-
-        first.collection("memory_entries").put(
-            "only-first", {"id": "only-first"}
-        )
-        assert (
-            second.collection("memory_entries").get("only-first") is None
-        )
-    finally:
-        reset_default_backend()
-
-
 def test_notification_outbox_uses_explicit_authority_backend(
     tmp_path: Path,
 ) -> None:
@@ -634,27 +592,6 @@ def test_notification_outbox_uses_explicit_authority_backend(
     outbox = NotificationOutbox(runtime_paths(tmp_path), backend)
 
     assert outbox._backend is backend
-
-
-def test_reset_closes_backend_used_by_default_repository(
-    tmp_path: Path,
-) -> None:
-    backend = create_sqlite_backend(
-        tmp_path,
-        db_path=tmp_path / "nuself.sqlite",
-    )
-    set_default_backend(backend, tmp_path)
-    repository = memory_entry_repository(tmp_path)
-    backend.collection("memory_entries").put(
-        "lifecycle-probe",
-        {"id": "lifecycle-probe", "title": "probe"},
-    )
-
-    reset_default_backend(tmp_path)
-
-    assert getattr(backend, "_closed") is True
-    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
-        repository.list()
 
 
 def test_candidate_repository_uses_explicit_backend(
@@ -666,33 +603,6 @@ def test_candidate_repository_uses_explicit_backend(
     )
 
     assert repository.list() == []
-
-
-def test_reset_default_backend_attempts_every_owned_close(
-    tmp_path: Path,
-) -> None:
-    failed = CloseBackend(error=RuntimeError("first close failed"))
-    healthy = CloseBackend()
-    set_default_backend(cast(StorageBackend, failed), tmp_path / "first")
-    set_default_backend(cast(StorageBackend, healthy), tmp_path / "second")
-
-    with pytest.raises(
-        DefaultBackendResetError,
-        match="failed to close 1 default storage backend",
-    ) as captured:
-        reset_default_backend()
-
-    assert failed.close_calls == 1
-    assert healthy.close_calls == 1
-    assert captured.value.failures == (failed.error,)
-    [event] = read_log_events(
-        project_root=tmp_path / "first",
-        component="storage",
-    )
-    assert event.event == "backend_close_failed"
-    assert event.status == "degraded"
-    assert event.error == "first close failed"
-    assert event.metadata == {"backend_type": "CloseBackend"}
 
 
 def test_close_is_idempotent_after_connection_closes(

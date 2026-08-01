@@ -18,7 +18,7 @@ from nuself.cli.exit_codes import CliExitCode
 from nuself.domain.memory import MemoryEntry
 from nuself.logs import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.storage import get_default_backend, reset_default_backend
+from tests.backend import owned_backend, close_owned_backend
 
 
 def _set_home(
@@ -42,7 +42,7 @@ def test_data_lists_and_shows_public_memory(
         body="Authoritative data is inspectable.",
     )
     memory_entry_repository(authority).save(entry)
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
     assert main(["data", "list", "memory", "--json"]) == 0
     listed = json.loads(capsys.readouterr().out)
@@ -72,7 +72,7 @@ def test_data_edit_validates_and_audits_memory(
     edited["title"] = "After"
     edit_file = tmp_path / "edited.json"
     edit_file.write_text(json.dumps(edited), encoding="utf-8")
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
     assert (
         main(
@@ -111,12 +111,12 @@ def test_data_check_reports_unique_invalid_records_and_repair_commands(
     healthy = backend.save(
         MemoryEntry(type="belief", title="Healthy", body="Keep this.")
     )
-    reset_default_backend(authority)
-    get_default_backend(authority).collection("memory_entries").put(
+    close_owned_backend(authority)
+    owned_backend(authority).collection("memory_entries").put(
         "mem broken",
         {"id": "mem broken", "body": "private invalid contents"},
     )
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
     assert main(["data", "check", "memory"]) == CliExitCode.FAILURE
     output = capsys.readouterr().out
@@ -137,7 +137,7 @@ def test_data_check_succeeds_for_valid_collection(
     memory_entry_repository(authority).save(
         MemoryEntry(type="belief", title="Healthy", body="All good.")
     )
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
     assert main(["data", "check", "memory"]) == CliExitCode.SUCCESS
     assert "1 valid, 0 invalid" in capsys.readouterr().out
@@ -156,7 +156,7 @@ def test_data_edit_rejects_identity_change(
     edited["id"] = "mem_replaced"
     edit_file = tmp_path / "invalid.json"
     edit_file.write_text(json.dumps(edited), encoding="utf-8")
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
     assert (
         main(
@@ -205,7 +205,7 @@ def test_data_delete_control_cancels_without_mutation(
             body="Terminal control must not delete this.",
         )
     )
-    reset_default_backend(authority)
+    close_owned_backend(authority)
 
     def interrupt(_prompt: str) -> str:
         raise control

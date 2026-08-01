@@ -11,7 +11,6 @@ import stat
 import pytest
 
 from nuself.cli import main
-from nuself.storage import set_default_backend
 from nuself.storage_sqlite import COLLECTION_NAMES, SqliteStorageBackend
 
 
@@ -95,21 +94,23 @@ def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
         tmp_path / ".nuself",
         db_path=tmp_path / ".nuself" / "nuself.sqlite",
     )
-    set_default_backend(backend, tmp_path / ".nuself")
-    backend.collection("memory_entries").put(
-        "live-entry",
-        {"id": "live-entry", "title": "Live WAL data"},
-    )
+    try:
+        backend.collection("memory_entries").put(
+            "live-entry",
+            {"id": "live-entry", "title": "Live WAL data"},
+        )
 
-    assert main(
-        [
-            "--workspace",
-            str(tmp_path),
-            "pack",
-            "export",
-            "live",
-        ]
-    ) == 0
+        assert main(
+            [
+                "--workspace",
+                str(tmp_path),
+                "pack",
+                "export",
+                "live",
+            ]
+        ) == 0
+    finally:
+        backend.close()
 
     snapshot = SqliteStorageBackend(
         tmp_path / ".nuself" / "exports" / "live.sqlite"

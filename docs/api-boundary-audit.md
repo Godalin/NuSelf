@@ -139,14 +139,13 @@ discussion/activation/synthesis capabilities and resolved settings.
 
 ### A7 — Resolved: process-adapter recomposition
 
-Several CLI and REPL handlers call `runtime_paths()`, `get_default_backend()`,
-and repository factories directly for profile, reflection, trace, reason, and
-persona operations. `compose_cli_application()` also retains a fallback that
-creates a graph outside the invocation-owned `ApplicationRuntime`.
+Several CLI and REPL handlers formerly called `runtime_paths()`, a global
+default-backend cache, and repository factories directly for profile,
+reflection, trace, reason, and persona operations.
 
 Risk: one command can create parallel object graphs and bypass teardown or
-application-level policy. The default backend cache currently masks much of
-the duplication but is not an API guarantee.
+application-level policy. `ApplicationRuntime` now owns one backend and graph;
+the global cache and fallback graph no longer exist.
 
 Minimal correction: require an invocation-scoped application runtime for every
 initialized command and remove the fallback composition path. Handlers call

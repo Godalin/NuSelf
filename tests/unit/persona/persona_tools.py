@@ -18,7 +18,8 @@ from nuself.persona.tools import (
     build_reason_persona_tools,
 )
 from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.storage import _create_sqlite_backend, get_default_backend
+from nuself.storage import _create_sqlite_backend
+from tests.backend import owned_backend
 
 
 class _TextAgent:
@@ -46,7 +47,7 @@ def _invoke_tool(tool: BaseTool, args: dict[str, object]) -> object:
 def _persona_dependencies(tmp_path: Path):
     return compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
 
 

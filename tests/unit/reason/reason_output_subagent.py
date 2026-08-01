@@ -17,11 +17,11 @@ from nuself.reason.output_contracts import (
 from reason_output_fixtures import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:
-    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
+    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
 
 
 def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

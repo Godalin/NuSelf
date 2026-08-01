@@ -36,7 +36,7 @@ from nuself.reflection.repository import ReflectionEntry
 from nuself.reflection.candidates import CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _local_datetime(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
@@ -193,7 +193,7 @@ def _generator(
 ) -> IdeaCandidateGenerator:
     application = compose_application(
         runtime_paths(project_root),
-        get_default_backend(project_root),
+        owned_backend(project_root),
     )
     return IdeaCandidateGenerator(
         project_root,
@@ -215,13 +215,13 @@ def _gate(
 ) -> LLMRelevanceGate:
     application = compose_application(
         runtime_paths(project_root),
-        get_default_backend(project_root),
+        owned_backend(project_root),
     )
     return LLMRelevanceGate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        schedule_collection=get_default_backend(project_root).collection(
+        schedule_collection=owned_backend(project_root).collection(
             "scheduler_state"
         ),
         repository=application.reflection,
@@ -276,7 +276,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     )
     application = compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     return compose_reflection_scheduler(
         application,
@@ -842,7 +842,7 @@ def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     agent = _CandidateAgent(candidates=[])
     application = compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     gen = IdeaCandidateGenerator(
         tmp_path,

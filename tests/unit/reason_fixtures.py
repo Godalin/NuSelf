@@ -14,7 +14,7 @@ from nuself.reason.service import (
     ReasonAdvancerProtocol,
     ReasonService as _ReasonService,
 )
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -38,7 +38,7 @@ class ReasonService(_ReasonService):
                 "explicit project_root"
             )
         root = runtime_paths(project_root).project_root
-        backend = get_default_backend(root)
+        backend = owned_backend(root)
         selected_repository = repository or ReasonRepository(
             runtime_paths(root),
             backend=backend,

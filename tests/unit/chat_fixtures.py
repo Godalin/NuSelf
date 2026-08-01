@@ -40,7 +40,7 @@ from nuself.reflection.service import ReflectionService
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.frontend import ApprovalPort
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -74,7 +74,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
     ) -> None:
         application = compose_application(
             runtime_paths(project_root),
-            get_default_backend(project_root),
+            owned_backend(project_root),
         )
         effective_models = (
             langchain_models

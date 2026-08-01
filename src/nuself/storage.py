@@ -5,7 +5,6 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 import os
 from pathlib import Path
-import threading
 from typing import (
     TYPE_CHECKING,
     Protocol,
@@ -20,7 +19,6 @@ from nuself.private_fs import (
     ensure_private_directory,
 )
 from nuself.runtime.messages import encode_json_value
-from nuself.storage_audit import report_backend_close_failure
 
 if TYPE_CHECKING:
     from nuself.storage_sqlite import SqliteStorageBackend
@@ -349,67 +347,6 @@ def _initialize_sqlite_authority(project_root: Path) -> Path:
                     cleanup_error=cleanup_error,
                 ) from primary_error
         raise
-
-
-_default_backends: dict[Path, StorageBackend] = {}
-_DEFAULT_BACKEND_LOCK = threading.Lock()
-
-
-class DefaultBackendResetError(RuntimeError):
-    """Raised after one or more owned default backends fail to close."""
-
-    def __init__(self, failures: tuple[Exception, ...]) -> None:
-        super().__init__(
-            f"failed to close {len(failures)} default storage backend(s)"
-        )
-        self.failures = failures
-
-
-def get_default_backend(project_root: Path | None = None) -> StorageBackend:
-    """Return a lazily-created default backend scoped to one project root."""
-    root = runtime_paths(project_root).project_root
-    with _DEFAULT_BACKEND_LOCK:
-        backend = _default_backends.get(root)
-        if backend is None:
-            backend = auto_backend(root)
-            _default_backends[root] = backend
-        return backend
-
-
-def set_default_backend(
-    backend: StorageBackend, project_root: Path | None = None
-) -> None:
-    """Override the process-global default backend (for tests or v0.2.4 migration)."""
-    root = runtime_paths(project_root).project_root
-    with _DEFAULT_BACKEND_LOCK:
-        _default_backends[root] = backend
-
-
-def reset_default_backend(project_root: Path | None = None) -> None:
-    """Close and reset one default backend, or every backend when omitted."""
-    with _DEFAULT_BACKEND_LOCK:
-        if project_root is None:
-            backends = tuple(_default_backends.items())
-            _default_backends.clear()
-        else:
-            root = runtime_paths(project_root).project_root
-            backend = _default_backends.pop(root, None)
-            backends = ((root, backend),) if backend is not None else ()
-    failures: list[Exception] = []
-    for root, backend in backends:
-        close = getattr(backend, "close", None)
-        if callable(close):
-            try:
-                close()
-            except Exception as exc:
-                failures.append(exc)
-                report_backend_close_failure(
-                    exc,
-                    project_root=root,
-                    backend_type=type(backend).__name__,
-                )
-    if failures:
-        raise DefaultBackendResetError(tuple(failures))
 
 
 def _remove_sqlite_migration_sidecars(database: Path) -> None:

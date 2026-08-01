@@ -20,7 +20,7 @@ from nuself.notification.outbox import (
 )
 from nuself.notification.adapters import LogOnlyNotificationAdapter
 from nuself.config import runtime_paths
-from nuself.storage import get_default_backend
+from nuself.storage import ClosableStorageBackend, auto_backend
 
 
 class _PausingNotificationOutbox(NotificationOutbox):
@@ -28,12 +28,13 @@ class _PausingNotificationOutbox(NotificationOutbox):
         self,
         project_root: Path,
         *,
+        backend: ClosableStorageBackend,
         scanned: Event,
         release: Event,
     ) -> None:
         super().__init__(
             runtime_paths(project_root),
-            get_default_backend(project_root),
+            backend,
         )
         self._scanned = scanned
         self._release = release
@@ -51,20 +52,26 @@ def _pause_during_outbox_add(
     scanned: Event,
     release: Event,
 ) -> None:
-    outbox = _PausingNotificationOutbox(
-        Path(project_root),
-        scanned=scanned,
-        release=release,
-    )
-    outbox.add(
-        OutboxEntry(
-            id="first",
-            title="First",
-            body="First body",
-            status="pending",
-            idempotency_key="shared-key",
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        outbox = _PausingNotificationOutbox(
+            root,
+            backend=backend,
+            scanned=scanned,
+            release=release,
         )
-    )
+        outbox.add(
+            OutboxEntry(
+                id="first",
+                title="First",
+                body="First body",
+                status="pending",
+                idempotency_key="shared-key",
+            )
+        )
+    finally:
+        backend.close()
 
 
 def _add_competing_outbox_entry(
@@ -72,17 +79,22 @@ def _add_competing_outbox_entry(
     attempted: Event,
     done: Event,
 ) -> None:
-    attempted.set()
-    notification_outbox(Path(project_root)).add(
-        OutboxEntry(
-            id="second",
-            title="Second",
-            body="Second body",
-            status="pending",
-            idempotency_key="shared-key",
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        attempted.set()
+        notification_outbox(root, backend=backend).add(
+            OutboxEntry(
+                id="second",
+                title="Second",
+                body="Second body",
+                status="pending",
+                idempotency_key="shared-key",
+            )
         )
-    )
-    done.set()
+        done.set()
+    finally:
+        backend.close()
 
 
 def _spawn_context() -> SpawnContext:

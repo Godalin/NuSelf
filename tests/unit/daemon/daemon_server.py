@@ -671,13 +671,13 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
     """End-to-end: daemon starts reflection scheduler thread, which reflects and creates an outbox entry."""
     state = DaemonState(tmp_path)
     reflected = threading.Event()
+    outbox = notification_outbox(tmp_path)
 
     class MockScheduler:
         def should_reflect(self, now: object = None) -> bool:
             return True
 
         def reflect(self, now: object = None) -> bool:
-            outbox = notification_outbox(tmp_path)
             outbox.add(
                 OutboxEntry(
                     id="reflection-test-001",
@@ -707,7 +707,6 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
         state.shutdown_requested.set()
         state.stop_background_tasks()
 
-    outbox = notification_outbox(tmp_path)
     entries = outbox.list()
     assert len(entries) >= 1
     assert any(e.title == "test reflection idea" for e in entries)

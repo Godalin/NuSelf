@@ -11,7 +11,7 @@ from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _reason_service(project_root: Path) -> ReasonService:
@@ -28,7 +28,7 @@ def _service(
 ) -> ReflectionService:
     trace = compose_trace_services(
         runtime_paths(project_root),
-        get_default_backend(project_root),
+        owned_backend(project_root),
     ).recorder
     return ReflectionService(
         repository,
@@ -60,7 +60,7 @@ def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
 
 
 def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     entry = repo.add(_reflection_entry())
     service = _service(tmp_path, repo)
 
@@ -73,7 +73,7 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
 
     query = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query
     reason_traces = query.list_traces(kind="reason_thread")
     promotion_traces = query.list_traces(kind="promotion")
@@ -87,7 +87,7 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
 
 
 def test_promote_rejects_non_pending_reflection(tmp_path: Path) -> None:
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     entry = repo.add(_reflection_entry()).with_status("archived")
     repo.update(entry)
 

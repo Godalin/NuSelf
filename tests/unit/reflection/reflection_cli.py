@@ -10,7 +10,7 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.application.runtime import open_application_runtime, use_application_runtime
 
 
@@ -34,7 +34,7 @@ def project_root(tmp_path: Path) -> Path:
 
 
 def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[ReflectionEntry]:
-    repo = ReflectionRepository(runtime_paths(project_root), backend=get_default_backend(project_root))
+    repo = ReflectionRepository(runtime_paths(project_root), backend=owned_backend(project_root))
     entries: list[ReflectionEntry] = []
     for i in range(count):
         entry = ReflectionEntry(
@@ -175,7 +175,7 @@ def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[st
     assert handle_reflection_dismiss(args) == 0
     output = capsys.readouterr().out
     assert f"Dismissed: {entries[0].id}" in output
-    repo = ReflectionRepository(runtime_paths(project_root), backend=get_default_backend(project_root))
+    repo = ReflectionRepository(runtime_paths(project_root), backend=owned_backend(project_root))
     assert repo.get(entries[0].id).status == "dismissed"
 
 
@@ -199,7 +199,7 @@ def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[st
     assert handle_reflection_archive(args) == 0
     output = capsys.readouterr().out
     assert f"Archived: {entries[0].id}" in output
-    repo = ReflectionRepository(runtime_paths(project_root), backend=get_default_backend(project_root))
+    repo = ReflectionRepository(runtime_paths(project_root), backend=owned_backend(project_root))
     assert repo.get(entries[0].id).status == "archived"
 
 

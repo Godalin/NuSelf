@@ -25,7 +25,8 @@ from nuself.memory.curator import MemoryCurator as _MemoryCurator
 from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
+from tests.backend import owned_backend
 from nuself.trace.service import TraceRecorder
 
 
@@ -38,7 +39,7 @@ def _resources(
         if isinstance(root_or_paths, RuntimePaths)
         else runtime_paths(root_or_paths)
     )
-    return paths, backend or get_default_backend(paths.project_root)
+    return paths, backend or owned_backend(paths.project_root)
 
 
 def memory_entry_repository(

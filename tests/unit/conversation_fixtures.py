@@ -6,7 +6,8 @@ from pathlib import Path
 
 from nuself.conversation import ConversationStore as _ConversationStore
 from nuself.config import runtime_paths
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage import StorageBackend
+from tests.backend import owned_backend
 
 
 class ConversationStore(_ConversationStore):
@@ -20,5 +21,5 @@ class ConversationStore(_ConversationStore):
     ) -> None:
         super().__init__(
             runtime_paths(project_root),
-            backend=backend or get_default_backend(project_root),
+            backend=backend or owned_backend(project_root),
         )

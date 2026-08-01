@@ -8,7 +8,7 @@ from nuself.config import runtime_paths
 from nuself.logs import read_log_events
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _entry(entry_id: str, *, title: str, body: str, score: float, created_at: str) -> ReflectionEntry:
@@ -32,7 +32,7 @@ def _entry(entry_id: str, *, title: str, body: str, score: float, created_at: st
 
 
 def test_reflection_organizer_merges_similar_pending_entries(tmp_path: Path) -> None:
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     weaker = repo.add(
         _entry(
             "reflection-a",
@@ -70,7 +70,7 @@ def test_reflection_organizer_merges_similar_pending_entries(tmp_path: Path) -> 
 
 
 def test_reflection_organizer_leaves_distinct_entries_pending(tmp_path: Path) -> None:
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     repo.add(
         _entry(
             "reflection-a",
@@ -104,7 +104,7 @@ def test_organizer_audit_failure_cannot_replace_merged_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     weaker = repo.add(
         _entry(
             "reflection-a",

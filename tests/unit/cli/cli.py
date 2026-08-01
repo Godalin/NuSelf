@@ -83,7 +83,7 @@ from nuself.runtime.context import (
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.execution import current_cancellation
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 from nuself.application.runtime import open_application_runtime, use_application_runtime
@@ -107,7 +107,7 @@ def _trace_repository(workspace: Path) -> TraceRepository:
     root = _authority(workspace)
     return TraceRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 
@@ -115,7 +115,7 @@ def _profile_repository(workspace: Path) -> ProfileItemRepository:
     root = _authority(workspace)
     return ProfileItemRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 
@@ -152,7 +152,7 @@ def _initialize_cli_test_authority(  # pyright: ignore[reportUnusedFunction]
         "uninitialized_authority"
     ) is not None:
         return
-    get_default_backend(_authority(tmp_path))
+    owned_backend(_authority(tmp_path))
     if request.node.get_closest_marker(
         "unconfigured_authority"
     ) is None:
@@ -1984,7 +1984,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    backend = get_default_backend(_authority(tmp_path))
+    backend = owned_backend(_authority(tmp_path))
     backend.collection("memory_curator_plans").put(
         "obs_default",
         {"observation_id": "wrong"},
@@ -2030,7 +2030,7 @@ def test_memory_plan_corruption_can_be_explicitly_discarded_without_state_change
         "Observation and candidates were not changed."
         in discard_output.out
     )
-    backend = get_default_backend(_authority(tmp_path))
+    backend = owned_backend(_authority(tmp_path))
     assert backend.collection("memory_curator_plans").get("obs_default") is None
     assert memory_candidate_repository(_authority(tmp_path)).get(candidate.id) == candidate
 
@@ -5813,7 +5813,7 @@ def test_reflection_cli_promote_creates_reason_and_trace(
         created_at="2026-05-19T00:00:00+00:00",
         reviewed_at=None,
     )
-    ReflectionRepository(runtime_paths(_authority(tmp_path)), backend=get_default_backend(_authority(tmp_path))).add(entry)
+    ReflectionRepository(runtime_paths(_authority(tmp_path)), backend=owned_backend(_authority(tmp_path))).add(entry)
 
     result = main(
         ["--workspace", str(tmp_path), "inbox", "reflection", "promote", entry.id]

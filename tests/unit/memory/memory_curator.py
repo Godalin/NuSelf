@@ -41,7 +41,7 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 class FakeCuratorAgent:
@@ -295,7 +295,7 @@ def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> No
             ],
         )
     )
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
@@ -949,7 +949,7 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
         repository=repository,
         trace_recorder=compose_trace_services(
             runtime_paths(tmp_path),
-            get_default_backend(tmp_path),
+            owned_backend(tmp_path),
         ).recorder,
     )
 
@@ -1012,7 +1012,7 @@ def test_auto_accept_update_trace_retains_update_action(
         repository=repository,
         trace_recorder=compose_trace_services(
             runtime_paths(tmp_path),
-            get_default_backend(tmp_path),
+            owned_backend(tmp_path),
         ).recorder,
     )
 
@@ -1021,7 +1021,7 @@ def test_auto_accept_update_trace_retains_update_action(
     assert result.updated == 1
     [trace] = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(
         kind="memory_update"
     )

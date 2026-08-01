@@ -14,8 +14,9 @@ import pytest
 
 from nuself.conversation import ConversationMessage, ConversationState
 from nuself.conversation import _PendingTurn
+from nuself.storage import auto_backend
 from conversation_fixtures import ConversationStore
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _hold_thread_lock(
@@ -24,11 +25,16 @@ def _hold_thread_lock(
     ready: Event,
     release: Event,
 ) -> None:
-    store = ConversationStore(Path(project_root))
-    with store._locked(conversation_id):
-        ready.set()
-        if not release.wait(timeout=10):
-            raise RuntimeError("parent did not release thread lock")
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        store = ConversationStore(root, backend=backend)
+        with store._locked(conversation_id):
+            ready.set()
+            if not release.wait(timeout=10):
+                raise RuntimeError("parent did not release thread lock")
+    finally:
+        backend.close()
 
 
 def _hold_thread_update(
@@ -36,7 +42,9 @@ def _hold_thread_update(
     ready: Event,
     release: Event,
 ) -> None:
-    store = ConversationStore(Path(project_root))
+    root = Path(project_root)
+    backend = auto_backend(root)
+    store = ConversationStore(root, backend=backend)
 
     def update(state: ConversationState) -> tuple[ConversationState, None]:
         ready.set()
@@ -56,7 +64,10 @@ def _hold_thread_update(
             None,
         )
 
-    store.update("source", update)
+    try:
+        store.update("source", update)
+    finally:
+        backend.close()
 
 
 def _run_thread_lifecycle(
@@ -65,21 +76,26 @@ def _run_thread_lifecycle(
     attempted: Event,
     done: Event,
 ) -> None:
-    store = ConversationStore(Path(project_root))
-    attempted.set()
-    if operation == "rename":
-        store.rename("source", "target")
-    elif operation == "branch":
-        store.branch("source", "target")
-    elif operation == "archive":
-        store.archive("source")
-    elif operation == "unarchive":
-        store.unarchive("source")
-    elif operation == "delete":
-        store.delete("source")
-    else:
-        raise AssertionError(f"unknown lifecycle operation: {operation}")
-    done.set()
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        store = ConversationStore(root, backend=backend)
+        attempted.set()
+        if operation == "rename":
+            store.rename("source", "target")
+        elif operation == "branch":
+            store.branch("source", "target")
+        elif operation == "archive":
+            store.archive("source")
+        elif operation == "unarchive":
+            store.unarchive("source")
+        elif operation == "delete":
+            store.delete("source")
+        else:
+            raise AssertionError(f"unknown lifecycle operation: {operation}")
+        done.set()
+    finally:
+        backend.close()
 
 
 def _spawn_context() -> SpawnContext:
@@ -95,7 +111,7 @@ def test_update_does_not_hold_sqlite_lock_across_callback(
     tmp_path: Path,
 ) -> None:
     store = ConversationStore(tmp_path)
-    backend = get_default_backend(tmp_path)
+    backend = owned_backend(tmp_path)
     completed = threading.Event()
 
     def read_from_worker() -> None:
@@ -116,7 +132,7 @@ def test_update_rejects_direct_concurrent_conversation_change(
     tmp_path: Path,
 ) -> None:
     store = ConversationStore(tmp_path)
-    collection = get_default_backend(tmp_path).collection("conversations")
+    collection = owned_backend(tmp_path).collection("conversations")
 
     def update(state: ConversationState) -> tuple[ConversationState, None]:
         collection.put(

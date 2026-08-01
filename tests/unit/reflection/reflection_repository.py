@@ -12,12 +12,12 @@ from nuself.reflection.repository import (
     ReflectionEntryNotFound,
     ReflectionRepository,
 )
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> ReflectionRepository:
-    return ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    return ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
 
 
 def _sample_entry(index: int = 0) -> ReflectionEntry:

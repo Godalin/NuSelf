@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 
 from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def test_observe_is_durable_idempotent_and_producer_neutral(tmp_path: Path) -> None:
-    repository = MemoryObservationRepository(get_default_backend(tmp_path))
+    repository = MemoryObservationRepository(owned_backend(tmp_path))
     observation = MemoryObservation.create(
         source_ref="interaction:opaque",
         fragments=("user: remember this", "assistant: understood"),
@@ -26,7 +26,7 @@ def test_observe_is_durable_idempotent_and_producer_neutral(tmp_path: Path) -> N
 
 
 def test_observe_rejects_identity_collision(tmp_path: Path) -> None:
-    repository = MemoryObservationRepository(get_default_backend(tmp_path))
+    repository = MemoryObservationRepository(owned_backend(tmp_path))
     original = MemoryObservation.create(
         source_ref="interaction:opaque",
         fragments=("first",),

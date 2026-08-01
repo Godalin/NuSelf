@@ -80,9 +80,9 @@ compensation logic for operations inside that boundary.
 Each `ApplicationRuntime` lazily owns one backend for its canonical authority
 and closes it at the CLI/daemon lifecycle boundary. A closed backend and its
 collections reject further access. Legacy direct-construction test helpers may
-retain a separate path-scoped default cache only until their callers adopt
-explicit ownership; application composition and migrations never use that
-cache.
+use a pytest-scoped owner that closes selected backends after each test;
+production provides no default-backend cache, override, reset API, or global
+storage lock.
 
 ## Collections
 

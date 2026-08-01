@@ -14,7 +14,7 @@ from nuself.config import runtime_paths
 from nuself.persona.definition import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.persona.tools import _record_prompt_trace  # pyright: ignore[reportPrivateUsage]
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.application.runtime import open_application_runtime, use_application_runtime
 
 
@@ -82,7 +82,7 @@ def test_persona_trace_failure_is_observed_without_failing_tool(
 
     application = compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     _record_prompt_trace(
         prompt,

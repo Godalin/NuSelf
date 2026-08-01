@@ -56,7 +56,7 @@ def test_cleanup_failure_records_preserve_safe_ordered_chains() -> None:
     ]
 
 
-def test_backend_close_projection_is_fixed(tmp_path: Path) -> None:
+def test_application_backend_close_projection_is_fixed(tmp_path: Path) -> None:
     report_backend_close_failure(
         OSError("close failed"),
         project_root=tmp_path,
@@ -67,7 +67,7 @@ def test_backend_close_projection_is_fixed(tmp_path: Path) -> None:
         project_root=tmp_path,
         component="storage",
     )
-    assert event.message == "Default storage backend could not be closed"
+    assert event.message == "Application storage backend could not be closed"
     assert event.level == "warning"
     assert event.status == "degraded"
     assert event.metadata == {"backend_type": "SqliteStorageBackend"}

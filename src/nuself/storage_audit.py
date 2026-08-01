@@ -100,7 +100,7 @@ def report_backend_close_failure(
     project_root: Path,
     backend_type: str,
 ) -> None:
-    """Report one default backend close failure."""
+    """Report one application-owned backend close failure."""
 
     metadata: dict[str, object] = {"backend_type": backend_type}
     definition = STORAGE_OPERATIONS_AUDIT_REGISTRY.resolve(
@@ -110,7 +110,7 @@ def report_backend_close_failure(
     report_defined_failure(
         exc,
         definition=definition,
-        message="Default storage backend could not be closed",
+        message="Application storage backend could not be closed",
         project_root=project_root,
         metadata=metadata,
     )

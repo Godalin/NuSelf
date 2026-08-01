@@ -15,13 +15,13 @@ from nuself.profile.repository import (
     ProfileStats,
     profile_stats,
 )
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _repository(root: Path) -> ProfileItemRepository:
     return ProfileItemRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 

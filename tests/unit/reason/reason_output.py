@@ -17,12 +17,12 @@ from reason_output_fixtures import ReasonOutputService
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.storage import write_json_atomic
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:
-    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=_prompt)
+    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)), project_root=tmp_path, prompt_generator=_prompt)
 
 
 def _prompt(*args: object, **kwargs: object) -> str:

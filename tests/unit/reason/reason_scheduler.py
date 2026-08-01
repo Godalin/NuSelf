@@ -15,7 +15,8 @@ from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonScheduler
 from reason_fixtures import ReasonService
-from nuself.storage import auto_backend, get_default_backend
+from nuself.storage import auto_backend
+from tests.backend import owned_backend
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -57,7 +58,7 @@ def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
         next_steps_data=thread.next_steps_data,
         mandates_data=thread.mandates_data,
     )
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     repo.save_thread(cooled)
 
     scheduler = ReasonScheduler(

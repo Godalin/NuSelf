@@ -152,7 +152,7 @@ def test_conversation_composition_has_bounded_public_fan_in() -> None:
 def test_chat_tool_runtime_does_not_compose_persistence() -> None:
     path = _SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
 
@@ -191,7 +191,7 @@ def test_conversation_store_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "conversation.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
     }
     assert {
         imported
@@ -204,7 +204,7 @@ def test_workspace_store_and_export_worker_do_not_resolve_authority() -> None:
     workspace_path = _SOURCE_ROOT / "workspace.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
     }
     assert {
         imported
@@ -227,7 +227,7 @@ def test_persona_definition_loader_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "persona" / "definition.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
     }
     assert [
         imported
@@ -239,7 +239,7 @@ def test_persona_definition_loader_does_not_resolve_authority() -> None:
 def test_chat_tool_collection_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "agent" / "tools" / "__init__.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
         ("nuself.application", "compose_trace_services"),
     }
@@ -298,7 +298,7 @@ def test_cli_and_repl_do_not_call_each_others_adapters() -> None:
 def test_migrated_trace_package_does_not_resolve_authority() -> None:
     violations: list[str] = []
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     for path in _package_files("trace"):
@@ -314,7 +314,7 @@ def test_migrated_trace_package_does_not_resolve_authority() -> None:
 def test_migrated_profile_package_does_not_resolve_authority() -> None:
     violations: list[str] = []
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     for path in _package_files("profile"):
@@ -337,7 +337,7 @@ def test_process_adapters_only_resolve_storage_for_infrastructure_commands() -> 
     for path in _package_files("cli"):
         if any(
             module == "nuself.storage"
-            and name in {"auto_backend", "get_default_backend"}
+            and name == "auto_backend"
             for module, name in _from_imports(path)
         ):
             relative = str(path.relative_to(_SOURCE_ROOT))
@@ -379,7 +379,7 @@ def test_reflection_scheduler_receives_foreign_capabilities() -> None:
 def test_migrated_reason_repository_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "reason" / "repository.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     violations = [
@@ -398,7 +398,7 @@ def test_reason_domain_does_not_import_application_composition() -> None:
 def test_migrated_reflection_repository_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "reflection" / "repository.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     violations = [
@@ -416,7 +416,7 @@ def test_reflection_domain_does_not_import_application_composition() -> None:
 
 def test_reflection_orchestration_does_not_resolve_authority() -> None:
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     paths = (
@@ -494,7 +494,7 @@ def test_reflection_service_does_not_compose_infrastructure() -> None:
     path = _SOURCE_ROOT / "reflection" / "service.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.reason.service", "ReasonService"),
         ("nuself.trace.repository", "TraceRepository"),
     }
@@ -507,7 +507,7 @@ def test_reflection_service_does_not_compose_infrastructure() -> None:
 
 def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     paths = (
@@ -528,7 +528,7 @@ def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
 def test_migrated_persona_repository_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "persona" / "prompt_repo.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     violations = [
@@ -544,7 +544,7 @@ def test_persona_definition_loading_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "persona" / "definition.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
     }
     assert {
         imported
@@ -557,7 +557,7 @@ def test_persona_tools_do_not_resolve_or_compose_authority() -> None:
     path = _SOURCE_ROOT / "persona" / "tools.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.application", "compose_trace_services"),
     }
     assert {
@@ -576,7 +576,7 @@ def test_reason_advancement_does_not_resolve_or_compose_authority() -> None:
     )
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
     }
     assert {
         (path.relative_to(_SOURCE_ROOT), imported)
@@ -616,7 +616,7 @@ def test_reason_output_contracts_are_separate_from_workflow() -> None:
 def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "notification" / "__init__.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     violations = [
@@ -646,7 +646,7 @@ def test_notification_delivery_is_not_implemented_in_package_root() -> None:
 
 def test_remaining_persistence_stores_do_not_resolve_authority() -> None:
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     paths = (
@@ -670,7 +670,7 @@ def test_memory_domain_does_not_import_application_composition() -> None:
 def test_memory_intake_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "memory" / "intake.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
 
@@ -684,7 +684,7 @@ def test_memory_intake_does_not_resolve_authority() -> None:
 def test_memory_optimizer_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "memory" / "optimizer.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     assert {
@@ -697,7 +697,7 @@ def test_memory_optimizer_does_not_resolve_authority() -> None:
 def test_memory_curator_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "memory" / "curator.py"
     forbidden = {
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.config", "runtime_paths"),
     }
     assert {
@@ -711,7 +711,7 @@ def test_reason_service_does_not_compose_infrastructure() -> None:
     path = _SOURCE_ROOT / "reason" / "service.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
         ("nuself.trace.repository", "TraceRepository"),
     }
     assert [
@@ -745,7 +745,7 @@ def test_conversation_runtime_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "get_default_backend"),
+        ("nuself.storage", "auto_backend"),
     }
     assert {
         imported

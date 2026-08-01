@@ -46,7 +46,7 @@ from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
@@ -58,7 +58,7 @@ from nuself.agent.tools.resources import ToolResources
 def _trace_repository(root: Path) -> TraceRepository:
     return TraceRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 
@@ -75,17 +75,17 @@ def _chat_tool(
     from nuself.reflection.organizer import ReflectionOrganizer
     from nuself.reflection.service import ReflectionService
 
-    repo = reflection_repository if reflection_repository is not None else ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = reflection_repository if reflection_repository is not None else ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     if not isinstance(repo, ReflectionRepository):
         raise TypeError("reflection_repository must be a ReflectionRepository")
     memory_repository = memory_entry_repository(tmp_path)
     trace = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     application = compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     resources = ToolResources(
         project_root=tmp_path,
@@ -243,7 +243,7 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
 
 
 def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
@@ -1191,7 +1191,7 @@ def test_empty_memory_search_requests_one_broader_query(
 def test_reflection_list_pending_empty(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool)
     assert "No pending reflection ideas" in result
@@ -1200,7 +1200,7 @@ def test_reflection_list_pending_empty(tmp_path: Path) -> None:
 def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1249,7 +1249,7 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
 def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     for i in range(5):
         repo.add(
             ReflectionEntry(
@@ -1278,7 +1278,7 @@ def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
 def test_reflection_count_tool(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1308,7 +1308,7 @@ def test_reflection_count_tool(tmp_path: Path) -> None:
 def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1340,7 +1340,7 @@ def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_reflection_dismiss_out_of_range(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
@@ -1351,7 +1351,7 @@ def test_reflection_dismiss_out_of_range(tmp_path: Path, monkeypatch: pytest.Mon
 def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
@@ -1361,7 +1361,7 @@ def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.Mo
 def test_reflection_archive_success(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     repo.add(
         ReflectionEntry(
             id="r1",
@@ -1393,7 +1393,7 @@ def test_reflection_archive_success(tmp_path: Path) -> None:
 def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     result = _invoke_chat_tool(tool, {"index": 0})
     assert "Invalid reflection index" in result
@@ -1402,7 +1402,7 @@ def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
 def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionRepository
 
-    repo = ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
     assert "Error" in _invoke_chat_tool(tool, {"index": -1})
 
@@ -1560,7 +1560,7 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
         _should_not_compose,
     )
 
-    service = ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *args, **kwargs: "Test-generated reasoning prompt.")
+    service = ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *args, **kwargs: "Test-generated reasoning prompt.")
     conversation = service.start_thread("Queued export")
     service.advance_thread(
         conversation.id,

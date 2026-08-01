@@ -94,18 +94,23 @@ def _deliver_in_process(
 ) -> None:
     if not start.wait(timeout=10):
         raise RuntimeError("parent did not start notification delivery")
-    outbox = notification_outbox(Path(project_root))
-    deliver_entry_once(
-        outbox,
-        entry_id,
-        [
-            _ProcessRecordingAdapter(
-                effect_path,
-                started=started,
-                release=release,
-            )
-        ],
-    )
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        outbox = notification_outbox(root, backend=backend)
+        deliver_entry_once(
+            outbox,
+            entry_id,
+            [
+                _ProcessRecordingAdapter(
+                    effect_path,
+                    started=started,
+                    release=release,
+                )
+            ],
+        )
+    finally:
+        backend.close()
 
 
 def _dismiss_in_process(
@@ -114,9 +119,14 @@ def _dismiss_in_process(
     attempted: Event,
     done: Event,
 ) -> None:
-    attempted.set()
-    notification_outbox(Path(project_root)).dismiss(entry_id)
-    done.set()
+    root = Path(project_root)
+    backend = auto_backend(root)
+    try:
+        attempted.set()
+        notification_outbox(root, backend=backend).dismiss(entry_id)
+        done.set()
+    finally:
+        backend.close()
 
 
 class DeleteFailingCollection:
