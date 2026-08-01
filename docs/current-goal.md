@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit repeated exception translation and DTO mapping across CLI/daemon
-adapters. Preserve intentional transport/domain separation; consolidate only
-identical mappings whose ownership is already shared.
+Audit repeated DTO mappings at daemon health/chat and lifecycle-result
+boundaries. Consolidate only when one source model maps identically to one wire
+model; keep transport codecs separate from application/domain DTOs.
 
 ## Constraints
 
@@ -212,6 +212,13 @@ identical mappings whose ownership is already shared.
   daemon-status observation translates lifecycle errors, data resolution
   enforces internal visibility, and activity opening owns optional transport
   degradation. They are not pass-throughs and remain intact.
+- Start and stop failure formatters had identical implementations and callers
+  required only the common safe lifecycle message. One union-typed formatter
+  now serves command, default-entrypoint, and interactive restart surfaces;
+  observed start/stop/restart audit paths remain distinct.
+- Lifecycle/CLI/entrypoint focused suite: 384 passed. Post-formatter cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

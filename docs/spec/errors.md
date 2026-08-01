@@ -246,8 +246,9 @@ the child process:
   receives no more than the remaining budget, so socket I/O cannot silently
   extend it.
 - CLI start, default startup, restart, and interactive restart use the
-  lifecycle failure's stable safe message. One-shot commands exit non-zero;
-  interactive restart returns to the existing REPL.
+  lifecycle failure's stable safe message through one formatter shared by
+  start and stop errors. One-shot commands exit non-zero; interactive restart
+  returns to the existing REPL.
 - A failed lifecycle operation is projected as a structured lifecycle audit
   with the reason, latest status, exit code when known, and sanitized compact
   exception chain. The terminal still receives only the stable outer message.

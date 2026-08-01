@@ -13,14 +13,10 @@ from nuself.runtime.diagnostics import (
 )
 
 
-def format_start_failure(error: lifecycle.DaemonStartError) -> str:
-    """Render one safe daemon-start failure across CLI surfaces."""
-
-    return diagnostic_exception_message(error)
-
-
-def format_stop_failure(error: lifecycle.DaemonStopError) -> str:
-    """Render one safe daemon-stop failure across CLI surfaces."""
+def format_lifecycle_failure(
+    error: lifecycle.DaemonStartError | lifecycle.DaemonStopError,
+) -> str:
+    """Render one safe daemon lifecycle failure across CLI surfaces."""
 
     return diagnostic_exception_message(error)
 

@@ -7,8 +7,7 @@ from pathlib import Path
 from nuself.cli.composition import compose_cli_conversation_store
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
-    format_start_failure,
-    format_stop_failure,
+    format_lifecycle_failure,
     restart_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status
@@ -350,9 +349,9 @@ def handle_interactive_restart_command(project_root: Path | None) -> str:
     try:
         result = restart_daemon_observed(project_root)
     except lifecycle.DaemonStopError as exc:
-        return f"Failed to restart daemon: {format_stop_failure(exc)}"
+        return f"Failed to restart daemon: {format_lifecycle_failure(exc)}"
     except lifecycle.DaemonStartError as exc:
-        return f"Failed to restart daemon: {format_start_failure(exc)}"
+        return f"Failed to restart daemon: {format_lifecycle_failure(exc)}"
     return (
         f"Restarted daemon: {format_status(result.status)} "
         f"stop={result.stop.outcome} start={result.start.outcome}"

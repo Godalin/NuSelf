@@ -12,7 +12,7 @@ from typing import Protocol
 from nuself.conversation import ConversationState, ConversationStore
 from nuself.cli.composition import compose_cli_conversation_store
 from nuself.cli.daemon_lifecycle import (
-    format_start_failure,
+    format_lifecycle_failure,
     start_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status, observe_daemon_status
@@ -98,7 +98,7 @@ class EntrypointController:
                 )
             except lifecycle.DaemonStartError as exc:
                 print(
-                    f"Failed to start daemon: {format_start_failure(exc)}",
+                    f"Failed to start daemon: {format_lifecycle_failure(exc)}",
                     file=sys.stderr,
                 )
                 return CliExitCode.FAILURE
