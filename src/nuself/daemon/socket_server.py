@@ -81,9 +81,12 @@ class RequestHandler(socketserver.StreamRequestHandler):
             else:
                 request_id = request.request_id
                 try:
+                    server = self.server
+                    if not isinstance(server, NuSelfUnixServer):
+                        raise RuntimeError("unexpected server type")
                     response = handle_request(
                         request,
-                        self._daemon_state(),
+                        server.state,
                     )
                 except Exception as exc:
                     report_daemon_transport_failure(
@@ -135,9 +138,3 @@ class RequestHandler(socketserver.StreamRequestHandler):
         if not isinstance(server, NuSelfUnixServer):
             return None
         return server.state.project_root
-
-    def _daemon_state(self) -> DaemonRequestState:
-        server = self.server
-        if not isinstance(server, NuSelfUnixServer):
-            raise RuntimeError("unexpected server type")
-        return server.state

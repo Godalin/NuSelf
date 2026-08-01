@@ -29,6 +29,7 @@ from nuself.daemon.protocol import (
     ProtocolError,
     RequestType,
 )
+from nuself.daemon.socket_server import NuSelfUnixServer
 from nuself.daemon.transport import (
     read_socket_frame,
     read_stream_frame,
@@ -228,11 +229,15 @@ def _handler_fake(
     raw: object,
     writer: object,
 ) -> object:
+    server = object.__new__(NuSelfUnixServer)
+    server.state = SimpleNamespace(  # type: ignore[assignment]
+        project_root=project_root
+    )
     return SimpleNamespace(
         connection=FakeConnection(raw),
         rfile=raw,
         wfile=writer,
-        _daemon_state=lambda: SimpleNamespace(project_root=project_root),
+        server=server,
         _request_project_root=lambda: project_root,
     )
 

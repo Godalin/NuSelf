@@ -657,11 +657,15 @@ def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: p
             return raw
 
     raw = DaemonRequest(type="ping", payload={}, request_id="boom1").to_json_line()
+    server = object.__new__(server_mod.NuSelfUnixServer)
+    server.state = SimpleNamespace(  # type: ignore[assignment]
+        project_root=tmp_path
+    )
     fake = SimpleNamespace(
         connection=FakeConnection(raw),
         rfile=io.BytesIO(raw),
         wfile=io.BytesIO(),
-        _daemon_state=lambda: SimpleNamespace(project_root=tmp_path),
+        server=server,
         _request_project_root=lambda: tmp_path,
     )
 

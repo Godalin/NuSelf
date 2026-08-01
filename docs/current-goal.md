@@ -10,8 +10,8 @@ In progress — continuously audit and simplify while preserving composability.
 ## Current Phase
 
 Continue auditing constructor assignments and single-use private methods for
-mirrored state or pass-through calls. Preserve real policy and test through
-the owning public capability instead of retaining production test seams.
+mirrored state or pass-through calls. Preserve real policy and make tests use
+the owning production object shape instead of private seams.
 
 ## Constraints
 
@@ -268,6 +268,13 @@ the owning public capability instead of retaining production test seams.
   directly; focused tests exercise the real scheduler API instead of that
   production-private test seam.
 - Daemon/boundary focused suite: 226 passed. Post-periodic-pass-through cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Socket `RequestHandler._daemon_state()` was a single-use state accessor whose
+  only policy was a server-type check. Dispatch now performs that check where
+  state crosses into request handling; transport tests use a real server shell
+  instead of injecting the removed private seam.
+- Socket/transport/request focused suite: 80 passed. Post-state-accessor cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
