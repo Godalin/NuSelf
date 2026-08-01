@@ -17,9 +17,8 @@ from nuself.reason.errors import (
 )
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
-from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
+from nuself.workspace import PrivateWorkspaceStore
 
 _MAX_EVIDENCE_REFS = 20
 
@@ -80,7 +79,6 @@ class ReasonService:
         self._project_root = project_root
         self._workspace_store = workspace_store
         self._trace_recorder: TraceRecorder | None = trace_recorder
-        self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer
         self._prompt_generator = prompt_generator or generate_reasoning_prompt
 
@@ -94,24 +92,6 @@ class ReasonService:
 
     def list_steps(self, thread_id: str) -> list[ReasoningStep]:
         return self._repository.list_steps(thread_id)
-
-    def workspace_paths(self, thread_id: str) -> PrivateWorkspacePaths:
-        self._repository.get_thread(thread_id)
-        return self._workspace_store.paths(thread_id)
-
-    def workspace(self, thread_id: str) -> ScopedWorkspace:
-        """Return a thread-scoped workspace for the given thread."""
-        cached = self._workspace_cache.get(thread_id)
-        if cached is not None:
-            return cached
-        ws = self._workspace_store.ensure(thread_id)
-        store = SqliteStore(ws.database)
-        w = ScopedWorkspace(
-            store,
-            ("workspace", "reason", thread_id),
-        )
-        self._workspace_cache[thread_id] = w
-        return w
 
     # ── Write ──────────────────────────────────────────────────────
 

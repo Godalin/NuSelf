@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing application and daemon service boundaries for methods or
-composition helpers with no production consumer. Remove only surface whose
-deletion shortens a real call path; retain complete domain use cases.
+Continue auditing domain service methods against production consumers, next
+checking trace and reflection APIs. Keep use-case methods even when one adapter
+uses them; remove test-only infrastructure exposure.
 
 ## Constraints
 
@@ -163,6 +163,13 @@ deletion shortens a real call path; retain complete domain use cases.
 - Protocol/request/transport focused suite: 115 passed. Post-request-surface
   cleanup `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- `ReasonService.workspace_paths()` and `workspace()` had no production
+  consumer and exposed infrastructure as if it were a reasoning use case.
+  They and their private cache are gone; advancers and exports continue to
+  receive the application-owned `reason_workspace` capability directly.
+- Reason service/output/application-boundary focused suite: 117 passed.
+- Post-Reason-service cleanup `uv run --locked pytest -q`: 2455 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

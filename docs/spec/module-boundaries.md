@@ -341,8 +341,11 @@ reuse `reason_service` so repository, workspace, and trace dependencies
 originate at one application boundary; an optional model-backed advancer is a
 single-operation dependency rather than a second service graph.
 `ReasonService` itself receives repository, workspace store, and trace recorder
-as required dependencies. Reason scheduling and output export must receive an
-existing reason service and the single application-owned workspace store.
+as required dependencies for its own thread lifecycle, but it does not expose
+generic workspace paths or key-value handles as reason operations. Consumers
+that need workspace infrastructure receive the single application-owned store
+explicitly. Reason scheduling and output export must receive an existing reason
+service and that workspace store.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 Cooldown mutation is a reason
