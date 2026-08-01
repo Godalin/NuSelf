@@ -120,7 +120,6 @@ class DaemonScheduler:
         self._pending: list[_QueuedTask] = []
         self._active: dict[str, _QueuedTask] = {}
         self._busy_resources: set[str] = set()
-        self._running_count = 0
         self._sequence = 0
         # Composition and startup recovery may admit work before the
         # dispatcher starts. Shutdown is the only transition that closes it.
@@ -203,7 +202,7 @@ class DaemonScheduler:
                 ),
                 accepting=self._phase in {"created", "running"},
                 pending=len(self._pending),
-                in_flight=self._running_count,
+                in_flight=len(self._busy_resources),
                 capacity=self._max_concurrency,
                 last_error=self._last_error,
             )
@@ -246,13 +245,12 @@ class DaemonScheduler:
             with self._condition:
                 queued = self._next_runnable_locked()
                 while queued is None:
-                    if self._phase == "stopping" and self._running_count == 0:
+                    if self._phase == "stopping" and not self._busy_resources:
                         return
                     self._condition.wait(self._wait_timeout_locked())
                     queued = self._next_runnable_locked()
                 self._pending.remove(queued)
                 self._busy_resources.add(queued.task.resource)
-                self._running_count += 1
             future = self._executor.submit(self._run, queued.task)
             future.add_done_callback(
                 lambda completed, item=queued: self._complete(
@@ -261,7 +259,7 @@ class DaemonScheduler:
             )
 
     def _next_runnable_locked(self) -> _QueuedTask | None:
-        if self._running_count >= self._max_concurrency:
+        if len(self._busy_resources) >= self._max_concurrency:
             return None
         now = self._clock()
         eligible = (
@@ -281,7 +279,7 @@ class DaemonScheduler:
         )
 
     def _wait_timeout_locked(self) -> float | None:
-        if self._running_count >= self._max_concurrency:
+        if len(self._busy_resources) >= self._max_concurrency:
             return None
         runnable_times = [
             queued.run_at
@@ -356,7 +354,6 @@ class DaemonScheduler:
         error = executed.exception()
         result = executed.result() if error is None else None
         with self._condition:
-            self._running_count -= 1
             self._busy_resources.remove(queued.task.resource)
             self._active.pop(queued.task.identity, None)
             if error is not None:

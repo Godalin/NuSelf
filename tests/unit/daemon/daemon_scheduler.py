@@ -211,9 +211,10 @@ def test_scheduler_shutdown_before_start_cancels_recovery_tasks() -> None:
 def test_scheduler_waits_for_completion_when_executor_is_full() -> None:
     scheduler = DaemonScheduler({"test": lambda task: None}, max_concurrency=1)
     scheduler.submit(DaemonTask("test", "pending", "resource:b"))
-    scheduler._running_count = 1  # pyright: ignore[reportPrivateUsage]
+    scheduler._busy_resources.add("resource:a")  # pyright: ignore[reportPrivateUsage]
 
     assert scheduler._wait_timeout_locked() is None  # pyright: ignore[reportPrivateUsage]
+    scheduler._busy_resources.clear()  # pyright: ignore[reportPrivateUsage]
     scheduler.shutdown()
 
 

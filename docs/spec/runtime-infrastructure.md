@@ -263,7 +263,9 @@ must rediscover it.
 One dispatcher owns admission state and a bounded executor performs handlers.
 Scheduler lifecycle has one monotonic phase (`created`, `running`, `stopping`,
 or `stopped`); running and admission health are derived from it rather than
-stored as independent booleans. All scheduler state (pending tasks, active
+stored as independent booleans. The busy-resource set is also the authoritative
+in-flight set, so the scheduler does not maintain a second task count that can
+drift from resource ownership. All scheduler state (pending tasks, active
 identities, busy resources, delayed tasks, and lifecycle phase) is protected by
 one short-held condition. No handler,
 database operation, model call, file operation, event projection, audit write,

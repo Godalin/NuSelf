@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit remaining process-local mutexes and conditions for duplicated lifecycle
-state or overlapping ownership, starting with daemon scheduler/activity. Keep
-the two proven reentrant transaction locks in SQLite and Reason.
+Continue the daemon/service API audit at the request boundary: look for
+transport-shaped methods, repeated lifecycle queries, or pass-through helpers
+that can be removed without narrowing domain use cases.
 
 ## Constraints
 
@@ -146,6 +146,16 @@ the two proven reentrant transaction locks in SQLite and Reason.
 - Registry/event/log/repository focused suite: 208 passed. Post-lock audit
   `uv run --locked pytest -q`: 2457 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- The scheduler no longer mirrors running work in both an integer counter and
+  its busy-resource set. Capacity, shutdown completion, and health now derive
+  from the resource set that already owns serialization.
+- The activity broker condition remains necessary for bounded cross-request
+  long polling, while the daemon shutdown event is the one signal shared by
+  process signals, the shutdown request, cleanup, and the server loop; neither
+  duplicates scheduler lifecycle state.
+- Scheduler/activity/server focused suite: 50 passed.
+- Post-scheduler-state cleanup `uv run --locked pytest -q`: 2457 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
