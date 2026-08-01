@@ -383,9 +383,10 @@ transcript audit blocks. The final `persona_discussion` record contains stable
 ids, outcome booleans, and counts only.
 
 The live-chat send call is a continuation of the interactive turn, not an
-independent worker. `OwnedCall` owns its one-shot thread; the target captures
-the creating RuntimeContext before start and restores the thread's prior
-context after completion or failure. Long-lived daemon workers follow their
+independent worker. `OwnedCall` owns its one-shot thread and captures the
+creating Python context before start, carrying both the application authority
+and RuntimeContext without CLI-specific wrappers. Completion or failure cannot
+alter the initiating thread's context. Long-lived daemon workers follow their
 separate runtime ownership contract and never inherit CLI context.
 
 An unexpected callback `Exception` becomes a non-retryable failed interactive

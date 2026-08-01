@@ -1,4 +1,5 @@
 import threading
+from contextvars import ContextVar
 
 import pytest
 from pytest import MonkeyPatch
@@ -8,6 +9,11 @@ from nuself.runtime.execution import (
     CancellationCleanupError,
     OwnedCall,
     current_cancellation,
+)
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
 )
 
 
@@ -27,6 +33,33 @@ def test_owned_call_supports_none_as_a_completed_value() -> None:
     call.start()
 
     assert call.outcome(timeout=1) == CallOutcome(value=None)
+
+
+def test_owned_call_captures_complete_construction_context() -> None:
+    marker = ContextVar("owned_call_test_marker", default="default")
+    with runtime_context(request_id="captured", source="client"):
+        token = marker.set("captured")
+        try:
+            call = OwnedCall(
+                name="test-call",
+                target=lambda: (current_runtime_context(), marker.get()),
+            )
+        finally:
+            marker.reset(token)
+
+    with runtime_context(request_id="invoker", source="test"):
+        call.start()
+        assert call.outcome(timeout=1) == CallOutcome(
+            value=(
+                RuntimeContext(request_id="captured", source="client"),
+                "captured",
+            )
+        )
+        assert current_runtime_context() == RuntimeContext(
+            request_id="invoker",
+            source="test",
+        )
+        assert marker.get() == "default"
 
 
 def test_owned_call_preserves_control_exception_identity_and_traceback() -> None:

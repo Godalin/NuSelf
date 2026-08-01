@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import contextmanager
-from contextvars import ContextVar, Token
+from contextvars import Context, ContextVar, Token, copy_context
 from dataclasses import dataclass
 import threading
 from typing import Generator, Generic, TypeVar, cast
@@ -139,6 +139,7 @@ class OwnedCall(Generic[ResultT]):
             raise TypeError("owned call target must be callable")
         self._name = name
         self._target = target
+        self._context: Context = copy_context()
         self._cancellation = cancellation or CancellationToken()
         self._lock = threading.Lock()
         self._done = threading.Event()
@@ -152,7 +153,7 @@ class OwnedCall(Generic[ResultT]):
             if self._thread is not None:
                 return False
             thread = threading.Thread(
-                target=self._run,
+                target=self._run_in_context,
                 name=self._name,
                 daemon=False,
             )
@@ -202,6 +203,9 @@ class OwnedCall(Generic[ResultT]):
         with self._lock:
             self._outcome = outcome
         self._done.set()
+
+    def _run_in_context(self) -> None:
+        self._context.run(self._run)
 
 
 def _validate_timeout(timeout: float | None) -> None:

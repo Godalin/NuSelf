@@ -335,7 +335,9 @@ messages because decoded or externally supplied envelopes are untrusted.
 
 Result-producing one-shot thread boundaries use `runtime.execution.OwnedCall`.
 They must not reproduce ad hoc value/error boxes, daemonize authoritative work,
-or leave a successfully started call unreaped on an exceptional exit path.
+leave a successfully started call unreaped on an exceptional exit path, or
+stack subsystem-specific context binders around its target. `OwnedCall` owns
+complete `ContextVar` capture for that thread boundary.
 
 Process-local log delivery uses `project_log_events(...)` only for bounded
 synchronous projections. Projection callbacks must not perform network calls,

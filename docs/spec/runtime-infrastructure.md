@@ -557,20 +557,21 @@ lifecycle result. Daemon and REPL owners compose their own steps and retain
 their domain-specific lifecycle error, diagnostic event, primary-cause, and
 success rules.
 
-## Deferred Callback Context
+## Owned Thread Context
 
-`bind_runtime_context(callback)` captures the current immutable
-`RuntimeContext` when the callback is bound. Every later invocation exactly
-installs that captured context for the callback duration and restores the
-invoking thread's context on return or exception. It is used only when deferred
-work continues the same logical operation.
+`OwnedCall` captures Python's complete `Context` when the call is constructed.
+Its owned thread executes the target inside that copied context, so the
+authority-scoped application runtime, immutable `RuntimeContext`, and future
+orthogonal `ContextVar` capabilities cross the one-shot thread boundary
+together. The caller and worker contexts remain independent, and worker exit
+or failure cannot mutate the initiating thread's context.
 
 Ownership rules:
 
 - synchronous `run_observed_best_effort` operations execute in their existing
   context and need no binding;
-- the CLI live-chat send thread binds its callback so the chat turn continues
-  across the thread boundary;
+- the CLI live-chat send thread relies on its `OwnedCall` context capture so
+  the chat turn and application authority continue across the thread boundary;
 - that boundary transports ordinary callback `Exception` values back as
   observed interactive failures, but transports non-`Exception`
   `BaseException` values back as main-thread control flow after subscription
@@ -962,6 +963,8 @@ callable runs exactly once. Unlike daemon tasks, a call transports one value or
 one escaping `BaseException` directly back to its initiating thread.
 
 - Construction rejects a non-callable target.
+- Construction captures one complete copied Python context; the target runs
+  inside it regardless of the context active when `start()` is later called.
 - `start()` is duplicate-safe. Thread-start failure atomically restores the
   unstarted state and propagates the original failure.
 - The target stores either its return value or the same escaping exception

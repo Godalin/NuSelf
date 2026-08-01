@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from pathlib import Path
@@ -132,17 +132,3 @@ def use_application_runtime(
         yield
     finally:
         _CURRENT_APPLICATION_RUNTIME.reset(token)
-
-
-def bind_application_runtime[T](callback: Callable[[], T]) -> Callable[[], T]:
-    """Carry the current application authority into one owned worker call."""
-
-    runtime = current_application_runtime()
-    if runtime is None:
-        return callback
-
-    def bound() -> T:
-        with use_application_runtime(runtime):
-            return callback()
-
-    return bound

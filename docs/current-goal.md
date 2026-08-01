@@ -9,29 +9,28 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the raw reflection scheduler collection from `ApplicationGraph` and
-from scheduler/gate composition. Reflection persistence must own both entry and
-typed schedule-state access behind one repository selected from the application
-authority.
+Make `OwnedCall`, the actual one-shot thread owner, capture the complete Python
+execution context once. Delete the separate application-runtime and
+RuntimeContext callback binders and their nested REPL wrapping path.
 
 ## Ordered Steps
 
-1. Define repository ownership of the reflection schedule record in governing
-   reflection and module-boundary specifications.
-2. Add typed repository read/write operations over its private schedule
-   collection; migrate scheduler and relevance gate to those operations.
-3. Delete `ApplicationGraph.reflection_schedule`, duplicate constructor
-   dependencies, raw collection imports, and compatibility aliases.
-4. Migrate tests and run reflection/boundary tests, Pyright, full pytest, and
-   package build; update evidence and commit without pushing.
+1. Define complete `ContextVar` capture/restoration at the OwnedCall boundary
+   in runtime, CLI, and development contracts.
+2. Capture `copy_context()` at call construction and execute the target inside
+   that copied context while retaining the owned cancellation scope.
+3. Remove `bind_runtime_context`, `bind_application_runtime`, nested REPL
+   wrappers, and binder-only tests; add direct OwnedCall context evidence.
+4. Run runtime/REPL tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not add a separate schedule repository, facade, or application bundle.
-- Do not move schedule policy, corruption reporting, or timing decisions into
-  persistence.
-- Do not change the scheduler-state wire format, collection/key, cooldown,
-  daily-cap, or fail-closed behavior.
+- Do not introduce a generic executor, context carrier, or new wrapper API.
+- Do not change cancellation, outcome identity, traceback, timeout, thread
+  ownership, or join behavior.
+- Do not propagate ambient context into daemon scheduler workers, whose task
+  context contract remains explicit and separate.
 
 ## Constraints
 
@@ -43,6 +42,14 @@ authority.
 
 ## Phase Evidence
 
+- `OwnedCall` now captures one complete copied Python context at construction
+  and runs its target inside that context, carrying application authority,
+  RuntimeContext, and orthogonal future ContextVars through the owned thread.
+  Removed `bind_application_runtime`, `bind_runtime_context`, the nested REPL
+  wrappers, and two binder-specific tests; one direct OwnedCall test covers
+  complete capture and caller isolation. Focused runtime/REPL/application tests:
+  122 passed; full suite: 2434 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Reflection schedule-state persistence now belongs to the existing
   `ReflectionRepository` through typed read/save operations. Removed the raw
   `ApplicationGraph.reflection_schedule` field, scheduler/gate collection

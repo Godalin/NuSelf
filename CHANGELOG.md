@@ -23,6 +23,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   reflection repository. The application graph, scheduler, and relevance gate
   no longer expose, accept, or retain a raw scheduler-state collection; typed
   decoding, cooldown behavior, and corruption handling are unchanged.
+- `OwnedCall` now captures the complete Python execution context for its
+  one-shot thread. Interactive chat no longer stacks separate application and
+  runtime-context callback wrappers, while authority, correlation, cancellation,
+  outcome, and traceback behavior remain intact.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

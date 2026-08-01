@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from functools import wraps
-from typing import ParamSpec, TypeVar
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 _CONTEXT_FIELDS = frozenset(
     {
@@ -128,23 +123,6 @@ def use_runtime_context(
         yield context
     finally:
         _CURRENT_RUNTIME_CONTEXT.reset(token)
-
-
-def bind_runtime_context(
-    callback: Callable[P, R],
-) -> Callable[P, R]:
-    """Bind one callback to the context active at wrapper creation."""
-
-    captured = current_runtime_context()
-
-    @wraps(callback)
-    def bound(*args: P.args, **kwargs: P.kwargs) -> R:
-        with use_runtime_context(captured):
-            return callback(*args, **kwargs)
-
-    return bound
-
-
 @contextmanager
 def runtime_context(
     *,
