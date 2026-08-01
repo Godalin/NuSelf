@@ -25,7 +25,7 @@ class ReflectionOrganizer:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         *,
         repository: ReflectionRepository,
     ) -> None:

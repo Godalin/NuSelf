@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection organizer composition now requires an explicit resolved project
+  root so successful merge audits cannot silently lose authority scope.
 - Reason scheduler composition now requires an explicit resolved project root,
   preventing background failure observations from silently losing authority
   scope.

@@ -9,22 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Require an explicit resolved authority path in Reason scheduler composition.
+Require an explicit resolved authority path in reflection organizer
+composition.
 
 ## Ordered Steps
 
-1. Confirm every production and test construction already supplies
-   `project_root`, while the scheduler's optional default can mis-scope audits.
-2. Require `Path` in both production and test composition without adding path
-   discovery inside the domain.
-3. Run focused reason tests and the complete verification gates; update
+1. Confirm every organizer construction already supplies `project_root` while
+   its optional default can mis-scope `organizer_completed` audit records.
+2. Require `Path` at the organizer boundary without adding path discovery or
+   another service interface.
+3. Run focused reflection tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not make the scheduler resolve an authority itself.
-- Do not expose repositories or runtime paths through `ReasonService`.
-- Do not change scheduling, cooldown, or failure-observation behavior.
+- Do not make the organizer resolve an authority itself.
+- Do not move merge/archive behavior out of the reflection domain.
+- Do not change best-effort audit semantics or organization results.
 
 ## Constraints
 
@@ -36,6 +37,11 @@ Require an explicit resolved authority path in Reason scheduler composition.
 
 ## Phase Evidence
 
+- `ReflectionOrganizer` now requires an explicit `Path` project root. Removed
+  its unused `None` default so successful merge observations remain scoped to
+  the application graph's selected authority; all existing callers already
+  supplied that path. Focused reflection tests: 53 passed; full suite: 2443
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `ReasonScheduler` and its test composition now require an explicit `Path`
   project root. Removed the unused `None` default that could send background
   failure observations outside the selected authority; every existing caller

@@ -142,7 +142,11 @@ Candidates below `persona_discussion_threshold` but passing the gate proceed dir
 
 There is no pending reflection count limit. Pending reflection growth is controlled by organization, not by blocking new reflection cycles.
 
-`ReflectionOrganizer` periodically scans pending entries, groups similar ideas, keeps the highest-scoring representative pending, folds short duplicate summaries into its body, and archives duplicate entries. Organization is best-effort: failure to organize must log an error and must not block the reflection cycle.
+`ReflectionOrganizer` requires the selected authority's resolved project root,
+periodically scans pending entries, groups similar ideas, keeps the
+highest-scoring representative pending, folds short duplicate summaries into
+its body, and archives duplicate entries. Organization is best-effort: failure
+to organize must log an error and must not block the reflection cycle.
 
 First implementation uses deterministic text similarity over title/body tokens. LLM-assisted cleanup can be added later, but the scheduler must not depend on an LLM to avoid unbounded duplicate growth.
 
