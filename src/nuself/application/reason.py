@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
@@ -12,9 +12,37 @@ from nuself.llm import (
     configured_langchain_chat_models,
 )
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
+from nuself.reason.prompt import generate_reasoning_prompt
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph
+    from nuself.config import RuntimePaths, SystemConfig
+
+
+def compose_reason_prompt_generator(
+    paths: "RuntimePaths",
+    config: "SystemConfig",
+) -> Callable[..., str]:
+    """Bind lazy model-backed prompt generation to one application authority."""
+
+    def generate(
+        topic: str,
+        *,
+        mandates: tuple[str, ...] = (),
+        active_items: tuple[dict[str, object], ...] = (),
+    ) -> str:
+        return generate_reasoning_prompt(
+            topic,
+            mandates=mandates,
+            active_items=active_items,
+            project_root=paths.project_root,
+            endpoints=configured_langchain_chat_models(
+                paths.project_root,
+                config=config,
+            ),
+        )
+
+    return generate
 
 
 def compose_reason_advancer(

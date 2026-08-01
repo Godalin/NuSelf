@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
+from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.errors import ReasonPromptError
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
@@ -31,6 +32,7 @@ def generate_reasoning_prompt(
     active_items: tuple[dict[str, object], ...] = (),
     project_root: Path | None = None,
     agent: StructuredAgent[ReasonPromptOutput] | None = None,
+    endpoints: tuple[LangChainLLMEndpoint, ...] = (),
 ) -> str:
     """Generate a custom reasoning system prompt for a thread topic."""
     if project_root is None:
@@ -110,6 +112,7 @@ Do NOT include field type/format descriptions — only explain meaning.
             ReasonPromptOutput,
             project_root=project_root,
             component="reasoning",
+            endpoints=endpoints,
         )
     )
     try:

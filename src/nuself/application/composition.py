@@ -8,6 +8,7 @@ from nuself.application.memory import (
     MemoryRepositories,
     compose_memory_repositories,
 )
+from nuself.application.reason import compose_reason_prompt_generator
 from nuself.application.data_admin import DataAdminService
 from nuself.application.trace import TraceServices, compose_trace_services
 from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
@@ -56,15 +57,17 @@ def compose_application(
     reason = ReasonRepository(paths, backend=backend)
     reflection = ReflectionRepository(paths, backend=backend)
     reason_workspace = PrivateWorkspaceStore(paths, scope="reason")
+    config = ConfigSystem.load(project_root=paths.project_root)
     reason_service = ReasonService(
         paths.project_root,
         repository=reason,
         workspace_store=reason_workspace,
         trace_recorder=trace.recorder,
+        prompt_generator=compose_reason_prompt_generator(paths, config),
     )
     return ApplicationGraph(
         paths=paths,
-        config=ConfigSystem.load(project_root=paths.project_root),
+        config=config,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,

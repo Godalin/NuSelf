@@ -15,7 +15,6 @@ from nuself.reason.errors import (
     ReasonPromptError,
     ReasonTransitionError,
 )
-from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
@@ -66,13 +65,13 @@ class ReasonService:
         repository: ReasonRepository,
         workspace_store: PrivateWorkspaceStore,
         trace_recorder: TraceRecorder,
-        prompt_generator: Callable[..., str] | None = None,
+        prompt_generator: Callable[..., str],
     ) -> None:
         self._repository = repository
         self._project_root = project_root
         self._workspace_store = workspace_store
         self._trace_recorder = trace_recorder
-        self._prompt_generator = prompt_generator or generate_reasoning_prompt
+        self._prompt_generator = prompt_generator
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -103,7 +102,6 @@ class ReasonService:
             topic,
             mandates=mandates,
             active_items=tuple(active_items),
-            project_root=self._project_root,
         ).strip()
         if not reasoning_prompt:
             raise ReasonPromptError(

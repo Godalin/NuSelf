@@ -9,16 +9,17 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Move Reason endpoint resolution to application composition.
+Finish Reason prompt composition so the domain service has no hidden model
+configuration fallback.
 
 ## Ordered Steps
 
-1. Confirm CLI/REPL call application Reason composition without endpoints while
-   the domain factory then reloads configuration; daemon already passes models.
-2. Resolve optional models from `ApplicationGraph.config` in the application
-   factory and require a concrete endpoint tuple in `default_reason_advancer()`.
-3. Update factory tests, run focused Reason/CLI/REPL tests and full gates, then
-   commit without pushing.
+1. Make the prompt generator a required `ReasonService` capability instead of
+   falling back to a domain-owned model factory.
+2. Compose the model-backed generator from application-owned paths and config;
+   keep explicit agent/endpoint injection for focused tests.
+3. Update boundary and behavior tests, run focused Reason/CLI/REPL tests and
+   full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -27,6 +28,8 @@ Move Reason endpoint resolution to application composition.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
+- Do not eagerly instantiate provider clients for application commands that do
+  not create a Reason thread.
 
 ## Constraints
 
@@ -38,6 +41,13 @@ Move Reason endpoint resolution to application composition.
 
 ## Phase Evidence
 
+- Reason prompt generation is now a required service capability composed by
+  `application.reason` from the application-owned paths and immutable config.
+  The domain service no longer imports the prompt factory or passes authority
+  paths into it; provider endpoints remain lazy until `start_thread`, and
+  explicit empty endpoints retain no-model semantics. Focused
+  Reason/CLI/Chat/composition tests: 863 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reason endpoint resolution now belongs to `application.reason`, which uses
   the existing graph config when callers omit an explicit tuple. The domain
   `default_reason_advancer()` requires concrete endpoints and no longer imports

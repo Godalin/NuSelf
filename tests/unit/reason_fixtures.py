@@ -28,7 +28,9 @@ class ReasonService(_ReasonService):
         repository: ReasonRepository | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         trace_recorder: TraceRecorder | None = None,
-        prompt_generator: Callable[..., str] | None = None,
+        prompt_generator: Callable[..., str] = lambda *args, **kwargs: (
+            "Test-generated reasoning prompt."
+        ),
     ) -> None:
         if repository is not None and project_root is None:
             raise ValueError(

@@ -1491,7 +1491,7 @@ def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, 
 
     monkeypatch.setattr(sys.stdin, "isatty", _isatty)
     monkeypatch.setattr(builtins, "input", _input)
-    monkeypatch.setattr("nuself.reason.service.generate_reasoning_prompt", _generate_reasoning_prompt)
+    monkeypatch.setattr("nuself.application.reason.generate_reasoning_prompt", _generate_reasoning_prompt)
 
     tool = _chat_tool(tmp_path, "reason_propose")
     result = _invoke_chat_tool(
@@ -1534,7 +1534,7 @@ def test_reason_propose_creates_conversation_when_proposal_audit_is_unavailable(
         return "Test-generated reasoning prompt."
 
     monkeypatch.setattr(
-        "nuself.reason.service.generate_reasoning_prompt",
+        "nuself.application.reason.generate_reasoning_prompt",
         generate_prompt,
     )
 

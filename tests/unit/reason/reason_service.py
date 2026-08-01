@@ -143,25 +143,21 @@ def test_start_thread_preserves_unexpected_prompt_generator_error(
     assert caught.value is unexpected
 
 
-def test_start_thread_uses_default_user_authority_for_prompt_generator(
+def test_start_thread_passes_only_reason_inputs_to_prompt_generator(
     tmp_path: Path,
-    monkeypatch: Any,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("NUSELF_HOME", str(tmp_path))
-    seen_project_roots: list[Path] = []
+    seen_kwargs: dict[str, object] = {}
 
     def prompt_generator(*args: object, **kwargs: object) -> str:
-        project_root = kwargs.get("project_root")
-        if isinstance(project_root, Path):
-            seen_project_roots.append(project_root)
+        del args
+        seen_kwargs.update(kwargs)
         return "Generated prompt."
 
-    service = ReasonService(prompt_generator=prompt_generator)
+    service = ReasonService(tmp_path, prompt_generator=prompt_generator)
 
     service.start_thread("Prompt root")
 
-    assert seen_project_roots == [tmp_path]
+    assert seen_kwargs == {"mandates": (), "active_items": ()}
 
 
 def test_generated_prompt_request_defines_bounded_round_pacing(

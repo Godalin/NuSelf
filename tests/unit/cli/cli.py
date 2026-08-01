@@ -5743,7 +5743,7 @@ def test_reason_cli_start_list_show_and_advance(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr(
-        "nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator
+        "nuself.application.reason.generate_reasoning_prompt", _test_reason_prompt_generator
     )
 
     start_result = main(
@@ -5780,7 +5780,7 @@ def test_reflection_cli_promote_creates_reason_and_trace(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr(
-        "nuself.reason.service.generate_reasoning_prompt", _test_reason_prompt_generator
+        "nuself.application.reason.generate_reasoning_prompt", _test_reason_prompt_generator
     )
 
     entry = ReflectionEntry(

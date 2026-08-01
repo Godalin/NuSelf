@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason thread prompt generation is now an application-composed capability;
+  the domain service no longer reloads model configuration, while provider
+  clients remain lazy until a thread is actually started.
 - Legacy v0.3.0 authority-layout migration now runs only from
   `scripts/migrate_legacy_layout.py`; removed the installed module and
   top-level `nuself migrate-layout` command.

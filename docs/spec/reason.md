@@ -53,12 +53,15 @@ schema fails, or invocation fails, thread creation fails with
 thread request -> invoke typed prompt agent -> persist `reasoning_prompt` ->
 reuse that prompt for every advance of the thread.
 
-Prompt generation does not construct configured models as an availability
-preflight. When no agent is injected, `default_structured_agent` constructs the
-endpoint set once and the shared endpoint runner reports unavailability during
-invocation. The generator translates that declared `RuntimeError` to
-`ReasonPromptError` while preserving it as the cause. An injected prompt agent
-does not read model configuration.
+Prompt generation never reads model configuration. `ReasonService` requires a
+prompt-generator capability at construction, and application composition binds
+that capability to the already-loaded application configuration. Provider
+clients are created lazily when a thread is started, so unrelated commands do
+not pay model setup cost. The generator passes one explicit endpoint tuple to
+`default_structured_agent`; an explicit empty tuple means no model. It
+translates the runner's declared `RuntimeError` to `ReasonPromptError` while
+preserving it as the cause. An injected prompt agent does not inspect endpoints
+or configuration.
 
 The generated prompt must define one bounded advance unit for the topic. For
 round-based simulations, debates, interviews, games, or staged discussions, one
@@ -446,6 +449,11 @@ persona, trace, and tool capabilities into the domain factory. CLI, REPL, and
 scheduler call this application factory rather than assembling the capability
 themselves. Explicit endpoints remain authoritative for daemon reuse and tests;
 an explicitly empty tuple means no model, not "load defaults".
+
+The same application factory owns prompt-generator composition. It captures
+the graph's resolved paths and immutable configuration, then lazily constructs
+the endpoint tuple only for `start_thread`. The Reason domain service receives
+the resulting callable and has no configuration or provider-factory fallback.
 
 Daemon composition supplies the same already-resolved endpoint tuple to chat
 and Reason scheduling. When scheduling reuses chat's readonly tools, it obtains
