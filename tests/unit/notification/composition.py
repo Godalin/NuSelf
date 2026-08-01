@@ -30,6 +30,7 @@ def test_composition_builds_configured_adapters_in_canonical_order(
         runtime_paths(tmp_path), config=config
     )
 
+    assert isinstance(adapters, tuple)
     assert [adapter.delivery_id for adapter in adapters] == [
         "email",
         "macos",

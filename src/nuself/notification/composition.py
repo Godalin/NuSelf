@@ -15,7 +15,7 @@ def build_notification_adapters(
     paths: RuntimePaths,
     *,
     config: SystemConfig | None = None,
-) -> list[NotificationAdapter]:
+) -> tuple[NotificationAdapter, ...]:
     """Build one ordered adapter plan shared by every runtime surface."""
 
     effective = (
@@ -35,4 +35,4 @@ def build_notification_adapters(
         adapters.append(MacOSNotificationAdapter(paths.project_root))
     if not adapters:
         adapters.append(LogOnlyNotificationAdapter(paths))
-    return adapters
+    return tuple(adapters)

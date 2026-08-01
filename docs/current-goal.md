@@ -9,23 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Freeze and validate the notification delivery loop's adapter plan once at
-composition.
+Return the canonical notification adapter plan as an immutable tuple.
 
 ## Ordered Steps
 
-1. Confirm the loop currently reindexes the same mutable adapter list once per
-   run and again for every pending entry.
-2. Validate/index the loop-owned plan once; retain immediate validation for
-   standalone CLI/REPL single-entry delivery.
+1. Confirm every builder consumer only iterates or passes the plan and none
+   mutates the returned list.
+2. Return the same ordered adapters as a tuple while keeping simple local list
+   assembly inside the builder.
 3. Run focused notification tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change adapter order, stable IDs, or frozen per-entry plans.
-- Do not replay interrupted delivery or weaken per-entry locking.
-- Do not introduce an adapter registry or generic delivery framework.
+- Do not change adapter selection, order, or fallback behavior.
+- Do not add a collection wrapper or registry.
+- Do not change standalone delivery or loop validation semantics.
 
 ## Constraints
 
@@ -37,6 +36,11 @@ composition.
 
 ## Phase Evidence
 
+- `build_notification_adapters()` now returns its canonical ordered plan as an
+  immutable tuple. All consumers already only iterate or pass it to delivery;
+  no collection wrapper or compatibility path was added. Added a direct tuple
+  contract assertion. Focused notification/CLI tests: 348 passed; full suite:
+  2444 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `NotificationDeliveryLoop` now validates and indexes its adapter sequence at
   composition, then reuses that private ordered plan for every poll and entry.
   Standalone single-entry delivery still validates at its own boundary. Added
