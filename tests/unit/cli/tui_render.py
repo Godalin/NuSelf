@@ -12,7 +12,7 @@ from nuself.notification.model import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reason.domain import ReasoningStep
 from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row, render_profile_row, render_source_row
-from nuself.tui.reason import render_reason_step_detail
+from nuself.tui.reason import render_step_watch_entry
 from nuself.tui.render import (
     format_display_timestamp,
     render_discussion_trace,
@@ -68,7 +68,7 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
     ]
 
 
-def test_render_reason_step_detail_shows_terminal_status() -> None:
+def test_render_step_watch_entry_shows_terminal_status() -> None:
     step = ReasoningStep(
         thread_id="reason-1",
         summary="Terminal step",
@@ -78,7 +78,7 @@ def test_render_reason_step_detail_shows_terminal_status() -> None:
         terminal_reason="All explicit goals are complete.",
     )
 
-    assert "terminal: suggest_resolved — All explicit goals are complete." in render_reason_step_detail(step, color=False)
+    assert "terminal: suggest_resolved — All explicit goals are complete." in render_step_watch_entry(step, color=False)
 
 
 def test_render_workspace_service_tag_uses_256_color(monkeypatch: MonkeyPatch) -> None:

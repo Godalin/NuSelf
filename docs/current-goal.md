@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue module-level reachability auditing. Remove legacy modules whose only
-consumer is their own test after confirming the current composition root owns
-the behavior.
+Continue removing test-only presentation entry points duplicated by live CLI
+renderers. Keep shared rendering primitives private and one public entry point
+per user workflow.
 
 ## Constraints
 
@@ -351,6 +351,12 @@ the behavior.
   that test are gone; scope resolution plus `scope init` remain the sole
   managed-authority initialization path.
 - Scope/config/lifecycle focused suite: 94 passed. Post-authority-module cleanup
+  `uv run --locked pytest -q`: 2446 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `render_reason_step_detail()` was called only by one test and duplicated the
+  default behavior of production `render_step_watch_entry()`. It is gone; the
+  terminal-status assertion now exercises the live watch renderer.
+- TUI/Reason/CLI focused suite: 600 passed. Post-renderer cleanup
   `uv run --locked pytest -q`: 2446 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

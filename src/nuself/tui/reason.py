@@ -106,26 +106,6 @@ def render_reason_detail(
     return "\n".join(lines)
 
 
-def render_reason_step_detail(
-    step: ReasoningStep,
-    *,
-    index: int | None = None,
-    color: bool | None = None,
-    full: bool = True,
-    include_tool_logs: bool = True,
-) -> str:
-    theme = TerminalTheme(color=color)
-    step_prefix = f"[{index}] " if index is not None else ""
-    return _render_step_body(
-        step,
-        theme,
-        indent=0,
-        full=full,
-        step_prefix=step_prefix,
-        include_tool_logs=include_tool_logs,
-    )
-
-
 def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -> str:
     theme = TerminalTheme(color=color)
     return _render_step_body(step, theme, indent=0, full=True, include_tool_logs=True)
