@@ -261,7 +261,9 @@ Initialized CLI and REPL commands always run inside one `ApplicationRuntime`;
 helper functions must not create a fallback graph when that scope is absent.
 The daemon server likewise owns its `ApplicationRuntime` and injects the
 already-composed `ApplicationGraph` into request/task state. `DaemonState`
-must not inspect a context variable, construct a fallback runtime, or retain
+borrows that graph only while composing its explicit services and task
+capabilities; it must not retain the whole graph as a runtime service locator.
+It must not inspect a context variable, construct a fallback runtime, or retain
 the lifecycle owner after composition.
 
 The `nuself.application` package root is an import-light namespace. Process

@@ -58,7 +58,6 @@ class DaemonState:
         self,
         application: ApplicationGraph,
     ) -> None:
-        self.application = application
         paths = application.paths
         self.project_root = paths.project_root
         self.authority_id = paths.scope.authority_id
@@ -78,8 +77,8 @@ class DaemonState:
         )
         self.reason_export_service = ReasonExportService(
             self.project_root,
-            reason_service=self.application.reason_service,
-            workspace_store=self.application.reason_workspace,
+            reason_service=application.reason_service,
+            workspace_store=application.reason_workspace,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
             text_agent=LangChainTextAgent(
@@ -89,7 +88,7 @@ class DaemonState:
             ),
         )
         self.conversation_runtime = compose_conversation_runtime(
-            self.application,
+            application,
             job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
                 self.project_root,
@@ -101,17 +100,17 @@ class DaemonState:
         )
 
         self.memory_curator = compose_memory_curator(
-            self.application,
+            application,
             langchain_models=langchain_models,
         )
         self.reflection_scheduler = compose_reflection_scheduler(
-            self.application,
+            application,
             config=config.reflection,
             language_preference=config.chat.language_preference,
             langchain_models=langchain_models,
         )
         self.notification_delivery_loop = NotificationDeliveryLoop(
-            self.application.notifications,
+            application.notifications,
             build_notification_adapters(
                 paths,
                 config=config,
@@ -121,13 +120,14 @@ class DaemonState:
         self.reason_scheduler = ReasonScheduler(
             self.project_root,
             advancer=compose_reason_advancer(
-                self.application,
+                application,
                 readonly_tools=self.conversation_runtime.readonly_tools(),
                 langchain_models=langchain_models,
             ),
             interval_seconds=reason_interval,
-            service=self.application.reason_service,
+            service=application.reason_service,
         )
+        self._memory_observations = application.memory.observations
         memory_interval = config.daemon.memory_curator.interval_seconds
         self._periodic_tasks: tuple[tuple[PeriodicTaskKind, float], ...] = (
             ("memory.scan", memory_interval),
@@ -218,7 +218,7 @@ class DaemonState:
 
     def _scan_memory_observations(self, task: DaemonTask) -> None:
         del task
-        for observation in self.application.memory.observations.pending():
+        for observation in self._memory_observations.pending():
             self._request_memory_curation(observation.id)
 
     def _scan_conversations(self, task: DaemonTask) -> None:
@@ -244,7 +244,7 @@ class DaemonState:
             turn_id=payload.turn_id,
         )
         observation = publish_chat_observation(
-            self.application.memory.observations,
+            self._memory_observations,
             turn=result.require_completed_turn(),
             source_trace_id=result.trace_id,
         )

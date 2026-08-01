@@ -9,26 +9,24 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify duplicate memory-domain string codecs split only by `dict` versus
-`Mapping` input annotations. One required-string and one optional-string helper
-should serve record and payload decoding with identical errors.
+Narrow daemon runtime ownership after composition. `DaemonState` should borrow
+the application graph while wiring services, then retain only the explicit
+capabilities needed by request and task handlers.
 
 ## Ordered Steps
 
-1. Confirm required dict/mapping string helpers and all three optional-string
-   helpers have identical value and error behavior.
-2. Let `_expect_str()` and `_optional_str()` accept `Mapping[str, object]` and
-   route all record/payload calls through them.
-3. Delete `_expect_optional_str()`, `_expect_mapping_str()`, and
-   `_expect_mapping_optional_str()`.
-4. Run memory domain/repository tests, Pyright, full pytest, and package build;
-   update evidence and commit without pushing.
+1. Inventory graph capabilities used after `DaemonState.__init__()`.
+2. Keep the application graph constructor-only and retain the observation
+   repository as the sole additional task-time domain capability.
+3. Run daemon/application boundary tests, Pyright, full pytest, and package
+   build; update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change accepted null/string values or exact failure messages.
-- Do not broaden list/object/numeric coercion behavior.
-- Do not merge validators whose sequence or type contracts differ.
+- Do not introduce a daemon facade or duplicate application graph.
+- Do not change scheduler task identity, resource keys, priorities, or retry
+  behavior.
+- Do not move domain composition into task handlers.
 
 ## Constraints
 
@@ -40,6 +38,13 @@ should serve record and payload decoding with identical errors.
 
 ## Phase Evidence
 
+- `DaemonState` now borrows `ApplicationGraph` only during construction and
+  retains the observation repository as its sole task-time domain repository;
+  already-composed chat, curator, reflection, notification, Reason, export,
+  and trace capabilities remain independently owned. Daemon tests no longer
+  reach through state into the complete graph. Focused daemon/application
+  boundary tests: 226 passed; full suite: 2440 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - Memory record and payload decoding now share `_expect_str()` and
   `_optional_str()` over `Mapping[str, object]`. Removed three behavior-identical
   dict/mapping validators while retaining accepted values and exact errors;

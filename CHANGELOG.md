@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon state now borrows the authority-scoped application graph only during
+  composition and retains explicit task capabilities instead of exposing the
+  complete graph as a long-lived service locator.
 - Memory record and payload decoding now share one required-string and one
   optional-string codec across dict and mapping inputs, replacing three
   duplicate validators.

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import runtime_paths
 from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
 from nuself.reason.job_contracts import (
@@ -73,7 +74,7 @@ def _manifest_path(
     thread_id: str = "thread-1",
 ) -> Path:
     return (
-        state.application.paths.exports_dir
+        runtime_paths(state.project_root).exports_dir
         / "reason"
         / thread_id
         / "jobs"

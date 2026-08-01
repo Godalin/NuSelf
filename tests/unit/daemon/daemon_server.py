@@ -421,15 +421,16 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
+    observations = state._memory_observations  # pyright: ignore[reportPrivateUsage]
     for source_ref in ("test:active", "test:archived"):
-        state.application.memory.observations.observe(
+        observations.observe(
             MemoryObservation.create(
                 source_ref=source_ref,
                 fragments=("user: remember this",),
             )
         )
     expected_ids = {
-        item.id for item in state.application.memory.observations.pending()
+        item.id for item in observations.pending()
     }
     calls: list[str] = []
 
@@ -487,7 +488,8 @@ def test_committed_chat_survives_followup_admission_failure(
 
     assert result.answer == "stubbed: hello"
     assert len(ConversationStore(tmp_path).load("default").messages) == 2
-    assert len(state.application.memory.observations.pending()) == 1
+    observations = state._memory_observations  # pyright: ignore[reportPrivateUsage]
+    assert len(observations.pending()) == 1
 
 
 def test_daemon_chat_fails_closed_when_scheduler_is_not_running(
@@ -515,7 +517,7 @@ def test_periodic_scan_recovers_lost_compression_wakeup(
 ) -> None:
     state = DaemonState(tmp_path)
     conversation_id = "needs-compression"
-    state.application.conversations.save(
+    ConversationStore(tmp_path).save(
         ConversationState(
             conversation_id=conversation_id,
             messages=[
