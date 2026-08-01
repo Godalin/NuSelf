@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue AST-assisted auditing of single-use private helpers and capability
-accessors. Remove local service-locator aliases while preserving application-
-owned domain services and one composition lookup per operation.
+Continue AST-assisted auditing for production methods referenced only by
+tests. Preserve behavior coverage through real domain paths or durable records
+instead of retaining test-only production seams.
 
 ## Constraints
 
@@ -289,6 +289,13 @@ owned domain services and one composition lookup per operation.
   the helper and its otherwise-unused type import are gone.
 - REPL/Reason/CLI/boundary focused suite: 702 passed. Post-accessor cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `ReflectionScheduler._read_last_reflection()` had no production caller and
+  existed only for direct private-method tests. It is gone; persistence checks
+  assert the actual schedule record, while existing scheduling tests cover
+  missing and corrupt state through the fail-closed production path.
+- Reflection focused suite: 105 passed. Post-test-seam cleanup
+  `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

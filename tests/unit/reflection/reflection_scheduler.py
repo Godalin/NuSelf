@@ -444,7 +444,9 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
 
     assert result is True
     assert len(scheduler._reflection_repo.list()) == 1
-    assert scheduler._read_last_reflection() == now
+    record = scheduler._schedule_collection.get("reflection")
+    assert record is not None
+    assert record["timestamp"] == "2024-01-01T12:00:00Z"
     assert read_log_events(
         project_root=scheduler._project_root,
         component="reflection",
@@ -550,18 +552,11 @@ def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionSchedu
     assert events[-1].metadata == {"reason": "quiet_hours"}
 
 
-# --- last reflection persistence ---
-
-def test_read_last_reflection_missing_file(scheduler: ReflectionScheduler) -> None:
-    assert scheduler._read_last_reflection() is None
-
-
-def test_read_write_last_reflection_roundtrip(scheduler: ReflectionScheduler) -> None:
+def test_write_last_reflection_persists_schedule_state(
+    scheduler: ReflectionScheduler,
+) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
-    loaded = scheduler._read_last_reflection()
-    assert loaded is not None
-    assert loaded.isoformat() == now.isoformat()
     record = scheduler._schedule_collection.get("reflection")
     assert record == {
         "id": "reflection",
@@ -570,27 +565,6 @@ def test_read_write_last_reflection_roundtrip(scheduler: ReflectionScheduler) ->
         "schema_version": 1,
         "timestamp": "2024-01-01T12:00:00Z",
     }
-
-
-def test_read_last_reflection_corrupt_record(scheduler: ReflectionScheduler) -> None:
-    scheduler._schedule_collection.put("reflection", {"invalid": True})
-    with pytest.raises(
-        ReflectionScheduleStateError,
-        match="malformed or unsupported",
-    ):
-        scheduler._read_last_reflection()
-
-
-def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) -> None:
-    scheduler._schedule_collection.put(
-        "reflection",
-        {"timestamp": "not-a-date"},
-    )
-    with pytest.raises(
-        ReflectionScheduleStateError,
-        match="malformed or unsupported",
-    ):
-        scheduler._read_last_reflection()
 
 
 @pytest.mark.parametrize(

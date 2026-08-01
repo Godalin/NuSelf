@@ -324,10 +324,6 @@ class ReflectionScheduler:
             return state.daily_count
         return 0
 
-    def _read_last_reflection(self) -> datetime | None:
-        state = _read_schedule_collection(self._schedule_collection)
-        return state.timestamp if state is not None else None
-
     def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
         current = _read_schedule_collection(self._schedule_collection)
         count = self._reflection_count_today(now, current) + 1
