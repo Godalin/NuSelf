@@ -9,8 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing convenience composition wrappers that obscure the live
-thread-aware capability provider.
+Continue removing unused transport alternatives after confirming both peers
+share one stricter framing path.
 
 ## Constraints
 
@@ -377,6 +377,13 @@ thread-aware capability provider.
   composition path.
 - Agent/Reason/workspace/boundary focused suite: 100 passed. Post-workspace-
   builder cleanup `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
+- `read_stream_frame()` and `BinaryFrameReader` were test-only alternatives to
+  the production socket reader and could not reject buffered trailing frames.
+  They are gone; client and server share one bounded `read_socket_frame()` path,
+  while response writes retain partial-write-safe stream handling.
+- Daemon transport/server/request focused suite: 77 passed. Post-stream-reader
+  cleanup `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

@@ -32,7 +32,6 @@ from nuself.daemon.protocol import (
 from nuself.daemon.socket_server import NuSelfUnixServer
 from nuself.daemon.transport import (
     read_socket_frame,
-    read_stream_frame,
     write_stream_frame,
 )
 from nuself.logs import read_log_events
@@ -191,23 +190,17 @@ def test_socket_frame_reader_retries_timeout_without_losing_partial_frame() -> N
     ) == b'{"ok":true}\n'
 
 
-def test_frame_readers_distinguish_clean_and_partial_eof() -> None:
+def test_socket_frame_reader_distinguishes_clean_and_partial_eof() -> None:
     with pytest.raises(DaemonPeerDisconnected):
         read_socket_frame(ChunkSocket([]))  # type: ignore[arg-type]
     with pytest.raises(DaemonIncompleteFrame):
         read_socket_frame(ChunkSocket([b'{"partial":true}']))  # type: ignore[arg-type]
-    with pytest.raises(DaemonPeerDisconnected):
-        read_stream_frame(io.BytesIO())
-    with pytest.raises(DaemonIncompleteFrame):
-        read_stream_frame(io.BytesIO(b'{"partial":true}'))
 
 
-def test_frame_readers_reject_oversized_and_extra_data() -> None:
+def test_socket_frame_reader_rejects_oversized_and_extra_data() -> None:
     oversized = b"x" * MAX_DAEMON_FRAME_BYTES
     with pytest.raises(DaemonFrameTooLarge):
         read_socket_frame(ChunkSocket([oversized]))  # type: ignore[arg-type]
-    with pytest.raises(DaemonFrameTooLarge):
-        read_stream_frame(io.BytesIO(oversized))
     with pytest.raises(DaemonExtraFrameData):
         read_socket_frame(  # type: ignore[arg-type]
             ChunkSocket([b'{"one":1}\n{"two":2}\n'])
