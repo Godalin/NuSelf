@@ -27,7 +27,6 @@ from nuself.memory.repository import (
 )
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import (
-    AtomicDeleteDurabilityError,
     AtomicWriteDurabilityError,
 )
 from tests.backend import owned_backend
@@ -650,22 +649,19 @@ def test_delete_rolls_back_target_when_delete_fails(
         )
     )
     original_delete = entry_repo.delete
-    durability_error = AtomicDeleteDurabilityError(
-        tmp_path / "entry.json",
-        sync_error=OSError("directory sync failed"),
-    )
+    delete_error = OSError("delete failed")
 
     def delete_then_fail_once(entry_id: str) -> None:
         original_delete(entry_id)
         monkeypatch.setattr(entry_repo, "delete", original_delete)
-        raise durability_error
+        raise delete_error
 
     monkeypatch.setattr(entry_repo, "delete", delete_then_fail_once)
 
-    with pytest.raises(AtomicDeleteDurabilityError) as captured:
+    with pytest.raises(OSError) as captured:
         repo.accept(candidate.id)
 
-    assert captured.value is durability_error
+    assert captured.value is delete_error
     assert entry_repo.get(original.id) == original
     assert repo.get(candidate.id).review_state == "pending"
 

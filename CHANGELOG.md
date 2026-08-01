@@ -27,6 +27,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   one-shot thread. Interactive chat no longer stacks separate application and
   runtime-context callback wrappers, while authority, correlation, cancellation,
   outcome, and traceback behavior remain intact.
+- Removed orphaned helpers from superseded file-storage, reasoning-tool,
+  configuration, memory parsing, tool-result, and relation-rendering paths.
+  Active configuration inspection, reasoning prompt generation, relation
+  output, and repository compensation behavior are unchanged.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

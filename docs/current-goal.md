@@ -9,28 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make `OwnedCall`, the actual one-shot thread owner, capture the complete Python
-execution context once. Delete the separate application-runtime and
-RuntimeContext callback binders and their nested REPL wrapping path.
+Delete proven zero-consumer public helpers left by earlier file-storage, agent
+tool, CLI, memory parsing, and rendering designs. Preserve the live replacement
+paths and semantic rollback tests; add no compatibility exports.
 
 ## Ordered Steps
 
-1. Define complete `ContextVar` capture/restoration at the OwnedCall boundary
-   in runtime, CLI, and development contracts.
-2. Capture `copy_context()` at call construction and execute the target inside
-   that copied context while retaining the owned cancellation scope.
-3. Remove `bind_runtime_context`, `bind_application_runtime`, nested REPL
-   wrappers, and binder-only tests; add direct OwnedCall context evidence.
-4. Run runtime/REPL tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Correct the development contract to remove the unused file-delete helper
+   and its dedicated durability exception.
+2. Delete the orphan reasoning-prompt tool factory and imports, legacy system
+   config handler, unused memory parsing helpers, tool-result helper, and
+   incomplete relation renderer.
+3. Keep memory candidate compensation coverage using an ordinary repository
+   delete failure instead of manufacturing the deleted file-helper error.
+4. Run storage/reason/memory/CLI tests, Pyright, full pytest, and package build;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not introduce a generic executor, context carrier, or new wrapper API.
-- Do not change cancellation, outcome identity, traceback, timeout, thread
-  ownership, or join behavior.
-- Do not propagate ambient context into daemon scheduler workers, whose task
-  context contract remains explicit and separate.
+- Do not delete registry-dispatched handlers, protocol members, codecs, or
+  framework-discovered tools based only on textual reference counts.
+- Do not replace removed helpers with aliases or a new utility module.
+- Do not change live config inspection, reasoning prompt generation, memory
+  validation, relation output, or transactional compensation behavior.
 
 ## Constraints
 
@@ -42,6 +43,15 @@ RuntimeContext callback binders and their nested REPL wrapping path.
 
 ## Phase Evidence
 
+- Removed seven zero-consumer public helpers spanning the obsolete reasoning
+  prompt tool factory, old system config handler, memory parsing, tool-result
+  conversion, relation rendering, and File-era durable deletion, plus the
+  latter's unused dedicated error. Live prompt/config/relation paths remain;
+  candidate compensation still covers an authoritative delete failure. The
+  implementation/test diff removes 132 net lines, and no public top-level
+  definition now has a repository-wide reference count of one. Focused
+  reason/memory/CLI/agent/storage tests: 1198 passed; full suite: 2434 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `OwnedCall` now captures one complete copied Python context at construction
   and runs its target inside that context, carrying application authority,
   RuntimeContext, and orthogonal future ContextVars through the owned thread.

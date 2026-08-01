@@ -9,7 +9,6 @@ import textwrap
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.domain.profile import ProfileItem
 from nuself.domain.source import SourceDocument
-from nuself.memory.repository import MemoryRelationIndexRecord
 from nuself.tui.render import TerminalTheme, render_key_value_field, render_record_block, render_record_header
 
 DEFAULT_TEXT_WIDTH = 88
@@ -144,17 +143,6 @@ def render_source_detail(document: SourceDocument, *, chunk_count: int, color: b
         *_optional_fields([("origin", document.origin), ("source_date", document.source_date)]),
     ]
     return render_record_block(_record_label(theme, "source"), fields, body=document.title)
-
-
-def render_relation_row(record: MemoryRelationIndexRecord, *, color: bool | None = None) -> str:
-    theme = TerminalTheme(color=color)
-    target_title = record.target_title or "(missing target)"
-    return (
-        f"{theme.tag('[rel]', 'persona')} {record.source_id} --{record.relation}-> {record.target_id} "
-        f"conf={record.confidence:.2f} target={target_title}"
-    )
-
-
 def _record_label(theme: TerminalTheme, name: str, *, index: int | None = None) -> str:
     label = theme.tag(f"[{name}]", "memory")
     if index is None:

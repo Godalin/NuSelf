@@ -6,15 +6,11 @@ from pathlib import Path
 from typing import Annotated
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from nuself.agent.tools.decorated import materialize_tool
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.decorators import component, observed, readonly, tool
 from nuself.reason.errors import ReasonPromptError
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.feature_execution import FeatureExecutor
 
 
 class ReasonPromptOutput(BaseModel):
@@ -134,30 +130,3 @@ Do NOT include field type/format descriptions — only explain meaning.
             f"{diagnostic_exception_message(exc)}"
         ) from exc
     return output.prompt
-
-
-def build_reasoning_prompt_tools(project_root: Path | None) -> tuple[StructuredTool, ...]:
-    """Build tools for generating custom reasoning prompts."""
-
-    @tool(
-        name="reasoning_prompt_gen",
-        description=(
-            "Generate a custom reasoning system prompt for a topic. "
-            "The prompt explains topic-specific reasoning output fields."
-        ),
-    )
-    @component("reasoning")
-    @readonly
-    @observed
-    def _run(topic: str, context: str = "") -> str:
-        """Generate a custom reasoning system prompt for a given topic.
-
-        The returned prompt sets the tone and explains the reasoning fields
-        in terms of the specific topic, so the reasoning agent produces
-        relevant output for each step.
-        """
-        return generate_reasoning_prompt(topic, project_root=project_root)
-
-    return (
-        materialize_tool(_run, executor=FeatureExecutor()),
-    )

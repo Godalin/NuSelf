@@ -155,15 +155,6 @@ process-visible but its crash durability is uncertain; its `sync_error` is the
 explicit cause. The shared writer performs no hidden write, sync, replace, or
 cleanup retry.
 
-NuSelf-owned file deletion uses `delete_file_durable()`. It unlinks one exact
-non-directory path and then synchronizes its parent directory. A missing path
-is an explicit no-op result. A successful unlink followed by parent-sync
-failure raises `AtomicDeleteDurabilityError`: deletion is process-visible but
-crash durability is uncertain, and the sync failure is its explicit cause.
-The helper never retries or claims that the path remains present. Callers that
-need a logical multi-record transaction must inspect authoritative state
-before choosing compensation after either visible-but-uncertain mutation.
-
 `write_json_atomic()` validates and serializes the complete payload as strict
 JSON before creating its temporary file. Non-string mapping keys, arbitrary
 objects, and non-finite floats fail without touching the destination or

@@ -8,7 +8,7 @@ import sys
 from nuself.cli.output import print_ansi
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.daemon_status import observe_daemon_status
-from nuself.config import ConfigSystem, runtime_paths
+from nuself.config import runtime_paths
 from nuself.logs import (
     read_log_events,
 )
@@ -54,32 +54,6 @@ def handle_health(args: argparse.Namespace) -> int:
         return 1
     print("All checks passed.")
     return 0
-
-
-def handle_config(args: argparse.Namespace) -> int:
-    paths = runtime_paths(args.project_root)
-    config_path = paths.authority_root / "config.yaml"
-    print(f"authority_root: {paths.authority_root}")
-    print(f"socket_path: {paths.socket_path}")
-    print(f"config_path: {config_path}")
-    state = (
-        "found"
-        if config_path.exists()
-        else "not found (using defaults)"
-    )
-    print(f"config_file: {state}")
-    print("daemon_reload: restart required after configuration changes")
-    effective = ConfigSystem.load(
-        config_path, args.project_root
-    )
-    print("config_effective:")
-    for key, value in sorted(
-        ConfigSystem().as_flat_dict(effective).items()
-    ):
-        print(f"  {key}: {value}")
-    return 0
-
-
 def _component(value: object) -> LogComponent | None:
     if value in LOG_COMPONENTS:
         return value
