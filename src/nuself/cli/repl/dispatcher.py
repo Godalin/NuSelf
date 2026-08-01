@@ -73,10 +73,6 @@ class ReplCommandDispatcher:
     def __init__(self) -> None:
         self._registry = _build_repl_command_registry()
 
-    @property
-    def registered_commands(self) -> tuple[str, ...]:
-        return self._registry.registered_keys
-
     def handle(
         self,
         command: str,

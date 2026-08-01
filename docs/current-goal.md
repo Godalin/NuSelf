@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue production/test call-surface comparison and remove historical DTO
-surfaces superseded by strict boundary codecs.
+Continue production/test call-surface comparison. Remove introspection exposed
+only for redundant tests while retaining executable construction invariants and
+their failure-path coverage.
 
 ## Constraints
 
@@ -310,6 +311,13 @@ surfaces superseded by strict boundary codecs.
   CLI projection remains explicit.
 - Chat/daemon/CLI focused suite: 246 passed. Post-result-serializer cleanup
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `ReplCommandDispatcher.registered_commands` exposed its internal registry to
+  one redundant test. It is gone; production construction already seals the
+  registry with `expected_keys=command_names()`, and the mismatch failure test
+  remains.
+- REPL/handler/boundary focused suite: 135 passed. Post-introspection cleanup
+  `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

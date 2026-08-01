@@ -54,12 +54,6 @@ def test_dispatcher_unknown_command_preserves_conversation_and_uses_registry_hel
     assert ":help" in output
 
 
-def test_dispatcher_registry_is_complete_and_sealed() -> None:
-    dispatcher = ReplCommandDispatcher()
-
-    assert set(dispatcher.registered_commands) == set(command_names())
-
-
 def test_retry_requires_an_available_retryable_turn(
     tmp_path: Path,
     capsys: CaptureFixture[str],
