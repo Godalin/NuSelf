@@ -256,6 +256,8 @@ second authority after those collaborators have been supplied.
 Notification adapter composition likewise receives the graph's resolved
 configuration explicitly; it must not reload configuration as an optional
 fallback for CLI, REPL, or daemon callers.
+Concrete adapters receive their resolved project path and subsystem config from
+that composition boundary; they do not resolve authority or system config.
 
 Reflection scheduling is orchestration, not a composition root. Candidate
 generation, relevance evaluation, organization, schedule-state storage, and

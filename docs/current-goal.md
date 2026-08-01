@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove hidden Notification configuration resolution.
+Make the Email adapter a pure composed delivery capability.
 
 ## Ordered Steps
 
-1. Confirm adapter composition's optional config fallback is used only by
-   CLI/REPL callers that already own an `ApplicationGraph` configuration.
-2. Require explicit `SystemConfig`, remove the hidden `ConfigSystem.load()`, and
-   pass the application-owned value from every runtime surface.
-3. Run focused Notification/CLI/REPL/composition tests and full gates, then
-   commit without pushing.
+1. Confirm every production Email adapter is built by notification composition
+   with a resolved project path and `EmailConfig`.
+2. Require both inputs, remove adapter-owned configuration/path resolution, and
+   update the one test that depended on implicit disabled-email defaults.
+3. Run focused Notification/composition tests and full gates, then commit
+   without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve adapter ordering, platform/email enablement, log-only fallback,
-  frozen delivery plans, and outbox recovery semantics.
+- Preserve SMTP/TLS/authentication behavior, dry-run audit, disabled-email
+  failure, credential secrecy, deep-link validation, and delivery recovery.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove hidden Notification configuration resolution.
 
 ## Phase Evidence
 
+- `EmailNotificationAdapter` now requires a resolved `Path` and `EmailConfig`.
+  Removed its optional inputs, internal `ConfigSystem.load()`, and
+  `runtime_paths()` authority resolution; notification composition remains the
+  sole owner of adapter construction. Focused Notification/boundary tests: 133
+  passed; full suite: 2439 passed; Pyright: 0 errors, 0 warnings; sdist and wheel
+  build succeeded.
 - Notification adapter composition now requires the application-owned
   `SystemConfig`. Removed its optional config type, hidden
   `ConfigSystem.load()`, and fallback branch; CLI and REPL pass the same graph

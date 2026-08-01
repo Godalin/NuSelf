@@ -16,7 +16,7 @@ import pytest
 
 import nuself.notification.outbox as notification_module
 from nuself.logs import read_log_events
-from nuself.config import runtime_paths
+from nuself.config import EmailConfig, runtime_paths
 from nuself.notification.adapters import LogOnlyNotificationAdapter
 from nuself.notification.model import OutboxEntry
 from nuself.notification.delivery import (
@@ -388,7 +388,11 @@ def test_failure_diagnostic_store_cannot_prevent_failed_transition(
     loop = NotificationDeliveryLoop(
         notification_outbox(tmp_path),
         adapters=[
-            EmailNotificationAdapter(tmp_path, dry_run=False)
+            EmailNotificationAdapter(
+                tmp_path,
+                config=EmailConfig(),
+                dry_run=False,
+            )
         ],
     )
 

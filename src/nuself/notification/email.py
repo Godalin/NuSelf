@@ -7,7 +7,7 @@ from email.message import EmailMessage
 from html import escape
 from pathlib import Path
 
-from nuself.config import ConfigSystem, EmailConfig, runtime_paths
+from nuself.config import EmailConfig
 from nuself.notification.model import OutboxEntry
 from nuself.notification.audit import (
     report_notification_failure,
@@ -23,16 +23,12 @@ class EmailNotificationAdapter:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         *,
-        config: EmailConfig | None = None,
+        config: EmailConfig,
         dry_run: bool = False,
     ) -> None:
-        if config is None:
-            config = ConfigSystem.load(
-                project_root=project_root
-            ).email
-        self._project_root = runtime_paths(project_root).project_root
+        self._project_root = project_root
         self._dry_run = dry_run
         self._config = config
 
