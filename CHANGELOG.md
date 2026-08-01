@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory curator plan corruption now preserves its typed store error across the
+  curator boundary instead of passing through a one-use generic rewrapper.
 - Memory curator recovery and operator inspection now share the plan store's
   single typed `get()` operation. The duplicate `resumable()` read and
   standalone one-use observation-ID validator were removed.

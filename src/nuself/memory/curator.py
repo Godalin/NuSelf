@@ -33,7 +33,6 @@ from nuself.memory.curator_contract import (
 )
 from nuself.memory.curator_plan import (
     MemoryCuratorPlan,
-    MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLockContended,
     MemoryCuratorPlanStore,
 )
@@ -48,7 +47,6 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.profile.contracts import ProfileRepositoryPort
-from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.trace.service import TraceRecorder
 
 DURABLE_SIGNAL_MARKERS: tuple[str, ...] = (
@@ -178,7 +176,7 @@ class MemoryCurator:
                 ignored=0,
                 log_path=self._memory_log_path(),
             )
-        plan = self._load_plan(observation_id)
+        plan = self._plan_store.get(observation_id)
         if plan is None:
             if not _has_memory_worthy_signal(
                 observation.fragments,
@@ -600,17 +598,6 @@ class MemoryCurator:
                 "action": action,
             },
         )
-
-    def _load_plan(
-        self,
-        observation_id: str,
-    ) -> MemoryCuratorPlan | None:
-        try:
-            return self._plan_store.get(observation_id)
-        except MemoryCuratorPlanCorruptError as exc:
-            raise ValueError(
-                diagnostic_exception_message(exc)
-            ) from exc
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"

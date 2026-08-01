@@ -12,10 +12,13 @@ import pytest
 from nuself.memory.curator_contract import MemoryAction
 from nuself.memory.curator_plan import (
     MemoryCuratorPlan,
+    MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLock,
     MemoryCuratorPlanLockCleanupError,
     MemoryCuratorPlanLockContended,
 )
+from nuself.logs import read_log_events
+from tests.backend import owned_backend
 from nuself.storage import auto_backend
 from memory_fixtures import memory_curator_plan_store
 
@@ -113,6 +116,30 @@ def test_plan_lock_rejects_invalid_observation_identity(
 
     with pytest.raises(ValueError, match="invalid observation id"):
         store.exclusive(observation_id)
+
+
+def test_plan_read_reports_and_preserves_typed_corruption(
+    tmp_path: Path,
+) -> None:
+    backend = owned_backend(tmp_path)
+    backend.collection("memory_curator_plans").put(
+        "obs_corrupt",
+        {"id": "obs_corrupt", "unexpected": "private value"},
+    )
+    store = memory_curator_plan_store(tmp_path, backend=backend)
+
+    with pytest.raises(
+        MemoryCuratorPlanCorruptError,
+        match="invalid memory curator plan",
+    ):
+        store.get("obs_corrupt")
+
+    event = read_log_events(project_root=tmp_path, component="memory")[-1]
+    assert event.event == "record_decode_failed"
+    assert event.metadata is not None
+    assert event.metadata["collection"] == "memory_curator_plans"
+    assert event.metadata["record_id"] == "obs_corrupt"
+    assert "private value" not in (event.error or "")
 
 
 class _FailingCloseHandle:

@@ -9,27 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Collapse duplicate curator-plan reads into one typed store API and return the
-single observation-ID lock-path check to its owning `exclusive()` operation.
-Keep durable recovery, corruption reporting, and lock behavior unchanged.
+Remove the curator's one-use corruption-error rewrapper. Let the plan store's
+already-safe, typed `MemoryCuratorPlanCorruptError` cross the curator boundary
+directly instead of erasing it into a generic `ValueError` with the same text.
 
 ## Ordered Steps
 
-1. Confirm `MemoryCuratorPlanStore.get()` and `resumable()` have identical
-   decode, identity, and corruption semantics.
-2. Make curator recovery use `get()` and delete the duplicate `resumable()`
-   method.
-3. Inline the zero-consumer `validate_observation_id()` helper into
-   `exclusive()`, which exclusively owns the derived lock path.
-4. Run curator-plan/memory/CLI tests, Pyright, full pytest, and package build;
+1. Confirm `_load_plan()` only catches a `ValueError` subtype and emits the
+   same safe top-level message without adding policy.
+2. Call the typed plan store directly and delete `_load_plan()` plus its now
+   unused diagnostic and error imports.
+3. Add direct coverage for typed corrupt-plan failure and its structured
+   `record_decode_failed` observation.
+4. Run curator-plan/memory tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change wire decoding, identity correlation, or corrupt-record reports.
-- Do not change lock paths, no-follow/private-file behavior, contention, or
-  cleanup failure provenance.
-- Do not change durable plan resume, completion, or discard behavior.
+- Do not expose corrupt record contents in the exception message or log event.
+- Do not change corruption detection, reporting, or abort behavior.
+- Do not change plan recovery, candidate application, or observation state.
 
 ## Constraints
 
@@ -41,6 +40,12 @@ Keep durable recovery, corruption reporting, and lock behavior unchanged.
 
 ## Phase Evidence
 
+- Curator plan loading now calls the typed store directly. Removed `_load_plan`,
+  which caught a `ValueError` subtype only to emit a generic `ValueError` with
+  the same safe message, plus its two sole imports. Corrupt plans still report
+  `record_decode_failed`, do not expose record content, and now preserve
+  `MemoryCuratorPlanCorruptError`. Focused curator tests: 40 passed; full suite:
+  2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Curator recovery now uses the same typed `MemoryCuratorPlanStore.get()` as
   operator inspection; removed the identical `resumable()` implementation.
   Observation-ID validation now stays in `exclusive()`, the sole lock-path

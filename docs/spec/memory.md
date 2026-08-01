@@ -139,7 +139,9 @@ message, or identifier.
   marked processed, its plan is removed.
 - A plan is an authoritative typed record. Invalid JSON, observation identity,
   source reference, or actions are corrupt state: report `record_decode_failed` and abort rather than
-  calling the model or guessing whether prior candidate effects committed.
+  calling the model or guessing whether prior candidate effects committed. The
+  typed `MemoryCuratorPlanCorruptError` crosses the curator boundary directly;
+  callers do not erase it into a generic error with the same safe message.
 - Curator runtime and operator tooling share one typed plan store and one
   `get()` read operation for path validation, strict decoding, corruption
   reporting, and exact-observation deletion. Recovery is a use of that read,
