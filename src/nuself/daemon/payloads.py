@@ -170,30 +170,6 @@ class SchedulerHealthPayload:
 
 
 @dataclass(frozen=True)
-class HealthResponsePayload:
-    """Daemon unified-scheduler health response."""
-
-    scheduler: SchedulerHealthPayload
-
-    def to_wire(self) -> dict[str, JsonValue]:
-        return {"scheduler": self.scheduler.to_wire()}
-
-    @classmethod
-    def from_wire(
-        cls,
-        payload: dict[str, JsonValue],
-    ) -> HealthResponsePayload:
-        _expect_fields(
-            payload,
-            required=frozenset({"scheduler"}),
-        )
-        scheduler = payload.get("scheduler")
-        if not isinstance(scheduler, dict):
-            raise ProtocolError("health response scheduler must be an object")
-        return cls(SchedulerHealthPayload.from_wire(scheduler))
-
-
-@dataclass(frozen=True)
 class ChatResponsePayload:
     """Stable daemon chat response projection."""
 

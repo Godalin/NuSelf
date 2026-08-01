@@ -89,7 +89,7 @@ def handle_daemon_status(args: argparse.Namespace) -> int:
 
 def handle_daemon_health(args: argparse.Namespace) -> int:
     try:
-        response = client.health(
+        scheduler = client.health(
             project_root=args.project_root,
             timeout=2.0,
         )
@@ -103,7 +103,6 @@ def handle_daemon_health(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    scheduler = response.scheduler
     print(
         "scheduler"
         f" running={str(scheduler.running).lower()}"

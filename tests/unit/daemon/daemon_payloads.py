@@ -15,7 +15,6 @@ from nuself.daemon.payloads import (
     ChatResponsePayload,
     DaemonIdentityPayload,
     EmptyPayload,
-    HealthResponsePayload,
     SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
@@ -99,7 +98,7 @@ def test_chat_response_payload_omits_absent_optional_fields() -> None:
     assert ChatResponsePayload.from_wire(payload.to_wire()) == payload
 
 
-def test_health_response_payload_projects_scheduler_model() -> None:
+def test_scheduler_health_payload_round_trips_directly() -> None:
     scheduler = SchedulerHealthPayload(
         running=True,
         accepting=True,
@@ -109,19 +108,15 @@ def test_health_response_payload_projects_scheduler_model() -> None:
         last_error=None,
     )
 
-    assert HealthResponsePayload(scheduler).to_wire() == {
-        "scheduler": {
-            "running": True,
-            "accepting": True,
-            "pending": 2,
-            "in_flight": 1,
-            "capacity": 4,
-            "last_error": None,
-        }
+    assert scheduler.to_wire() == {
+        "running": True,
+        "accepting": True,
+        "pending": 2,
+        "in_flight": 1,
+        "capacity": 4,
+        "last_error": None,
     }
-    assert HealthResponsePayload.from_wire(
-        HealthResponsePayload(scheduler).to_wire()
-    ) == HealthResponsePayload(scheduler)
+    assert SchedulerHealthPayload.from_wire(scheduler.to_wire()) == scheduler
 
 
 @pytest.mark.parametrize(
@@ -129,14 +124,12 @@ def test_health_response_payload_projects_scheduler_model() -> None:
     [
         (
             {
-                "scheduler": {
-                    "running": "yes",
-                    "accepting": True,
-                    "pending": 0,
-                    "in_flight": 0,
-                    "capacity": 4,
-                    "last_error": None,
-                }
+                "running": "yes",
+                "accepting": True,
+                "pending": 0,
+                "in_flight": 0,
+                "capacity": 4,
+                "last_error": None,
             },
             "running",
         ),
@@ -175,8 +168,8 @@ def test_response_payloads_reject_malformed_nested_fields(
     error: str,
 ) -> None:
     decoder = (
-        HealthResponsePayload.from_wire
-        if "scheduler" in payload
+        SchedulerHealthPayload.from_wire
+        if "running" in payload
         else ChatResponsePayload.from_wire
     )
     with pytest.raises(ProtocolError, match=error):

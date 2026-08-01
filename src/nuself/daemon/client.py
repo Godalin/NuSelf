@@ -17,7 +17,7 @@ from nuself.daemon.payloads import (
     ChatRequestPayload,
     ChatResponsePayload,
     EmptyPayload,
-    HealthResponsePayload,
+    SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import (
     DaemonRequest,
@@ -238,7 +238,7 @@ def health(
     project_root: Path | None = None,
     *,
     timeout: float = 2.0,
-) -> HealthResponsePayload:
+) -> SchedulerHealthPayload:
     """Return a fully validated daemon worker-health snapshot."""
 
     return decode_response(
@@ -247,7 +247,7 @@ def health(
             project_root=project_root,
             timeout=timeout,
         ),
-        HealthResponsePayload.from_wire,
+        SchedulerHealthPayload.from_wire,
         operation="health",
     )
 

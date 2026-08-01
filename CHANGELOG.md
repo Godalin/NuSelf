@@ -9,7 +9,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Daemon control success payloads no longer duplicate request type and status
   as fixed acknowledgement strings. Ping carries only the runtime
   `authority_id`, while shutdown and idempotent activity close return the
-  shared exact empty payload.
+  shared exact empty payload. Health returns the unified scheduler snapshot
+  directly instead of nesting it in a single-field response wrapper.
 - The unified daemon scheduler now sleeps while executor capacity or resource
   lanes are blocked, fails chat closed when unavailable, and reports only
   payload-safe current degradation. A committed chat reply is no longer

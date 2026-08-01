@@ -23,7 +23,6 @@ from nuself.daemon.payloads import (
     ChatRequestPayload,
     ChatResponsePayload,
     EmptyPayload,
-    HealthResponsePayload,
     SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import (
@@ -149,15 +148,13 @@ def _handle_health(
 ) -> DaemonResponse:
     _decode_request_payload(EmptyPayload.from_wire, request.payload)
     snapshot = state.scheduler.snapshot()
-    payload = HealthResponsePayload(
-        SchedulerHealthPayload(
-            running=snapshot.running,
-            accepting=snapshot.accepting,
-            pending=snapshot.pending,
-            in_flight=snapshot.in_flight,
-            capacity=snapshot.capacity,
-            last_error=snapshot.last_error,
-        )
+    payload = SchedulerHealthPayload(
+        running=snapshot.running,
+        accepting=snapshot.accepting,
+        pending=snapshot.pending,
+        in_flight=snapshot.in_flight,
+        capacity=snapshot.capacity,
+        last_error=snapshot.last_error,
     )
     return DaemonResponse.ok(request, payload.to_wire())
 

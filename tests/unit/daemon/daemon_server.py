@@ -558,8 +558,7 @@ def test_daemon_health_returns_scheduler_snapshot(tmp_path: Path) -> None:
         state,
     )
     assert response.status == "ok"
-    scheduler = response.payload["scheduler"]
-    assert isinstance(scheduler, dict)
+    scheduler = response.payload
     assert scheduler["running"] is False
     assert scheduler["accepting"] is True
     assert scheduler["pending"] == 0

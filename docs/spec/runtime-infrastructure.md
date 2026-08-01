@@ -213,7 +213,9 @@ Success response payload field sets are also exact:
 - `shutdown` returns an exact empty object; request type plus successful
   response status already acknowledge shutdown and must not be duplicated as a
   fixed message;
-- `health` returns one complete typed `scheduler` snapshot;
+- `health` returns the complete typed scheduler snapshot directly; the daemon
+  has one scheduler authority and must not wrap it in a single-field health
+  envelope;
 - `chat` returns string `answer`, non-blank `conversation_id`, a string list
   `evidence_references`, nullable string `epistemic_status`, and optional numeric
   `confidence`; terminal adapters may name that answer `reply` in their local

@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing daemon response models and service projections for fields with
-no production consumer. Preserve idempotent cleanup, diagnostics, and explicit
-domain outcomes where callers make decisions from them.
+Continue auditing single-field service and wire envelopes that do not represent
+an independent domain boundary. Preserve exact schemas and explicit bundles
+where multiple capabilities genuinely compose.
 
 ## Constraints
 
@@ -722,6 +722,13 @@ domain outcomes where callers make decisions from them.
   are gone; `ActivityBroker.close()` still owns and tests actual deletion while
   REPL cleanup remains best effort on every exit path.
 - Activity/payload/transport/REPL focused suite: 89 passed. Post-close-response
+  cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
+- Daemon health now returns `SchedulerHealthPayload` directly. The removed
+  `HealthResponsePayload` only nested that sole scheduler under one field, and
+  its only production consumer immediately unwrapped it; all six health fields
+  and CLI presentation remain unchanged.
+- Payload/server/client/CLI focused suite: 407 passed. Post-health-wrapper
   cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
 
