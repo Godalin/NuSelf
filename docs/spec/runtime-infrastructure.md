@@ -251,6 +251,10 @@ tasks, and stopping state) is protected by one short-held condition. No handler,
 database operation, model call, file operation, event projection, audit write,
 or approval prompt runs while that condition is held. Tasks declare one primary
 resource; multi-record consistency remains a repository transaction concern.
+When executor capacity is full, or every due task is blocked by a busy
+resource, the dispatcher waits for a completion/admission/shutdown
+notification. It must not repeatedly wait with a zero timeout. Timed waiting
+considers only future tasks whose resources are currently available.
 
 Control-plane requests (`ping`, `health`, `shutdown`, and activity subscription
 operations) execute directly in the socket adapter. Work-plane requests such
@@ -268,6 +272,17 @@ Shutdown closes admission, wakes the dispatcher, cancels pending volatile
 wake-ups, and waits within one daemon-wide graceful deadline for dispatched
 work. Completion always releases task identity and resource in a `finally`
 boundary. Durable unprocessed work is recovered at the next startup.
+Work-plane requests fail closed if the scheduler is not both running and
+accepting; daemon request threads never execute synchronous domain fallbacks.
+After a chat turn and its durable memory observation commit, admission of
+curation and compression is only a wake-up. Capacity or shutdown rejection is
+observed as deferred work and cannot replace the successful reply. Periodic
+discovery recovers pending observations and conversations still requiring
+compression.
+
+Scheduler health exposes only a payload-safe failure type and task kind. A
+successful task clears current degradation, so an old failure is not presented
+as ongoing health damage; raw exception messages never enter health payloads.
 
 Runtime events remain observation only. Scheduler activity may publish typed
 task lifecycle events; neither an event projection nor audit replay may submit

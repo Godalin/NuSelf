@@ -48,6 +48,12 @@ uses an injected approval port; terminal, daemon, test, and future web
 frontends provide different adapters without changing feature functions.
 Observation publishes safe lifecycle events. Audit writes durable records
 through an injected sink. Arguments and results are private by default.
+For an `@observed` function, the shared executor publishes
+`feature.started` followed by exactly one of `feature.completed` or
+`feature.failed`. Payloads contain component, operation, and status only; the
+failure payload may contain the exception type but never arguments, results,
+or the raw exception message. Functions without `@observed` publish none of
+these lifecycle events. Event publication remains secondary to execution.
 
 An approval decorator that calls `input()`, imports terminal rendering, writes
 audit records, or JSON-wraps the domain result is forbidden. Type-checking

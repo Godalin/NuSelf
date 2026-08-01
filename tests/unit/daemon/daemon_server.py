@@ -13,15 +13,39 @@ from nuself.agent.chat import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
+from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
-from nuself.daemon.state import DaemonState
+from nuself.daemon.state import DaemonState as _DaemonState
 from nuself.logs import read_log_events
 from nuself.memory.observation import MemoryObservation
 from nuself.notification import OutboxEntry
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
+from nuself.daemon.scheduler import (
+    DaemonSchedulerCapacityError,
+    DaemonTask,
+    DaemonTaskSubmission,
+)
+
+_CREATED_STATES: list[_DaemonState] = []
+
+
+def DaemonState(project_root: Path) -> _DaemonState:
+    """Build the request-serving state used by these adapter tests."""
+
+    state = _DaemonState(project_root)
+    state.scheduler.start()
+    _CREATED_STATES.append(state)
+    return state
+
+
+@pytest.fixture(autouse=True)
+def _close_states():  # pyright: ignore[reportUnusedFunction]
+    yield
+    while _CREATED_STATES:
+        _CREATED_STATES.pop().stop_background_tasks()
 
 class StaticResponseService:
     def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
@@ -402,6 +426,91 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
     assert set(calls) == expected_ids
 
 
+def test_committed_chat_survives_followup_admission_failure(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    state.conversation_runtime = _successful_conversation_runtime(tmp_path)
+    submit = state.scheduler.submit
+
+    def reject_followup(
+        task: DaemonTask,
+        *,
+        delay_seconds: float = 0.0,
+        interval_seconds: float | None = None,
+    ) -> DaemonTaskSubmission:
+        if task.kind in {"memory.curate", "conversation.compress"}:
+            raise DaemonSchedulerCapacityError("full")
+        return submit(
+            task,
+            delay_seconds=delay_seconds,
+            interval_seconds=interval_seconds,
+        )
+
+    state.scheduler.submit = reject_followup  # type: ignore[method-assign]
+
+    result = state.run_chat(
+        "remember this",
+        conversation_id="default",
+        turn_id="turn-followup-deferred",
+    )
+
+    assert result.answer == "stubbed: hello"
+    assert len(ConversationStore(tmp_path).load("default").messages) == 2
+    assert len(state.application.memory.observations.pending()) == 1
+
+
+def test_daemon_chat_fails_closed_when_scheduler_is_not_running(
+    tmp_path: Path,
+) -> None:
+    state = _DaemonState(tmp_path)
+    called = False
+
+    class UnexpectedRuntime:
+        def respond(self, *args: object, **kwargs: object) -> None:
+            nonlocal called
+            del args, kwargs
+            called = True
+
+    state.conversation_runtime = UnexpectedRuntime()  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="scheduler is unavailable"):
+        state.run_chat("hello", conversation_id="default", turn_id=None)
+
+    assert called is False
+
+
+def test_periodic_scan_recovers_lost_compression_wakeup(
+    tmp_path: Path,
+) -> None:
+    state = DaemonState(tmp_path)
+    conversation_id = "needs-compression"
+    state.application.conversations.save(
+        ConversationState(
+            conversation_id=conversation_id,
+            messages=[
+                ConversationMessage(role="user", content=f"message {index}")
+                for index in range(30)
+            ],
+            next_message_index=30,
+        )
+    )
+    requested: list[str] = []
+    state._request_conversation_compression = (  # type: ignore[method-assign]
+        lambda value: requested.append(value) or True
+    )
+
+    state._scan_conversations(  # pyright: ignore[reportPrivateUsage]
+        DaemonTask(
+            "conversation.scan",
+            "periodic:conversation.scan",
+            "schedule:conversation.scan",
+        )
+    )
+
+    assert requested == [conversation_id]
+
+
 def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     request = DaemonRequest(type="ping", payload={}, request_id="ping1")
@@ -415,7 +524,7 @@ def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
 
 
 def test_daemon_health_returns_scheduler_snapshot(tmp_path: Path) -> None:
-    state = DaemonState(tmp_path)
+    state = _DaemonState(tmp_path)
     response = handle_request(
         DaemonRequest(type="health", payload={}, request_id="health1"),
         state,

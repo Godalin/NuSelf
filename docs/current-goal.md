@@ -5,25 +5,42 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — close scheduler and feature-policy correctness gaps found by external
+review.
 
-## Last Completed Goal
+## Objective
 
-Simplified cross-module interaction behind explicit APIs without adding a
-service bus, compatibility path, or interface-per-method layer.
+Preserve the single daemon scheduler and simple application composition while
+eliminating dispatcher spinning, post-commit chat ambiguity, dead-scheduler
+fallback behavior, inert observation declarations, and unsafe/stale scheduler
+health errors.
+
+## Ordered Steps
+
+1. Make dispatcher waiting resource- and capacity-aware, with regression tests
+   proving blocked work sleeps until notification.
+2. Treat durable chat commit/projection as primary and follow-up admission as
+   recoverable wake-up; add durable compression discovery.
+3. Execute `@observed` lifecycle policy centrally in `FeatureExecutor`.
+4. Fail closed when daemon scheduling is unavailable and sanitize scheduler
+   failure health.
+5. Minimally type production task construction, reconcile the audit document,
+   run all gates, commit, push, and verify CI.
+
+## Exclusions
+
+- No service bus, per-domain scheduler, persistent generic queue, or new lock
+  hierarchy.
+- No ApplicationResources/ApplicationServices duplication in this goal.
+- No one-method facade or compatibility fallback.
 
 ## Completion Evidence
 
-- CLI, REPL, daemon, worker threads, chat, reflection, persona, and evaluation
-  reuse one application-owned authority graph.
-- Generic data operations use a validated administration API; completed turns
-  cross into memory as immutable DTOs; reflection receives narrow injected
-  capabilities; persona no longer imports memory persistence.
-- The daemon still has one scheduler and one resource-serialization mechanism,
-  with a closed eight-name task catalog and no per-module locks.
-- Executable architecture gates reject raw storage use in feature adapters,
-  cross-domain persistence imports, and private reflection composition.
-- `uv run --locked pytest -q`: 2441 passed.
-- `uv run --locked pyright`: 0 errors, 0 warnings.
-- `uv build`: sdist and wheel built successfully.
-- Python 3.12 clean-wheel install, imports, and `nuself --version` succeeded.
+- Scheduler blocked-state tests cannot observe zero-timeout spinning.
+- A committed chat reply remains successful when follow-up admission closes;
+  durable recovery later discovers both curation and compression work.
+- Observed functions publish started/completed/failed, while undecorated
+  functions publish none.
+- Dead scheduler chat fails before model execution; health exposes only
+  payload-safe current degradation state.
+- Pyright, full pytest, build, clean-wheel smoke, and final CI pass.

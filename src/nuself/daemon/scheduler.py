@@ -284,9 +284,16 @@ class DaemonScheduler:
         )
 
     def _wait_timeout_locked(self) -> float | None:
-        if not self._pending:
+        if self._running_count >= self._max_concurrency:
             return None
-        next_run = min(queued.run_at for queued in self._pending)
+        runnable_times = [
+            queued.run_at
+            for queued in self._pending
+            if queued.task.resource not in self._busy_resources
+        ]
+        if not runnable_times:
+            return None
+        next_run = min(runnable_times)
         return max(0.0, next_run - self._clock())
 
     def _run(self, task: DaemonTask) -> object:
@@ -356,7 +363,11 @@ class DaemonScheduler:
             self._busy_resources.remove(queued.task.resource)
             self._active.pop(queued.task.identity, None)
             if error is not None:
-                self._last_error = f"{type(error).__name__}: {error}"
+                self._last_error = (
+                    f"{queued.task.kind}:{type(error).__name__}"
+                )
+            else:
+                self._last_error = None
             if (
                 queued.interval_seconds is not None
                 and self._accepting

@@ -506,6 +506,16 @@ class ConversationGraphRuntime:
 
         self._conversation_store.update(conversation_id, compress)
 
+    def conversations_requiring_compression(self) -> tuple[str, ...]:
+        """Return durable conversation work discoverable after lost wake-ups."""
+
+        return tuple(
+            conversation_id
+            for conversation_id in self._conversation_store.list()
+            if len(self._conversation_store.load(conversation_id).messages)
+            > self._settings.summary_trigger_messages
+        )
+
     # ------------------------------------------------------------------
     # Prompt building
     # ------------------------------------------------------------------

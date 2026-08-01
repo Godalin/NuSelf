@@ -209,8 +209,11 @@ message remains concise and the original cause remains chained.
 ## Daemon Task Boundary
 
 Every daemon task executes through the unified scheduler boundary. An
-unexpected `Exception` completes that task as failed, records the compact
-exception chain in scheduler health, and publishes `daemon/task.failed`.
+unexpected `Exception` completes that task as failed, records only its
+payload-safe type and task kind as current scheduler degradation, and publishes
+`daemon/task.failed` with the existing sanitized diagnostic boundary.
+The next successful task clears current scheduler degradation; historical
+failure detail belongs in logs rather than the health snapshot.
 Recurring tasks are admitted again only after completion, so failures cannot
 kill a dedicated subsystem loop or create overlap. Domain retries must persist
 their attempt transition before admitting a successor. Reporting remains a

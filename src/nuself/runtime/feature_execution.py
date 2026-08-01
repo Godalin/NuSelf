@@ -70,13 +70,48 @@ class FeatureExecutor:
             else function.__name__
         )
         self._confirm(spec, component, operation, args, kwargs)
+        self._observe(spec, component, operation, "started", None)
         try:
             result = function(*args, **kwargs)
         except Exception as exc:
+            self._observe(spec, component, operation, "failed", exc)
             self._audit(spec, component, operation, "failed", exc)
             raise
+        self._observe(spec, component, operation, "completed", None)
         self._audit(spec, component, operation, "completed", None)
         return result
+
+    def _observe(
+        self,
+        spec: FeatureSpec,
+        component: str,
+        operation: str,
+        outcome: str,
+        error: Exception | None,
+    ) -> None:
+        if spec.observation is None or self._events is None:
+            return
+        try:
+            self._events.publish(
+                producer="chat",
+                name=f"feature.{outcome}",
+                payload=RuntimeLogEventPayload(
+                    message=f"feature {outcome}: {operation}",
+                    level="error" if error is not None else "info",
+                    status=outcome,
+                    metadata={
+                        "service_component": component,
+                        "operation": operation,
+                        **(
+                            {"error_type": type(error).__name__}
+                            if error is not None
+                            else {}
+                        ),
+                    },
+                ).to_mapping(),
+            )
+        except Exception:
+            return
 
     def _confirm(
         self,

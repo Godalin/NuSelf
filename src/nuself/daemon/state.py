@@ -27,8 +27,17 @@ from nuself.daemon.reason_export import (
     ReasonExportService,
     build_reason_export_section_planner,
 )
-from nuself.daemon.scheduler import DaemonScheduler, DaemonTask
-from nuself.daemon.tasks import DAEMON_TASK_KINDS, PeriodicTaskKind
+from nuself.daemon.scheduler import (
+    DaemonScheduler,
+    DaemonSchedulerCapacityError,
+    DaemonSchedulerStoppedError,
+    DaemonTask,
+)
+from nuself.daemon.tasks import (
+    DAEMON_TASK_KINDS,
+    PeriodicTaskKind,
+    daemon_task,
+)
 from nuself.logs import runtime_event_log_sink
 from nuself.notification import (
     NotificationDeliveryLoop,
@@ -36,6 +45,8 @@ from nuself.notification import (
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason import ReasonScheduler
 from nuself.runtime.events import EventPublisher
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.observability import publish_observed_event
 from nuself.runtime.jobs import JobMessage
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -52,6 +63,10 @@ def _require_completed_turn(result: ChatResult) -> CompletedTurn:
     if turn is None:
         raise RuntimeError("conversation result is missing its committed turn")
     return turn
+
+
+class DaemonUnavailableError(RuntimeError):
+    """The daemon cannot safely admit work-plane requests."""
 
 
 class DaemonState:
@@ -76,7 +91,10 @@ class DaemonState:
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()
         self.event_publisher.attach_projection(
-            runtime_event_log_sink(project_root)
+            runtime_event_log_sink(
+                project_root,
+                projection=self.activity_broker.publish,
+            )
         )
         self.reason_export_service = ReasonExportService(
             project_root,
@@ -138,6 +156,7 @@ class DaemonState:
         handlers = {
             "memory.scan": self._scan_memory_observations,
             "memory.curate": self._curate_memory_observation,
+            "conversation.scan": self._scan_conversations,
             "chat.turn": self._run_chat_task,
             "conversation.compress": self._compress_conversation,
             "reflection.check": self._check_reflection,
@@ -178,6 +197,10 @@ class DaemonState:
             self.memory_curator_interval_seconds,
         )
         self._schedule_periodic(
+            "conversation.scan",
+            self.memory_curator_interval_seconds,
+        )
+        self._schedule_periodic(
             "reflection.check",
             self.reflection_check_interval_seconds,
         )
@@ -193,11 +216,11 @@ class DaemonState:
     def stop_background_tasks(self) -> None:
         self.scheduler.shutdown()
 
-    def request_memory_curation(self, observation_id: str) -> None:
+    def request_memory_curation(self, observation_id: str) -> bool:
         """Admit one coalesced curator task for a durable observation."""
 
-        self.scheduler.submit(
-            DaemonTask(
+        return self._submit_followup(
+            daemon_task(
                 "memory.curate",
                 f"memory.curate:{observation_id}",
                 f"memory-observation:{observation_id}",
@@ -214,26 +237,16 @@ class DaemonState:
     ) -> ChatResult:
         """Run chat through its conversation resource lane in a live daemon."""
 
-        if not self.scheduler.snapshot().running:
-            result = self.conversation_runtime.respond(
-                message,
-                conversation_id=conversation_id,
-                turn_id=turn_id,
-            )
-            observation = publish_chat_observation(
-                self.application.memory.observations,
-                turn=_require_completed_turn(result),
-                source_trace_id=result.trace_id,
-            )
-            self.request_memory_curation(observation.id)
-            return result
+        snapshot = self.scheduler.snapshot()
+        if not snapshot.running or not snapshot.accepting:
+            raise DaemonUnavailableError("daemon scheduler is unavailable")
         identity = (
             f"chat.turn:{conversation_id}:{turn_id}"
             if turn_id is not None
             else f"chat.turn:{conversation_id}:{uuid4().hex}"
         )
         submission = self.scheduler.submit(
-            DaemonTask(
+            daemon_task(
                 "chat.turn",
                 identity,
                 f"conversation:{conversation_id}",
@@ -252,7 +265,7 @@ class DaemonState:
         interval: float,
     ) -> None:
         self.scheduler.submit(
-            DaemonTask(kind, f"periodic:{kind}", f"schedule:{kind}"),
+            daemon_task(kind, f"periodic:{kind}", f"schedule:{kind}"),
             delay_seconds=interval,
             interval_seconds=interval,
         )
@@ -261,6 +274,13 @@ class DaemonState:
         del task
         for observation in self.application.memory.observations.pending():
             self.request_memory_curation(observation.id)
+
+    def _scan_conversations(self, task: DaemonTask) -> None:
+        del task
+        for conversation_id in (
+            self.conversation_runtime.conversations_requiring_compression()
+        ):
+            self._request_conversation_compression(conversation_id)
 
     def _curate_memory_observation(self, task: DaemonTask) -> None:
         observation_id = task.payload
@@ -283,16 +303,49 @@ class DaemonState:
             source_trace_id=result.trace_id,
         )
         self.request_memory_curation(observation.id)
-        self.scheduler.submit(
-            DaemonTask(
+        self._request_conversation_compression(result.conversation_id)
+        return result
+
+    def _request_conversation_compression(
+        self,
+        conversation_id: str,
+    ) -> bool:
+        return self._submit_followup(
+            daemon_task(
                 "conversation.compress",
-                f"conversation.compress:{result.conversation_id}",
-                f"conversation:{result.conversation_id}",
-                payload=result.conversation_id,
+                f"conversation.compress:{conversation_id}",
+                f"conversation:{conversation_id}",
+                payload=conversation_id,
                 priority=120,
             )
         )
-        return result
+
+    def _submit_followup(self, task: DaemonTask) -> bool:
+        try:
+            self.scheduler.submit(task)
+        except (
+            DaemonSchedulerCapacityError,
+            DaemonSchedulerStoppedError,
+        ) as exc:
+            publish_observed_event(
+                self.event_publisher,
+                name="task.deferred",
+                producer="daemon",
+                payload=RuntimeLogEventPayload(
+                    message="durable daemon follow-up deferred",
+                    level="warning",
+                    status="deferred",
+                    metadata={
+                        "task_kind": task.kind,
+                        "resource": task.resource,
+                        "error_type": type(exc).__name__,
+                    },
+                ).to_mapping(),
+                project_root=self.project_root,
+                failure_component="daemon",
+            )
+            return False
+        return True
 
     def _compress_conversation(self, task: DaemonTask) -> None:
         conversation_id = task.payload
@@ -320,7 +373,7 @@ class DaemonState:
     ) -> None:
         attempt = message.payload.get("attempt", 0)
         self.scheduler.submit(
-            DaemonTask(
+            daemon_task(
                 "reason.export",
                 f"reason.export:{message.job_id}:{message.resource_id}:{attempt}",
                 f"reason:{message.resource_id}",

@@ -206,3 +206,43 @@ def test_scheduler_shutdown_before_start_cancels_recovery_tasks() -> None:
     assert not scheduler.snapshot().accepting
     with pytest.raises(DaemonSchedulerStoppedError):
         scheduler.start()
+
+
+def test_scheduler_waits_for_completion_when_executor_is_full() -> None:
+    scheduler = DaemonScheduler({"test": lambda task: None}, max_concurrency=1)
+    scheduler.submit(DaemonTask("test", "pending", "resource:b"))
+    scheduler._running_count = 1  # pyright: ignore[reportPrivateUsage]
+
+    assert scheduler._wait_timeout_locked() is None  # pyright: ignore[reportPrivateUsage]
+    scheduler.shutdown()
+
+
+def test_scheduler_waits_when_every_due_resource_is_busy() -> None:
+    scheduler = DaemonScheduler({"test": lambda task: None})
+    scheduler.submit(DaemonTask("test", "pending", "resource:a"))
+    scheduler._busy_resources.add("resource:a")  # pyright: ignore[reportPrivateUsage]
+
+    assert scheduler._wait_timeout_locked() is None  # pyright: ignore[reportPrivateUsage]
+    scheduler._busy_resources.clear()  # pyright: ignore[reportPrivateUsage]
+    scheduler.shutdown()
+
+
+def test_scheduler_health_is_safe_and_clears_after_success() -> None:
+    class SecretFailure(RuntimeError):
+        pass
+
+    def run(task: DaemonTask) -> None:
+        if task.identity == "fail":
+            raise SecretFailure("private model output")
+
+    scheduler = DaemonScheduler({"test": run})
+    scheduler.start()
+    failed = scheduler.submit(DaemonTask("test", "fail", "resource:a"))
+    with pytest.raises(SecretFailure):
+        failed.completion.result(timeout=1)
+    assert scheduler.snapshot().last_error == "test:SecretFailure"
+
+    succeeded = scheduler.submit(DaemonTask("test", "ok", "resource:a"))
+    succeeded.completion.result(timeout=1)
+    assert scheduler.snapshot().last_error is None
+    scheduler.shutdown()

@@ -33,21 +33,15 @@ workflow as a fallback.
 
 ## Summary
 
-The shared runtime foundation is sound: CLI and daemon requests use sealed
-handler registries, feature decorators attach orthogonal policy, runtime events
-use typed envelopes, logging uses a shared contract, and the daemon scheduler
-dispatches registered handlers without importing domain implementations.
+This is a historical audit with per-finding disposition below. The resulting
+system uses one application composition path, explicit domain APIs and DTOs,
+one daemon scheduler, executable import gates, and centrally executed feature
+policies. Concrete repositories remain legitimate APIs inside their owning
+domain; no duplicate public facade graph was added.
 
-The repository is not yet API-only end to end. The principal structural issue
-is that `ApplicationGraph` exposes a backend and concrete repositories as a
-public resource bag. This makes correct composition possible but does not make
-incorrect cross-domain access impossible. Nine confirmed boundary problems
-remain; none is a new data-corruption or release blocker, but the first four
-should be addressed before adding more domains.
+## Historical Findings
 
-## Confirmed Findings
-
-### A1 — ApplicationGraph is a concrete service locator (high)
+### A1 — Accepted with safeguards: application graph exposure
 
 `ApplicationGraph` publicly exposes `StorageBackend`, `ConversationStore`, and
 the concrete repositories for memory, notification, persona, reason,
@@ -65,7 +59,7 @@ Minimal correction: keep a private authority resource graph inside
 typed use-case APIs. Only repository factories and migration/admin
 infrastructure receive `StorageBackend`.
 
-### A2 — The generic data CLI bypasses every domain API (high)
+### A2 — Resolved: generic data CLI bypass
 
 `cli.commands.data` owns a hard-coded alias table, a partial validator table,
 and raw `backend.collection(name)` read/write/delete transactions. It therefore
@@ -81,7 +75,7 @@ validate/edit/delete capabilities. The CLI should know public resource names,
 not collection names or wire codecs. Keep an explicitly unsafe raw-storage
 inspection command under `dev`, read-only by default.
 
-### A3 — Reflection orchestrates concrete foreign domains (high)
+### A3 — Resolved: reflection foreign-domain orchestration
 
 `ReflectionScheduler` accepts concrete `NotificationOutbox` and
 `TraceRecorder` implementations, imports persona implementation types, and
@@ -98,7 +92,7 @@ discussion, publication, provenance, and schedule state. Compose all concrete
 implementations once in `application.reflection`; inject language/config as
 values.
 
-### A4 — Conversation-to-memory projection still receives the entire graph (high)
+### A4 — Resolved: graph-shaped conversation projection
 
 `publish_chat_observation()` receives `ApplicationGraph`, reloads the concrete
 conversation store, extracts the last two records by positional convention,
@@ -114,7 +108,7 @@ Minimal correction: have the conversation commit API return an immutable
 `MemoryObserver` port performs the only conversion; remove the reload and
 fallback.
 
-### A5 — Memory candidate persistence hard-codes profile routing (medium)
+### A5 — Accepted: memory-owned candidate/profile workflow
 
 `MemoryCandidateRepository` both persists candidates and applies them. It
 branches repeatedly on the string `profile_fact`, constructs `ProfileItem`,
@@ -128,7 +122,7 @@ accept/reject/merge into `MemoryCandidateService`. Supply a sealed target
 handler registry or one explicit profile-target port from application
 composition.
 
-### A6 — Persona reads memory's concrete model and repository (medium)
+### A6 — Resolved: persona-memory persistence dependency
 
 `persona.definition.load_persona_definitions()` imports memory search filters,
 queries the concrete memory repository, and understands the
@@ -143,7 +137,7 @@ Minimal correction: define a `PersonaDefinitionSource` API returning persona
 DTOs. Put the memory-to-persona projection in `application.persona`; inject
 discussion/activation/synthesis capabilities and resolved settings.
 
-### A7 — Process adapters still recompose repositories and traces (medium)
+### A7 — Resolved: process-adapter recomposition
 
 Several CLI and REPL handlers call `runtime_paths()`, `get_default_backend()`,
 and repository factories directly for profile, reflection, trace, reason, and
@@ -159,7 +153,7 @@ initialized command and remove the fallback composition path. Handlers call
 domain facades only; `scope`, migration, pack, and developer diagnostics remain
 explicit infrastructure exceptions.
 
-### A8 — Daemon task routing is registered but weakly typed (medium)
+### A8 — Resolved: daemon task construction boundary
 
 The scheduler itself correctly uses a handler map, but `DaemonTask.kind`,
 identity, resource, and payload are free-form strings/objects. `DaemonState`
@@ -174,7 +168,7 @@ catalog whose definitions encode key, payload codec/type, identity builder,
 resource builder, priority, and handler. Do not introduce per-domain schedulers
 or locks.
 
-### A9 — Evaluation code mutates private implementation state (low)
+### A9 — Resolved: private evaluation construction
 
 `notification_eval` constructs `ReflectionScheduler` via `__new__`, assigns
 private fields, calls private methods, and selects storage independently.
@@ -205,7 +199,7 @@ composition fixture with fake ports and an in-memory/test backend.
 | `tui`, `repl` | clean adapters | Presentation dependencies point outward and do not own persistence. |
 | evaluation modules | needs work | `notification_eval` violates public construction (A9); migration/evaluation-only direct storage should be explicit and isolated. |
 
-## Recommended Order
+## Historical Recommended Order
 
 1. Make the application graph private-by-default and define domain facade
    capabilities. This prevents new bypasses before individual cleanup.

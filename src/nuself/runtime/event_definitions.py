@@ -131,6 +131,24 @@ class EventDefinitionRegistry:
 
 CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (
     RuntimeEventDefinition(
+        producer="chat",
+        name="feature.started",
+        description="A declared observed feature started.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="chat",
+        name="feature.completed",
+        description="A declared observed feature completed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="chat",
+        name="feature.failed",
+        description="A declared observed feature failed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
         producer="daemon",
         name="worker.started",
         description="A daemon worker entered its run loop.",
@@ -164,6 +182,12 @@ CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (
         producer="daemon",
         name="task.failed",
         description="A unified daemon scheduler task failed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="daemon",
+        name="task.deferred",
+        description="A durable follow-up wake-up was deferred.",
         payload_validator=validate_runtime_log_event_payload,
     ),
     RuntimeEventDefinition(

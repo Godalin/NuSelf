@@ -526,15 +526,18 @@ def runtime_event_log_sink(
     project_root: Path | None = None,
     *,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
+    projection: Callable[[LogEvent], None] | None = None,
 ) -> Callable[[RuntimeEnvelope], None]:
     """Build a bounded synchronous event-to-audit projection."""
 
     def sink(envelope: RuntimeEnvelope) -> None:
-        write_runtime_event(
+        event = write_runtime_event(
             envelope,
             project_root=project_root,
             retention_policy=retention_policy,
         )
+        if projection is not None:
+            projection(event)
 
     return sink
 

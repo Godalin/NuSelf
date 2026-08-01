@@ -6,6 +6,13 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The unified daemon scheduler now sleeps while executor capacity or resource
+  lanes are blocked, fails chat closed when unavailable, and reports only
+  payload-safe current degradation. A committed chat reply is no longer
+  replaced by a failed curation/compression wake-up; durable scans recover both
+  kinds of maintenance. The shared `@observed` policy now emits safe feature
+  started/completed/failed events, and production daemon tasks enter through a
+  closed typed construction boundary.
 - Application composition is now the single authority path for initialized
   CLI, REPL, daemon, chat, reflection, persona, and evaluation work. Generic
   data commands use a validated administration API instead of raw

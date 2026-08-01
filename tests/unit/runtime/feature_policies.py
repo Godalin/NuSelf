@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 
@@ -28,6 +29,7 @@ from nuself.runtime.frontend import (
     ApprovalDecision,
     ApprovalRequest,
 )
+from nuself.logs import read_log_events, runtime_event_log_sink
 
 
 @dataclass
@@ -122,9 +124,10 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
     ]
     assert all(payload.metadata is not None for payload in payloads)
     assert [
-        payload.metadata["frontend_event"]
+        payload.metadata.get("frontend_event")
         for payload in payloads
         if payload.metadata is not None
+        and "frontend_event" in payload.metadata
     ] == [
         "approval_requested",
         "approval_decided",
@@ -138,6 +141,69 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
             outcome="completed",
         )
     ]
+    assert [
+        event.name
+        for event in captured
+        if event.name.startswith("feature.")
+    ] == [
+        "feature.started",
+        "feature.completed",
+    ]
+
+
+def test_observed_feature_publishes_safe_failure_lifecycle() -> None:
+    events = EventPublisher()
+    captured: list[RuntimeEnvelope] = []
+    events.attach_projection(captured.append)
+
+    @component("memory")
+    @observed
+    def fail(secret: str) -> None:
+        raise RuntimeError(secret)
+
+    with pytest.raises(RuntimeError, match="private-value"):
+        FeatureExecutor(events=events).invoke(fail, "private-value")
+
+    assert [event.name for event in captured] == [
+        "feature.started",
+        "feature.failed",
+    ]
+    assert "private-value" not in repr(captured)
+    failed = RuntimeLogEventPayload.from_mapping(captured[-1].payload)
+    assert failed.metadata == {
+        "service_component": "memory",
+        "operation": "fail",
+        "error_type": "RuntimeError",
+    }
+
+
+def test_unobserved_feature_publishes_no_lifecycle() -> None:
+    events = EventPublisher()
+    captured: list[RuntimeEnvelope] = []
+    events.attach_projection(captured.append)
+
+    def plain() -> str:
+        return "done"
+
+    assert FeatureExecutor(events=events).invoke(plain) == "done"
+    assert captured == []
+
+
+def test_observed_feature_uses_the_normal_log_projection(tmp_path: Path) -> None:
+    events = EventPublisher()
+    events.attach_projection(runtime_event_log_sink(tmp_path))
+
+    @component("memory")
+    @observed
+    def feature() -> None:
+        pass
+
+    FeatureExecutor(events=events).invoke(feature)
+
+    assert [
+        event.event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+    ] == ["feature.started", "feature.completed"]
 
 
 def test_declined_confirmation_does_not_call_feature() -> None:
