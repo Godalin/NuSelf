@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.tui.render import render_session_header
 
 DaemonStatusProvider = Callable[[Path | None], str]

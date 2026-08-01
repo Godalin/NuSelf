@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.persona_management import (
     create_persona,

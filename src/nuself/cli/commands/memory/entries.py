@@ -11,7 +11,8 @@ from pathlib import Path
 from nuself.cli.composition import compose_cli_application
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.commands.output import (
+from nuself.cli.memory_preview import format_memory_preview
+from nuself.cli.output import (
     print_ansi,
     resolve_handle,
     resolve_handle_selection,
@@ -32,12 +33,7 @@ from nuself.memory.repository import (
     memory_stats,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.tui.memory import (
-    render_memory_entry_detail,
-    render_memory_entry_row,
-)
-
-DEFAULT_PREVIEW_LIMIT = 8
+from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row
 
 
 def memory_type_choices() -> list[str]:
@@ -96,26 +92,6 @@ def _resolve_entry_ids(
         label="memory",
         get_id=lambda entry: entry.id,
     )
-
-
-def format_memory_preview(
-    project_root: Path | None,
-    limit: int = DEFAULT_PREVIEW_LIMIT,
-) -> str:
-    normalized_limit = max(limit, 1)
-    entries = compose_cli_application(project_root).memory.entries.list()
-    if not entries:
-        return "No memory entries."
-    shown = entries[:normalized_limit]
-    lines = [render_memory_entry_row(entry) for entry in shown]
-    lines.append("")
-    lines.append(f"  {len(shown)}/{len(entries)} entries shown.")
-    if len(entries) > normalized_limit:
-        lines.append(
-            "  Use `nuself memory list` or "
-            "`nuself memory preview --limit N` to see more."
-        )
-    return "\n".join(lines)
 
 
 def _format_counts(counts: Mapping[str, int]) -> str:

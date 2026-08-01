@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.composition import compose_cli_application
 from nuself.reason.errors import ReasonNotFound
 from nuself.tui.reason import render_reason_detail, render_step_watch_entry

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.cli.commands.output import (
+from nuself.cli.output import (
     print_ansi,
     resolve_handle,
     resolve_handle_selection,

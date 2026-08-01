@@ -8,7 +8,7 @@ from pathlib import Path
 
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.commands.output import (
+from nuself.cli.output import (
     print_ansi,
     resolve_handle,
     resolve_handle_selection,

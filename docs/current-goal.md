@@ -9,10 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Finish the REPL adapter audit. The remaining cross-adapter dependency is a
-memory preview formatter imported from `cli.commands.memory`; move presentation
-to its TUI owner if confirmed, then reassess the large REPL command module by
-cohesion rather than line count alone.
+Audit the remaining large REPL command and dispatcher modules for dead public
+handlers and repeated subcommand parsing. Do not split them merely to reduce
+file length; require a smaller call graph or a clearer domain boundary.
 
 ## Constraints
 
@@ -316,6 +315,15 @@ cohesion rather than line count alone.
 - Added executable boundaries prohibiting parser→REPL command imports,
   argparse inside REPL commands, and REPL→Persona command-adapter imports.
 - Persona/CLI/REPL/boundary focused suite: 776 passed. Post-Persona-boundary
+  `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Compact memory preview querying/rendering now belongs to
+  `cli.memory_preview`, shared by one-shot and REPL surfaces without importing
+  a memory command adapter.
+- Shared ANSI output and visible-handle resolution moved from
+  `cli.commands.output` to `cli.output`; REPL now imports no one-shot command
+  module at all.
+- CLI/REPL/Memory focused suite: 768 passed. Post-REPL-adapter cleanup
   `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

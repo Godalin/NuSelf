@@ -13,7 +13,7 @@ from nuself.cli.daemon_lifecycle import (
 )
 from nuself.cli.daemon_status import format_status
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.persona_management import (
     create_persona,
     delete_personas,

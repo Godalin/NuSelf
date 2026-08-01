@@ -14,7 +14,6 @@ from nuself.cli.commands.memory.candidate import (
     handle_memory_candidate_show,
 )
 from nuself.cli.commands.memory.entries import (
-    DEFAULT_PREVIEW_LIMIT,
     handle_memory_add,
     handle_memory_delete,
     handle_memory_edit,
@@ -29,6 +28,7 @@ from nuself.cli.commands.memory.entries import (
     handle_memory_unquarantine,
     memory_type_choices,
 )
+from nuself.cli.memory_preview import DEFAULT_PREVIEW_LIMIT
 from nuself.cli.commands.memory.graph import (
     handle_memory_graph_closure,
     handle_memory_graph_edges,

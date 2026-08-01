@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from nuself.cli.composition import compose_cli_conversation_store
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.config import ConfigSystem, runtime_paths

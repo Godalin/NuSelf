@@ -14,7 +14,7 @@ from nuself.agent.chat.audit import (
     report_chat_failure,
     write_chat_audit,
 )
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ConfigSystem

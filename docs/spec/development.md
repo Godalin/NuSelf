@@ -397,6 +397,12 @@ application runtime.
   surfaces. Argparse handlers unpack namespaces into those functions; REPL
   commands pass parsed values directly and must not synthesize namespaces or
   call argparse handlers.
+- `cli.memory_preview` owns the compact query-and-render workflow shared by the
+  `memory preview` command and bare `:mem`. REPL modules must not import a
+  one-shot memory command module for this presentation path.
+- Shared ANSI output and visible-handle resolution belong to `cli.output`, not
+  the one-shot `cli.commands` package. Command and REPL adapters may both use
+  this primitive without creating an adapter-to-adapter dependency.
 - `cli/chat.py` owns CLI-facing daemon and one-shot chat adapters: configured
   request timeout, transport/application error translation, correlated audit
   writes, direct `ConversationGraphRuntime` invocation, and post-turn memory curator

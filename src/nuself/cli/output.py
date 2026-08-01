@@ -1,4 +1,4 @@
-"""Shared output and visible-handle helpers for CLI command modules."""
+"""Shared output and visible-handle helpers for terminal adapters."""
 
 from __future__ import annotations
 

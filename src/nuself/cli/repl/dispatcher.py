@@ -9,8 +9,8 @@ from pathlib import Path
 from nuself.conversation import ConversationState
 from nuself.cli.composition import compose_cli_conversation_store
 from nuself.cli.daemon_status import format_status, observe_daemon_status
-from nuself.cli.commands.memory.entries import format_memory_preview
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.memory_preview import format_memory_preview
+from nuself.cli.output import print_ansi
 from nuself.cli.repl.commands import (
     handle_interactive_history_command,
     handle_interactive_inbox_command,

@@ -10,7 +10,7 @@ from nuself.application.reason import (
     compose_reason_advancer,
 )
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService

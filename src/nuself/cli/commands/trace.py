@@ -10,7 +10,7 @@ from typing import cast
 
 from nuself.application.trace import TraceServices
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
 from nuself.tui.trace import render_trace_detail, render_trace_row

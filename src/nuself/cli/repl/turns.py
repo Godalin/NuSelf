@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from uuid import uuid4
 
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.repl.activity import (
     ActivityReader,
     run_live_activity_send,

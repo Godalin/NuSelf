@@ -7,7 +7,7 @@ import json
 import sys
 
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message

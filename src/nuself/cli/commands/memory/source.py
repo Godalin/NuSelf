@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi, resolve_handle
+from nuself.cli.output import print_ansi, resolve_handle
 from nuself.domain.memory import PrivacyLevel
 from nuself.domain.source import SourceChunk
 from nuself.memory.source_repository import (
