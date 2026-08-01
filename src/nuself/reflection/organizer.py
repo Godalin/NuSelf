@@ -44,7 +44,7 @@ class ReflectionOrganizer:
                 continue
             self._repository.save(_merge_entries(primary, duplicates))
             for entry in duplicates:
-                self._repository.archive(entry.id)
+                self._repository.save(entry.with_status("archived"))
             archived_count += len(duplicates)
 
         result = ReflectionOrganizationResult(

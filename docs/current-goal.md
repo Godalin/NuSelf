@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify Reflection repository writes under one truthful save operation.
+Keep Reflection status decisions out of its persistence repository.
 
 ## Ordered Steps
 
-1. Confirm `ReflectionRepository.add()` and `update()` are identical stable-ID
-   upserts with no distinct validation or lifecycle rule.
-2. Replace both with `save()` across scheduler, organizer, service tests, and
-   adapters; retain semantic dismiss/archive operations without aliases.
-3. Run focused Reflection/chat/CLI tests and the complete verification gates;
-   update evidence and commit without pushing.
+1. Confirm repository dismiss/archive are called only after service or
+   organizer already resolved the complete entry, causing a duplicate read.
+2. Apply status transitions in those owning domain operations and persist via
+   `save()`; delete the repository use-case methods without aliases.
+3. Run focused Reflection/CLI tests and the complete verification gates; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve reflection identity, wire format, status mutations, scheduling,
-  organization, promotion, and audit behavior.
+- Preserve reflection status values, reviewed timestamps, visible-handle
+  resolution, organization, and persistence behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,13 @@ Unify Reflection repository writes under one truthful save operation.
 
 ## Phase Evidence
 
+- Reflection dismiss/archive status decisions now live in `ReflectionService`,
+  and duplicate archival remains in `ReflectionOrganizer`; each saves the
+  already-resolved entry directly. Removed both repository use-case methods and
+  their duplicate reads, replacing repository tests with direct service
+  coverage of status, reviewed timestamp, and persistence. Focused
+  Reflection/CLI/REPL tests: 428 passed; full suite: 2444 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - `ReflectionRepository` now exposes one truthful stable-ID `save()` operation
   for both creation and replacement. Removed identical `add()`/`update()` APIs
   and migrated scheduler, organizer, tests, and adapters without compatibility

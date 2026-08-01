@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from nuself.application.trace import compose_trace_services
 from nuself.config import runtime_paths
 from reason_fixtures import ReasonService
@@ -57,6 +59,28 @@ def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
         created_at=now,
         reviewed_at=None,
     )
+
+
+@pytest.mark.parametrize(
+    ("operation", "status"),
+    (("dismiss_entry", "dismissed"), ("archive_entry", "archived")),
+)
+def test_status_operations_persist_resolved_entry(
+    tmp_path: Path,
+    operation: str,
+    status: str,
+) -> None:
+    repo = ReflectionRepository(
+        runtime_paths(tmp_path),
+        backend=owned_backend(tmp_path),
+    )
+    entry = repo.save(_reflection_entry())
+
+    updated = getattr(_service(tmp_path, repo), operation)(entry.id)
+
+    assert updated.status == status
+    assert updated.reviewed_at is not None
+    assert repo.get(entry.id) == updated
 
 
 def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:

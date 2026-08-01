@@ -71,26 +71,6 @@ def test_list_filter_by_status(repo: ReflectionRepository) -> None:
     assert len(repo.list(status="archived")) == 0
 
 
-def test_dismiss(repo: ReflectionRepository) -> None:
-    entry = _sample_entry()
-    repo.save(entry)
-    updated = repo.dismiss(entry.id)
-    assert updated.status == "dismissed"
-    assert updated.reviewed_at is not None
-    retrieved = repo.get(entry.id)
-    assert retrieved.status == "dismissed"
-
-
-def test_archive(repo: ReflectionRepository) -> None:
-    entry = _sample_entry()
-    repo.save(entry)
-    updated = repo.archive(entry.id)
-    assert updated.status == "archived"
-    assert updated.reviewed_at is not None
-    retrieved = repo.get(entry.id)
-    assert retrieved.status == "archived"
-
-
 def test_save_replaces_existing_entry(repo: ReflectionRepository) -> None:
     entry = _sample_entry()
     repo.save(entry)

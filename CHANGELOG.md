@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection status decisions now remain in the user service and organizer;
+  removed repository-level dismiss/archive use cases that re-read already
+  resolved entries before saving them.
 - Reflection persistence now uses one stable-ID `save()` operation, removing
   identical `add()` and `update()` repository APIs while retaining explicit
   status-transition operations.

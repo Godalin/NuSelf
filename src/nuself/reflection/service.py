@@ -43,11 +43,11 @@ class ReflectionService:
 
     def dismiss_entry(self, id_or_index: str) -> ReflectionEntry:
         entry = self._resolve_entry(id_or_index)
-        return self._repository.dismiss(entry.id)
+        return self._repository.save(entry.with_status("dismissed"))
 
     def archive_entry(self, id_or_index: str) -> ReflectionEntry:
         entry = self._resolve_entry(id_or_index)
-        return self._repository.archive(entry.id)
+        return self._repository.save(entry.with_status("archived"))
 
     def organize_pending(self) -> ReflectionOrganizationResult:
         return self._organizer.organize_pending()
