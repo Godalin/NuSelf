@@ -283,6 +283,18 @@ def test_process_surfaces_use_application_chat_factory() -> None:
     )
 
 
+def test_cli_and_repl_do_not_call_each_others_adapters() -> None:
+    parser = _SOURCE_ROOT / "cli" / "parser.py"
+    repl_commands = _SOURCE_ROOT / "cli" / "repl" / "commands.py"
+
+    assert "nuself.cli.repl.commands" not in _imports(parser)
+    assert "argparse" not in _imports(repl_commands)
+    assert not any(
+        imported == "nuself.cli.commands.persona"
+        for imported in _imports(repl_commands)
+    )
+
+
 def test_migrated_trace_package_does_not_resolve_authority() -> None:
     violations: list[str] = []
     forbidden = {

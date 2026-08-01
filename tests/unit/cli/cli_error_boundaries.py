@@ -97,11 +97,12 @@ def test_persona_command_reports_failure_without_logging_prompt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail_create(args: object) -> None:
+    def fail_create(*args: object) -> None:
+        del args
         raise OSError("persona store unavailable")
 
     monkeypatch.setattr(
-        "nuself.cli.repl.commands.handle_persona_create",
+        "nuself.cli.repl.commands.create_persona",
         fail_create,
     )
 

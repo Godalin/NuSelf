@@ -9,9 +9,10 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove REPL-to-argparse adapter calls, beginning with Persona commands that
-construct synthetic `argparse.Namespace` values. Extract or call narrow shared
-use cases without adding a command facade.
+Finish the REPL adapter audit. The remaining cross-adapter dependency is a
+memory preview formatter imported from `cli.commands.memory`; move presentation
+to its TUI owner if confirmed, then reassess the large REPL command module by
+cohesion rather than line count alone.
 
 ## Constraints
 
@@ -307,6 +308,15 @@ use cases without adding a command facade.
   the argparse Reason watch adapter.
 - CLI/REPL/Reason focused suite: 838 passed. Post-watch-boundary
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Persona lookup, confirmation, mutation feedback, and lifecycle trace now use
+  parameterized `cli.persona_management` workflows shared by terminal surfaces.
+  Argparse handlers only unpack namespaces; REPL passes parsed values directly
+  and no longer imports argparse or one-shot Persona handlers.
+- Added executable boundaries prohibiting parser→REPL command imports,
+  argparse inside REPL commands, and REPL→Persona command-adapter imports.
+- Persona/CLI/REPL/boundary focused suite: 776 passed. Post-Persona-boundary
+  `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 ## Last Completed Goal

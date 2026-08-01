@@ -7,7 +7,7 @@ import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.application.composition import compose_application
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
+from nuself.cli.persona_management import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
 from nuself.logs import read_log_events
 from nuself.config import runtime_paths
 from nuself.persona.definition import PersonaInput, PersonaTurnState

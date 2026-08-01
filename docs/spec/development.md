@@ -392,6 +392,11 @@ application runtime.
   polling loop; `commands.reason` owns its argparse adapter and the REPL
   dispatcher calls the same loop directly. The top-level parser must not
   import `cli.repl.commands` to obtain a one-shot handler.
+- `cli.persona_management` similarly owns Persona lookup, confirmation,
+  mutation, rendering feedback, and lifecycle trace shared by terminal
+  surfaces. Argparse handlers unpack namespaces into those functions; REPL
+  commands pass parsed values directly and must not synthesize namespaces or
+  call argparse handlers.
 - `cli/chat.py` owns CLI-facing daemon and one-shot chat adapters: configured
   request timeout, transport/application error translation, correlated audit
   writes, direct `ConversationGraphRuntime` invocation, and post-turn memory curator

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
 from nuself.cli.composition import compose_cli_conversation_store
@@ -15,12 +14,12 @@ from nuself.cli.daemon_lifecycle import (
 from nuself.cli.daemon_status import format_status
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
-from nuself.cli.commands.persona import (
-    handle_persona_create,
-    handle_persona_delete,
-    handle_persona_disable,
-    handle_persona_enable,
+from nuself.cli.persona_management import (
+    create_persona,
+    delete_personas,
+    list_persona_prompts,
     resolve_persona_id,
+    set_persona_enabled,
 )
 from nuself.daemon import lifecycle
 from nuself.memory.repository import (
@@ -287,7 +286,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 
         repo = compose_cli_application(project_root).persona_prompts
         if command in {"", "list"}:
-            prompts = repo.list()
+            prompts = list_persona_prompts(project_root)
             if not prompts:
                 return f"{theme.tag('[persona]', 'persona')} {theme.muted('No custom personas yet')}"
             blocks: list[str] = [f"{theme.tag('[persona]', 'persona')} Custom personas (dynamic):"]
@@ -296,8 +295,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             return "\n".join(blocks)
         if command.startswith("show "):
             persona_id = command.removeprefix("show ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root)
-            resolved = resolve_persona_id(args)
+            resolved = resolve_persona_id(project_root, persona_id)
             if resolved is None:
                 return f"{theme.tag('[persona]', 'persona')} {theme.error('Not found')}: {persona_id}"
             prompt = repo.get(resolved)
@@ -306,18 +304,23 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             return render_persona_detail(prompt)
         if command.startswith("delete "):
             persona_id = command.removeprefix("delete ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
-            handle_persona_delete(args)
+            delete_personas(project_root, persona_id)
             return ""
         if command.startswith("disable "):
             persona_id = command.removeprefix("disable ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
-            handle_persona_disable(args)
+            set_persona_enabled(
+                project_root,
+                persona_id,
+                enabled=False,
+            )
             return ""
         if command.startswith("enable "):
             persona_id = command.removeprefix("enable ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
-            handle_persona_enable(args)
+            set_persona_enabled(
+                project_root,
+                persona_id,
+                enabled=True,
+            )
             return ""
         if command.startswith("create "):
             rest = command.removeprefix("create ").strip()
@@ -325,8 +328,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             if len(parts) < 2:
                 return f"{theme.tag('[persona]', 'persona')} {theme.error('Usage')}: :persona create <name> <prompt>"
             name, prompt_text = parts
-            args = argparse.Namespace(name=name, prompt=prompt_text, project_root=project_root)
-            handle_persona_create(args)
+            create_persona(project_root, name, prompt_text)
             return ""
         return interactive_persona_help(command)
     except Exception as exc:
