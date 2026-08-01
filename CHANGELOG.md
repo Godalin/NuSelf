@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory symbolic graph projection now has one `compute_graph()` implementation
+  reused by repository operations and external query expansion, removing a
+  private mirror and public pass-through.
 - Reflection status decisions now remain in the user service and organizer;
   removed repository-level dismiss/archive use cases that re-read already
   resolved entries before saving them.

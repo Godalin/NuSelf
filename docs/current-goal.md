@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Keep Reflection status decisions out of its persistence repository.
+Make one Memory graph operation serve internal and external consumers.
 
 ## Ordered Steps
 
-1. Confirm repository dismiss/archive are called only after service or
-   organizer already resolved the complete entry, causing a duplicate read.
-2. Apply status transitions in those owning domain operations and persist via
-   `save()`; delete the repository use-case methods without aliases.
-3. Run focused Reflection/CLI tests and the complete verification gates; update
+1. Confirm public `compute_graph()` only forwards to `_compute_graph()` while
+   repository operations bypass it and external query expansion requires it.
+2. Move the implementation to the public operation and reuse it internally;
+   delete the private mirror without changing graph projection behavior.
+3. Run focused Memory tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve reflection status values, reviewed timestamps, visible-handle
-  resolution, organization, and persistence behavior.
+- Preserve symbolic nodes, edges, filtering, traversal order, transitive
+  closure, and retrieval expansion behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Keep Reflection status decisions out of its persistence repository.
 
 ## Phase Evidence
 
+- `MemoryEntryRepository.compute_graph()` now directly owns symbolic graph
+  construction, and node/edge search, path finding, closure, and external
+  retrieval expansion all reuse it. Removed the private implementation mirror
+  and public pass-through without adding cache or state. Focused Memory/chat
+  tests: 128 passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Reflection dismiss/archive status decisions now live in `ReflectionService`,
   and duplicate archival remains in `ReflectionOrganizer`; each saves the
   already-resolved entry directly. Removed both repository use-case methods and

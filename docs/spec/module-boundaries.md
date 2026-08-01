@@ -124,6 +124,9 @@ mutate instead of constructing them during an operation. Aggregate functions
 such as memory statistics receive repositories rather than resolving an
 authority. The application layer owns the immutable repository bundle and
 must reuse its instances for one authority.
+`MemoryEntryRepository.compute_graph()` is the single one-shot symbolic graph
+projection used by both repository operations and external memory-query
+expansion. A private mirror with identical behavior is not a second capability.
 
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records

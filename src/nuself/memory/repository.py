@@ -277,7 +277,10 @@ class MemoryEntryRepository:
     def list_relations(self, filters: MemoryRelationFilters | None = None) -> list[MemoryRelationIndexRecord]:
         return [r for r in self._compute_relations() if _matches_relation_filters(r, filters)]
 
-    def _compute_graph(self) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
+    def compute_graph(
+        self,
+    ) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
+        """Build one symbolic graph for reuse across related operations."""
         entries = self.list()
         by_id = {e.id: e for e in entries}
         nodes = [_symbolic_node_from_wire(_symbolic_node_record(e)) for e in entries]
@@ -288,18 +291,12 @@ class MemoryEntryRepository:
         ]
         return nodes, edges
 
-    def compute_graph(self) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
-        """Public one-shot graph projection, so callers that need several closures
-        (e.g. retrieval expansion) can compute the graph once and reuse it instead
-        of rebuilding it from ``list()`` per closure."""
-        return self._compute_graph()
-
     def list_graph_nodes(self, filters: SymbolicGraphNodeFilters | None = None) -> list[SymbolicGraphNode]:
-        nodes, _ = self._compute_graph()
+        nodes, _ = self.compute_graph()
         return [n for n in nodes if _matches_graph_node_filters(n, filters)]
 
     def list_graph_edges(self, filters: SymbolicGraphEdgeFilters | None = None) -> list[SymbolicGraphEdge]:
-        _, edges = self._compute_graph()
+        _, edges = self.compute_graph()
         return [e for e in edges if _matches_graph_edge_filters(e, filters)]
 
     def search_graph(
@@ -310,7 +307,7 @@ class MemoryEntryRepository:
         limit: int = 8,
         depth: int = 1,
     ) -> SymbolicGraphSearchResult:
-        nodes, edges = self._compute_graph()
+        nodes, edges = self.compute_graph()
         matched_nodes = [
             node
             for node in nodes
@@ -349,7 +346,7 @@ class MemoryEntryRepository:
 
     def find_path(self, from_id: str, to_id: str) -> list[SymbolicGraphEdge]:
         """Return the shortest path from from_id to to_id as a list of edges."""
-        _, edges = self._compute_graph()
+        _, edges = self.compute_graph()
 
         adjacency = _build_graph_adjacency(edges, self._relation_registry, bidirectional=True)
 
@@ -373,7 +370,11 @@ class MemoryEntryRepository:
         self, node_id: str, relation: str
     ) -> SymbolicGraphSearchResult:
         """Return all nodes and edges reachable from node_id via the given relation."""
-        return self.transitive_closure_from(self._compute_graph(), node_id, relation)
+        return self.transitive_closure_from(
+            self.compute_graph(),
+            node_id,
+            relation,
+        )
 
     def transitive_closure_from(
         self,
