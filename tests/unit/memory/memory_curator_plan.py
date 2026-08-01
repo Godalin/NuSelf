@@ -90,8 +90,6 @@ def test_plan_locks_are_per_thread_and_stable_after_exception(
             with other_lock:
                 raise RuntimeError("operation failed")
 
-    assert default_lock.acquired is False
-    assert other_lock.acquired is False
     assert default_lock.path.exists()
     assert other_lock.path.exists()
     with store.exclusive("obs_default"):
@@ -142,7 +140,6 @@ def test_plan_lock_acquire_preserves_contention_and_cleanup_failures(
     )
     assert str(error.cleanup_error) == "close failed"
     assert error.__cause__ is error.primary_error
-    assert lock.acquired is False
 
 
 def test_plan_lock_release_preserves_unlock_and_cleanup_failures(
@@ -168,4 +165,3 @@ def test_plan_lock_release_preserves_unlock_and_cleanup_failures(
     assert str(error.primary_error) == "unlock failed"
     assert str(error.cleanup_error) == "close failed"
     assert error.__cause__ is error.primary_error
-    assert lock.acquired is False

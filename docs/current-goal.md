@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing lifecycle objects for mirrored booleans and test-only state
-inspection. Derive state from the resource ownership structure that already
-governs behavior.
+Continue removing test-only resource-state views. Prefer behavior-level proof
+through contention, reacquisition, and cleanup over boolean projections of
+private handles.
 
 ## Constraints
 
@@ -326,6 +326,13 @@ governs behavior.
 - Signal/daemon-lifecycle focused suite: 28 passed. Post-signal-state cleanup
   `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `DaemonInstanceLock.acquired` and `MemoryCuratorPlanLock.acquired` projected
+  private handle presence solely for tests. Both are gone; tests retain real
+  contention, release/reacquisition, context cleanup, and combined failure
+  coverage without exposing lock internals.
+- Daemon-instance/memory-plan lock focused suite: 28 passed. Post-lock-view
+  cleanup `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

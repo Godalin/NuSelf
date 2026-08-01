@@ -38,10 +38,6 @@ class DaemonInstanceLock:
         self.path = path
         self._handle: IO[str] | None = None
 
-    @property
-    def acquired(self) -> bool:
-        return self._handle is not None
-
     def acquire(self) -> None:
         if self._handle is not None:
             return

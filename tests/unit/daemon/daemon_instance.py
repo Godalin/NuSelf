@@ -24,14 +24,11 @@ def test_instance_lock_contends_then_releases(tmp_path: Path) -> None:
     contender = DaemonInstanceLock(lock_path)
 
     owner.acquire()
-    assert owner.acquired is True
     with pytest.raises(DaemonInstanceLockContended):
         contender.acquire()
 
     owner.release()
-    assert owner.acquired is False
     contender.acquire()
-    assert contender.acquired is True
     contender.release()
     assert lock_path.exists()
 
@@ -99,7 +96,6 @@ def test_instance_lock_acquire_retains_flock_and_close_failures(
     assert str(error.cleanup_error) == "close failed"
     assert error.__cause__ is error.primary_error
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_acquire_retains_single_system_failure(
@@ -131,7 +127,6 @@ def test_instance_lock_acquire_retains_single_system_failure(
         lock.acquire()
 
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_release_retains_unlock_and_close_failures(
@@ -158,7 +153,6 @@ def test_instance_lock_release_retains_unlock_and_close_failures(
     assert str(error.cleanup_error) == "close failed"
     assert error.__cause__ is error.primary_error
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_release_retains_single_unlock_failure(
@@ -180,7 +174,6 @@ def test_instance_lock_release_retains_single_unlock_failure(
         lock.release()
 
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_release_retains_single_close_failure(
@@ -206,7 +199,6 @@ def test_instance_lock_release_retains_single_close_failure(
         lock.release()
 
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_contended_daemon_preserves_owner_resources(
