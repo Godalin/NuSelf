@@ -9,17 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Finish Reason prompt composition so the domain service has no hidden model
-configuration fallback.
+Remove the unused full Reflection config dependency from candidate generation.
 
 ## Ordered Steps
 
-1. Make the prompt generator a required `ReasonService` capability instead of
-   falling back to a domain-owned model factory.
-2. Compose the model-backed generator from application-owned paths and config;
-   keep explicit agent/endpoint injection for focused tests.
-3. Update boundary and behavior tests, run focused Reason/CLI/REPL tests and
-   full gates, then commit without pushing.
+1. Verify `IdeaCandidateGenerator` never reads `ReflectionSettings` and that
+   scheduling/relevance remain the owners of configured policy.
+2. Remove the unused constructor parameter and composition/test plumbing.
+3. Run focused Reflection tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -28,8 +25,7 @@ configuration fallback.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Do not eagerly instantiate provider clients for application commands that do
-  not create a Reason thread.
+- Do not move schedule or relevance policy into candidate generation.
 
 ## Constraints
 
@@ -41,6 +37,12 @@ configuration fallback.
 
 ## Phase Evidence
 
+- `IdeaCandidateGenerator` now accepts only the context, language, authority,
+  and typed-agent inputs it consumes. Removed its unused full
+  `ReflectionSettings` dependency and composition/test plumbing; scheduling and
+  relevance policy remain with their existing owners. Focused
+  Reflection/daemon/composition tests: 277 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reason prompt generation is now a required service capability composed by
   `application.reason` from the application-owned paths and immutable config.
   The domain service no longer imports the prompt factory or passes authority

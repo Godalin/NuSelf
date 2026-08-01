@@ -189,7 +189,6 @@ def _generator(
     project_root: Path,
     *,
     agent: object,
-    config: ReflectionSettings | None = None,
 ) -> IdeaCandidateGenerator:
     application = compose_application(
         runtime_paths(project_root),
@@ -198,7 +197,6 @@ def _generator(
     return IdeaCandidateGenerator(
         project_root,
         agent=agent,  # type: ignore[arg-type]
-        config=config or _reflection_settings(),
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
@@ -844,7 +842,6 @@ def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     gen = IdeaCandidateGenerator(
         tmp_path,
         agent=agent,
-        config=_reflection_settings(),
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,

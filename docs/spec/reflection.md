@@ -170,6 +170,10 @@ The scheduler must enforce the configured deterministic schedule gates before ca
 Quiet hours and daily caps are interpreted in the current system timezone. Internal persisted timestamps remain timezone-aware ISO timestamps.
 
 If any schedule gate blocks a cycle, `reflect()` returns `false` before candidate generation and writes `schedule_blocked` with `status=skipped` and a short `reason` metadata value.
+Candidate generation receives only the context repositories/history, language
+preference, project authority, and typed-agent capability that it consumes. It
+does not receive `ReflectionSettings`; schedule and gate policy remain owned by
+the scheduler and relevance gate.
 The daemon's periodic reflection task invokes `reflect()` exactly once and
 does not preflight with `should_reflect()`: gate evaluation and blocked-cycle
 observation have one authoritative owner. `should_reflect()` remains the

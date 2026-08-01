@@ -26,7 +26,6 @@ def compose_reflection_scheduler(
     paths = application.paths
     generator = IdeaCandidateGenerator(
         paths.project_root,
-        config=config,
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,

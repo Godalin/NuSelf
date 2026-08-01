@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
-from nuself.config import ReflectionSettings
 from nuself.llm import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType
@@ -57,7 +56,6 @@ class IdeaCandidateGenerator:
         self,
         project_root: Path,
         *,
-        config: ReflectionSettings,
         memory_repository: MemoryEntryRepository,
         source_repository: SourceRepository,
         profile_repository: ProfileItemRepository,

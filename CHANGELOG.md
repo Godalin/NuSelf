@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection candidate generation no longer accepts the full reflection
+  configuration it never consumed; schedule and relevance policy stay with
+  their actual owners.
 - Reason thread prompt generation is now an application-composed capability;
   the domain service no longer reloads model configuration, while provider
   clients remain lazy until a thread is actually started.
