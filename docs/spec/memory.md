@@ -61,6 +61,9 @@ that result must not affect the model or a later serialization. Descriptor
 validation, merge, conversion, retrieval, and relation traversal must accept
 the immutable in-memory `Mapping` and `Sequence` forms without weakening their
 existing wire-shape validation.
+Required and optional string fields share one codec each across concrete dict
+records and abstract mapping payloads. Container annotation differences must
+not create duplicate validators with identical accepted values and errors.
 
 `relations` is the only persisted relation field for memory entries,
 candidates, profile items, and the entry payload embedded in `MemoryObject`.

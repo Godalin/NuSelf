@@ -9,26 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify the duplicate atomic-storage fsync helpers. File and directory durability
-use the same open/fsync/close primitive; their distinct failure semantics remain
-at the two call sites that know replacement state.
+Unify duplicate memory-domain string codecs split only by `dict` versus
+`Mapping` input annotations. One required-string and one optional-string helper
+should serve record and payload decoding with identical errors.
 
 ## Ordered Steps
 
-1. Confirm `_sync_file()` and `_sync_directory()` execute identical descriptor
-   ownership and fsync logic.
-2. Replace both with one `_sync_path()` primitive and update atomic text and
-   binary publish call sites.
-3. Preserve pre-replace cleanup versus post-replace durability error handling,
-   descriptor closure, permissions, and atomicity.
-4. Run storage/atomic-write tests, Pyright, full pytest, and package build;
+1. Confirm required dict/mapping string helpers and all three optional-string
+   helpers have identical value and error behavior.
+2. Let `_expect_str()` and `_optional_str()` accept `Mapping[str, object]` and
+   route all record/payload calls through them.
+3. Delete `_expect_optional_str()`, `_expect_mapping_str()`, and
+   `_expect_mapping_optional_str()`.
+4. Run memory domain/repository tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not move fsync error interpretation into the shared primitive.
-- Do not change replace ordering, temporary cleanup, or directory durability.
-- Do not change private path validation, permissions, or SQLite behavior.
+- Do not change accepted null/string values or exact failure messages.
+- Do not broaden list/object/numeric coercion behavior.
+- Do not merge validators whose sequence or type contracts differ.
 
 ## Constraints
 
@@ -40,6 +40,13 @@ at the two call sites that know replacement state.
 
 ## Phase Evidence
 
+- Memory record and payload decoding now share `_expect_str()` and
+  `_optional_str()` over `Mapping[str, object]`. Removed three behavior-identical
+  dict/mapping validators while retaining accepted values and exact errors;
+  list, object, and numeric codecs remain separate. Source removes 37 lines and
+  adds 15. Focused memory domain/repository/persona tests: 89 passed; full
+  suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Atomic text and binary writers now use one `_sync_path()` descriptor
   open/fsync/close primitive for temporary files and parent directories.
   Removed duplicate file/directory implementations while retaining call-site

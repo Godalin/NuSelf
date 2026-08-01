@@ -257,7 +257,7 @@ class MemoryEntry:
             review_state=_expect_review_state(data, "review_state"),
             created_at=_expect_str(data, "created_at"),
             updated_at=_expect_str(data, "updated_at"),
-            revisit_at=_expect_optional_str(data, "revisit_at"),
+            revisit_at=_optional_str(data, "revisit_at"),
             observed_at=_optional_str(data, "observed_at"),
             valid_from=_optional_str(data, "valid_from"),
             valid_until=_optional_str(data, "valid_until"),
@@ -281,8 +281,8 @@ class MemoryEntry:
         return cls(
             id=memory.id,
             type=_memory_object_type_as_entry_type(memory.type),
-            title=_expect_mapping_str(payload, "title"),
-            body=_expect_mapping_str(payload, "body"),
+            title=_expect_str(payload, "title"),
+            body=_expect_str(payload, "body"),
             tags=_expect_mapping_str_list(payload, "tags"),
             source_refs=memory.source_refs,
             confidence=memory.confidence,
@@ -291,10 +291,10 @@ class MemoryEntry:
             review_state=memory.review_state,
             created_at=memory.created_at,
             updated_at=memory.updated_at,
-            revisit_at=_expect_mapping_optional_str(payload, "revisit_at"),
-            observed_at=_expect_mapping_optional_str(payload, "observed_at"),
-            valid_from=_expect_mapping_optional_str(payload, "valid_from"),
-            valid_until=_expect_mapping_optional_str(payload, "valid_until"),
+            revisit_at=_optional_str(payload, "revisit_at"),
+            observed_at=_optional_str(payload, "observed_at"),
+            valid_from=_optional_str(payload, "valid_from"),
+            valid_until=_optional_str(payload, "valid_until"),
             temporal_note=_optional_payload_str(payload, "temporal_note"),
             relations=relations,
             evidence=_optional_mapping_evidence_list(payload, "evidence"),
@@ -909,8 +909,8 @@ class EntryPayloadDescriptor:
         return issues
 
     def summarize(self, memory: MemoryObject) -> str:
-        title = _expect_mapping_str(memory.payload, "title")
-        body = _expect_mapping_str(memory.payload, "body")
+        title = _expect_str(memory.payload, "title")
+        body = _expect_str(memory.payload, "body")
         return f"{title}: {body}"
 
     def merge(self, existing: MemoryObject, incoming: MemoryObject) -> MemoryObject:
@@ -1175,23 +1175,14 @@ def default_relation_descriptor_registry() -> RelationDescriptorRegistry:
     )
 
 
-def _expect_str(data: dict[str, object], field_name: str) -> str:
+def _expect_str(data: Mapping[str, object], field_name: str) -> str:
     value = data.get(field_name)
     if not isinstance(value, str):
         raise ValueError(f"field '{field_name}' must be a string")
     return value
 
 
-def _expect_optional_str(data: dict[str, object], field_name: str) -> str | None:
-    value = data.get(field_name)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError(f"field '{field_name}' must be a string or null")
-    return value
-
-
-def _optional_str(data: dict[str, object], field_name: str) -> str | None:
+def _optional_str(data: Mapping[str, object], field_name: str) -> str | None:
     value = data.get(field_name)
     if value is None:
         return None
@@ -1365,22 +1356,6 @@ def _validate_entry_payload(payload: Mapping[str, object]) -> list[MemoryValidat
     if isinstance(evidence, str) or not isinstance(evidence, Sequence):
         issues.append(MemoryValidationIssue("payload.evidence", "must be a list"))
     return issues
-
-
-def _expect_mapping_str(data: Mapping[str, object], field_name: str) -> str:
-    value = data.get(field_name)
-    if not isinstance(value, str):
-        raise ValueError(f"field '{field_name}' must be a string")
-    return value
-
-
-def _expect_mapping_optional_str(data: Mapping[str, object], field_name: str) -> str | None:
-    value = data.get(field_name)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError(f"field '{field_name}' must be a string or null")
-    return value
 
 
 def _expect_mapping_str_list(
