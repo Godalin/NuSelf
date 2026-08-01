@@ -89,18 +89,17 @@ class ReasonSectionPlanOutput(BaseModel):
 
 
 @dataclass(frozen=True)
-class _ExportJobInspection:
-    terminal: bool
+class _PendingExportInspection:
     total_chunks: int | str
     progress_error: Exception | None = None
 
 
-def _inspect_export_job(
+def _inspect_pending_export_job(
     manifest_path: Path,
     *,
     job_id: str,
     thread_id: str,
-) -> _ExportJobInspection:
+) -> _PendingExportInspection | None:
     """Decode and correlate one export manifest and optional progress."""
 
     manifest = _read_export_manifest(manifest_path)
@@ -109,7 +108,7 @@ def _inspect_export_job(
             "export manifest identity does not match queue message"
         )
     if manifest.status in ("complete", "failed"):
-        return _ExportJobInspection(terminal=True, total_chunks="?")
+        return None
 
     progress_path = manifest_path.with_name(manifest.progress_filename)
     try:
@@ -119,15 +118,13 @@ def _inspect_export_job(
                 "export progress identity does not match queue message"
             )
     except FileNotFoundError:
-        return _ExportJobInspection(terminal=False, total_chunks="?")
+        return _PendingExportInspection(total_chunks="?")
     except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
-        return _ExportJobInspection(
-            terminal=False,
+        return _PendingExportInspection(
             total_chunks="?",
             progress_error=exc,
         )
-    return _ExportJobInspection(
-        terminal=False,
+    return _PendingExportInspection(
         total_chunks=progress.total_chunks,
     )
 
@@ -300,7 +297,7 @@ class ReasonExportService:
             / "manifest.json"
         )
         try:
-            inspection = _inspect_export_job(
+            inspection = _inspect_pending_export_job(
                 manifest_path,
                 job_id=job_id,
                 thread_id=thread_id,
@@ -318,7 +315,7 @@ class ReasonExportService:
                 metadata={},
             )
             return
-        if inspection.terminal:
+        if inspection is None:
             return
         if inspection.progress_error is not None:
             report_reason_failure(

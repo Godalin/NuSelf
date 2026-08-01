@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue consolidating codecs only when both directions carry the same domain
-value and exact schema. Preserve direction-specific models when they contain
-independent inputs or outcomes.
+Continue removing result fields that merely encode object absence. Preserve
+typed result objects when every field carries independent information used by
+callers.
 
 ## Constraints
 
@@ -738,6 +738,13 @@ independent inputs or outcomes.
 - Activity/payload/transport/REPL focused suite: 89 passed. Post-subscription-
   codec cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- Reason-export inspection now exists only for pending work. Terminal manifests
+  return no inspection instead of allocating an object with a mirrored
+  `terminal` flag; pending results contain only chunk diagnostics consumed by
+  composition.
+- Reason-export focused suite: 24 passed. Post-pending-inspection cleanup
+  `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 ## Last Completed Goal
 
