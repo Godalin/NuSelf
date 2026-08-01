@@ -380,9 +380,10 @@ not create or infer a second reason persistence graph. Agent reason tools
 receive the export workspace capability from chat composition and never resolve
 runtime paths to construct it.
 `ReasonAdvancer` receives workspace, persona repository, trace recorder, and
-resolved paths from application composition. `ReasonScheduler` receives the
-existing single-operation advancer protocol explicitly and never depends on or
-constructs the concrete model-backed implementation from a project root.
+resolved paths from application composition. `ReasonScheduler` requires the
+selected authority's resolved project root for correctly scoped observation,
+receives the existing single-operation advancer protocol explicitly, and never
+depends on or constructs the concrete model-backed implementation.
 
 Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require

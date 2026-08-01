@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason scheduler composition now requires an explicit resolved project root,
+  preventing background failure observations from silently losing authority
+  scope.
 - Background Reason scheduling now depends on the existing one-operation
   advancer protocol instead of the concrete model-backed implementation.
 - Daemon durable follow-up admission no longer exposes an unused boolean

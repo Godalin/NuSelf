@@ -65,7 +65,7 @@ class ReasonScheduler(_ReasonScheduler):
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         advancer: ReasonAdvancerProtocol | None = None,
         interval_seconds: int = 600,
         *,

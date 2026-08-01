@@ -9,24 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the stale concrete-advancer coupling and forced casts from Reason
-scheduler test composition.
+Require an explicit resolved authority path in Reason scheduler composition.
 
 ## Ordered Steps
 
-1. Confirm the scheduler fixture still requires `ReasonAdvancer` even though
-   production now accepts `ReasonAdvancerProtocol`.
-2. Align the fixture and structural test doubles with that protocol; remove
-   concrete imports and forced casts.
+1. Confirm every production and test construction already supplies
+   `project_root`, while the scheduler's optional default can mis-scope audits.
+2. Require `Path` in both production and test composition without adding path
+   discovery inside the domain.
 3. Run focused reason tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change production scheduler behavior.
-- Keep concrete `ReasonAdvancer` typing in tests that exercise its actual
-  model-backed implementation.
-- Do not weaken Pyright checks with ignores or broader types.
+- Do not make the scheduler resolve an authority itself.
+- Do not expose repositories or runtime paths through `ReasonService`.
+- Do not change scheduling, cooldown, or failure-observation behavior.
 
 ## Constraints
 
@@ -38,6 +36,12 @@ scheduler test composition.
 
 ## Phase Evidence
 
+- `ReasonScheduler` and its test composition now require an explicit `Path`
+  project root. Removed the unused `None` default that could send background
+  failure observations outside the selected authority; every existing caller
+  already supplied the resolved path. Focused reason/daemon tests: 30 passed;
+  full suite: 2443 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Reason scheduler test composition now accepts `ReasonAdvancerProtocol`, and
   six structural test doubles satisfy its named `thread` parameter directly.
   Removed the concrete advancer import and all forced casts that previously hid
