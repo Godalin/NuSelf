@@ -129,7 +129,8 @@ def handle_notify_send(args: argparse.Namespace) -> int:
         entry_id,
         build_notification_adapters(
             application.paths,
-            config=application.config,
+            email_config=application.config.email,
+            macos_config=application.config.macos_notification,
         ),
     )
     if updated.status == "sent":

@@ -113,7 +113,8 @@ class DaemonState:
             application.notifications,
             build_notification_adapters(
                 paths,
-                config=config,
+                email_config=config.email,
+                macos_config=config.macos_notification,
             ),
         )
         reason_interval = config.daemon.reason_scheduler.interval_seconds

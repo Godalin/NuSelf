@@ -131,10 +131,12 @@ single-entry delivery validates its supplied plan at that call boundary.
    terminal adapter states and only finalizes the projection.
 
 Daemon, CLI, and REPL build adapters through the same
-`build_notification_adapters(project_root)` composition root, preserving the
-same order and stable IDs. The builder returns an immutable tuple; adapter-plan
-mutation is not a runtime extension mechanism. They never directly overwrite
-global status. If an
+`build_notification_adapters(paths, email_config, macos_config)` composition
+root, preserving the same order and stable IDs. Composition passes only the
+two validated notification-owned config models, not the aggregate system
+configuration. The builder returns an immutable tuple; adapter-plan mutation
+is not a runtime extension mechanism. They never directly overwrite global
+status. If an
 entry already has another frozen adapter plan, the command preserves that
 plan, records any still-pending unavailable adapters as failed, skips prior
 terminal results, and finalizes the projection.

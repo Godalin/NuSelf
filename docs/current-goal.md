@@ -9,14 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make macOS notification escaping an internal implementation detail.
+Narrow notification adapter composition to notification-owned configuration.
 
 ## Ordered Steps
 
-1. Confirm `escape()` is called only by `send()` and direct unit tests.
-2. Move it to a private module function; validate quoting/backslashes through
-   the actual subprocess command rather than the helper API.
-3. Run focused macOS adapter tests and full gates, then commit without pushing.
+1. Confirm the canonical adapter builder reads only email and macOS settings.
+2. Pass those two validated config models explicitly from application
+   composition; add no aggregate or facade type.
+3. Run focused notification/composition tests and full gates, then commit
+   without pushing.
 
 ## Exclusions
 
@@ -25,7 +26,7 @@ Make macOS notification escaping an internal implementation detail.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve exact AppleScript quoting and subprocess behavior.
+- Preserve adapter order, log-only fallback, delivery identity, and behavior.
 
 ## Constraints
 
@@ -37,6 +38,13 @@ Make macOS notification escaping an internal implementation detail.
 
 ## Phase Evidence
 
+- Notification adapter composition now receives only `EmailConfig` and
+  `MacosNotificationConfig` from application composition instead of the full
+  `SystemConfig`. No wrapper type or new layer was added; adapter ordering and
+  log-only fallback are unchanged. Focused notification/daemon/CLI tests: 750
+  passed; full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded. One concurrent Memory test timed out only while gates
+  ran in parallel, then passed alone and in the serial full-suite rerun.
 - macOS AppleScript escaping is now a private module implementation detail
   consumed only by `send()`. Replaced two direct helper tests with one stronger
   assertion over the exact emitted `osascript` command covering quotes and

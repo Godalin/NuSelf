@@ -586,7 +586,8 @@ def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str,
             entry_id,
             build_notification_adapters(
                 application.paths,
-                config=application.config,
+                email_config=application.config.email,
+                macos_config=application.config.macos_notification,
             ),
         )
         if updated.status == "sent":

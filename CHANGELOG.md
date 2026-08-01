@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Notification adapter composition now receives only validated email and macOS
+  settings instead of the aggregate system configuration.
 - macOS AppleScript escaping is now a private adapter implementation detail;
   tests verify exact quoting through the emitted subprocess command.
 - The macOS notification adapter now keeps its construction-time executable
