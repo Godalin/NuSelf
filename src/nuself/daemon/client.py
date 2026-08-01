@@ -13,7 +13,7 @@ from nuself.config import runtime_paths
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
     ActivityEventsResponsePayload,
-    ActivityOpenResponsePayload,
+    ActivitySubscriptionPayload,
     ChatRequestPayload,
     ChatResponsePayload,
     EmptyPayload,
@@ -312,7 +312,7 @@ def open_activity(
     )
     payload = decode_response(
         response,
-        ActivityOpenResponsePayload.from_wire,
+        ActivitySubscriptionPayload.from_wire,
         operation="activity open",
     )
     return payload.subscription_id

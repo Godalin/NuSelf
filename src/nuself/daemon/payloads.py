@@ -314,29 +314,7 @@ class ActivityNextRequestPayload:
 
 
 @dataclass(frozen=True)
-class ActivityCloseRequestPayload:
-    subscription_id: str
-
-    @classmethod
-    def from_wire(
-        cls,
-        payload: dict[str, JsonValue],
-    ) -> ActivityCloseRequestPayload:
-        _expect_fields(
-            payload,
-            required=frozenset({"subscription_id"}),
-        )
-        return cls(
-            subscription_id=_required_string(
-                payload,
-                "subscription_id",
-                context="activity",
-            )
-        )
-
-
-@dataclass(frozen=True)
-class ActivityOpenResponsePayload:
+class ActivitySubscriptionPayload:
     subscription_id: str
 
     def to_wire(self) -> dict[str, JsonValue]:
@@ -346,16 +324,16 @@ class ActivityOpenResponsePayload:
     def from_wire(
         cls,
         payload: dict[str, JsonValue],
-    ) -> ActivityOpenResponsePayload:
+    ) -> ActivitySubscriptionPayload:
         _expect_fields(
             payload,
             required=frozenset({"subscription_id"}),
         )
         return cls(
-            _required_string(
+            subscription_id=_required_string(
                 payload,
                 "subscription_id",
-                context="activity open response",
+                context="activity subscription",
             )
         )
 

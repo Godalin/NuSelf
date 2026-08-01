@@ -6,11 +6,10 @@ from typing import cast
 import pytest
 
 from nuself.daemon.payloads import (
-    ActivityCloseRequestPayload,
     ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
-    ActivityOpenResponsePayload,
+    ActivitySubscriptionPayload,
     ChatRequestPayload,
     ChatResponsePayload,
     DaemonIdentityPayload,
@@ -184,10 +183,10 @@ def test_activity_response_payloads_round_trip_and_fail_atomically() -> None:
         event="test",
         message="test event",
     )
-    opened = ActivityOpenResponsePayload("sub-1")
+    opened = ActivitySubscriptionPayload("sub-1")
     events = ActivityEventsResponsePayload((event,))
 
-    assert ActivityOpenResponsePayload.from_wire(
+    assert ActivitySubscriptionPayload.from_wire(
         opened.to_wire()
     ) == opened
     assert ActivityEventsResponsePayload.from_wire(
@@ -261,7 +260,7 @@ def test_activity_payloads_validate_bounds() -> None:
             "limt",
         ),
         (
-            ActivityCloseRequestPayload.from_wire,
+            ActivitySubscriptionPayload.from_wire,
             {"subscription_id": "   "},
             "non-blank",
         ),

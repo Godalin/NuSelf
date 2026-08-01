@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing single-field service and wire envelopes that do not represent
-an independent domain boundary. Preserve exact schemas and explicit bundles
-where multiple capabilities genuinely compose.
+Continue consolidating codecs only when both directions carry the same domain
+value and exact schema. Preserve direction-specific models when they contain
+independent inputs or outcomes.
 
 ## Constraints
 
@@ -730,6 +730,13 @@ where multiple capabilities genuinely compose.
   and CLI presentation remain unchanged.
 - Payload/server/client/CLI focused suite: 407 passed. Post-health-wrapper
   cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
+- Activity open response and close request now share one exact
+  `ActivitySubscriptionPayload`; the two prior classes duplicated the same
+  non-blank `subscription_id` codec. Next-batch request remains separate because
+  its timeout and limit are independent inputs.
+- Activity/payload/transport/REPL focused suite: 89 passed. Post-subscription-
+  codec cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal

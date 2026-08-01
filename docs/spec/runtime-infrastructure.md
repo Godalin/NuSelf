@@ -224,6 +224,11 @@ Success response payload field sets are also exact:
   list of complete log-event records; idempotent activity close returns the
   shared exact empty payload.
 
+The open response and close request share one exact subscription-identity
+codec. Direction-specific wrappers around the same single field are prohibited;
+next retains its separate request model because timeout and batch limit are
+independent inputs.
+
 Typed client operations own success-payload decoding. An explicit daemon
 `error` response raises `DaemonApplicationError` and is not retryable as a
 connection failure. An `ok` response with a malformed request-specific payload

@@ -15,11 +15,10 @@ from nuself.daemon.activity import (
 )
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
-    ActivityCloseRequestPayload,
     ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
-    ActivityOpenResponsePayload,
+    ActivitySubscriptionPayload,
     ChatRequestPayload,
     ChatResponsePayload,
     EmptyPayload,
@@ -242,7 +241,7 @@ def _handle_activity_open(
     subscription_id = state.activity_broker.open(payload.turn_id)
     return DaemonResponse.ok(
         request,
-        ActivityOpenResponsePayload(subscription_id).to_wire(),
+        ActivitySubscriptionPayload(subscription_id).to_wire(),
     )
 
 
@@ -276,7 +275,7 @@ def _handle_activity_close(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     payload = _decode_request_payload(
-        ActivityCloseRequestPayload.from_wire,
+        ActivitySubscriptionPayload.from_wire,
         request.payload,
     )
     state.activity_broker.close(payload.subscription_id)
