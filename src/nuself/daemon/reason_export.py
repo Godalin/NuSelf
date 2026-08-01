@@ -89,31 +89,27 @@ class ReasonSectionPlanOutput(BaseModel):
 
 
 @dataclass(frozen=True)
-class ExportJobInspection:
-    manifest: ReasonOutputManifest
+class _ExportJobInspection:
+    terminal: bool
     total_chunks: int | str
     progress_error: Exception | None = None
 
-    @property
-    def terminal(self) -> bool:
-        return self.manifest.status in ("complete", "failed")
 
-
-def inspect_export_job(
+def _inspect_export_job(
     manifest_path: Path,
     *,
     job_id: str,
     thread_id: str,
-) -> ExportJobInspection:
+) -> _ExportJobInspection:
     """Decode and correlate one export manifest and optional progress."""
 
-    manifest = read_export_manifest(manifest_path)
+    manifest = _read_export_manifest(manifest_path)
     if manifest.job_id != job_id or manifest.thread_id != thread_id:
         raise ValueError(
             "export manifest identity does not match queue message"
         )
     if manifest.status in ("complete", "failed"):
-        return ExportJobInspection(manifest=manifest, total_chunks="?")
+        return _ExportJobInspection(terminal=True, total_chunks="?")
 
     progress_path = manifest_path.with_name(manifest.progress_filename)
     try:
@@ -123,28 +119,28 @@ def inspect_export_job(
                 "export progress identity does not match queue message"
             )
     except FileNotFoundError:
-        return ExportJobInspection(manifest=manifest, total_chunks="?")
+        return _ExportJobInspection(terminal=False, total_chunks="?")
     except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
-        return ExportJobInspection(
-            manifest=manifest,
+        return _ExportJobInspection(
+            terminal=False,
             total_chunks="?",
             progress_error=exc,
         )
-    return ExportJobInspection(
-        manifest=manifest,
+    return _ExportJobInspection(
+        terminal=False,
         total_chunks=progress.total_chunks,
     )
 
 
-def persist_export_failure(
+def _persist_export_failure(
     manifest_path: Path,
     operation_error: Exception,
     *,
     max_attempts: int,
-) -> ReasonOutputManifest:
+) -> int:
     """Persist one failed composition attempt atomically."""
 
-    manifest = read_export_manifest(manifest_path)
+    manifest = _read_export_manifest(manifest_path)
     attempts = manifest.attempts + 1
     updated = manifest.with_updates(
         status="failed" if attempts >= max_attempts else None,
@@ -153,7 +149,7 @@ def persist_export_failure(
         last_attempt_at=utc_now_iso(),
     )
     write_json_atomic(manifest_path, updated.to_wire())
-    return updated
+    return attempts
 
 
 def build_reason_export_section_planner(
@@ -304,7 +300,7 @@ class ReasonExportService:
             / "manifest.json"
         )
         try:
-            inspection = inspect_export_job(
+            inspection = _inspect_export_job(
                 manifest_path,
                 job_id=job_id,
                 thread_id=thread_id,
@@ -360,7 +356,7 @@ class ReasonExportService:
         thread_id = message.resource_id
         job_id = message.job_id
         try:
-            failed_manifest = persist_export_failure(
+            attempts = _persist_export_failure(
                 manifest_path,
                 operation_error,
                 max_attempts=MAX_EXPORT_ATTEMPTS,
@@ -374,7 +370,6 @@ class ReasonExportService:
             )
             self._schedule_delayed_reconciliation(thread_id, job_id)
             return
-        attempts = failed_manifest.attempts
         if attempts >= MAX_EXPORT_ATTEMPTS:
             report_reason_failure(
                 operation_error,
@@ -446,7 +441,7 @@ class ReasonExportService:
                 if not manifest_path.exists():
                     continue
                 try:
-                    manifest = read_export_manifest(manifest_path)
+                    manifest = _read_export_manifest(manifest_path)
                 except (
                     OSError,
                     json.JSONDecodeError,
@@ -543,7 +538,7 @@ class ReasonExportService:
             ]
         )
 
-def read_export_manifest(path: Path) -> ReasonOutputManifest:
+def _read_export_manifest(path: Path) -> ReasonOutputManifest:
     return ReasonOutputManifest.from_wire(_read_json_object(path))
 
 

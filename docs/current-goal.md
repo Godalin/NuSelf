@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing daemon and service composition for redundant result wrappers
-or duplicate construction paths; retain explicit domain services and the one
-scheduler authority.
+Continue auditing daemon and service composition for internal helpers that leak
+more state than their consumers require; preserve explicit domain APIs, durable
+authorities, and the single scheduler.
 
 ## Constraints
 
@@ -694,6 +694,14 @@ scheduler authority.
   Duplicate identities return the same handle, so coalescing remains explicit
   without a production-unused admission label or submission wrapper.
 - Scheduler/daemon focused suite: 47 passed. Post-submission-wrapper cleanup
+  `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Reason-export manifest inspection, failure persistence, and manifest decoding
+  are private daemon steps rather than implied public APIs. Inspection carries
+  only terminal state/chunk diagnostics, and failure persistence returns only
+  the attempt count its sole consumer needs; the durable manifest remains the
+  authority for recovery.
+- Reason-export focused suite: 24 passed. Post-export-result narrowing
   `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
