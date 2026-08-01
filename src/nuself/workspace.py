@@ -19,17 +19,8 @@ class PrivateWorkspaceStore:
 
     def __init__(self, paths: RuntimePaths, *, scope: str) -> None:
         _validate_segment(scope, "workspace scope")
-        self._scope = scope
         self._root = paths.exports_dir / scope
         self._db_path = paths.authority_root / "nuself.sqlite"
-
-    @property
-    def scope(self) -> str:
-        return self._scope
-
-    @property
-    def database(self) -> Path:
-        return self._db_path
 
     def paths(self, owner_id: str) -> PrivateWorkspacePaths:
         _validate_segment(owner_id, "workspace owner id")

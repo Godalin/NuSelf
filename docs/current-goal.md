@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing properties and constructors for test-only infrastructure
-exposure. Require tests to use the same explicit composition inputs as
-production instead of widening runtime APIs for fixture convenience.
+Continue auditing resource and composition objects for fields never consumed
+after construction. Retain fields that provide a stable capability even when
+their underlying value is simple; remove mirrors with no caller.
 
 ## Constraints
 
@@ -234,6 +234,12 @@ production instead of widening runtime APIs for fixture convenience.
   repository. The property is removed and test composition now requires its
   authority root explicitly.
 - Reason/Reflection/Chat/CLI focused suite: 658 passed. Post-repository-surface
+  cleanup `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
+- `PrivateWorkspaceStore.scope` and `.database` had no production or test
+  consumer. Owner paths remain the explicit workspace capability, so both
+  properties and the mirrored `_scope` field are removed.
+- Workspace/Reason/agent/Chat focused suite: 340 passed. Post-workspace-surface
   cleanup `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
 
