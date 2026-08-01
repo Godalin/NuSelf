@@ -9,24 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the daemon's duplicate reflection schedule preflight and leave gate
-ownership in the reflection scheduler.
+Remove the unused boolean result from daemon durable follow-up admission.
 
 ## Ordered Steps
 
-1. Confirm `ReflectionScheduler.reflect()` already evaluates every schedule
-   gate and records blocked cycles before performing domain work.
-2. Make the daemon task handler invoke that single authoritative operation and
-   remove its repeated `should_reflect()` preflight.
-3. Add focused regression coverage, run the complete verification gates,
-   update evidence, and commit without pushing.
+1. Confirm no caller consumes the return value of memory-curation,
+   conversation-compression, or shared follow-up admission helpers.
+2. Make these wake-up operations return `None`; retain typed admission failure
+   handling and the existing `task.deferred` observation.
+3. Run focused daemon tests and the complete verification gates; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Keep `should_reflect()` as the side-effect-light inspection API used by
-  evaluation and deterministic scheduler tests.
-- Do not move reflection gates, audits, or candidate work into daemon state.
-- Do not change periodic task identity, interval, or scheduler semantics.
+- Do not remove capacity/stopped handling or durable rediscovery.
+- Do not change task identity, resource lanes, priority, or scheduling.
+- Do not expose scheduler completion objects from these fire-and-observe
+  follow-up operations.
 
 ## Constraints
 
@@ -38,6 +37,12 @@ ownership in the reflection scheduler.
 
 ## Phase Evidence
 
+- Daemon memory-curation, conversation-compression, and shared durable
+  follow-up admission now return `None`. Removed an unconsumed success/deferred
+  boolean while retaining typed capacity/stopped handling, `task.deferred`
+  observation, and periodic durable rediscovery. Focused daemon tests: 33
+  passed; full suite: 2443 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - The daemon reflection task now calls `ReflectionScheduler.reflect()` once;
   removed its redundant `should_reflect()` preflight. Reflection retains sole
   ownership of schedule gates and blocked-cycle audit, and one periodic wake-up

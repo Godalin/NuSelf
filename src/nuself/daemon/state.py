@@ -173,10 +173,10 @@ class DaemonState:
                 interval_seconds=interval,
             )
 
-    def _request_memory_curation(self, observation_id: str) -> bool:
+    def _request_memory_curation(self, observation_id: str) -> None:
         """Admit one coalesced curator task for a durable observation."""
 
-        return self._submit_followup(
+        self._submit_followup(
             daemon_task(
                 "memory.curate",
                 f"memory.curate:{observation_id}",
@@ -255,8 +255,8 @@ class DaemonState:
     def _request_conversation_compression(
         self,
         conversation_id: str,
-    ) -> bool:
-        return self._submit_followup(
+    ) -> None:
+        self._submit_followup(
             daemon_task(
                 "conversation.compress",
                 f"conversation.compress:{conversation_id}",
@@ -266,7 +266,7 @@ class DaemonState:
             )
         )
 
-    def _submit_followup(self, task: DaemonTask) -> bool:
+    def _submit_followup(self, task: DaemonTask) -> None:
         try:
             self.scheduler.submit(task)
         except (
@@ -290,8 +290,6 @@ class DaemonState:
                 project_root=self.project_root,
                 failure_component="daemon",
             )
-            return False
-        return True
 
     def _compress_conversation(self, task: DaemonTask) -> None:
         conversation_id = task.payload

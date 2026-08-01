@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon durable follow-up admission no longer exposes an unused boolean
+  result; deferral remains observable and recoverable through its existing
+  typed boundary.
 - Daemon reflection checks now call the scheduler's authoritative `reflect()`
   operation once instead of evaluating its jittered schedule gates twice.
 - Conversation and notification resource locking now share one managed-file
