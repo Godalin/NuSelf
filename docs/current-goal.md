@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make chat tools and skills reflect actually composed capabilities.
+Remove implicit component fallback from explicit skill-tool permissions.
 
 ## Ordered Steps
 
-1. Register the Reason export tool only when a concrete `JobSink` exists.
-2. Expose only skills whose allowed/component tools are present in the current
-   chat runtime.
-3. Update tests/spec, run focused agent/chat tests and full gates, then commit
+1. Confirm every tool-calling skill declares exact `allowed-tools` names.
+2. Make runtime skill projection use only the intersection with composed tools;
+   do not widen an invalid/absent declaration by component metadata.
+3. Add drift coverage, run focused agent/chat tests and full gates, then commit
    without pushing.
 
 ## Exclusions
@@ -26,8 +26,8 @@ Make chat tools and skills reflect actually composed capabilities.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve every base Reason tool, daemon export behavior, skill files, and
-  placeholder rendering for capabilities that are actually present.
+- Preserve advisory empty-tool skills only when deliberately supported in a
+  future explicit policy; do not infer tool authority from component names.
 
 ## Constraints
 
@@ -39,6 +39,12 @@ Make chat tools and skills reflect actually composed capabilities.
 
 ## Phase Evidence
 
+- Skill capability projection now uses only the ordered intersection of each
+  file's explicit `allowed-tools` and the runtime registry. Removed the
+  component-label fallback that could mask stale names and broaden authority;
+  a drift regression proves a memory skill receives no tools even while memory
+  component tools exist. Focused agent/chat tests: 80 passed; full suite: 2441
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Chat tool composition now returns the six base Reason tools without a job
   sink and adds `reason_export` only when scheduling is present. The skill
   loader likewise advertises only skills backed by at least one actual runtime

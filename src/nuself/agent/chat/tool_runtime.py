@@ -198,18 +198,8 @@ def _tools_for_skill(
     skill: AgentSkill,
     tools: dict[str, BaseTool],
 ) -> tuple[str, ...]:
-    explicit = tuple(
-        name for name in skill.allowed_tools if name in tools
-    )
-    if explicit:
-        return explicit
-    service_component = (
-        "reasoning" if skill.name == "reason" else skill.name
-    )
     return tuple(
-        name
-        for name, tool in tools.items()
-        if tool_service_component(tool) == service_component
+        name for name in skill.allowed_tools if name in tools
     )
 
 

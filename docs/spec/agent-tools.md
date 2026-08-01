@@ -207,6 +207,12 @@ skills/
 
 Each skill file starts with YAML frontmatter containing `name`, `description`, and `allowed-tools`, followed by Markdown instructions. `allowed-tools` names the exact LangChain tools the skill may call. A skill may omit `allowed-tools` only when it is intentionally advisory and does not call tools.
 
+At runtime, a skill's callable tools are exactly the ordered intersection of
+its `allowed-tools` declaration and the tools composed for that runtime. An
+empty intersection makes the skill unavailable. The loader must not fall back
+to every tool sharing a component label, because that would hide declaration
+drift and silently widen the skill's authority.
+
 Current chat runtime loads these Markdown files through the `load_skill` tool. Skill prose must stay file-backed rather than moving back into hard-coded prompt strings.
 
 Rules:

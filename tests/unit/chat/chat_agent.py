@@ -1485,6 +1485,40 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     assert "reason_output" not in tools["load_skill"].description
 
 
+def test_skill_tool_drift_does_not_fall_back_to_component_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.agent.skills import AgentSkill
+
+    monkeypatch.setattr(
+        "nuself.agent.chat.tool_runtime.load_agent_skills",
+        lambda: (
+            AgentSkill(
+                name="memory",
+                description="Stale memory skill",
+                instructions="Call the declared tool.",
+                allowed_tools=("memory_removed",),
+                path=tmp_path / "memory.md",
+            ),
+        ),
+    )
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=FakeResponseService(),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
+    )
+    tools = runtime._tool_runtime.tools  # pyright: ignore[reportPrivateUsage]
+
+    result = _invoke_chat_tool(
+        tools["load_skill"],
+        {"skill_name": "memory"},
+    )
+
+    assert "unknown skill 'memory'" in result
+    assert "memory" not in tools["load_skill"].description
+
+
 def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import builtins
     import sys

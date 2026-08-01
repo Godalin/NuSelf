@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Agent skills now receive only explicitly declared tools present in the
+  runtime; removed component-based fallback that could mask a stale declaration
+  and silently broaden a skill's tool authority.
 - Chat now registers tools and advertises skills only for capabilities present
   in that runtime; direct chat without a daemon job sink no longer exposes the
   unusable Reason export tool or `reason_output` skill.
