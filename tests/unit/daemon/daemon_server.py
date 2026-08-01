@@ -676,9 +676,6 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
     outbox = notification_outbox(tmp_path)
 
     class MockScheduler:
-        def should_reflect(self, now: object = None) -> bool:
-            return True
-
         def reflect(self, now: object = None) -> bool:
             outbox.add(
                 OutboxEntry(

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon reflection checks now call the scheduler's authoritative `reflect()`
+  operation once instead of evaluating its jittered schedule gates twice.
 - Conversation and notification resource locking now share one managed-file
   lock lifecycle primitive instead of maintaining duplicate stateful classes
   or repeating its parent-directory preparation at domain call sites.

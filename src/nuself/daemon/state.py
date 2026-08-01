@@ -301,8 +301,7 @@ class DaemonState:
 
     def _check_reflection(self, task: DaemonTask) -> None:
         del task
-        if self.reflection_scheduler.should_reflect():
-            self.reflection_scheduler.reflect()
+        self.reflection_scheduler.reflect()
 
     def _check_reasons(self, task: DaemonTask) -> None:
         del task
