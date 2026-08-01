@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit default agent-construction fallbacks and public builder exports; remove
-production-unused shortcuts while keeping test injection and standalone domain
-composition explicit and small.
+Audit remaining `default_structured_agent` fallbacks across Memory intake,
+optimizer, Reason prompt, and standalone Reflection/Persona entry points;
+remove hidden config discovery where every real caller already owns endpoints.
 
 ## Constraints
 
@@ -185,6 +185,18 @@ composition explicit and small.
 - Endpoint/agent focused suite: 679 passed. Post-endpoint-reuse
   `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- Persona tool builders and Reason export now require an explicit `TextAgent`;
+  the global `default_text_agent` shortcut is gone. Reason persona tools build
+  their component-tagged wrapper from the advancer's existing endpoints.
+- Removed unused Persona prompt/tool/default-discussion re-exports from the
+  package facade. `agent.tools.__init__` is now import-light; Chat aggregation
+  lives in `agent.tools.composition`, and domain users import workspace tools
+  directly.
+- The import-light package boundary fixes a real `reason.output` ↔ agent-tools
+  initialization cycle exposed by multiprocessing spawn. The three failing
+  cross-process SQLite tests and a 691-test affected suite pass afterward.
+- Post-fallback/package cleanup `uv run --locked pytest -q`: 2450 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

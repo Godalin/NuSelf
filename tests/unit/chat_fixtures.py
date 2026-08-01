@@ -15,7 +15,7 @@ from conversation_fixtures import ConversationStore
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
-from nuself.agent.text import TextAgent
+from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.application.composition import compose_application
 from nuself.application.persona import load_personas_from_memory
 from nuself.config import runtime_paths
@@ -75,6 +75,14 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             runtime_paths(project_root),
             get_default_backend(project_root),
         )
+        effective_models = (
+            langchain_models
+            if langchain_models is not None
+            else configured_langchain_chat_models(
+                project_root,
+                config=application.config,
+            )
+        )
         entries = memory_repository or application.memory.entries
         sources = source_repository or application.memory.sources
         profile = profile_repository or application.memory.profile
@@ -111,6 +119,11 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                         project_root,
                         repository=application.persona_prompts,
                         trace_recorder=application.trace.recorder,
+                        text_agent=LangChainTextAgent(
+                            endpoints=effective_models,
+                            project_root=project_root,
+                            component="persona",
+                        ),
                     )
                 ),
                 job_sink=job_sink,
@@ -128,14 +141,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         )
         super().__init__(
             resources,
-            langchain_models=(
-                langchain_models
-                if langchain_models is not None
-                else configured_langchain_chat_models(
-                    project_root,
-                    config=application.config,
-                )
-            ),
+            langchain_models=effective_models,
             settings=settings or ChatAgentSettings(
                 recent_messages=(
                     application.config.chat.context.recent_messages

@@ -69,7 +69,7 @@ def _chat_tool(
     query_service: MemoryService | None = None,
     reflection_repository: object | None = None,
 ) -> BaseTool:
-    from nuself.agent.tools import build_langchain_chat_tools
+    from nuself.agent.tools.composition import build_langchain_chat_tools
     from nuself.application.composition import compose_application
     from nuself.reflection.repository import ReflectionRepository
     from nuself.reflection.organizer import ReflectionOrganizer

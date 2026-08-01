@@ -17,7 +17,7 @@ from nuself.agent.tool_audit import ToolOutcomeProjection
 from nuself.agent.tool_utils import (
     tool_service_component,
 )
-from nuself.agent.tools import build_langchain_chat_tools
+from nuself.agent.tools.composition import build_langchain_chat_tools
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.agent.tools.resources import ToolResources
 from nuself.decorators import component, observed, readonly, tool

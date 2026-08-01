@@ -12,6 +12,7 @@ from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import compose_reason_advancer
+from nuself.agent.text import LangChainTextAgent
 from nuself.conversation import CompletedTurn
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
@@ -91,7 +92,11 @@ class DaemonState:
             workspace_store=self.application.reason_workspace,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
-            langchain_models=langchain_models,
+            text_agent=LangChainTextAgent(
+                endpoints=langchain_models,
+                project_root=self.project_root,
+                component="reasoning",
+            ),
         )
         self.conversation_runtime = compose_conversation_runtime(
             self.application,

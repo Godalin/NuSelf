@@ -144,6 +144,10 @@ One daemon startup resolves and orders its configured LLM endpoints once.
 Chat, reflection, reasoning, persona discussion, and export receive that tuple
 while retaining separate component-tagged agent wrappers; endpoint reuse does
 not imply shared conversation state or a process-global model registry.
+`nuself.agent.tools` package initialization imports no domain tool modules.
+Chat-only aggregation lives in `agent.tools.composition`; domain code imports
+its concrete tool module directly so importing decorators or one tool cannot
+initialize Reason, Reflection, Memory, and Persona transitively.
 
 Daemon chat receives its memory, profile, reflection, trace, and conversation
 collaborators from that graph. `application.chat` resolves them once into an

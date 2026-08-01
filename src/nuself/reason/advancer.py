@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.failover import invoke_agent_endpoint
+from nuself.agent.text import LangChainTextAgent
 from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
 from nuself.agent.tool_audit import ToolOutcomeProjection
 from nuself.agent.structured import require_structured_response
@@ -363,7 +364,9 @@ class ReasonAdvancer:
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
         """Build workspace tools once that resolve the active reason thread."""
         ws_store = self._workspace_store
-        from nuself.agent.tools import build_workspace_tools_from_provider
+        from nuself.agent.tools.workspace import (
+            build_workspace_tools_from_provider,
+        )
         from nuself.store import ScopedWorkspace, SqliteStore
 
         def _resolve() -> ScopedWorkspace:
@@ -396,6 +399,11 @@ class ReasonAdvancer:
             global_repository=self._persona_repository,
             trace_recorder=self._trace_recorder,
             get_thread_workspace=_thread_workspace,
+            text_agent=LangChainTextAgent(
+                endpoints=self._langchain_models,
+                project_root=self._paths.project_root,
+                component="persona",
+            ),
         )
 
 

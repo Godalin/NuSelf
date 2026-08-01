@@ -11,10 +11,7 @@ from langchain_core.messages import BaseMessage
 from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
-from nuself.llm import (
-    LangChainLLMEndpoint,
-    configured_langchain_chat_models,
-)
+from nuself.llm import LangChainLLMEndpoint
 
 
 class TextAgent(Protocol):
@@ -53,21 +50,3 @@ class LangChainTextAgent:
             project_root=self._project_root,
             component=self._component,
         )
-
-
-def default_text_agent(
-    *,
-    project_root: Path | None = None,
-    component: AgentEndpointComponent,
-    endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
-) -> TextAgent:
-    """Build the configured framework-native free-text runner."""
-    return LangChainTextAgent(
-        endpoints=(
-            endpoints
-            if endpoints is not None
-            else configured_langchain_chat_models(project_root)
-        ),
-        project_root=project_root,
-        component=component,
-    )

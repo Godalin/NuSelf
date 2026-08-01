@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.agent.errors import AgentError
-from nuself.agent.text import TextAgent, default_text_agent
+from nuself.agent.text import TextAgent
 from nuself.config import RuntimePaths
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -26,19 +26,12 @@ def build_persona_tools(
     *,
     repository: PersonaPromptRepository,
     trace_recorder: TraceRecorder,
-    text_agent: TextAgent | None = None,
+    text_agent: TextAgent,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
     repo = repository
-    persona_agent = (
-        text_agent
-        if text_agent is not None
-        else default_text_agent(
-            project_root=project_root,
-            component="persona",
-        )
-    )
+    persona_agent = text_agent
 
     executor = FeatureExecutor()
 
@@ -281,7 +274,7 @@ def build_reason_persona_tools(
     global_repository: PersonaPromptRepository,
     trace_recorder: TraceRecorder,
     get_thread_workspace: Callable[[], ScopedWorkspace],
-    text_agent: TextAgent | None = None,
+    text_agent: TextAgent,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools scoped to a reason thread.
 
@@ -304,14 +297,7 @@ def build_reason_persona_tools(
         )
 
     global_repo = global_repository
-    persona_agent = (
-        text_agent
-        if text_agent is not None
-        else default_text_agent(
-            project_root=paths.project_root,
-            component="persona",
-        )
-    )
+    persona_agent = text_agent
     executor = FeatureExecutor()
 
     @tool(
