@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Hide raw Source document writes behind the complete ingest operation.
+Inline Source document persistence into the complete ingest operation.
 
 ## Ordered Steps
 
-1. Confirm production `save_document()` is called only by `ingest_path()` and
-   its remaining callers are test fixtures that can use real source ingestion.
-2. Make document persistence internal and migrate those tests to temporary
-   source files; do not retain a raw-write alias.
+1. Confirm the now-private document persistence method is a one-line,
+   single-caller forwarding method rather than a reusable operation.
+2. Inline that write into ingestion and remove the forwarding method without
+   changing the public Source API.
 3. Run focused Source/CLI tests and the complete verification gates; update
    evidence and commit without pushing.
 
@@ -38,6 +38,11 @@ Hide raw Source document writes behind the complete ingest operation.
 
 ## Phase Evidence
 
+- Source ingestion now writes its document record directly and retains only
+  the non-trivial chunk replacement operation as a private method. Removed the
+  one-line, single-caller `_save_document()` forwarding method without changing
+  the public API. Focused Source/CLI tests: 322 passed; full suite: 2444 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Source document persistence is now private to `ingest_path()`, matching the
   already-private chunk replacement operation. Four CLI fixtures now ingest
   real temporary files instead of constructing partial stored documents; no

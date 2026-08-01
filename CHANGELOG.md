@@ -6,8 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
-- Raw Source document writes are now internal to complete source ingestion;
-  CLI tests use real temporary source files instead of a partial-write API.
+- Raw Source document writes are now direct internal steps of complete source
+  ingestion; CLI tests use real temporary files instead of a partial-write API.
 - Source chunk replacement is now an internal part of the complete ingest
   operation instead of an independently exposed repository mutation.
 - Memory relation listing now owns its one-shot projection and filtering,
