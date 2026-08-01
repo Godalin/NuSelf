@@ -9,14 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Give every notification adapter the same narrow authority input.
+Inline the daemon chat codec's two optional-string branches.
 
 ## Ordered Steps
 
-1. Confirm the log-only adapter consumes only `RuntimePaths.project_root`.
-2. Pass the already-resolved project `Path` directly, matching email and macOS
-   adapters; add no adapter base class or authority wrapper.
-3. Run focused notification tests and full gates, then commit without pushing.
+1. Confirm the overloaded optional-string helper serves only conversation and
+   turn IDs in `ChatRequestPayload.from_wire()`.
+2. Decode those two defaults at their owning codec and remove the helper plus
+   typing-only overload import.
+3. Run focused daemon payload tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -25,7 +26,7 @@ Give every notification adapter the same narrow authority input.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve adapter order, log-only fallback, delivery identity, and behavior.
+- Preserve exact daemon wire defaults and strict blank/type rejection.
 
 ## Constraints
 
@@ -37,6 +38,12 @@ Give every notification adapter the same narrow authority input.
 
 ## Phase Evidence
 
+- `ChatRequestPayload.from_wire()` now owns its two optional ID defaults and
+  strict decoding directly. Removed a two-call helper, two overload
+  declarations, and the `overload` import while preserving message-first
+  validation and all wire behavior. Focused daemon payload/handler tests: 28
+  passed; full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel
+  build succeeded.
 - `LogOnlyNotificationAdapter` now receives the resolved project `Path`, like
   the email and macOS adapters, instead of retaining `RuntimePaths` solely to
   extract one field. No adapter hierarchy or authority wrapper was added.

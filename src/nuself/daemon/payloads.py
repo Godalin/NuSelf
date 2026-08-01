@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast, overload
+from typing import cast
 
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.runtime.log_event import LogEvent
@@ -78,25 +78,34 @@ class ChatRequestPayload:
             required=frozenset({"message"}),
             optional=frozenset({"conversation_id", "turn_id"}),
         )
-        return cls(
-            message=_required_string(
-                payload,
-                "message",
-                context="chat request",
-                allow_blank=True,
-            ),
-            conversation_id=_optional_non_blank_string(
+        message = _required_string(
+            payload,
+            "message",
+            context="chat request",
+            allow_blank=True,
+        )
+        conversation_id = (
+            _required_string(
                 payload,
                 "conversation_id",
-                default="default",
                 context="chat request",
-            ),
-            turn_id=_optional_non_blank_string(
+            )
+            if "conversation_id" in payload
+            else "default"
+        )
+        turn_id = (
+            _required_string(
                 payload,
                 "turn_id",
-                default=None,
                 context="chat request",
-            ),
+            )
+            if "turn_id" in payload
+            else None
+        )
+        return cls(
+            message=message,
+            conversation_id=conversation_id,
+            turn_id=turn_id,
         )
 
 
@@ -415,42 +424,6 @@ def _required_string(
             f"{context} field '{field_name}' must be a non-blank string"
         )
     return value
-
-
-@overload
-def _optional_non_blank_string(
-    payload: dict[str, JsonValue],
-    field_name: str,
-    *,
-    default: str,
-    context: str,
-) -> str: ...
-
-
-@overload
-def _optional_non_blank_string(
-    payload: dict[str, JsonValue],
-    field_name: str,
-    *,
-    default: None,
-    context: str,
-) -> str | None: ...
-
-
-def _optional_non_blank_string(
-    payload: dict[str, JsonValue],
-    field_name: str,
-    *,
-    default: str | None,
-    context: str,
-) -> str | None:
-    if field_name not in payload:
-        return default
-    return _required_string(
-        payload,
-        field_name,
-        context=context,
-    )
 
 
 def _optional_integer(
