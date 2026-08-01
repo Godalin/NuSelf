@@ -37,8 +37,6 @@ def test_chat_timeout_uses_default_after_malformed_yaml(
         "chat: [unterminated",
         encoding="utf-8",
     )
-    ConfigSystem.clear_cache()
-
     timeout = chat_request_timeout_seconds(tmp_path)
 
     assert timeout == ChatConfig().request_timeout_seconds

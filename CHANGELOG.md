@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Configuration caching now relies solely on automatic path/mtime/size
+  invalidation; removed an explicit reset method used only by one test.
 - Removed the unused Profile statistics type/function; Memory statistics remain
   the only statistics API because they have an actual product consumer.
 - Tool outcomes now use their validated dataclass constructor directly;

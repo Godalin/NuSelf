@@ -439,11 +439,6 @@ class ConfigSystem:
             _deep_merge(defaults, merged_layers)
         )
 
-    @staticmethod
-    def clear_cache() -> None:
-        """Drop all memoized configs (test helper / explicit reload)."""
-        _CONFIG_CACHE.clear()
-
     @classmethod
     def _build(cls, config_path: Path | None) -> SystemConfig:
         yaml_data = (

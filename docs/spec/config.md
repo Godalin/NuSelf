@@ -76,6 +76,12 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 If a configuration layer is missing, loading proceeds with lower layers. No
 error is raised.
 
+Single-file loads memoize validated immutable configuration by path, mtime, and
+size. A changed file replaces stale entries automatically, while a missing file
+is never cached so later creation is discovered. There is no explicit cache
+reset API without a runtime reload use case; daemon configuration remains fixed
+until restart.
+
 `nuself dev health` does not report a missing config file as unhealthy.
 `nuself dev config` describes the effective file/default state and explicitly
 states that a running daemon must be restarted after configuration changes.

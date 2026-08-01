@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unconsumed Profile statistics API.
+Remove the unused explicit configuration-cache reset API.
 
 ## Ordered Steps
 
-1. Confirm `ProfileStats` and `profile_stats()` have no production, CLI, or
-   application-service consumers and exist only in their own test.
-2. Remove the unused type/function and narrow the statistics specification to
-   the real Memory stats capability.
-3. Run focused Profile/Memory tests and complete verification gates; update
+1. Confirm `ConfigSystem.clear_cache()` has no production caller and its sole
+   test call is unnecessary because missing files are never cached.
+2. Document automatic cache invalidation and remove the public reset method
+   without a compatibility alias.
+3. Run focused Config/CLI tests and complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve profile CRUD/search/merge/accept behavior and the user-visible
-  Memory statistics operation.
+- Preserve path/mtime/size memoization, changed-file invalidation, missing-file
+  discovery, layered configuration, and daemon restart semantics.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove the unconsumed Profile statistics API.
 
 ## Phase Evidence
 
+- `ConfigSystem` no longer exposes `clear_cache()`, whose only caller was an
+  unnecessary test step after creating a previously missing file. Config loads
+  still memoize immutable values by path/mtime/size, replace stale entries, and
+  never cache missing files; the daemon still adopts changes on restart.
+  Focused Config/CLI tests: 79 passed; full suite: 2440 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Removed `ProfileStats` and `profile_stats()`, which had no production, CLI,
   or application-service consumer and were exercised only by their own test.
   Profile CRUD/search/merge/accept remain unchanged; the specification now
