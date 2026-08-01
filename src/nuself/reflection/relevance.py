@@ -102,9 +102,6 @@ class LLMRelevanceGate:
             reasons=("llm_fallback",),
         )
 
-    def passes(self, candidate: IdeaCandidate) -> bool:
-        return self.score(candidate).passes
-
     def _cooldown_ok(self) -> bool:
         try:
             state = self._repository.schedule_state()

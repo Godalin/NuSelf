@@ -9,13 +9,12 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unused full Reflection config dependency from candidate generation.
+Remove the zero-consumer boolean facade from the Reflection relevance API.
 
 ## Ordered Steps
 
-1. Verify `IdeaCandidateGenerator` never reads `ReflectionSettings` and that
-   scheduling/relevance remain the owners of configured policy.
-2. Remove the unused constructor parameter and composition/test plumbing.
+1. Confirm all consumers require the complete `RelevanceScore` from `score()`.
+2. Remove `passes()`, which only discards that score after invoking it.
 3. Run focused Reflection tests and full gates, then commit without pushing.
 
 ## Exclusions
@@ -25,7 +24,7 @@ Remove the unused full Reflection config dependency from candidate generation.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Do not move schedule or relevance policy into candidate generation.
+- Preserve one LLM invocation per gate decision and all fallback/cooldown data.
 
 ## Constraints
 
@@ -37,6 +36,11 @@ Remove the unused full Reflection config dependency from candidate generation.
 
 ## Phase Evidence
 
+- `LLMRelevanceGate` now exposes only `score()`, the complete operation used by
+  the scheduler. Removed the zero-consumer `passes()` facade that would invoke
+  the same model-backed decision and discard cooldown, component scores, and
+  reasons. Focused Reflection/daemon tests: 275 passed; full suite: 2440
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `IdeaCandidateGenerator` now accepts only the context, language, authority,
   and typed-agent inputs it consumes. Removed its unused full
   `ReflectionSettings` dependency and composition/test plumbing; scheduling and

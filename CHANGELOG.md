@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection relevance now exposes only its complete score operation; removed
+  an unused boolean facade that discarded the rest of the LLM decision.
 - Reflection candidate generation no longer accepts the full reflection
   configuration it never consumed; schedule and relevance policy stay with
   their actual owners.
