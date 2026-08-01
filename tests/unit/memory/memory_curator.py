@@ -18,7 +18,7 @@ from typing import Literal
 import pytest
 from langchain_core.messages import BaseMessage
 
-from nuself.application import compose_trace_services
+from nuself.application.trace import compose_trace_services
 from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.config import runtime_paths

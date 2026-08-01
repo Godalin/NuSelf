@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from nuself.application import compose_trace_services
+from nuself.application.trace import compose_trace_services
 from nuself.config import runtime_paths
 from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository

@@ -253,6 +253,13 @@ already-composed `ApplicationGraph` into request/task state. `DaemonState`
 must not inspect a context variable, construct a fallback runtime, or retain
 the lifecycle owner after composition.
 
+The `nuself.application` package root is an import-light namespace. Process
+adapters import each composition function or immutable resource bundle from
+its owning application module; the root does not grow a second catalog of the
+composition graph. By contrast, `nuself.decorators` is the deliberate public
+spelling for the cohesive inert feature-declaration DSL and may re-export the
+policies and decorators owned by `runtime.features`.
+
 Cross-domain APIs stay coarse enough to represent a use case. Do not wrap
 every repository method in a one-method interface, introduce a generic service
 bus, or preserve parallel concrete and facade paths. A consumer-owned Protocol

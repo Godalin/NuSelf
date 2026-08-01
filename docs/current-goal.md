@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Finish the package-root audit: inspect the Application and Decorators exports,
-while treating CLI and Notification `__init__` files as implementation modules
-rather than facades. Retain only exports with a deliberate external contract.
+Audit the 602-line Notification implementation package for separable domain,
+outbox, delivery-loop, and adapter concerns. Reduce the root without replacing
+it with forwarding exports or fragmenting cohesive behavior unnecessarily.
 
 ## Constraints
 
@@ -248,6 +248,15 @@ rather than facades. Retain only exports with a deliberate external contract.
   response services, capabilities, and the full graph are no longer leaked or
   eagerly initialized by the package root.
 - Chat/daemon/evaluation/boundary focused suite: 286 passed. Post-Chat cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- The Application package root no longer re-exports Trace composition; process
+  and test consumers import `application.trace` directly. The Decorators root
+  remains intentionally because it is the cohesive, widely consumed public
+  spelling for inert orthogonal feature declarations.
+- Corrected the agent-tool specification: its package root is import-light and
+  Chat aggregation belongs only to `agent.tools.composition`, matching code.
+- Application/trace/boundary focused suite: 137 passed. Post-package-root audit
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

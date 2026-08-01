@@ -482,12 +482,13 @@ mutate tool metadata after construction. Adding or renaming a tool therefore
 changes one authoritative definition rather than requiring a second catalog to
 remain synchronized.
 
-The public `nuself.agent.tools` package is a composition boundary, not a
-monolithic implementation module. Memory, reflection, reason, trace, selves,
-and workspace tool definitions live in subsystem-focused modules. The public
-package composes those builders with persona tools and re-exports supported
-entry points. Subsystem builders receive their service dependencies explicitly
-and do not construct unrelated repositories or services.
+The `nuself.agent.tools` package root is an import-light namespace, not a
+public facade or monolithic implementation module. Memory, reflection, reason,
+trace, selves, and workspace tool definitions live in subsystem-focused
+modules; Chat-only aggregation lives in `agent.tools.composition`. Consumers
+import the owning builder or composition module directly. Subsystem builders
+receive their service dependencies explicitly and do not construct unrelated
+repositories or services.
 
 Tools that emit durable operational logs, such as export flows and other long-running side effects, should include a `log` tag in addition to their behavioral tag(s) so log-oriented tooling can classify them consistently.
 

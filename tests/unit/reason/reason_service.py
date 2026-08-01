@@ -11,7 +11,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import ValidationError
 
-from nuself.application import compose_trace_services
+from nuself.application.trace import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.logs import read_log_events
 from nuself.reason.domain import ReasoningStep

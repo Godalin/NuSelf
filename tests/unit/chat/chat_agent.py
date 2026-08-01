@@ -33,7 +33,7 @@ from nuself.conversation import (
 )
 from conversation_fixtures import ConversationStore
 from nuself.agent.tool_utils import tool_service_component
-from nuself.application import compose_trace_services
+from nuself.application.trace import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem

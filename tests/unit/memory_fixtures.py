@@ -6,7 +6,7 @@ from pathlib import Path
 
 from conversation_fixtures import ConversationStore
 from nuself.agent.structured import StructuredAgent
-from nuself.application import compose_trace_services
+from nuself.application.trace import compose_trace_services
 from nuself.config import RuntimePaths, runtime_paths
 from nuself.domain.memory import (
     MemoryTypeRegistry,

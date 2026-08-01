@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.application import runtime as runtime_module
+import nuself.application.runtime as runtime_module
 from nuself.application.runtime import (
     ApplicationRuntimeClosedError,
     open_application_runtime,
