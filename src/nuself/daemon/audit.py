@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
 
-from nuself.logs import LogLevel
+from nuself.runtime.audit_types import LogLevel
 from nuself.runtime.definitions import (
     DefinitionRegistry,
     UnknownDefinitionError,

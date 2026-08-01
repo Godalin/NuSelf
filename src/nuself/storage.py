@@ -14,7 +14,7 @@ from typing import (
 from uuid import uuid4
 
 from nuself.config import runtime_paths
-from nuself.logs import LogComponent
+from nuself.runtime.audit_types import LogComponent
 from nuself.private_fs import (
     create_private_file,
     ensure_private_directory,

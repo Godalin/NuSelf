@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the remaining large REPL command and dispatcher modules for dead public
-handlers and repeated subcommand parsing. Do not split them merely to reduce
-file length; require a smaller call graph or a clearer domain boundary.
+Audit the remaining structured-log public entry points and read-side cursor for
+unused duplication. Do not split reliable append, rotation, recovery, and live
+delivery mechanics unless doing so removes a dependency or call path.
 
 ## Constraints
 
@@ -22,6 +22,24 @@ file length; require a smaller call graph or a clearer domain boundary.
   board to Idle while the persistent review goal remains active.
 
 ## Phase Evidence
+
+- The remaining large REPL command and dispatcher modules have no dead public
+  handlers or duplicated parser boundary: the sealed handler table exactly
+  covers registry command identities, while metadata and execution remain
+  separate. A mechanical domain split would add files without reducing the
+  call graph, so they remain intact.
+- Runtime-event persistence and daemon live activity cannot be registered as
+  parallel projections without adding a second envelope-to-log conversion:
+  the publisher carries `RuntimeEnvelope`, while the unified activity stream
+  intentionally carries persisted-form `LogEvent`. The existing bounded log
+  sink observer remains the one conversion point.
+- CLI parsing, daemon audit definitions, storage backends, and shared
+  observability now import `LOG_COMPONENTS`, `LogComponent`, and `LogLevel`
+  directly from neutral `runtime.audit_types`; they no longer load the log
+  persistence module merely to describe contracts.
+- Logging/runtime/daemon focused suite: 216 passed. Post-boundary
+  `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
