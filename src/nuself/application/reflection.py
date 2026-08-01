@@ -5,11 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from nuself.config import ReflectionSettings
 from nuself.config import RuntimePaths
-from nuself.conversation import ConversationHistoryService
-from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
-from nuself.notification import NotificationOutbox
-from nuself.profile.repository import ProfileItemRepository
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
@@ -18,7 +13,6 @@ from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.service import ReflectionService
 from nuself.application.reason import compose_reason_service
 from nuself.storage import StorageBackend
-from nuself.trace.service import TraceRecorder
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph
@@ -46,46 +40,43 @@ def compose_reflection_service(
 
 
 def compose_reflection_scheduler(
-    paths: RuntimePaths,
-    backend: StorageBackend,
+    application: "ApplicationGraph",
     *,
     config: ReflectionSettings,
-    repository: ReflectionRepository,
-    outbox: NotificationOutbox,
-    trace_recorder: TraceRecorder,
-    memory_repository: MemoryEntryRepository,
-    source_repository: SourceRepository,
-    profile_repository: ProfileItemRepository,
-    conversation_history: ConversationHistoryService,
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
 
-    schedule_collection = backend.collection("scheduler_state")
+    paths = application.paths
+    from nuself.application.composition import application_backend
+
+    schedule_collection = application_backend(application).collection(
+        "scheduler_state"
+    )
     generator = IdeaCandidateGenerator(
         paths.project_root,
         config=config,
-        memory_repository=memory_repository,
-        source_repository=source_repository,
-        profile_repository=profile_repository,
-        conversation_history=conversation_history,
+        memory_repository=application.memory.entries,
+        source_repository=application.memory.sources,
+        profile_repository=application.memory.profile,
+        conversation_history=application.conversation_history,
     )
     gate = LLMRelevanceGate(
         paths.project_root,
         config,
         schedule_collection=schedule_collection,
-        repository=repository,
+        repository=application.reflection,
     )
     organizer = ReflectionOrganizer(
         paths.project_root,
-        repository=repository,
+        repository=application.reflection,
     )
     return ReflectionScheduler(
         paths.project_root,
         config,
         schedule_collection=schedule_collection,
-        repository=repository,
-        outbox=outbox,
-        trace_recorder=trace_recorder,
+        repository=application.reflection,
+        outbox=application.notifications,
+        trace_recorder=application.trace.recorder,
         candidate_generator=generator,
         relevance_gate=gate,
         organizer=organizer,

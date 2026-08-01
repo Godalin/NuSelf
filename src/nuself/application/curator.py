@@ -24,7 +24,6 @@ def compose_memory_curator(
         profile_repository=application.memory.profile,
         trace_recorder=application.trace.recorder,
         plan_store=application.memory.curator_plans,
-        backend=application.backend,
     )
 
 

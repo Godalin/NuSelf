@@ -176,7 +176,6 @@ class MemoryCurator(_MemoryCurator):
                 backend=selected_backend,
                 registry=registry,
             ),
-            backend=selected_backend,
         )
 
     def run_once(

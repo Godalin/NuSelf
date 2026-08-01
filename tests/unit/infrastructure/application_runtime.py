@@ -61,3 +61,8 @@ def test_cli_composition_rejects_authority_drift(
                 compose_cli_application(tmp_path / "other")
     finally:
         runtime.close()
+
+
+def test_cli_composition_requires_active_runtime(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="runtime is not active"):
+        compose_cli_application(tmp_path)

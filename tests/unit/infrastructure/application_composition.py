@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.application.composition import compose_application
+from nuself.application.composition import application_backend, compose_application
 from nuself.config import runtime_paths
 from nuself.storage import auto_backend
 
@@ -20,7 +20,7 @@ def test_application_graph_reuses_one_authority_repository_graph(
     graph = compose_application(paths, backend)
 
     assert graph.paths is paths
-    assert graph.backend is backend
+    assert application_backend(graph) is backend
     assert graph.notifications._backend is backend
     assert graph.persona_prompts._project_root == paths.project_root
     assert graph.memory.curator_plans._backend is backend

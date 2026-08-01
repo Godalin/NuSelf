@@ -36,6 +36,7 @@ from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
 from nuself.conversation import (
+    CompletedTurn,
     ConversationTurnConflictError,
     ConversationMessage,
     ConversationState,
@@ -394,6 +395,14 @@ class ConversationGraphRuntime:
             evidence_references=tuple(final_response.evidence_references),
             confidence=final_response.confidence,
             epistemic_status=final_response.epistemic_status,
+            completed_turn=CompletedTurn(
+                conversation_id=conversation_id,
+                start_index=state.next_message_index - 2,
+                end_index=state.next_message_index,
+                user_content=message,
+                assistant_content=final_response.answer,
+                turn_id=turn_id,
+            ),
         ), turn_state.node_trace
 
     def _record_chat_turn_trace(
@@ -610,7 +619,20 @@ def _completed_turn_result(
     for item in reversed(state.messages):
         if item.turn_id == turn_id and item.role == "user":
             if item.content == message:
-                return ChatResult(answer=assistant_message.content, conversation_id=conversation_id)
+                assistant_index = state.messages.index(assistant_message)
+                user_index = state.messages.index(item)
+                return ChatResult(
+                    answer=assistant_message.content,
+                    conversation_id=conversation_id,
+                    completed_turn=CompletedTurn(
+                        conversation_id=conversation_id,
+                        start_index=state.message_start_index + user_index,
+                        end_index=state.message_start_index + assistant_index + 1,
+                        user_content=item.content,
+                        assistant_content=assistant_message.content,
+                        turn_id=turn_id,
+                    ),
+                )
             raise ConversationTurnConflictError(
                 f"turn ID {turn_id!r} is already bound to different input"
             )

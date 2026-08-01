@@ -164,19 +164,22 @@ def send_one_shot_chat_interactive(
         source="client",
     ):
         try:
-            reply = one_shot_reply(
+            result = run_one_shot_chat(
                 message,
                 project_root,
                 conversation_id,
                 turn_id=turn_id,
             )
             application = compose_cli_application(project_root)
-            result = ChatResult(answer=reply, conversation_id=conversation_id)
+            turn = result.completed_turn
+            if turn is None:
+                raise RuntimeError(
+                    "conversation result is missing its committed turn"
+                )
             observation = publish_chat_observation(
-                application,
-                result=result,
-                user_message=message,
-                turn_id=turn_id,
+                application.memory.observations,
+                turn=turn,
+                source_trace_id=result.trace_id,
             )
             write_chat_audit(
                 "one_shot_chat_completed",
@@ -230,22 +233,22 @@ def run_memory_curator(
         )
 
 
-def one_shot_reply(
+def run_one_shot_chat(
     message: str,
     project_root: Path | None,
     conversation_id: str = "default",
     *,
     turn_id: str | None = None,
-) -> str:
-    """Invoke the local conversation runtime and return its reply text."""
+) -> ChatResult:
+    """Invoke the local conversation runtime and return its committed result."""
 
-    return (
-        compose_conversation_runtime(
-            compose_cli_application(project_root),
-            approval_port=TerminalApprovalPort(),
-        )
-        .respond(message, conversation_id=conversation_id, turn_id=turn_id)
-        .reply
+    return compose_conversation_runtime(
+        compose_cli_application(project_root),
+        approval_port=TerminalApprovalPort(),
+    ).respond(
+        message,
+        conversation_id=conversation_id,
+        turn_id=turn_id,
     )
 
 

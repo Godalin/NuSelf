@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from nuself.agent.chat import ChatResult
+from nuself.application.runtime import open_application_runtime
 from nuself.cli import chat
+from nuself.cli.composition import use_cli_application_runtime
+from nuself.conversation import CompletedTurn
 from nuself.daemon.client import (
     DaemonApplicationError,
     DaemonConnectionError,
@@ -17,6 +21,36 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.runtime.execution import CancellationToken, use_cancellation
+
+
+@pytest.fixture(autouse=True)
+def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
+    runtime = open_application_runtime(tmp_path)
+    try:
+        with use_cli_application_runtime(runtime):
+            yield
+    finally:
+        runtime.close()
+
+
+def _chat_result(
+    answer: str = "done",
+    *,
+    conversation_id: str = "thread-1",
+    turn_id: str | None = "turn-1",
+) -> ChatResult:
+    return ChatResult(
+        answer=answer,
+        conversation_id=conversation_id,
+        completed_turn=CompletedTurn(
+            conversation_id=conversation_id,
+            start_index=0,
+            end_index=2,
+            user_content="hello",
+            assistant_content=answer,
+            turn_id=turn_id,
+        ),
+    )
 
 
 def test_daemon_connection_failure_is_retryable(
@@ -192,7 +226,7 @@ def test_one_shot_failure_is_safely_presented_and_audited(
             f"one-shot failed password={runtime_secret}"
         )
 
-    monkeypatch.setattr(chat, "one_shot_reply", fail_reply)
+    monkeypatch.setattr(chat, "run_one_shot_chat", fail_reply)
 
     result = chat.send_one_shot_chat_interactive(
         "hello",
@@ -219,7 +253,7 @@ def test_one_shot_failure_survives_broken_exception_renderer(
         del args, kwargs
         raise BrokenMessageError
 
-    monkeypatch.setattr(chat, "one_shot_reply", fail_reply)
+    monkeypatch.setattr(chat, "run_one_shot_chat", fail_reply)
 
     result = chat.send_one_shot_chat_interactive(
         "hello",
@@ -332,11 +366,11 @@ def test_one_shot_success_runs_curator_after_reply(
         conversation_id: str = "default",
         *,
         turn_id: str | None = None,
-    ) -> str:
+    ) -> ChatResult:
         assert project_root == tmp_path
         contexts.append(current_runtime_context())
         calls.append(f"reply:{message}:{conversation_id}:{turn_id}")
-        return "done"
+        return _chat_result(conversation_id=conversation_id, turn_id=turn_id)
 
     def curate(project_root: Path | None, observation_id: str) -> None:
         assert project_root == tmp_path
@@ -350,7 +384,7 @@ def test_one_shot_success_runs_curator_after_reply(
             project_root=project_root,
         )
 
-    monkeypatch.setattr(chat, "one_shot_reply", reply)
+    monkeypatch.setattr(chat, "run_one_shot_chat", reply)
     monkeypatch.setattr(chat, "run_memory_curator", curate)
 
     with runtime_context(trace_id="trace-1", source="outer"):
@@ -434,16 +468,16 @@ def test_one_shot_success_survives_uncertain_completion_audit(
 ) -> None:
     calls: list[str] = []
 
-    def reply(*args: object, **kwargs: object) -> str:
+    def reply(*args: object, **kwargs: object) -> ChatResult:
         del args, kwargs
-        return "done"
+        return _chat_result()
 
     def curate(_project_root: Path | None, _conversation_id: str) -> None:
         calls.append("curator")
 
     monkeypatch.setattr(
         chat,
-        "one_shot_reply",
+        "run_one_shot_chat",
         reply,
     )
     monkeypatch.setattr(

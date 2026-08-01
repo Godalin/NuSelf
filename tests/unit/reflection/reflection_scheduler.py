@@ -219,7 +219,7 @@ def _gate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        schedule_collection=application.backend.collection(
+        schedule_collection=get_default_backend(project_root).collection(
             "scheduler_state"
         ),
         repository=application.reflection,
@@ -277,16 +277,8 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         get_default_backend(tmp_path),
     )
     return compose_reflection_scheduler(
-        application.paths,
-        application.backend,
+        application,
         config=config,
-        repository=application.reflection,
-        outbox=application.notifications,
-        trace_recorder=application.trace.recorder,
-        memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
-        profile_repository=application.memory.profile,
-        conversation_history=application.conversation_history,
     )
 
 

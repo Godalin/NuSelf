@@ -2,48 +2,36 @@
 
 from __future__ import annotations
 
+from typing import Protocol
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.agent.chat import ChatResult
-from nuself.application.composition import ApplicationGraph
+from nuself.conversation import CompletedTurn
 from nuself.memory.observation import MemoryObservation
 
 
-def publish_chat_observation(
-    application: ApplicationGraph,
-    *,
-    result: ChatResult,
-    user_message: str,
-    turn_id: str | None = None,
-) -> MemoryObservation:
-    """Publish the last committed turn without exposing conversation to memory."""
+class MemoryObserver(Protocol):
+    def observe(self, observation: MemoryObservation) -> MemoryObservation: ...
 
-    state = application.conversations.load(result.conversation_id)
-    if len(state.messages) >= 2:
-        persisted_user, persisted_assistant = state.messages[-2:]
-        if persisted_user.role != "user" or persisted_assistant.role != "assistant":
-            raise ValueError("completed chat result does not end in a complete turn")
-        start_index = state.next_message_index - 2
-        source_identity = (
-            f"{result.conversation_id}:{start_index}:{state.next_message_index}"
-        )
-        fragments = (
-            f"user: {persisted_user.content}",
-            f"assistant: {persisted_assistant.content}",
-        )
-    else:
-        source_identity = (
-            f"{result.conversation_id}:{turn_id or ''}:{user_message}:{result.reply}"
-        )
-        fragments = (
-            f"user: {user_message}",
-            f"assistant: {result.reply}",
-        )
+
+def publish_chat_observation(
+    observer: MemoryObserver,
+    *,
+    turn: CompletedTurn,
+    source_trace_id: str | None = None,
+) -> MemoryObservation:
+    """Project one committed turn into memory's producer-neutral API."""
+
+    source_identity = (
+        f"{turn.conversation_id}:{turn.start_index}:{turn.end_index}"
+    )
     source_ref = f"interaction:{uuid5(NAMESPACE_URL, source_identity).hex}"
-    return application.memory.observations.observe(
+    return observer.observe(
         MemoryObservation.create(
             source_ref=source_ref,
-            fragments=fragments,
-            source_trace_id=result.trace_id,
+            fragments=(
+                f"user: {turn.user_content}",
+                f"assistant: {turn.assistant_content}",
+            ),
+            source_trace_id=source_trace_id,
         )
     )

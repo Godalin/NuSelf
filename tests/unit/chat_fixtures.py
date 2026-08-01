@@ -108,11 +108,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 application.memory.entries,
                 project_root=project_root,
             ),
-            conversation_store=conversation_store
-            or ConversationStore(
-                project_root,
-                backend=application.backend,
-            ),
+            conversation_store=conversation_store or application.conversations,
         )
         super().__init__(
             resources,

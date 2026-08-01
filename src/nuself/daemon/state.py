@@ -21,6 +21,7 @@ from nuself.application.reason import (
     compose_reason_service,
 )
 from nuself.config import ConfigSystem
+from nuself.conversation import CompletedTurn
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
     ReasonExportService,
@@ -43,6 +44,13 @@ class _ChatTaskPayload:
     message: str
     conversation_id: str
     turn_id: str | None
+
+
+def _require_completed_turn(result: ChatResult) -> CompletedTurn:
+    turn = result.completed_turn
+    if turn is None:
+        raise RuntimeError("conversation result is missing its committed turn")
+    return turn
 
 
 class DaemonState:
@@ -92,16 +100,8 @@ class DaemonState:
             config.daemon.memory_curator.interval_seconds
         )
         self.reflection_scheduler = compose_reflection_scheduler(
-            paths,
-            self.application.backend,
+            self.application,
             config=config.reflection,
-            repository=self.application.reflection,
-            outbox=self.application.notifications,
-            trace_recorder=self.application.trace.recorder,
-            memory_repository=self.application.memory.entries,
-            source_repository=self.application.memory.sources,
-            profile_repository=self.application.memory.profile,
-            conversation_history=self.application.conversation_history,
         )
         self.reflection_check_interval_seconds: float = (
             config.daemon.reflection_scheduler.check_interval_seconds
@@ -216,10 +216,9 @@ class DaemonState:
                 turn_id=turn_id,
             )
             observation = publish_chat_observation(
-                self.application,
-                result=result,
-                user_message=message,
-                turn_id=turn_id,
+                self.application.memory.observations,
+                turn=_require_completed_turn(result),
+                source_trace_id=result.trace_id,
             )
             self.request_memory_curation(observation.id)
             return result
@@ -270,10 +269,9 @@ class DaemonState:
             turn_id=payload.turn_id,
         )
         observation = publish_chat_observation(
-            self.application,
-            result=result,
-            user_message=payload.message,
-            turn_id=payload.turn_id,
+            self.application.memory.observations,
+            turn=_require_completed_turn(result),
+            source_trace_id=result.trace_id,
         )
         self.request_memory_curation(observation.id)
         self.scheduler.submit(

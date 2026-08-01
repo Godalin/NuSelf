@@ -477,6 +477,18 @@ class ConversationHistoryExcerpt:
     messages: tuple[ConversationHistoryMessage, ...]
 
 
+@dataclass(frozen=True)
+class CompletedTurn:
+    """Immutable committed-turn evidence exported by conversation."""
+
+    conversation_id: str
+    start_index: int
+    end_index: int
+    user_content: str
+    assistant_content: str
+    turn_id: str | None = None
+
+
 class ConversationHistoryService:
     """Read-only API for domains that explicitly need chat evidence."""
 

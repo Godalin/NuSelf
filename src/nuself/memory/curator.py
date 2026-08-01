@@ -49,7 +49,6 @@ from nuself.memory.repository import (
 )
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 
 DURABLE_SIGNAL_MARKERS: tuple[str, ...] = (
@@ -132,7 +131,6 @@ class MemoryCurator:
         registry: MemoryTypeRegistry | None = None,
         trace_recorder: TraceRecorder,
         plan_store: MemoryCuratorPlanStore,
-        backend: StorageBackend,
     ) -> None:
         self._paths = paths
         self._agent = agent or default_structured_agent(
@@ -141,7 +139,6 @@ class MemoryCurator:
             component="memory",
         )
         self._settings = settings or MemoryCuratorSettings()
-        self._backend = backend
         self._observations = observation_repository
         self._repository = repository
         self._profile_repository = profile_repository

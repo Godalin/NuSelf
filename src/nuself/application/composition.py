@@ -27,7 +27,7 @@ class ApplicationGraph:
     """Concrete services sharing one selected authority."""
 
     paths: RuntimePaths
-    backend: StorageBackend
+    _backend: StorageBackend
     conversations: ConversationStore
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
@@ -36,6 +36,11 @@ class ApplicationGraph:
     reason: ReasonRepository
     reflection: ReflectionRepository
     trace: TraceServices
+
+    def composition_storage(self) -> StorageBackend:
+        """Return storage to application-owned factories."""
+
+        return self._backend
 
 
 def compose_application(
@@ -47,7 +52,7 @@ def compose_application(
     conversations = ConversationStore(paths, backend=backend)
     return ApplicationGraph(
         paths=paths,
-        backend=backend,
+        _backend=backend,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=compose_memory_repositories(paths, backend),
@@ -57,3 +62,9 @@ def compose_application(
         reflection=compose_reflection_repository(paths, backend),
         trace=compose_trace_services(paths, backend),
     )
+
+
+def application_backend(application: ApplicationGraph) -> StorageBackend:
+    """Borrow storage inside application composition only."""
+
+    return application.composition_storage()

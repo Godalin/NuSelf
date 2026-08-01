@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nuself.conversation import ConversationMessage, ConversationState
+from nuself.conversation import CompletedTurn, ConversationMessage, ConversationState
 from nuself.config import ConfigSystem
 
 ConversationNodeName = Literal[
@@ -83,6 +83,7 @@ class ChatResult:
     confidence: float | None = None
     epistemic_status: str = "inferred"
     trace_id: str | None = None
+    completed_turn: CompletedTurn | None = None
 
     @property
     def reply(self) -> str:
