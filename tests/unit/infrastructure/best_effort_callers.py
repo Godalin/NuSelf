@@ -7,6 +7,7 @@ import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.application.composition import compose_application
 from nuself.cli.commands.memory.common import record_memory_trace
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.persona_management import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
 from nuself.logs import read_log_events
 from nuself.config import runtime_paths
@@ -113,6 +114,7 @@ def test_cli_persona_trace_failure_is_observed_after_mutation(
     )
 
     _record_lifecycle(
+        compose_cli_application(tmp_path).trace.recorder,
         tmp_path,
         action="prompt_created",
         persona=prompt,
@@ -140,6 +142,7 @@ def test_cli_persona_unknown_trace_action_propagates(
 
     with pytest.raises(AttributeError):
         _record_lifecycle(
+            compose_cli_application(tmp_path).trace.recorder,
             tmp_path,
             action="unknown",
             persona=prompt,

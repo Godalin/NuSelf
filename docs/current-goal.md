@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit narrow CLI composition helpers and command-local service accessors for
-dead pass-through APIs. Retain widely used capability accessors when deleting
-them would only repeat graph field traversal at every caller.
+Audit CLI helpers that hide application lookup inside trace, handle-resolution,
+or presentation workflows. Pass already-owned capabilities when the caller has
+resolved the graph; do not introduce a generic CLI context object.
 
 ## Constraints
 
@@ -87,6 +87,13 @@ them would only repeat graph field traversal at every caller.
   production callers as the narrow conversation capability accessor; removing
   it would spread graph traversal rather than remove composition.
 - CLI/REPL focused suite: 325 passed. Post-lookup cleanup
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Persona create/delete/enable now resolve one application graph, reuse one
+  prompt snapshot for handle selection, and pass the composed trace recorder
+  into lifecycle observation. The internal multi-handle resolver is no longer
+  a pseudo-public CLI helper.
+- Persona/CLI/observability focused suite: 334 passed. Post-persona-reuse
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

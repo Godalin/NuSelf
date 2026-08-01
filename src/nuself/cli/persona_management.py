@@ -14,6 +14,7 @@ from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.persona.audit import run_persona_observed
 from nuself.persona.prompt_repo import PersonaPrompt, create_persona_prompt
+from nuself.trace.service import TraceRecorder
 from nuself.tui.render import TerminalTheme
 
 _theme = TerminalTheme()
@@ -29,21 +30,31 @@ def resolve_persona_id(
     project_root: Path | None,
     persona_ref: str,
 ) -> str | None:
-    return resolve_handle(
+    return _resolve_persona_id(
         persona_ref,
         list_persona_prompts(project_root),
+    )
+
+
+def _resolve_persona_id(
+    persona_ref: str,
+    prompts: tuple[PersonaPrompt, ...],
+) -> str | None:
+    return resolve_handle(
+        persona_ref,
+        prompts,
         label="persona",
         get_id=lambda prompt: prompt.id,
     )
 
 
-def resolve_persona_ids(
-    project_root: Path | None,
+def _resolve_persona_ids(
     persona_ref: str,
+    prompts: tuple[PersonaPrompt, ...],
 ) -> list[str] | None:
     return resolve_handle_selection(
         persona_ref,
-        list_persona_prompts(project_root),
+        prompts,
         label="persona",
         get_id=lambda prompt: prompt.id,
     )
@@ -54,7 +65,8 @@ def create_persona(
     name: str,
     prompt_text: str,
 ) -> int:
-    repository = compose_cli_application(project_root).persona_prompts
+    application = compose_cli_application(project_root)
+    repository = application.persona_prompts
     persona = create_persona_prompt(name, prompt_text)
     existing = repository.get_by_name(name)
     if existing is not None:
@@ -68,7 +80,10 @@ def create_persona(
         )
     repository.save(persona)
     _record_lifecycle(
-        project_root, action="prompt_created", persona=persona
+        application.trace.recorder,
+        project_root,
+        action="prompt_created",
+        persona=persona,
     )
     print_ansi(
         f"{_theme.tag('[persona]', 'persona')} "
@@ -84,8 +99,9 @@ def delete_personas(
     *,
     confirmed: bool = False,
 ) -> int:
-    repository = compose_cli_application(project_root).persona_prompts
-    prompt_ids = resolve_persona_ids(project_root, persona_ref)
+    application = compose_cli_application(project_root)
+    repository = application.persona_prompts
+    prompt_ids = _resolve_persona_ids(persona_ref, repository.list())
     if prompt_ids is None:
         return CliExitCode.FAILURE
     if not confirmed:
@@ -127,8 +143,9 @@ def set_persona_enabled(
     enabled: bool,
     confirmed: bool = False,
 ) -> int:
-    repository = compose_cli_application(project_root).persona_prompts
-    prompt_id = resolve_persona_id(project_root, persona_ref)
+    application = compose_cli_application(project_root)
+    repository = application.persona_prompts
+    prompt_id = _resolve_persona_id(persona_ref, repository.list())
     if prompt_id is None:
         return CliExitCode.FAILURE
     prompt = repository.get(prompt_id)
@@ -157,7 +174,12 @@ def set_persona_enabled(
             return CliExitCode.SUCCESS
     repository.set_disabled(prompt.id, not enabled)
     action = "enabled" if enabled else "disabled"
-    _record_lifecycle(project_root, action=action, persona=prompt)
+    _record_lifecycle(
+        application.trace.recorder,
+        project_root,
+        action=action,
+        persona=prompt,
+    )
     rendered = (
         _theme.paint(f"Enabled: {prompt.name}", "32")
         if enabled
@@ -168,12 +190,12 @@ def set_persona_enabled(
 
 
 def _record_lifecycle(
+    recorder: TraceRecorder,
     project_root: Path | None,
     *,
     action: str,
     persona: PersonaPrompt,
 ) -> None:
-    recorder = compose_cli_application(project_root).trace.recorder
     method = getattr(recorder, f"record_persona_{action}")
 
     def record() -> object:
