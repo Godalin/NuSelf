@@ -71,7 +71,14 @@ class NotificationOutbox:
 
     def add(self, entry: OutboxEntry) -> OutboxEntry:
         with self._backend.transaction():
-            existing = self._find_by_idempotency_key(entry.idempotency_key)
+            existing = next(
+                (
+                    candidate
+                    for candidate in self.list()
+                    if candidate.idempotency_key == entry.idempotency_key
+                ),
+                None,
+            )
             if existing is not None:
                 return existing
             self._col.put(entry.id, entry.to_wire())
@@ -265,13 +272,6 @@ class NotificationOutbox:
                         self._col.delete(entry.id)
                         removed += 1
         return removed
-
-    def _find_by_idempotency_key(self, key: str) -> OutboxEntry | None:
-        for entry in self.list():
-            if entry.idempotency_key == key:
-                return entry
-        return None
-
 
 class OutboxEntryNotFound(ValueError):
     """Raised when an outbox entry does not exist."""

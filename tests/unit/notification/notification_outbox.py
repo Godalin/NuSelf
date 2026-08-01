@@ -13,6 +13,7 @@ from pathlib import Path
 from nuself.notification.model import (
     AdapterDelivery,
     OutboxEntry,
+    OutboxStatus,
 )
 from nuself.notification.outbox import (
     NotificationOutbox,
@@ -39,12 +40,12 @@ class _PausingNotificationOutbox(NotificationOutbox):
         self._scanned = scanned
         self._release = release
 
-    def _find_by_idempotency_key(self, key: str) -> OutboxEntry | None:
-        existing = super()._find_by_idempotency_key(key)
+    def list(self, status: OutboxStatus | None = None) -> list[OutboxEntry]:
+        entries = super().list(status=status)
         self._scanned.set()
         if not self._release.wait(timeout=10):
             raise RuntimeError("parent did not release outbox admission")
-        return existing
+        return entries
 
 
 def _pause_during_outbox_add(

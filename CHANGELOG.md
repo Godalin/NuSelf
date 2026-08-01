@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Notification idempotency lookup now lives directly inside transactional
+  `add()`; removed its single-use private helper and moved concurrency-test
+  instrumentation to the real list boundary.
 - Notification outbox state transitions now expose their collection writes
   directly, removing a policy-free `_write_entry()` forwarding method.
 - `ActivityBroker.close()` now matches the idempotent empty daemon response and

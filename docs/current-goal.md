@@ -9,16 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline notification outbox's policy-free write forwarding method.
+Inline notification outbox's single-use idempotency lookup.
 
 ## Ordered Steps
 
-1. Confirm `_write_entry()` only forwards validated entries to the owned
-   collection and owns no transaction or audit behavior.
-2. Make each state transition show its persistence point directly and remove
-   the forwarding method.
-3. Run focused notification/daemon/CLI tests and full gates, then commit
-   without pushing.
+1. Confirm `_find_by_idempotency_key()` is only the linear lookup inside
+   transactional `add()` and is otherwise a test seam.
+2. Inline the lookup; move concurrency-test pausing to the real `list()` query
+   boundary instead of retaining a production helper for instrumentation.
+3. Run focused notification tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -27,8 +26,7 @@ Inline notification outbox's policy-free write forwarding method.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve transactions, entry locking, idempotency, recovery states, and
-  delivery finalization semantics.
+- Preserve atomic cross-process admission and first-entry-wins behavior.
 
 ## Constraints
 
@@ -40,6 +38,12 @@ Inline notification outbox's policy-free write forwarding method.
 
 ## Phase Evidence
 
+- Transactional notification admission now performs its one idempotency-key
+  scan directly in `add()`. Removed `_find_by_idempotency_key()` and moved the
+  cross-process test pause to the real `list()` query boundary; first-entry-wins
+  admission remains covered. Focused outbox/delivery tests: 37 passed; full
+  suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Notification outbox state transitions now write their validated immutable
   entries directly to the owned collection. Removed `_write_entry()`, which
   added no transaction, locking, validation, or audit policy, while retaining
