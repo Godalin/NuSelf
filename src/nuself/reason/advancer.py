@@ -24,10 +24,7 @@ from nuself.agent.tool_utils import (
 )
 from nuself.config import RuntimePaths
 
-from nuself.llm import (
-    LangChainLLMEndpoint,
-    configured_langchain_chat_models,
-)
+from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import (
     ReasoningStep,
     ReasoningThread,
@@ -404,7 +401,7 @@ def default_reason_advancer(
     persona_repository: PersonaPromptRepository,
     trace_recorder: TraceRecorder,
     readonly_tools: Sequence[BaseTool] | None = None,
-    langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+    langchain_models: tuple[LangChainLLMEndpoint, ...],
 ) -> ReasonAdvancer:
     """Build the default reason capability from explicit application resources."""
     return ReasonAdvancer(
@@ -413,9 +410,5 @@ def default_reason_advancer(
         persona_repository=persona_repository,
         trace_recorder=trace_recorder,
         readonly_tools=readonly_tools,
-        langchain_models=(
-            configured_langchain_chat_models(paths.project_root)
-            if langchain_models is None
-            else langchain_models
-        ),
+        langchain_models=langchain_models,
     )

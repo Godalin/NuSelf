@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from threading import Lock
 import time
-from typing import Any, Never, cast
+from typing import Any, cast
 
 import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from nuself.agent.middleware import ToolOutcome
 from nuself.application.composition import compose_application
+from nuself.application.reason import compose_reason_advancer
 from nuself.config import runtime_paths
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
 from nuself.logs import read_log_events
@@ -59,7 +60,45 @@ def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
     }
 
 
-def test_default_reason_advancer_loads_project_endpoints_once(
+def test_application_reason_composition_resolves_models_from_graph_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = compose_application(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://reason.test/v1",
+            api_key="test",
+            model="reason-test",
+        ),
+        model=cast(BaseChatModel, object()),
+    )
+    captured: list[tuple[Path | None, object]] = []
+
+    def configured(
+        project_root: Path | None,
+        *,
+        config: object,
+    ) -> tuple[LangChainLLMEndpoint, ...]:
+        captured.append((project_root, config))
+        return (endpoint,)
+
+    monkeypatch.setattr(
+        "nuself.application.reason.configured_langchain_chat_models",
+        configured,
+    )
+
+    advancer = compose_reason_advancer(application)
+
+    assert captured == [(tmp_path, application.config)]
+    assert advancer._langchain_models == (endpoint,)
+
+
+def test_default_reason_advancer_uses_explicit_endpoints_and_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -72,14 +111,6 @@ def test_default_reason_advancer_loads_project_endpoints_once(
         ),
         model=cast(BaseChatModel, object()),
     )
-    calls: list[Path | None] = []
-
-    def configured(
-        project_root: Path | None,
-    ) -> tuple[LangChainLLMEndpoint, ...]:
-        calls.append(project_root)
-        return (endpoint,)
-
     def create_agent(**kwargs: object) -> object:
         return kwargs
 
@@ -99,10 +130,6 @@ def test_default_reason_advancer_loads_project_endpoints_once(
     )
 
     monkeypatch.setattr(
-        "nuself.reason.advancer.configured_langchain_chat_models",
-        configured,
-    )
-    monkeypatch.setattr(
         "nuself.reason.advancer._create_agent",
         create_agent,
     )
@@ -110,9 +137,9 @@ def test_default_reason_advancer_loads_project_endpoints_once(
     advancer = default_reason_advancer(
         **_advancer_dependencies(tmp_path),
         readonly_tools=(readonly_tool, invalid_metadata_tool),
+        langchain_models=(endpoint,),
     )
 
-    assert calls == [tmp_path]
     assert advancer._langchain_models == (endpoint,)
     assert advancer._workspace_store is not None
     assert advancer._readonly_tools == (
@@ -125,17 +152,7 @@ def test_default_reason_advancer_loads_project_endpoints_once(
 
 def test_default_reason_advancer_preserves_explicit_empty_endpoints(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def unexpected(project_root: Path | None) -> Never:
-        del project_root
-        raise AssertionError("configured endpoints must not be loaded")
-
-    monkeypatch.setattr(
-        "nuself.reason.advancer.configured_langchain_chat_models",
-        unexpected,
-    )
-
     advancer = default_reason_advancer(
         **_advancer_dependencies(tmp_path),
         langchain_models=(),

@@ -7,7 +7,10 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
 
-from nuself.llm import LangChainLLMEndpoint
+from nuself.llm import (
+    LangChainLLMEndpoint,
+    configured_langchain_chat_models,
+)
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
 
 if TYPE_CHECKING:
@@ -28,5 +31,12 @@ def compose_reason_advancer(
         persona_repository=application.persona_prompts,
         trace_recorder=application.trace.recorder,
         readonly_tools=readonly_tools,
-        langchain_models=langchain_models,
+        langchain_models=(
+            langchain_models
+            if langchain_models is not None
+            else configured_langchain_chat_models(
+                application.paths.project_root,
+                config=application.config,
+            )
+        ),
     )

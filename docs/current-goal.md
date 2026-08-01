@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Give shared Persona discussion one explicit composition path.
+Move Reason endpoint resolution to application composition.
 
 ## Ordered Steps
 
-1. Confirm full `ProactivePersonaDiscussion` injection has no production caller
-   and hidden config loading exists only because Chat omits Reflection settings.
-2. Require resolved path/settings/language, thread settings through
-   `ConversationResources`, and retain only narrow agent injection points.
-3. Consolidate the redundant discussion-service tests, run focused Persona/Chat/
-   Reflection tests and full gates, then commit without pushing.
+1. Confirm CLI/REPL call application Reason composition without endpoints while
+   the domain factory then reloads configuration; daemon already passes models.
+2. Resolve optional models from `ApplicationGraph.config` in the application
+   factory and require a concrete endpoint tuple in `default_reason_advancer()`.
+3. Update factory tests, run focused Reason/CLI/REPL tests and full gates, then
+   commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve bounded discussion behavior, typed structured agents, model endpoint
-  injection, degradation policy, trace callbacks, and language selection.
+- Preserve explicit empty endpoints, failover ordering, readonly tools,
+  workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Give shared Persona discussion one explicit composition path.
 
 ## Phase Evidence
 
+- Reason endpoint resolution now belongs to `application.reason`, which uses
+  the existing graph config when callers omit an explicit tuple. The domain
+  `default_reason_advancer()` requires concrete endpoints and no longer imports
+  or invokes the configuration/model factory; explicit empty tuples remain
+  authoritative. Focused Reason/CLI/REPL tests: 639 passed; full suite: 2439
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `SharedPersonaDiscussionService` now has one construction path requiring a
   resolved project `Path`, `ReflectionSettings`, and language preference.
   Removed full-engine injection and internal `ConfigSystem.load()`; Chat carries
