@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove unused registry overrides from memory application composition.
+Remove unused raw operations from the Reason repository.
 
 ## Ordered Steps
 
-1. Confirm no production or test caller supplies the optional memory type or
-   relation registry overrides to `compose_memory_repositories()`.
-2. Document concrete application composition and remove those unused override
-   parameters while retaining direct repository injection for focused tests.
-3. Run focused composition/memory tests and the complete verification gates; update
+1. Confirm `ReasonRepository.ensure()` is a no-op with no callers and
+   `get_step()` has no production consumer beyond its repository-only test.
+2. Remove both operations while preserving transactional writes and the
+   thread-scoped `list_steps()` API used by `ReasonService`.
+3. Run focused Reason tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve domain-owned registry validation and direct repository injection;
-  remove only unused application-composition variability.
+- Preserve thread lifecycle, transactional step/thread persistence, ordered
+  step listing, daemon advancement, and output export.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove unused registry overrides from memory application composition.
 
 ## Phase Evidence
 
+- `ReasonRepository` no longer contains the zero-caller no-op `ensure()` or
+  the raw `get_step()` operation used only by its own test. The application
+  continues to expose ordered thread-scoped steps through `ReasonService`, and
+  transactional step/thread writes are unchanged. Focused Reason tests: 261
+  passed; full suite: 2443 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - `compose_memory_repositories()` now exposes only its two required authority
   inputs. Removed unused memory type and relation registry override parameters
   and imports; direct `MemoryEntryRepository` construction still supports

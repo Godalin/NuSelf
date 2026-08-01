@@ -407,6 +407,9 @@ Pause, resume, resolve, and archive remain explicit Reason use cases, while the
 shared transition rule owns their common ID-or-index resolution, validation,
 persistence, and audit path. Public semantic names must not require duplicate
 adapter logic.
+Reason persistence exposes thread-scoped ordered step listing to the service;
+it does not expose an otherwise unused raw step lookup. Backend collections
+already exist when composed, so the repository has no no-op `ensure()` method.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 `PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has

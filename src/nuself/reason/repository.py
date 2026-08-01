@@ -39,9 +39,6 @@ class ReasonRepository:
             with self._backend.transaction():
                 yield
 
-    def ensure(self) -> None:
-        pass  # collections create directories automatically
-
     # ── Thread operations ──────────────────────────────────────────
 
     def save_thread(self, thread: ReasoningThread) -> ReasoningThread:
@@ -118,9 +115,3 @@ class ReasonRepository:
                 continue
             steps.append(step)
         return sorted(steps, key=lambda s: (s.created_at, s.id))
-
-    def get_step(self, step_id: str) -> ReasoningStep:
-        raw = self._steps.get(step_id)
-        if raw is None:
-            raise ReasonNotFound(step_id)
-        return ReasoningStep.from_wire(raw)

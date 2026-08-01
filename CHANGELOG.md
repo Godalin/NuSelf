@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The Reason repository no longer exposes a no-op `ensure()` or an unused raw
+  step lookup; thread-scoped ordered step access remains the service boundary.
 - Memory application composition no longer exposes unused type/relation
   registry overrides; custom registries remain available to focused repository
   construction.

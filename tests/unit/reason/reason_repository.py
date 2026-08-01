@@ -89,16 +89,6 @@ def test_save_and_list_steps(tmp_path: Path) -> None:
     assert len(steps) == 2
 
 
-def test_get_step(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    t = ReasoningThread(topic="Test")
-    repo.save_thread(t)
-    s = ReasoningStep(thread_id=t.id, summary="Step")
-    repo.save_step(s)
-    loaded = repo.get_step(s.id)
-    assert loaded.id == s.id
-
-
 def test_list_empty_threads(tmp_path: Path) -> None:
     repo = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     assert repo.list_threads() == []
