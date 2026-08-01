@@ -387,6 +387,11 @@ application runtime.
   between daemon-backed and local interactive sessions. It receives chat and
   REPL execution as typed callbacks from the composition root and does not
   implement either capability itself.
+- Shared terminal workflows used by both argparse and REPL live in a narrow
+  CLI module rather than either adapter. `cli.reason_watch` owns the reasoning
+  polling loop; `commands.reason` owns its argparse adapter and the REPL
+  dispatcher calls the same loop directly. The top-level parser must not
+  import `cli.repl.commands` to obtain a one-shot handler.
 - `cli/chat.py` owns CLI-facing daemon and one-shot chat adapters: configured
   request timeout, transport/application error translation, correlated audit
   writes, direct `ConversationGraphRuntime` invocation, and post-turn memory curator

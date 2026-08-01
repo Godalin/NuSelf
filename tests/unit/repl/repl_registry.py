@@ -1,6 +1,5 @@
 from nuself.cli.repl.registry import (
     command_body,
-    command_matches,
     command_names,
     command_tokens,
     render_help_lines,
@@ -11,7 +10,6 @@ from nuself.cli.repl.registry import (
 
 def test_registry_drives_canonical_and_alias_matching() -> None:
     assert tokens_for("mem") == (":mem", ":m")
-    assert command_matches(":m", "mem")
     assert command_body(":mem search durable context", "mem") == (
         "search durable context"
     )

@@ -21,7 +21,6 @@ from nuself.cli.repl.commands import (
     handle_interactive_notify_subcommand,
     handle_interactive_persona_command,
     handle_interactive_reason_command,
-    handle_interactive_reason_watch,
     handle_interactive_reflection_command,
     handle_interactive_reflection_list_command,
     handle_interactive_reflection_show_command,
@@ -33,6 +32,7 @@ from nuself.cli.repl.commands import (
     handle_interactive_whoami_command,
 )
 from nuself.cli.repl.input import interactive_help
+from nuself.cli.reason_watch import watch_reason_steps
 from nuself.cli.repl.registry import (
     command_names,
     resolve_command,
@@ -290,7 +290,7 @@ def _handle_reason(
     print()
     if body == "watch" or body.startswith("watch "):
         thread_ref = body.removeprefix("watch").strip()
-        handle_interactive_reason_watch(
+        watch_reason_steps(
             context.project_root,
             thread_ref=thread_ref or None,
         )

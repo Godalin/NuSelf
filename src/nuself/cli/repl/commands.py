@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from nuself.cli.composition import compose_cli_conversation_store
@@ -244,65 +243,6 @@ def interactive_reason_help(command: str | None = None) -> str:
         ]
     )
     return "\n".join(lines)
-
-
-def handle_interactive_reason_watch(project_root: Path | None, interval: int = 2, thread_ref: str | None = None) -> None:
-    """Watch for new reasoning steps and print them.
-
-    If *thread_ref* is given (id or index), watch only that thread.
-    """
-    import time
-
-    from nuself.tui.reason import render_reason_detail, render_step_watch_entry
-
-    service = _reason_service(project_root)
-    threads = service.list_threads(status="all")
-    if thread_ref is not None:
-        try:
-            thread = service.show_thread(thread_ref)
-        except ReasonNotFound:
-            print(f"Reason thread not found: {thread_ref}", file=sys.stderr)
-            return
-        threads = [thread]
-        print_ansi(render_reason_detail(thread))
-        for step in service.list_steps(thread.id):
-            print_ansi(render_step_watch_entry(step))
-    else:
-        for index, thread in enumerate(threads):
-            print_ansi(render_reason_detail(thread))
-            print_ansi(theme.muted(f"(index: {index})"))
-            for step in service.list_steps(thread.id):
-                print_ansi(render_step_watch_entry(step))
-    print()
-    print("Watching for new reasoning steps. Press Ctrl+C to stop.")
-
-    # Track step count per thread for polling.
-    counts: dict[str, int] = {}
-    for thread in threads:
-        counts[thread.id] = len(service.list_steps(thread.id))
-
-    try:
-        while True:
-            time.sleep(interval)
-            for thread in threads:
-                steps = service.list_steps(thread.id)
-                if len(steps) > counts.get(thread.id, 0):
-                    for step in steps[counts[thread.id]:]:
-                        print_ansi(render_step_watch_entry(step))
-                    counts[thread.id] = len(steps)
-    except KeyboardInterrupt:
-        print("\nStopped watching.")
-
-
-def handle_reason_watch(args: argparse.Namespace) -> int:
-    """Run the one-shot argparse adapter for the interactive watch loop."""
-
-    handle_interactive_reason_watch(
-        args.project_root,
-        interval=getattr(args, "interval", 5),
-        thread_ref=getattr(args, "thread_id", None) or None,
-    )
-    return 0
 
 
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:

@@ -313,7 +313,7 @@ def test_reason_watch_dispatches_directly_to_repl_command_owner(
         calls.append((project_root, interval, thread_ref))
 
     monkeypatch.setattr(
-        "nuself.cli.repl.commands.handle_interactive_reason_watch",
+        "nuself.cli.commands.reason.watch_reason_steps",
         watch,
     )
 

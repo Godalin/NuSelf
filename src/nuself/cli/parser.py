@@ -54,6 +54,7 @@ from nuself.cli.commands.persona import (
     handle_persona_show,
 )
 from nuself.cli.commands.reason import (
+    handle_reason_watch,
     REASON_VERBS,
     handle_reason_delete,
     handle_reason_list,
@@ -105,7 +106,6 @@ from nuself.cli.readiness import (
     MODEL_READY,
     NO_READINESS,
 )
-from nuself.cli.repl.commands import handle_reason_watch
 from nuself.logs import LOG_COMPONENTS
 from nuself.trace.domain import TRACE_KINDS
 

@@ -161,10 +161,6 @@ def command_body(text: str, name: str) -> str | None:
     return None
 
 
-def command_matches(text: str, name: str) -> bool:
-    return command_body(text, name) == ""
-
-
 def resolve_command(text: str) -> ResolvedReplCommand | None:
     """Resolve a complete input to one canonical command and argument body."""
     token, separator, remainder = text.partition(" ")

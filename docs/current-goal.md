@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the REPL command/dispatcher pair for duplicated command taxonomy,
-parsing, and routing. Keep one explicit registry and direct handlers; avoid a
-generic command bus or a second parser framework.
+Remove REPL-to-argparse adapter calls, beginning with Persona commands that
+construct synthetic `argparse.Namespace` values. Extract or call narrow shared
+use cases without adding a command facade.
 
 ## Constraints
 
@@ -295,6 +295,17 @@ generic command bus or a second parser framework.
   capture, curation, startup notices, and session headers retain their existing
   paths through the moved callback graph.
 - CLI/REPL focused suite: 574 passed. Post-REPL-composition
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- The REPL registry's command taxonomy and dispatcher handler table remain
+  separate by design: metadata drives aliases/help/completion, while the sealed
+  handler registry proves exact execution coverage without importing runtime
+  handlers into metadata. Removed the test-only `command_matches` query.
+- Reason step watching now lives in `cli.reason_watch`, shared directly by the
+  argparse adapter and REPL dispatcher. The top-level parser no longer imports
+  `cli.repl.commands` for a one-shot handler, and REPL commands no longer own
+  the argparse Reason watch adapter.
+- CLI/REPL/Reason focused suite: 838 passed. Post-watch-boundary
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

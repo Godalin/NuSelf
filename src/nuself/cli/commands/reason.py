@@ -11,6 +11,7 @@ from nuself.application.reason import (
 )
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
+from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -90,6 +91,16 @@ def handle_reason_start(args: argparse.Namespace) -> int:
         return 1
     print(f"Started reasoning thread: {thread.id}")
     print_ansi(render_reason_detail(thread))
+    return 0
+
+
+def handle_reason_watch(args: argparse.Namespace) -> int:
+    """Run the one-shot argparse adapter for the shared watch loop."""
+    watch_reason_steps(
+        args.project_root,
+        interval=getattr(args, "interval", 5),
+        thread_ref=getattr(args, "thread_id", None) or None,
+    )
     return 0
 
 
