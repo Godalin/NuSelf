@@ -2336,19 +2336,21 @@ def test_memory_add_infers_type_without_manual_type(
                 importance=0.6,
             )
 
-    def fake_default_structured_agent(
+    def fake_structured_agent(
         schema: object,
         *,
+        endpoints: object,
         project_root: Path | None = None,
         component: str,
     ) -> FakeIntakeAgent:
+        del endpoints, project_root
         assert schema is IntakeResultOutput
         assert component == "memory"
         return FakeIntakeAgent()
 
     monkeypatch.setattr(
-        "nuself.memory.intake.default_structured_agent",
-        fake_default_structured_agent,
+        "nuself.cli.commands.memory.entries.LangChainStructuredAgent",
+        fake_structured_agent,
     )
     add_result = main(
         [

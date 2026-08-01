@@ -8,9 +8,8 @@ from typing import cast
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from nuself.agent.errors import AgentError
-from nuself.agent.structured import StructuredAgent, default_structured_agent
+from nuself.agent.structured import StructuredAgent
 from nuself.config import RuntimePaths
-from nuself.llm import LangChainLLMEndpoint
 from nuself.domain.memory import (
     MemoryCandidate,
     MemoryEntry,
@@ -123,8 +122,7 @@ class MemoryCurator:
         self,
         paths: RuntimePaths,
         *,
-        agent: StructuredAgent[CuratorActionsOutput] | None = None,
-        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+        agent: StructuredAgent[CuratorActionsOutput],
         settings: MemoryCuratorSettings | None = None,
         observation_repository: MemoryObservationRepository,
         repository: MemoryEntryRepository,
@@ -135,12 +133,7 @@ class MemoryCurator:
         plan_store: MemoryCuratorPlanStore,
     ) -> None:
         self._paths = paths
-        self._agent = agent or default_structured_agent(
-            CuratorActionsOutput,
-            project_root=paths.project_root,
-            component="memory",
-            endpoints=langchain_models,
-        )
+        self._agent = agent
         self._settings = settings or MemoryCuratorSettings()
         self._observations = observation_repository
         self._repository = repository

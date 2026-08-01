@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from nuself.cli.composition import compose_cli_application
+from nuself.agent.structured import LangChainStructuredAgent
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.commands.output import (
     print_ansi,
@@ -19,7 +20,8 @@ from nuself.domain.memory import (
     MemoryEntry,
     default_memory_type_registry,
 )
-from nuself.memory.intake import MemoryIntakeAgent
+from nuself.llm import configured_langchain_chat_models
+from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.memory.query import MemoryQuery
 from nuself.memory.repository import (
     MemoryEntryNotFound,
@@ -207,7 +209,15 @@ def handle_memory_add(args: argparse.Namespace) -> int:
     try:
         application = compose_cli_application(args.project_root)
         inferred = MemoryIntakeAgent(
-            args.project_root,
+            agent=LangChainStructuredAgent(
+                IntakeResultOutput,
+                endpoints=configured_langchain_chat_models(
+                    application.paths.project_root,
+                    config=application.config,
+                ),
+                project_root=application.paths.project_root,
+                component="memory",
+            ),
             profile_repository=application.memory.profile,
         ).infer(
             body=args.body,

@@ -48,7 +48,6 @@ def _output(
 def _intake(tmp_path: Path, agent: object) -> MemoryIntakeAgent:
     _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     return MemoryIntakeAgent(
-        tmp_path,
         agent=agent,  # type: ignore[arg-type]
         profile_repository=ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)),
     )
@@ -214,7 +213,6 @@ def test_memory_intake_includes_profile_context_in_prompt(
         )
     )
     agent = MemoryIntakeAgent(
-        tmp_path,
         agent=structured_agent,
         profile_repository=profile_repo,
     )

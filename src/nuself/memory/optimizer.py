@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
-from nuself.agent.structured import StructuredAgent, default_structured_agent
+from nuself.agent.structured import StructuredAgent
 from nuself.config import RuntimePaths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
@@ -105,7 +105,7 @@ class MemoryOptimizer:
         self,
         paths: RuntimePaths,
         *,
-        agent: StructuredAgent[OptimizeActionsOutput] | None = None,
+        agent: StructuredAgent[OptimizeActionsOutput],
         settings: MemoryOptimizerSettings | None = None,
         repository: MemoryEntryRepository,
         candidate_repository: MemoryCandidateRepository,
@@ -113,11 +113,7 @@ class MemoryOptimizer:
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._paths = paths
-        self._agent = agent or default_structured_agent(
-            OptimizeActionsOutput,
-            project_root=paths.project_root,
-            component="memory",
-        )
+        self._agent = agent
         self._settings = settings or MemoryOptimizerSettings()
         self._repository = repository
         self._profile_repository = profile_repository

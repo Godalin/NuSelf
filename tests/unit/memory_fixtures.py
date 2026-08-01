@@ -127,7 +127,7 @@ class MemoryCurator(_MemoryCurator):
         self,
         project_root: Path,
         *,
-        agent: StructuredAgent[CuratorActionsOutput] | None = None,
+        agent: StructuredAgent[CuratorActionsOutput],
         settings: MemoryCuratorSettings | None = None,
         conversation_store: ConversationStore | None = None,
         repository: MemoryEntryRepository | None = None,

@@ -387,6 +387,9 @@ importance updates; mutations refresh the derived memory index before
 returning. Agent tools receive only this service and never the entry repository.
 Repository bundles remain internal application resources for workflows that
 coordinate candidates, sources, observations, curator plans, and profiles.
+Memory intake, curation, and optimization receive typed structured agents from
+CLI/application composition. Domain constructors do not resolve configuration
+or model endpoints and retain direct agent injection for deterministic tests.
 
 ### Filtering Before Scoring
 

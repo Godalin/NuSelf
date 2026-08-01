@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit remaining `default_structured_agent` fallbacks across Memory intake,
-optimizer, Reason prompt, and standalone Reflection/Persona entry points;
-remove hidden config discovery where every real caller already owns endpoints.
+Audit remaining domain package `__init__` facades for eager cross-domain imports
+or circular initialization risk; keep only cohesive re-exports with real
+production consumers.
 
 ## Constraints
 
@@ -196,6 +196,15 @@ remove hidden config discovery where every real caller already owns endpoints.
   initialization cycle exposed by multiprocessing spawn. The three failing
   cross-process SQLite tests and a 691-test affected suite pass afterward.
 - Post-fallback/package cleanup `uv run --locked pytest -q`: 2450 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Memory intake, curation, and optimization now require an injected typed
+  `StructuredAgent`. CLI/application composition builds those agents from the
+  active configuration snapshot and resolved endpoints; domain constructors no
+  longer discover configuration or models.
+- Remaining configured structured-agent fallbacks are retained only for Reason
+  prompt and standalone Reflection/Persona entry points that have real direct
+  callers. Memory/CLI/daemon focused suite: 687 passed.
+- Post-memory-agent-boundary `uv run --locked pytest -q`: 2450 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
