@@ -9,16 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make Reason export planning require a real job-scheduling capability.
+Make chat tools and skills reflect actually composed capabilities.
 
 ## Ordered Steps
 
-1. Remove optional job-sink and unused job-registry injection from persistent
-   `ReasonOutputService` state.
-2. Require a sink at `plan_job()` and make the chat tool fail before planning
-   when its surface cannot schedule daemon work.
-3. Update tests/spec, run focused Reason output/chat/daemon tests and full
-   gates, then commit without pushing.
+1. Register the Reason export tool only when a concrete `JobSink` exists.
+2. Expose only skills whose allowed/component tools are present in the current
+   chat runtime.
+3. Update tests/spec, run focused agent/chat tests and full gates, then commit
+   without pushing.
 
 ## Exclusions
 
@@ -27,8 +26,8 @@ Make Reason export planning require a real job-scheduling capability.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve durable manifests after an actual enqueue failure so daemon recovery
-  remains possible; prevent only the no-sink false-success mode.
+- Preserve every base Reason tool, daemon export behavior, skill files, and
+  placeholder rendering for capabilities that are actually present.
 
 ## Constraints
 
@@ -40,6 +39,13 @@ Make Reason export planning require a real job-scheduling capability.
 
 ## Phase Evidence
 
+- Chat tool composition now returns the six base Reason tools without a job
+  sink and adds `reason_export` only when scheduling is present. The skill
+  loader likewise advertises only skills backed by at least one actual runtime
+  tool, removing unavailable export/workspace capabilities from direct chat
+  instead of retaining error-only branches. Focused agent/chat/export tests:
+  88 passed; full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Reason export planning now receives a required `JobSink` at the operation
   boundary instead of retaining an optional sink and unused registry override
   in service state. Chat surfaces without daemon scheduling fail before

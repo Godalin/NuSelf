@@ -234,8 +234,8 @@ model-backed composition policy.
 Export planning requires a concrete `JobSink` at the `plan_job()` operation
 boundary. The service does not retain an optional sink or silently create a
 planned manifest without a wake-up attempt. If a chat surface has no daemon job
-capability, `reason_export` fails before creating artifacts and must not report
-`queued=true`. Once a real enqueue attempt is made, its failure remains
+capability, `reason_export` is not registered and the `reason_output` skill is
+not advertised. Once a real enqueue attempt is made, its failure remains
 best-effort: the durable manifest is preserved for daemon reconciliation.
 
 `TextAgent` guarantees a stripped, non-empty result. Endpoint exhaustion,

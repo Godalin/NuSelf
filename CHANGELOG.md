@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat now registers tools and advertises skills only for capabilities present
+  in that runtime; direct chat without a daemon job sink no longer exposes the
+  unusable Reason export tool or `reason_output` skill.
 - Reason export planning now requires a concrete job sink per operation;
   surfaces without daemon scheduling fail before creating artifacts instead of
   reporting a job as queued without submitting it.

@@ -281,6 +281,17 @@ def build_reason_tools(
         )
         return thread.id
 
+    base_tools = (
+        materialize_tool(list_active_reasoning_threads, executor=execution),
+        materialize_tool(count_reasoning_threads, executor=execution),
+        materialize_tool(show_reasoning_thread, executor=execution),
+        materialize_tool(show_reasoning_context, executor=execution),
+        materialize_tool(show_reasoning_step, executor=execution),
+        materialize_tool(reason_propose, executor=execution),
+    )
+    if job_sink is None:
+        return base_tools
+
     @tool(
         name="reason_export",
         description=(
@@ -304,8 +315,6 @@ def build_reason_tools(
         tid = thread_id.strip()
         if not tid:
             return "Error: thread_id must be a non-empty string"
-        if job_sink is None:
-            return "Error: reason export requires daemon job scheduling"
         try:
             output_service = ReasonOutputService(
                 project_root,
@@ -344,12 +353,7 @@ def build_reason_tools(
         )
 
     return (
-        materialize_tool(list_active_reasoning_threads, executor=execution),
-        materialize_tool(count_reasoning_threads, executor=execution),
-        materialize_tool(show_reasoning_thread, executor=execution),
-        materialize_tool(show_reasoning_context, executor=execution),
-        materialize_tool(show_reasoning_step, executor=execution),
-        materialize_tool(reason_propose, executor=execution),
+        *base_tools,
         materialize_tool(reason_export, executor=execution),
     )
 

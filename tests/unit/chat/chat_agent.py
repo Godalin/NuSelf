@@ -1471,12 +1471,18 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
 
     reason = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason"})
     proposal = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason_proposal"})
+    unavailable = _invoke_chat_tool(
+        tools["load_skill"],
+        {"skill_name": "reason_output"},
+    )
 
     assert "Allowed tools: reason_list_active, reason_count, reason_context, reason_step, reason_show" in reason
     assert "Reason read tools omit tool logs" in reason
     assert "reason_propose" not in reason
     assert "Allowed tools: reason_propose" in proposal
     assert "decorated tool wrapper will prompt for confirmation" in proposal.replace("\n", " ")
+    assert "unknown skill 'reason_output'" in unavailable
+    assert "reason_output" not in tools["load_skill"].description
 
 
 def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1605,18 +1611,11 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
     assert not Path(inner["paths"]["combined"]).exists()
 
 
-def test_reason_export_tool_rejects_missing_scheduler_before_planning(
+def test_reason_export_tool_is_absent_without_scheduler(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("builtins.input", lambda _prompt="": "y")
-
-    result = _invoke_chat_tool(
-        _chat_tool(tmp_path, "reason_export"),
-        {"thread_id": "reason-missing-scheduler"},
-    )
-
-    assert result == "Error: reason export requires daemon job scheduling"
+    with pytest.raises(KeyError, match="reason_export"):
+        _chat_tool(tmp_path, "reason_export")
     assert not tuple(tmp_path.rglob("manifest.json"))
 
 

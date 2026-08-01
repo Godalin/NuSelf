@@ -49,10 +49,16 @@ class ConversationToolRuntime:
             feature_executor=self._feature_executor,
         )
         self._tools = {tool.name: tool for tool in tools}
-        self._skills = load_agent_skills()
-        self._tools_by_skill = {
+        loaded_skills = load_agent_skills()
+        tools_by_skill = {
             skill.name: _tools_for_skill(skill, self._tools)
-            for skill in self._skills
+            for skill in loaded_skills
+        }
+        self._skills = tuple(
+            skill for skill in loaded_skills if tools_by_skill[skill.name]
+        )
+        self._tools_by_skill = {
+            skill.name: tools_by_skill[skill.name] for skill in self._skills
         }
         self._tools["load_skill"] = self._build_skill_loader()
 

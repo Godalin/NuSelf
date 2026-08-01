@@ -62,24 +62,34 @@ def test_subsystem_tool_builders_own_their_registries(
         "reflection_dismiss",
         "reflection_archive",
     }
-    assert _names(
-        build_reason_tools(
-            service=ReasonService(tmp_path),
-            project_root=tmp_path,
-            workspace_store=PrivateWorkspaceStore(
-                runtime_paths(tmp_path),
-                scope="reason",
-            ),
-        )
-    ) == {
+    reason_service = ReasonService(tmp_path)
+    reason_workspace = PrivateWorkspaceStore(
+        runtime_paths(tmp_path),
+        scope="reason",
+    )
+    base_reason_tools = {
         "reason_list_active",
         "reason_count",
         "reason_show",
         "reason_context",
         "reason_step",
         "reason_propose",
-        "reason_export",
     }
+    assert _names(
+        build_reason_tools(
+            service=reason_service,
+            project_root=tmp_path,
+            workspace_store=reason_workspace,
+        )
+    ) == base_reason_tools
+    assert _names(
+        build_reason_tools(
+            service=reason_service,
+            project_root=tmp_path,
+            workspace_store=reason_workspace,
+            job_sink=lambda _message: None,
+        )
+    ) == {*base_reason_tools, "reason_export"}
     assert _names(
         build_trace_tools(
             TraceQueryService(
