@@ -502,9 +502,6 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
     assert updated.state.updated_conversation_state is not None
     assert updated.state.updated_conversation_state.next_message_index == 2
 
-    compressed = runtime.compression_node(updated.state)
-    assert compressed.state.updated_conversation_state == updated.state.updated_conversation_state
-
 
 def test_conversation_state_transitions_preserve_archived_status(
     tmp_path: Path,

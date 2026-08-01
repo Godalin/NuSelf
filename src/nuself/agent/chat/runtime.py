@@ -473,9 +473,6 @@ class ConversationGraphRuntime:
     def state_update_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         return self._state_manager.update(state)
 
-    def compression_node(self, state: ConversationTurnState) -> ConversationNodeResult:
-        return self._state_manager.compress(state)
-
     def compress_conversation(self, conversation_id: str) -> None:
         """Compress one committed conversation outside reply delivery."""
 

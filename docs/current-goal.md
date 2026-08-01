@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue AST-assisted auditing for production methods referenced only by
-tests. Preserve behavior coverage through real domain paths or durable records
-instead of retaining test-only production seams.
+Continue production/test call-surface comparison. Remove test-only methods and
+their dependent adapters while preserving behavior through the actual runtime
+entry point.
 
 ## Constraints
 
@@ -297,6 +297,14 @@ instead of retaining test-only production seams.
 - Reflection focused suite: 105 passed. Post-test-seam cleanup
   `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `ConversationGraphRuntime.compression_node()` was absent from the production
+  turn pipeline and called only by one node-contract test. Removing it also
+  exposed `ConversationStateManager.compress()` as dead adaptation; both are
+  gone. Durable background compression still uses the atomic
+  `compress_conversation()` path.
+- Chat/daemon/conversation focused suite: 351 passed. Post-compression-node
+  cleanup `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

@@ -53,24 +53,6 @@ class ConversationStateManager:
             )
         )
 
-    def compress(
-        self, state: ConversationTurnState
-    ) -> ConversationNodeResult:
-        updated = state.updated_conversation_state
-        if updated is None:
-            raise RuntimeError(
-                "conversation runtime conversation state is missing"
-            )
-        return ConversationNodeResult(
-            state=replace(
-                state,
-                updated_conversation_state=self.compress_conversation(
-                    updated
-                ),
-                node_trace=(*state.node_trace, "compression"),
-            )
-        )
-
     def compress_conversation(
         self, state: ConversationState
     ) -> ConversationState:
