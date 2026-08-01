@@ -28,6 +28,19 @@ def entry() -> OutboxEntry:
     )
 
 
+def _delivery_adapter(
+    project_root: Path,
+    *,
+    available: bool,
+) -> MacOSNotificationAdapter:
+    discovered = "/usr/bin/osascript" if available else None
+    with patch(
+        "nuself.notification.macos.shutil.which",
+        return_value=discovered,
+    ):
+        return MacOSNotificationAdapter(project_root, dry_run=False)
+
+
 def test_dry_run_returns_true_and_logs(adapter: MacOSNotificationAdapter, entry: OutboxEntry) -> None:
     assert adapter.send(entry) is True
     [event] = read_log_events(
@@ -43,14 +56,12 @@ def test_dry_run_returns_true_and_logs(adapter: MacOSNotificationAdapter, entry:
 
 
 def test_unavailable_osascript_returns_true_and_logs(tmp_path: Path, entry: OutboxEntry) -> None:
-    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter.has_osascript = False
+    adapter = _delivery_adapter(tmp_path, available=False)
     assert adapter.send(entry) is True
 
 
 def test_send_runs_osascript(tmp_path: Path, entry: OutboxEntry) -> None:
-    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter.has_osascript = True
+    adapter = _delivery_adapter(tmp_path, available=True)
 
     with patch("nuself.notification.macos.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stderr="")
@@ -63,8 +74,7 @@ def test_send_runs_osascript(tmp_path: Path, entry: OutboxEntry) -> None:
 
 
 def test_send_osascript_failure_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
-    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter.has_osascript = True
+    adapter = _delivery_adapter(tmp_path, available=True)
 
     with patch("nuself.notification.macos.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=1, stderr="execution error")
@@ -87,8 +97,7 @@ def test_osascript_failure_diagnostic_preserves_false(
         "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
-    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter.has_osascript = True
+    adapter = _delivery_adapter(tmp_path, available=True)
 
     with patch("nuself.notification.macos.subprocess.run") as run:
         run.return_value = MagicMock(
@@ -107,8 +116,7 @@ def test_osascript_failure_diagnostic_preserves_false(
 def test_send_osascript_timeout_returns_false(tmp_path: Path, entry: OutboxEntry) -> None:
     import subprocess
 
-    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter.has_osascript = True
+    adapter = _delivery_adapter(tmp_path, available=True)
 
     with patch("nuself.notification.macos.subprocess.run") as mock_run:
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="osascript", timeout=10)
@@ -133,8 +141,7 @@ def test_osascript_timeout_diagnostic_preserves_false(
         "nuself.runtime.observability.write_audit_envelope",
         fail_log,
     )
-    adapter = MacOSNotificationAdapter(tmp_path, dry_run=False)
-    adapter.has_osascript = True
+    adapter = _delivery_adapter(tmp_path, available=True)
 
     with patch("nuself.notification.macos.subprocess.run") as run:
         run.side_effect = subprocess.TimeoutExpired(

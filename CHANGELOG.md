@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The macOS notification adapter now keeps its construction-time executable
+  availability private; tests control discovery rather than mutating public
+  adapter state.
 - The macOS notification adapter now requires a composition-resolved project
   path and no longer resolves authority through an optional constructor input.
 - Notification idempotency lookup now lives directly inside transactional

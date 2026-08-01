@@ -24,10 +24,10 @@ class MacOSNotificationAdapter:
     def __init__(self, project_root: Path, *, dry_run: bool = False) -> None:
         self._project_root = project_root
         self._dry_run = dry_run
-        self.has_osascript = shutil.which("osascript") is not None
+        self._has_osascript = shutil.which("osascript") is not None
 
     def send(self, entry: OutboxEntry) -> bool:
-        if self._dry_run or not self.has_osascript:
+        if self._dry_run or not self._has_osascript:
             write_notification_audit(
                 "macos_dry_run" if self._dry_run else "macos_unavailable",
                 project_root=self._project_root,

@@ -171,6 +171,10 @@ Notification composition passes `MacOSNotificationAdapter` one already-resolved
 project `Path`. The adapter does not accept an omitted authority or call
 `runtime_paths()` internally.
 
+The adapter snapshots `osascript` availability privately at construction.
+Availability is not a mutable public control surface; tests control executable
+discovery at the `shutil.which()` boundary before constructing the adapter.
+
 Built-in stable delivery IDs are `log`, `email`, and `macos`. Third-party
 adapters must supply their own non-empty stable ID; class names and error text
 must never be used as persisted identities.

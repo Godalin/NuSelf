@@ -9,16 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove hidden authority resolution from the macOS notification adapter.
+Remove test-controlled public state from the macOS notification adapter.
 
 ## Ordered Steps
 
-1. Confirm every macOS adapter construction already has a resolved project
-   path and composition owns production construction.
-2. Require that Path directly; remove optional root and internal
-   `runtime_paths()` import/call.
-3. Run focused notification/composition tests and full gates, then commit
-   without pushing.
+1. Confirm `has_osascript` is mutated only by tests and production needs an
+   immutable construction-time environment snapshot.
+2. Make the field private; tests control `shutil.which()` before construction
+   instead of changing adapter state afterward.
+3. Run focused macOS adapter tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -27,8 +26,8 @@ Remove hidden authority resolution from the macOS notification adapter.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve dry-run behavior, osascript discovery, escaping, timeout, audit, and
-  delivery results.
+- Preserve discovery timing, dry-run behavior, escaping, timeout, audit, and
+  delivery results without adding an injection sentinel.
 
 ## Constraints
 
@@ -40,6 +39,11 @@ Remove hidden authority resolution from the macOS notification adapter.
 
 ## Phase Evidence
 
+- `MacOSNotificationAdapter` now keeps its construction-time `osascript`
+  discovery result private. Tests control `shutil.which()` before construction
+  rather than mutating adapter state; no sentinel or alternate constructor was
+  added. Focused macOS/delivery tests: 36 passed; full suite: 2441 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `MacOSNotificationAdapter` now requires one composition-resolved project
   `Path`. Removed its optional authority input and internal `runtime_paths()`
   import/call; dry-run, executable discovery, timeout, audit, and delivery
