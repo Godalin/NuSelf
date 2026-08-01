@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue production/test call-surface comparison. Remove test-only methods and
-their dependent adapters while preserving behavior through the actual runtime
-entry point.
+Continue production/test call-surface comparison and remove historical DTO
+surfaces superseded by strict boundary codecs.
 
 ## Constraints
 
@@ -305,6 +304,13 @@ entry point.
 - Chat/daemon/conversation focused suite: 351 passed. Post-compression-node
   cleanup `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- `ChatResult.to_payload()` had no production or documented consumer; its only
+  caller tested the obsolete generic mapping itself. It is gone. Daemon wire
+  serialization remains solely owned by strict `ChatResponsePayload`, while
+  CLI projection remains explicit.
+- Chat/daemon/CLI focused suite: 246 passed. Post-result-serializer cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

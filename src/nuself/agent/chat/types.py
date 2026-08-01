@@ -69,20 +69,6 @@ class ChatResult:
     trace_id: str | None = None
     completed_turn: CompletedTurn | None = None
 
-    def to_payload(self) -> dict[str, object]:
-        payload: dict[str, object] = {
-            "answer": self.answer,
-            "conversation_id": self.conversation_id,
-            "evidence_references": list(self.evidence_references),
-            "epistemic_status": self.epistemic_status,
-        }
-        if self.confidence is not None:
-            payload["confidence"] = self.confidence
-        if self.trace_id is not None:
-            payload["trace_id"] = self.trace_id
-        return payload
-
-
 @dataclass(frozen=True)
 class ConversationTurnState:
     """Typed state passed between conversation pipeline stages."""

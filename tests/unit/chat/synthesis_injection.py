@@ -183,36 +183,6 @@ def test_selves_consult_returns_internal_synthesis(
     assert "skeptic_self" in result or "builder_self" in result
 
 
-def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
-    """Verify that synthesis remains internal and does NOT appear in ChatResult.to_payload()."""
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        response_service=StaticResponseService(
-            ChatStructuredOutput(answer="Final answer.", confidence=0.5)
-        ),
-        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
-    )
-
-    _, result, _ = runtime.run_turn(
-        ConversationState.empty("payload-test"),
-        "What are the risks and implementation steps for this?",
-        "payload-test",
-    )
-
-    # Verify ChatResult payload doesn't include synthesis info
-    payload = result.to_payload()
-    payload_str = str(payload)
-    assert "Internal perspective fusion" not in payload_str
-    assert "synthesizer_self" not in payload_str
-    assert "synthesis" not in payload_str.lower()
-    
-    # Verify expected fields are present and correct
-    assert payload["answer"] == "Final answer."
-    assert payload["conversation_id"] == "payload-test"
-    assert isinstance(payload["evidence_references"], list)
-    assert isinstance(payload["epistemic_status"], str)
-
-
 def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     """Verify that the chat graph does not include synthesis sections in the normal respond path."""
     runtime = ConversationGraphRuntime(
