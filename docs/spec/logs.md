@@ -84,6 +84,12 @@ override projection defaults locally. Unknown events, missing or extra metadata
 fields, incorrect field types, forbidden errors, and missing required errors
 are programming errors raised before the best-effort log sink boundary.
 
+Exact metadata field-set validation is one shared audit-definition primitive;
+domain validators compose it with their own value constraints. Domains retain
+separate sealed registries, messages, producers, and semantic validators.
+Audit events without a current production producer are not retained as
+speculative API surface.
+
 `restart_failed` is one event with two explicit metadata variants selected by
 `stage`: the `start` variant carries start-failure reason/phase/PID/socket/exit
 code, while the `stop` variant carries stop-failure

@@ -35,7 +35,7 @@ def test_chat_completion_contract_is_exact() -> None:
             project_root=Path("."),
             request_id="request-1",
             duration_ms=1,
-            metadata={"evidence_references": 0},
+            metadata={},
         )
     with pytest.raises(AuditSchemaError, match="non-negative"):
         write_daemon_request_audit(
@@ -45,7 +45,6 @@ def test_chat_completion_contract_is_exact() -> None:
             duration_ms=1,
             metadata={
                 "evidence_references": -1,
-                "memory_curation_requested": False,
             },
         )
 

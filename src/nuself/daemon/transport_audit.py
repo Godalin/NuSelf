@@ -10,6 +10,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_chain
@@ -30,19 +31,6 @@ _MESSAGES: dict[DaemonTransportAuditEvent, str] = {
 }
 
 
-def _require_exact(
-    metadata: Mapping[str, object],
-    expected: frozenset[str],
-) -> None:
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "daemon transport audit metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
-
-
 def _require_response_status(metadata: Mapping[str, object]) -> None:
     if metadata["response_status"] not in {"ok", "error"}:
         raise AuditSchemaError(
@@ -51,14 +39,19 @@ def _require_response_status(metadata: Mapping[str, object]) -> None:
 
 
 def _response_encode(metadata: Mapping[str, object]) -> None:
-    _require_exact(metadata, frozenset({"response_status"}))
+    require_exact_metadata(
+        metadata,
+        frozenset({"response_status"}),
+        context="daemon transport audit metadata",
+    )
     _require_response_status(metadata)
 
 
 def _response_delivery(metadata: Mapping[str, object]) -> None:
-    _require_exact(
+    require_exact_metadata(
         metadata,
         frozenset({"response_status", "fallback"}),
+        context="daemon transport audit metadata",
     )
     _require_response_status(metadata)
     if type(metadata["fallback"]) is not bool:

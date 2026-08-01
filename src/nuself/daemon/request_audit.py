@@ -11,6 +11,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_chain
@@ -42,21 +43,12 @@ _MESSAGES: dict[DaemonRequestAuditEvent, str] = {
 }
 
 
-def _require_exact(
-    metadata: Mapping[str, object],
-    expected: frozenset[str],
-) -> None:
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "daemon request audit metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
-
-
 def _request_rejected(metadata: Mapping[str, object]) -> None:
-    _require_exact(metadata, frozenset({"request_type"}))
+    require_exact_metadata(
+        metadata,
+        frozenset({"request_type"}),
+        context="daemon request audit metadata",
+    )
     value = metadata["request_type"]
     if not isinstance(value, str) or not value.strip():
         raise AuditSchemaError(
@@ -65,20 +57,15 @@ def _request_rejected(metadata: Mapping[str, object]) -> None:
 
 
 def _chat_completed(metadata: Mapping[str, object]) -> None:
-    _require_exact(
+    require_exact_metadata(
         metadata,
-        frozenset(
-            {"evidence_references", "memory_curation_requested"}
-        ),
+        frozenset({"evidence_references"}),
+        context="daemon request audit metadata",
     )
     evidence_references = metadata["evidence_references"]
     if type(evidence_references) is not int or evidence_references < 0:
         raise AuditSchemaError(
             "daemon request audit evidence_references must be non-negative"
-        )
-    if type(metadata["memory_curation_requested"]) is not bool:
-        raise AuditSchemaError(
-            "daemon request audit memory_curation_requested must be a boolean"
         )
 
 

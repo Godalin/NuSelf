@@ -9,18 +9,18 @@ Idle — no active implementation goal.
 
 ## Last Completed Goal
 
-Simplified daemon and application-service composition without changing
-storage, configuration, wire protocol, or user-visible behavior.
+Simplified composable daemon audit infrastructure without merging domain
+registries or changing protocol, storage, scheduler, or CLI behavior.
 
 ## Completion Evidence
 
-- Removed repository-only forwarding factories and two empty composition
-  modules; the application root now constructs simple repositories directly.
-- `ApplicationGraph` no longer stores or exposes the raw backend. Reflection
-  receives only its scheduler-state collection.
-- Daemon health reads the scheduler directly, memory admission is private, and
-  the typed task kind is the only runtime catalog source.
-- Focused daemon/API boundary suite: 91 passed.
-- `uv run --locked pytest -q`: 2450 passed.
+- Removed the production-unused worker-timeout event, reporter, schema, and
+  tests left by the former multi-worker daemon.
+- Removed the constant `memory_curation_requested` chat audit field; durable
+  recovery remains authoritative.
+- Daemon audit domains now compose one exact-field validation primitive while
+  retaining independent event definitions and producers.
+- Focused daemon/shared audit suite: 71 passed.
+- `uv run --locked pytest -q`: 2447 passed.
 - `uv run --locked pyright`: 0 errors, 0 warnings.
 - `uv build`: `nuself-0.3.1` sdist and wheel built successfully.

@@ -231,7 +231,6 @@ def _handle_chat(
             duration_ms=duration_ms,
             metadata={
                 "evidence_references": len(result.evidence_references),
-                "memory_curation_requested": True,
             },
         )
     return DaemonResponse.ok(request, payload.to_wire())

@@ -41,11 +41,25 @@ class UnknownAuditDefinitionError(LookupError):
     """A direct audit event has no owning definition."""
 
 
-def _validate_no_metadata(metadata: Mapping[str, object]) -> None:
-    if metadata:
+def require_exact_metadata(
+    metadata: Mapping[str, object],
+    expected: frozenset[str],
+    *,
+    context: str = "audit metadata",
+) -> None:
+    """Require one exact metadata field set before value validation."""
+
+    actual = frozenset(metadata)
+    if actual != expected:
         raise AuditSchemaError(
-            f"audit metadata fields differ (extra={sorted(metadata)!r})"
+            f"{context} fields differ "
+            f"(missing={sorted(expected - actual)!r}, "
+            f"extra={sorted(actual - expected)!r})"
         )
+
+
+def _validate_no_metadata(metadata: Mapping[str, object]) -> None:
+    require_exact_metadata(metadata, frozenset())
 
 
 @dataclass(frozen=True)

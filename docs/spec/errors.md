@@ -143,13 +143,13 @@ The daemon request layer owns one sealed audit contract:
 |---|---|---|---|---|
 | `request_rejected` | warning | `error` | required error, no duration | `request_type` |
 | `chat_turn_failed` | error | `error` | required error, no duration | none |
-| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references`, boolean `memory_curation_requested` |
+| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references` |
 | `shutdown_requested` | info | `accepted` | no error or duration | none |
 
 Messages are fixed by the request audit adapter. Producers supply only event
 schema data and correlation; they cannot choose messages, levels, statuses, or
 error policy. Unknown events, missing or extra metadata, invalid counts,
-non-boolean flags, and invalid duration/error combinations fail before the
+invalid counts and duration/error combinations fail before the
 best-effort sink.
 
 Request events are distinct from Chat runtime events: Chat `turn.*` describes
@@ -344,14 +344,13 @@ before instance-lock release succeed. Failed cleanup emits
 lifecycle error. Failure of that diagnostic does not alter the retained error
 set.
 
-Daemon process/supervisor failures use one sealed operations audit contract:
+Daemon process cleanup failures use one sealed operations audit contract:
 
 | Event | Level | Status | Exact metadata |
 |---|---|---|---|
-| `thread_timeout` | warning | `timed_out` | non-empty `worker`, finite non-negative `timeout_seconds` |
 | `shutdown_cleanup_failed` | error | `error` | non-empty ordered `failures` records containing non-empty `step` and canonical `error`, boolean `primary_failed` |
 
-Both events require a canonical top-level error and forbid duration. Cleanup
+The event requires a canonical top-level error and forbids duration. Cleanup
 metadata preserves each retained failure because the aggregate lifecycle
 exception intentionally summarizes only the count. The adapter sanitizes each
 failure chain through the shared diagnostic path; callers do not format nested
