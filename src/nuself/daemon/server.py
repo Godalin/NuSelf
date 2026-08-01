@@ -97,10 +97,9 @@ def run_daemon(project_root: Path | None = None) -> int:
             error=diagnostic_exception_message(exc),
         )
         return 1
-    result = 0
     primary_error: BaseException | None = None
     try:
-        result = _run_owned_daemon(paths)
+        _run_owned_daemon(paths)
     except BaseException as exc:
         primary_error = exc
     cleanup_failures = run_cleanup_steps(
@@ -111,10 +110,10 @@ def run_daemon(project_root: Path | None = None) -> int:
         primary_error=primary_error,
         cleanup_failures=cleanup_failures,
     )
-    return result
+    return 0
 
 
-def _run_owned_daemon(paths: RuntimePaths) -> int:
+def _run_owned_daemon(paths: RuntimePaths) -> None:
     """Run the daemon while the caller holds project instance ownership."""
 
     state: DaemonState | None = None
@@ -141,7 +140,12 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         ) as server:
             write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
             state.start_background_tasks()
-            state.require_scheduler_ready()
+            if state.shutdown_requested.is_set():
+                raise RuntimeError(
+                    "daemon shutdown was requested before readiness"
+                )
+            if not state.scheduler.snapshot().running:
+                raise RuntimeError("daemon scheduler is not running")
             write_lifecycle_audit(
                 "started",
                 project_root=paths.project_root,
@@ -186,7 +190,6 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         primary_error=primary_error,
         cleanup_failures=cleanup_failures,
     )
-    return 0
 
 
 def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:

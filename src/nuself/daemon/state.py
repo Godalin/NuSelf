@@ -159,12 +159,6 @@ class DaemonState:
             project_root=self.project_root,
         )
 
-    def require_scheduler_ready(self) -> None:
-        """Require the dispatcher to remain alive before readiness."""
-
-        if not self.scheduler.snapshot().running:
-            raise RuntimeError("daemon scheduler is not running")
-
     def start_background_tasks(self) -> None:
         """Start one scheduler and admit all recurring responsibilities."""
 

@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit daemon server startup/cleanup composition for duplicated lifecycle state
-or wrapper steps while preserving one process owner and exhaustive cleanup.
+Audit remaining application service APIs for pass-through methods, duplicated
+authority state, or adapter-shaped CRUD while preserving complete domain use
+cases.
 
 ## Constraints
 
@@ -98,6 +99,16 @@ or wrapper steps while preserving one process owner and exhaustive cleanup.
   booleans were replaced by one monotonic `created/running/stopping/stopped`
   phase; running and accepting health now derive from that source.
 - Scheduler/daemon focused suite: 50 passed. Post-scheduler-lifecycle
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Daemon server keeps named exhaustive cleanup because ordinary context-manager
+  unwinding cannot retain and report every failure. Removed the pass-through
+  scheduler readiness method; the process owner now checks the injected
+  scheduler and pre-readiness shutdown directly.
+- Replaced the daemon lifecycle test fixture's obsolete five-worker model with
+  the production single-scheduler boundary. The private owned runner no longer
+  returns a constant exit code; `run_daemon()` alone owns process status.
+- Server lifecycle focused suite: 98 passed. Post-server-composition
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
