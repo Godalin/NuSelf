@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Visible tool-call leakage rejection now owns its sole marker check directly,
+  removing a one-use substring-classifier helper.
 - Unconfigured and exhausted-endpoint chat fallbacks now share one last-user-
   message extractor while retaining distinct cause text and epistemic policy.
 - REPL memory search and reflection indentation now stay at their sole command

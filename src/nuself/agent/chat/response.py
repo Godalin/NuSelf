@@ -287,10 +287,6 @@ def _compatible_final_message(
     return None
 
 
-def _looks_like_tool_call(text: str) -> bool:
-    return "minimax:tool_call" in text
-
-
 def _local_response_output(
     prompt: list[BaseMessage],
 ) -> ChatStructuredOutput:
@@ -333,7 +329,7 @@ def _last_user_text(prompt: list[BaseMessage]) -> str:
 def _reject_visible_tool_call(
     response: ChatStructuredOutput,
 ) -> None:
-    if _looks_like_tool_call(response.answer):
+    if "minimax:tool_call" in response.answer:
         raise AgentInvalidOutputError(
             "Agent produced visible tool call text instead of "
             "a structured response"

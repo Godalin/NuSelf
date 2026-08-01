@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify duplicate last-user-message extraction across the two distinct chat
-fallback response builders.
+Inline the one-use visible-tool-call substring classifier into the chat response
+protocol rejection boundary.
 
 ## Ordered Steps
 
-1. Confirm local-unconfigured and configured-request-failed builders use
-   byte-for-byte identical reverse HumanMessage selection.
-2. Extract that selection once while keeping both answer texts and configured-
-   failure epistemic status independent.
+1. Confirm `_looks_like_tool_call()` has one caller and only checks one fixed
+   protocol-leak marker.
+2. Keep the marker test in `_reject_visible_tool_call()` and remove the
+   classifier helper.
 3. Run chat response tests, Pyright, full pytest, and package build; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not merge the two failure classifications or messages.
-- Do not expose prompt/system contents in fallback text.
+- Do not remove the typed invalid-output error boundary.
+- Do not change the rejected marker or accepted response text.
 - Do not change retry, failover, or tool non-replay behavior.
 
 ## Constraints
@@ -37,6 +37,12 @@ fallback response builders.
 
 ## Phase Evidence
 
+- `_reject_visible_tool_call()` now checks its single protocol-leak marker
+  directly. Removed the one-use `_looks_like_tool_call()` classifier while
+  preserving both structured and compatible-message rejection paths and the
+  typed invalid-output error. Focused chat response/agent tests: 95 passed;
+  full suite: 2443 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Unconfigured-model and exhausted-configured-endpoint fallback builders now
   share `_last_user_text()`. Removed duplicate reverse prompt scans while
   retaining distinct cause guidance and the configured-failure `unsupported`
