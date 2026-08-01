@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit remaining domain package `__init__` facades for eager cross-domain imports
-or circular initialization risk; keep only cohesive re-exports with real
-production consumers.
+Audit the Persona package facade: replace internal consumers with owning-module
+imports, then retain only a cohesive package API if an actual external boundary
+justifies it; do not trade the facade for another aggregate module.
 
 ## Constraints
 
@@ -206,6 +206,13 @@ production consumers.
   callers. Memory/CLI/daemon focused suite: 687 passed.
 - Post-memory-agent-boundary `uv run --locked pytest -q`: 2450 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- `nuself.reason` is now an import-light domain namespace instead of a facade
+  that eagerly initialized advancer/model code, repository, output, scheduler,
+  service, and store aliases. The daemon imports its scheduler from the owning
+  module, and an executable boundary test prevents root imports from returning.
+- Reason/daemon/boundary focused suite: 351 passed. Post-Reason-package cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

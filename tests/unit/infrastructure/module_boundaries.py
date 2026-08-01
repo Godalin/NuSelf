@@ -249,6 +249,12 @@ def test_chat_tool_collection_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_reason_package_root_is_import_light() -> None:
+    path = _SOURCE_ROOT / "reason" / "__init__.py"
+
+    assert _imports(path) == ()
+
+
 def test_process_surfaces_use_application_chat_factory() -> None:
     paths = (
         _SOURCE_ROOT / "cli" / "chat.py",

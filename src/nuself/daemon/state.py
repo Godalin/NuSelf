@@ -36,7 +36,7 @@ from nuself.notification import (
     NotificationDeliveryLoop,
 )
 from nuself.notification.composition import build_notification_adapters
-from nuself.reason import ReasonScheduler
+from nuself.reason.scheduler import ReasonScheduler
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.observability import publish_observed_event
