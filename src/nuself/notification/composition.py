@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
-from nuself.notification import (
+from nuself.notification.adapters import (
     LogOnlyNotificationAdapter,
     NotificationAdapter,
 )

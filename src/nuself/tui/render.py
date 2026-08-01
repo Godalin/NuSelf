@@ -10,7 +10,7 @@ import sys
 from typing import cast
 
 from nuself.logs import LogEvent
-from nuself.notification import OutboxEntry
+from nuself.notification.outbox import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 import re
 

@@ -9,9 +9,10 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the 602-line Notification implementation package for separable domain,
-outbox, delivery-loop, and adapter concerns. Reduce the root without replacing
-it with forwarding exports or fragmenting cohesive behavior unnecessarily.
+Audit the remaining Notification outbox module: decide whether its immutable
+wire model/codec and persistent repository have independently useful consumers,
+or should remain one cohesive aggregate. Remove duplication rather than merely
+moving lines between files.
 
 ## Constraints
 
@@ -259,6 +260,19 @@ it with forwarding exports or fragmenting cohesive behavior unnecessarily.
 - Application/trace/boundary focused suite: 137 passed. Post-package-root audit
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- Notification implementation moved from the package root to its owning
+  `outbox` module; the root is import-light and the former bottom-of-file
+  delivery re-export/circular initialization path is gone.
+- Adapter contract and log adapter now live in `notification.adapters`, while
+  delivery orchestration imports adapter and outbox capabilities directly.
+  Email/macOS adapters, composition, CLI, daemon, tests, and evaluation use
+  their owning modules rather than a forwarding facade.
+- Reflection scheduling no longer imports or constructs `OutboxEntry`; it calls
+  the outbox's use-case-level `enqueue` capability through its consumer-owned
+  publisher protocol.
+- Notification/Reflection/daemon/boundary focused suite: 220 passed.
+  Post-Notification-boundary `uv run --locked pytest -q`: 2451 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

@@ -14,13 +14,13 @@ from typing import cast
 
 import pytest
 
-import nuself.notification as notification_module
+import nuself.notification.outbox as notification_module
 from nuself.logs import read_log_events
 from nuself.config import runtime_paths
-from nuself.notification import (
-    LogOnlyNotificationAdapter,
+from nuself.notification.adapters import LogOnlyNotificationAdapter
+from nuself.notification.outbox import OutboxEntry
+from nuself.notification.delivery import (
     NotificationDeliveryLoop,
-    OutboxEntry,
     deliver_entry_once,
 )
 from nuself.notification.email import EmailNotificationAdapter

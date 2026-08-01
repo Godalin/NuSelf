@@ -8,7 +8,7 @@ from html import escape
 from pathlib import Path
 
 from nuself.config import ConfigSystem, EmailConfig, runtime_paths
-from nuself.notification import OutboxEntry
+from nuself.notification.outbox import OutboxEntry
 from nuself.notification.audit import (
     report_notification_failure,
     write_notification_audit,

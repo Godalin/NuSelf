@@ -257,6 +257,7 @@ def test_domain_package_roots_are_import_light() -> None:
         "reflection",
         "runtime",
         "trace",
+        "notification",
     ):
         path = _SOURCE_ROOT / package / "__init__.py"
         assert _imports(path) == ()

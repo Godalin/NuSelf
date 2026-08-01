@@ -8,7 +8,7 @@ from nuself.logs import LogEvent
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.domain.source import SourceDocument
-from nuself.notification import OutboxEntry
+from nuself.notification.outbox import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reason.domain import ReasoningStep
 from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row, render_profile_row, render_source_row

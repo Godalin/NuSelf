@@ -8,7 +8,6 @@ from typing import Protocol
 
 from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate, RelevanceScore
-from nuself.notification import OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.audit import (
     report_reflection_failure,
@@ -45,7 +44,15 @@ class PendingReflectionOrganizer(Protocol):
 
 
 class ReflectionPublisher(Protocol):
-    def add(self, entry: OutboxEntry) -> OutboxEntry: ...
+    def enqueue(
+        self,
+        *,
+        entry_id: str,
+        title: str,
+        body: str,
+        idempotency_key: str,
+        deep_link: str | None = None,
+    ) -> None: ...
 
 
 class ReflectionDiscussionResult(Protocol):
@@ -218,8 +225,7 @@ class ReflectionScheduler:
         self._write_last_reflection(now, title=title, body=body)
 
         if self._config.auto_notify:
-            intent = self._candidate_to_notify_entry(entry)
-            self._outbox.add(intent)
+            self._publish_notification(entry)
 
         write_reflection_audit(
             "cycle_completed",
@@ -381,12 +387,11 @@ class ReflectionScheduler:
             reviewed_at=None,
         )
 
-    def _candidate_to_notify_entry(self, entry: ReflectionEntry) -> OutboxEntry:
-        return OutboxEntry(
-            id=f"notify-{entry.id}",
+    def _publish_notification(self, entry: ReflectionEntry) -> None:
+        self._outbox.enqueue(
+            entry_id=f"notify-{entry.id}",
             title=f"New reflection: {entry.title}",
             body=f"A new reflection idea is available. View it with: nuself reflection show {entry.id}",
-            status="pending",
             idempotency_key=f"notify-{entry.id}",
             deep_link=entry.deep_link,
         )

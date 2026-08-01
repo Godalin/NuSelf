@@ -11,13 +11,13 @@ from typing import cast
 from nuself.cli.commands.output import print_ansi, resolve_handle
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.exit_codes import CliExitCode
-from nuself.notification import (
+from nuself.notification.outbox import (
     NotificationOutbox,
     NotificationClearStatus,
     OutboxEntryNotFound,
-    deliver_entry_once,
 )
 from nuself.notification.composition import build_notification_adapters
+from nuself.notification.delivery import deliver_entry_once
 from nuself.tui.render import render_outbox_detail, render_outbox_summary
 
 

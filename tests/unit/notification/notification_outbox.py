@@ -10,13 +10,13 @@ from multiprocessing.context import SpawnContext
 from multiprocessing.synchronize import Event
 from pathlib import Path
 
-from nuself.notification import (
+from nuself.notification.outbox import (
     AdapterDelivery,
-    LogOnlyNotificationAdapter,
     NotificationOutbox,
     OutboxEntry,
     OutboxEntryNotFound,
 )
+from nuself.notification.adapters import LogOnlyNotificationAdapter
 from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
 

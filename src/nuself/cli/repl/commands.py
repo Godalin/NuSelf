@@ -603,7 +603,7 @@ def handle_interactive_notify_list_command(project_root: Path | None) -> str:
 
 
 def handle_interactive_notify_show_command(project_root: Path | None, entry_id: str) -> str:
-    from nuself.notification import OutboxEntryNotFound
+    from nuself.notification.outbox import OutboxEntryNotFound
     from nuself.tui.render import render_outbox_detail
 
     try:
@@ -616,10 +616,8 @@ def handle_interactive_notify_show_command(project_root: Path | None, entry_id: 
 
 
 def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    from nuself.notification import (
-        OutboxEntryNotFound,
-        deliver_entry_once,
-    )
+    from nuself.notification.delivery import deliver_entry_once
+    from nuself.notification.outbox import OutboxEntryNotFound
     from nuself.notification.composition import (
         build_notification_adapters,
     )

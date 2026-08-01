@@ -9,7 +9,7 @@ import pytest
 
 from nuself.config import EmailConfig, EmailSmtpConfig
 from nuself.logs import read_log_events
-from nuself.notification import OutboxEntry
+from nuself.notification.outbox import OutboxEntry
 from nuself.notification.email import EmailNotificationAdapter
 
 

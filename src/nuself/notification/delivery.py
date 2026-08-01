@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from nuself.notification import (
-    NotificationAdapter,
+from nuself.notification.adapters import NotificationAdapter
+from nuself.notification.outbox import (
     NotificationOutbox,
     OutboxEntry,
     validate_adapter_ids,

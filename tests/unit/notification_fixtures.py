@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.config import RuntimePaths, runtime_paths
-from nuself.notification import NotificationOutbox
+from nuself.notification.outbox import NotificationOutbox
 from nuself.storage import StorageBackend, get_default_backend
 
 

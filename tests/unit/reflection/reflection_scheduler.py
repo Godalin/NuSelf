@@ -28,7 +28,7 @@ from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, Refl
 from nuself.config import runtime_paths
 from nuself.domain.proactive import IdeaCandidate
 from nuself.logs import read_log_events
-from nuself.notification import NotificationOutbox
+from nuself.notification.outbox import NotificationOutbox
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
