@@ -30,7 +30,9 @@ an invitation for a business command to create storage.
 `nuself migrate-layout` is the only legacy layout migration command. Its source
 must contain a valid `nuself.sqlite`; it does not import file-backed
 collections. Migration takes exclusive source and destination leases, publishes
-atomically, and leaves a validated backup.
+atomically, and leaves a validated backup. Runtime locks and SQLite sidecars
+are transient coordination files: validation and copying ignore them, while
+the SQLite backup API captures committed WAL state consistently.
 
 ## Storage protocol
 

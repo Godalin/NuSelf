@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the observed legacy-layout migration check/use race without expanding
-the migration protocol or adding another lock.
+Audit the remaining `ApplicationGraph` concrete-resource exposure—conversation,
+notification, persona, and reflection scheduling—and remove only boundaries
+that duplicate an existing complete API.
 
 ## Constraints
 
@@ -143,6 +144,14 @@ the migration protocol or adding another lock.
 - The first full run exposed an unrelated concurrent legacy-layout migration
   race between directory enumeration and `lstat`; its isolated rerun passed,
   so the next phase will remove the check/use window explicitly.
+- Legacy-layout validation and copying now share one transient-file predicate.
+  Runtime locks and SQLite WAL/SHM/journal files are skipped before `lstat`, so
+  normal SQLite checkpoint cleanup cannot race source validation; committed WAL
+  state remains captured through SQLite backup.
+- Layout migration suite: 8 passed; the concurrent publication case passed
+  three additional consecutive process runs. Post-race-fix
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

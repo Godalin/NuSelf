@@ -24,6 +24,9 @@ from nuself.storage import (
 )
 
 _SQLITE_TRANSIENT_SUFFIXES = ("-wal", "-shm", "-journal")
+_SQLITE_TRANSIENT_FILENAMES = frozenset(
+    f"nuself.sqlite{suffix}" for suffix in _SQLITE_TRANSIENT_SUFFIXES
+)
 _TRANSIENT_FILENAMES = frozenset(
     {
         ".storage-authority.lock",
@@ -90,6 +93,8 @@ def _validate_source_tree(source: Path) -> None:
         root_path = Path(root)
         for name in (*directories, *files):
             path = root_path / name
+            if _is_transient_source_file(source, path):
+                continue
             mode = path.lstat().st_mode
             if stat.S_ISLNK(mode):
                 raise LayoutMigrationError(
@@ -111,17 +116,9 @@ def _copy_legacy_tree(source: Path, stage: Path) -> None:
             ensure_managed_directory(stage, destination_root / directory)
         for name in files:
             source_path = Path(root) / name
-            if name in _TRANSIENT_FILENAMES or name.endswith(".lock"):
+            if _is_transient_source_file(source, source_path):
                 continue
             if source_path == source_database:
-                continue
-            if (
-                source_path.parent == source
-                and any(
-                    name == f"nuself.sqlite{suffix}"
-                    for suffix in _SQLITE_TRANSIENT_SUFFIXES
-                )
-            ):
                 continue
             destination = destination_root / name
             shutil.copyfile(source_path, destination)
@@ -136,6 +133,15 @@ def _copy_legacy_tree(source: Path, stage: Path) -> None:
             )
         finally:
             source_backend.close()
+
+
+def _is_transient_source_file(source: Path, path: Path) -> bool:
+    if path.name in _TRANSIENT_FILENAMES or path.name.endswith(".lock"):
+        return True
+    return (
+        path.parent == source
+        and path.name in _SQLITE_TRANSIENT_FILENAMES
+    )
 
 
 def _validate_staged_authority(stage: Path) -> None:
