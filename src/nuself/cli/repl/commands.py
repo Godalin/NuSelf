@@ -84,43 +84,44 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
         return handle_interactive_memory_search(query, project_root)
+    memory = compose_cli_application(project_root).memory
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
         if entry_id.isdigit():
-            entries = compose_cli_application(project_root).memory.entries.list()
+            entries = memory.entries.list()
             index = int(entry_id)
             if 0 <= index < len(entries):
                 entry_id = entries[index].id
         try:
-            entry = compose_cli_application(project_root).memory.entries.get(entry_id)
+            entry = memory.entries.get(entry_id)
         except MemoryEntryNotFound:
             return f"Memory entry not found: {entry_id}"
         return render_memory_entry_detail(entry)
     if command == "review":
-        candidates = compose_cli_application(project_root).memory.candidates.list()
+        candidates = memory.candidates.list()
         if not candidates:
             return "No memory candidates."
         return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
     if command.startswith("review "):
         candidate_id = command.removeprefix("review ").strip()
         if candidate_id.isdigit():
-            candidates = compose_cli_application(project_root).memory.candidates.list()
+            candidates = memory.candidates.list()
             index = int(candidate_id)
             if 0 <= index < len(candidates):
                 candidate_id = candidates[index].id
         try:
-            candidate = compose_cli_application(project_root).memory.candidates.get(candidate_id)
+            candidate = memory.candidates.get(candidate_id)
         except MemoryCandidateNotFound:
             return f"Memory candidate not found: {candidate_id}"
         return render_candidate_detail(candidate)
     if command.startswith("profile "):
         query = command.removeprefix("profile ").strip()
-        items = compose_cli_application(project_root).memory.profile.search(query)
+        items = memory.profile.search(query)
         if not items:
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
     if command == "sources":
-        repo = compose_cli_application(project_root).memory.sources
+        repo = memory.sources
         documents = repo.list_documents()
         if not documents:
             return "No source documents."
@@ -130,7 +131,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         )
     if command.startswith("source "):
         source_id = command.removeprefix("source ").strip()
-        repo = compose_cli_application(project_root).memory.sources
+        repo = memory.sources
         if source_id.isdigit():
             documents = repo.list_documents()
             index = int(source_id)

@@ -220,7 +220,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
             else inferred.importance
         ),
     )
-    repository = compose_cli_application(args.project_root).memory.entries
+    repository = application.memory.entries
     repository.save(entry)
     repository.reindex()
     record_memory_trace(args.project_root, entry, "add")
@@ -275,7 +275,8 @@ def handle_memory_delete(args: argparse.Namespace) -> int:
 
 
 def handle_memory_search(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.entries
+    application = compose_cli_application(args.project_root)
+    repository = application.memory.entries
     filters = MemorySearchFilters(
         type=args.type,
         tag=args.tag,
@@ -288,7 +289,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
     eligible_ids = {
         entry.id for entry in repository.search("", filters)
     }
-    matches = compose_cli_application(args.project_root).memory_service.search(
+    matches = application.memory_service.search(
         MemoryQuery(
             text=args.query,
             limit=max(len(eligible_ids), 1),
@@ -381,14 +382,13 @@ def handle_memory_types(args: argparse.Namespace) -> int:
 
 
 def handle_memory_reindex(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.entries
+    memory = compose_cli_application(args.project_root).memory
+    repository = memory.entries
     memory_path = repository.reindex()
     relation_path = repository.reindex_relations()
     graph_path = repository.reindex_symbolic_graph()
-    source_path = compose_cli_application(args.project_root).memory.sources.reindex()
-    profile_path = compose_cli_application(
-        args.project_root
-    ).memory.profile.reindex()
+    source_path = memory.sources.reindex()
+    profile_path = memory.profile.reindex()
     print(f"Rebuilt memory index: {memory_path}")
     print(f"Rebuilt relation index: {relation_path}")
     print(f"Rebuilt symbolic graph: {graph_path}")

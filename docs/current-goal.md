@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit CLI command adapters for repeated application/service lookup within one
-operation. Reuse the invocation-owned graph without introducing command
-contexts, service bundles, or new facades.
+Audit narrow CLI composition helpers and command-local service accessors for
+dead pass-through APIs. Retain widely used capability accessors when deleting
+them would only repeat graph field traversal at every caller.
 
 ## Constraints
 
@@ -77,6 +77,16 @@ contexts, service bundles, or new facades.
   it through resource resolution, validation, and mutation. Repeated
   application-runtime lookup and authority validation are gone.
 - Data CLI/boundary focused suite: 63 passed. Post-service-reuse
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Memory add/search/reindex, source delete/extract, system status, and REPL
+  memory dispatch now each resolve the invocation application once and reuse
+  its resource graph. A full CLI AST audit finds no handler with more than one
+  application/conversation lookup.
+- `compose_cli_conversation_store` remains justified by more than twenty
+  production callers as the narrow conversation capability accessor; removing
+  it would spread graph traversal rather than remove composition.
+- CLI/REPL focused suite: 325 passed. Post-lookup cleanup
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

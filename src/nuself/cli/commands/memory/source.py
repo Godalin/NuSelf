@@ -113,7 +113,8 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
 def handle_memory_source_delete(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.sources
+    memory = compose_cli_application(args.project_root).memory
+    repository = memory.sources
     source_id = _resolve_source_id(args)
     if source_id is None:
         return 1
@@ -126,7 +127,7 @@ def handle_memory_source_delete(
         )
         return 1
     repository.reindex()
-    compose_cli_application(args.project_root).memory.profile.reindex()
+    memory.profile.reindex()
     print(f"Deleted source document: {source_id}")
     return 0
 
@@ -171,10 +172,9 @@ def handle_memory_source_extract(
     source_id = _resolve_source_id(args)
     if source_id is None:
         return 1
+    memory = compose_cli_application(args.project_root).memory
     try:
-        candidates = compose_cli_application(
-            args.project_root
-        ).memory.sources.extract_candidates(source_id)
+        candidates = memory.sources.extract_candidates(source_id)
     except SourceDocumentNotFound:
         print(
             f"Source document not found: {source_id}",
@@ -184,9 +184,7 @@ def handle_memory_source_extract(
     if not candidates:
         print("No source chunks to extract.")
         return 0
-    candidate_repository = compose_cli_application(
-        args.project_root
-    ).memory.candidates
+    candidate_repository = memory.candidates
     for candidate in candidates:
         candidate_repository.save(candidate)
     print(
