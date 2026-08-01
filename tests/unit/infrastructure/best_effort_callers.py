@@ -10,7 +10,7 @@ from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
 from nuself.logs import read_log_events
 from nuself.config import runtime_paths
-from nuself.persona import PersonaInput, PersonaTurnState
+from nuself.persona.definition import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.persona.tools import _record_prompt_trace  # pyright: ignore[reportPrivateUsage]
 from nuself.storage import get_default_backend

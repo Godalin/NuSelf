@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.domain.proactive import IdeaCandidate
-from nuself.persona import SharedPersonaDiscussionService
+from nuself.persona.discussion import SharedPersonaDiscussionService
 
 
 @dataclass(frozen=True)

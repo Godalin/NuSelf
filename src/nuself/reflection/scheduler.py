@@ -21,7 +21,6 @@ from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.relevance import (
     RelevanceScoreOutput as RelevanceScoreOutput,
 )
-from nuself.persona import PersonaCompetitionResult
 from nuself.reflection.schedule_state import (
     REFLECTION_SCHEDULE_STATE_VERSION,
     ReflectionScheduleState,
@@ -49,8 +48,22 @@ class ReflectionPublisher(Protocol):
     def add(self, entry: OutboxEntry) -> OutboxEntry: ...
 
 
+class ReflectionDiscussionResult(Protocol):
+    @property
+    def approved(self) -> bool: ...
+
+    @property
+    def revised_title(self) -> str: ...
+
+    @property
+    def revised_body(self) -> str: ...
+
+    @property
+    def discussion_trace(self) -> tuple[str, ...]: ...
+
+
 class ReflectionDiscussion(Protocol):
-    def discuss(self, candidate: IdeaCandidate) -> PersonaCompetitionResult: ...
+    def discuss(self, candidate: IdeaCandidate) -> ReflectionDiscussionResult: ...
 
 
 class ReflectionTraceRecorder(Protocol):

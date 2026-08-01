@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the Persona package facade: replace internal consumers with owning-module
-imports, then retain only a cohesive package API if an actual external boundary
-justifies it; do not trade the facade for another aggregate module.
+Audit the Reflection package facade and remaining package-root imports. Remove
+only eager aggregation that has no cohesive production consumer; keep explicit
+consumer-owned protocols at cross-domain boundaries.
 
 ## Constraints
 
@@ -213,6 +213,15 @@ justifies it; do not trade the facade for another aggregate module.
 - Reason/daemon/boundary focused suite: 351 passed. Post-Reason-package cleanup
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `nuself.persona` is now an import-light namespace instead of eagerly joining
+  definitions, model-backed graph orchestration, and competitive discussion.
+  Production and test consumers import owning modules directly.
+- Reflection scheduling no longer imports the concrete Persona result merely
+  for typing; its narrow read-only result protocol makes the existing injected
+  discussion capability a real consumer-owned boundary.
+- Persona/Chat/Reflection/boundary focused suite: 488 passed. Post-Persona
+  cleanup `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

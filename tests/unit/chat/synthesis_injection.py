@@ -26,7 +26,8 @@ from nuself.agent.chat import (
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.persona import PersonaDiscussionAgents, PersonaGraphAgents
+from nuself.persona.discussion import PersonaDiscussionAgents
+from nuself.persona.graph import PersonaGraphAgents
 from nuself.persona.definition import (
     PersonaActivationOutput,
     PersonaContributionOutput,

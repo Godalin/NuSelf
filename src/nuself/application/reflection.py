@@ -8,7 +8,7 @@ from nuself.llm import LangChainLLMEndpoint
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
-from nuself.persona import SharedPersonaDiscussionService
+from nuself.persona.discussion import SharedPersonaDiscussionService
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph

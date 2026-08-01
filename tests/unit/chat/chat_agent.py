@@ -558,7 +558,8 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from nuself.persona import PersonaDiscussionAgents, PersonaGraphAgents
+    from nuself.persona.discussion import PersonaDiscussionAgents
+    from nuself.persona.graph import PersonaGraphAgents
     from nuself.persona.definition import (
         PersonaActivationOutput,
         PersonaContributionOutput,

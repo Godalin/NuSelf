@@ -9,15 +9,17 @@ from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryService
-from nuself.persona import (
+from nuself.persona.definition import (
+    PersonaDefinition,
+    PersonaInput,
+    PersonaTurnState,
+)
+from nuself.persona.discussion import SharedPersonaDiscussionService
+from nuself.persona.graph import (
     AgentBackedActivationPolicy,
     AgentBackedPersonaNode,
     AgentBackedSynthesizerNode,
-    PersonaDefinition,
     PersonaGraphDriver,
-    PersonaInput,
-    PersonaTurnState,
-    SharedPersonaDiscussionService,
     persona_graph_agents,
 )
 from nuself.persona.audit import (
