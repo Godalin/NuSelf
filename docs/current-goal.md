@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Let the Memory relation list operation own its one-shot projection.
+Hide Source chunk replacement behind the complete ingest operation.
 
 ## Ordered Steps
 
-1. Confirm `_compute_relations()` is called only by `list_relations()` and no
-   consumer needs an unfiltered precomputed relation collection.
-2. Move projection into the public list operation and delete the single-use
-   private method while retaining projection order and filtering.
-3. Run focused Memory/CLI tests and the complete verification gates; update
+1. Confirm `replace_chunks()` is called only by `ingest_path()` and exposing it
+   permits document/chunk updates to be split externally.
+2. Make chunk replacement an internal ingestion step without adding a facade
+   or compatibility alias.
+3. Run focused Source/CLI tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve relation descriptors, endpoint validation, ordering, filtering, and
-  CLI rendering.
+- Preserve source parsing, chunk IDs/order, re-ingestion replacement, search,
+  deletion, candidate extraction, and CLI behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Let the Memory relation list operation own its one-shot projection.
 
 ## Phase Evidence
 
+- Source chunk replacement is now private to `ingest_path()`, its sole
+  consumer. Removed an independently exposed partial-write API while preserving
+  complete document/chunk ingestion, re-ingestion replacement, queries,
+  deletion, and candidate extraction. Focused Source/CLI/Memory/Reflection
+  tests: 385 passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - `MemoryEntryRepository.list_relations()` now directly owns its one-shot
   relation projection and filter. Removed the sole-use `_compute_relations()`
   method; descriptors, record order, endpoint handling, and CLI output remain

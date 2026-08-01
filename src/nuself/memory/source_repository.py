@@ -69,7 +69,7 @@ class SourceRepository:
         for source_path in paths:
             document, document_chunks = load_source_file(source_path, tags=tags or [], privacy=privacy)
             self.save_document(document)
-            self.replace_chunks(document.id, document_chunks)
+            self._replace_chunks(document.id, document_chunks)
             documents += 1
             chunks += len(document_chunks)
         return SourceIngestResult(documents=documents, chunks=chunks)
@@ -92,7 +92,11 @@ class SourceRepository:
         self._documents.delete(document.id)
         self._delete_chunks(source_id)
 
-    def replace_chunks(self, source_id: str, chunks: list[SourceChunk]) -> None:
+    def _replace_chunks(
+        self,
+        source_id: str,
+        chunks: list[SourceChunk],
+    ) -> None:
         for wire in self._chunks.list():
             existing = self._decode_chunk(wire)
             if existing is not None and existing.source_id == source_id:

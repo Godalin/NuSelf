@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Source chunk replacement is now an internal part of the complete ingest
+  operation instead of an independently exposed repository mutation.
 - Memory relation listing now owns its one-shot projection and filtering,
   removing a single-use private projection method.
 - Removed the unused Memory-object persistence adapter; memory entry writes now

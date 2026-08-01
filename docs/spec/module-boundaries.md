@@ -133,6 +133,9 @@ repository capability.
 Memory entry persistence accepts the canonical `MemoryEntry` domain object;
 an unused validate-convert-save adapter for `MemoryObject` is not repository
 API. Legacy object-shaped records remain a decoding concern.
+Source ingestion is the public document/chunk write operation. Replacing one
+document's chunks is an internal ingestion step, not an independently exposed
+repository capability that callers may separate from document persistence.
 
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records
