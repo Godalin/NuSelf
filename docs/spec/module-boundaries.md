@@ -54,7 +54,9 @@ the repository is forbidden. Services receive repositories, clocks, sinks,
 and cross-domain capabilities explicitly.
 Authority-scoped workspace storage follows the same rule: it receives resolved
 `RuntimePaths`. Daemon workers borrow that store from process composition and
-must not create it lazily during worker startup.
+must not create it lazily during worker startup. The low-level workspace store
+accepts only the resolved database path; it must not offer a convenience
+constructor that resolves project or authority scope again.
 
 `ApplicationRuntime` is the shared authority-lifetime owner. Its public
 factory resolves paths without opening storage; the first graph access selects

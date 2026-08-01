@@ -198,10 +198,6 @@ class _LangChainChatSupervisor:
         self._tool_outcomes: list[ToolOutcome] = []
 
     @property
-    def has_tool_outcomes(self) -> bool:
-        return bool(self._tool_outcomes)
-
-    @property
     def has_mutating_tool_outcomes(self) -> bool:
         readonly_names = {
             tool.name

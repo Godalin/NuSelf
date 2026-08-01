@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove redundant internal type aliases in Reason and Persona.
+Remove zero-consumer chat and workspace convenience APIs.
 
 ## Ordered Steps
 
-1. Confirm `ReasonStepList` only renames `list[ReasoningStep]` within one helper
-   and Persona discussion duplicates definition's exact `NonBlankText` type.
-2. Use the concrete Reason list type and import the existing Persona constraint
-   through the dependency already shared by discussion.
-3. Run focused Reason/Persona tests and complete verification gates; update
+1. Confirm the chat supervisor's generic tool-outcome flag and
+   `SqliteStore.for_project()` have no runtime, test, or specification consumer.
+2. Remove both convenience APIs so chat retains only its retry-safety query and
+   workspace storage receives an already-resolved authority database path.
+3. Run focused Chat/workspace tests and complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve partition typing/runtime behavior and every Pydantic non-blank,
-  whitespace-stripping Persona validation rule.
+- Preserve mutating-tool retry suppression and the LangGraph `BaseStore`
+  contract.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove redundant internal type aliases in Reason and Persona.
 
 ## Phase Evidence
 
+- Removed the chat supervisor's unused generic `has_tool_outcomes` property;
+  retry safety continues to use the narrower mutating-outcome predicate. Removed
+  `SqliteStore.for_project()` and its config dependency so the low-level
+  LangGraph store accepts only a composition-resolved database path. Focused
+  Chat/workspace tests: 55 passed; full suite: 2439 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 - Reason partitioning now uses `list[ReasoningStep]` directly instead of the
   one-helper `ReasonStepList` alias, and Persona discussion imports the exact
   `NonBlankText` constraint already owned by Persona definition rather than

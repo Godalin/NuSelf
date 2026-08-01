@@ -24,7 +24,6 @@ from langgraph.store.base import (
     SearchOp,
 )
 
-from nuself.config import runtime_paths
 from nuself.private_fs import require_private_file
 from nuself.runtime.messages import decode_json_value, encode_json_value
 
@@ -125,17 +124,6 @@ class SqliteStore(BaseStore):
                 )
         finally:
             connection.close()
-
-    @classmethod
-    def for_project(
-        cls,
-        project_root: Path | None = None,
-        *,
-        db_path: Path | None = None,
-    ) -> SqliteStore:
-        """Create a ``SqliteStore`` backed by the main project database."""
-        path = db_path if db_path is not None else runtime_paths(project_root).authority_root / "nuself.sqlite"
-        return cls(path)
 
     def batch(self, ops: Iterable[Op]) -> list[Result]:
         def execute(conn: sqlite3.Connection) -> list[Result]:
