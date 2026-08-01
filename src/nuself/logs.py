@@ -1087,17 +1087,6 @@ def _record_optional_mapping(
 # ============================================================================
 
 
-def log_event_key(event: LogEvent) -> str:
-    """Stable event identity with a legacy-record compatibility fallback."""
-
-    if event.event_id is not None:
-        return f"id:{event.event_id}"
-    record = event.to_record()
-    record.pop("event_id", None)
-    record.pop("schema_version", None)
-    return f"legacy:{json.dumps(record, sort_keys=True, ensure_ascii=True)}"
-
-
 def _log_event_fingerprint(event: LogEvent) -> str:
     return json.dumps(
         event.to_record(),
@@ -1116,7 +1105,16 @@ def _reconcile_log_event_identities(
     canonical: list[LogEvent] = []
     conflicts: list[LogEvent] = []
     for event in events:
-        key = log_event_key(event)
+        if event.event_id is not None:
+            key = f"id:{event.event_id}"
+        else:
+            record = event.to_record()
+            record.pop("event_id", None)
+            record.pop("schema_version", None)
+            key = (
+                "legacy:"
+                f"{json.dumps(record, sort_keys=True, ensure_ascii=True)}"
+            )
         fingerprint = _log_event_fingerprint(event)
         if key not in seen_event_keys:
             seen_event_keys.add(key)

@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the remaining structured-log public entry points and read-side cursor for
-unused duplication. Do not split reliable append, rotation, recovery, and live
-delivery mechanics unless doing so removes a dependency or call path.
+Audit whether `LogEvent` model consumers unnecessarily load filesystem
+persistence, or whether separating that model would merely move code. Require
+a measurable import-boundary or call-graph reduction before adding a module.
 
 ## Constraints
 
@@ -38,6 +38,13 @@ delivery mechanics unless doing so removes a dependency or call path.
   directly from neutral `runtime.audit_types`; they no longer load the log
   persistence module merely to describe contracts.
 - Logging/runtime/daemon focused suite: 216 passed. Post-boundary
+  `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Audit-envelope construction/persistence and runtime-event projection remain
+  explicit public contracts with distinct validation and failure semantics.
+  Removed the undocumented `log_event_key` pseudo-API; stable/legacy identity
+  selection now stays inside the sole reconciliation algorithm that uses it.
+- Log read/cursor focused suite: 104 passed. Post-identity cleanup
   `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
