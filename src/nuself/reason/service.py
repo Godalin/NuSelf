@@ -72,14 +72,12 @@ class ReasonService:
         repository: ReasonRepository,
         workspace_store: PrivateWorkspaceStore,
         trace_recorder: TraceRecorder,
-        advancer: ReasonAdvancerProtocol | None = None,
         prompt_generator: Callable[..., str] | None = None,
     ) -> None:
         self._repository = repository
         self._project_root = project_root
         self._workspace_store = workspace_store
         self._trace_recorder = trace_recorder
-        self._advancer = advancer
         self._prompt_generator = prompt_generator or generate_reasoning_prompt
 
     # ── Read ───────────────────────────────────────────────────────
@@ -176,11 +174,10 @@ class ReasonService:
             metadata={"thread_id": thread.id},
         )
 
-        selected_advancer = advancer or self._advancer
         if step is not None:
             pass
-        elif selected_advancer is not None:
-            generated = selected_advancer.advance(thread)
+        elif advancer is not None:
+            generated = advancer.advance(thread)
             if generated is not None:
                 step = generated
             else:

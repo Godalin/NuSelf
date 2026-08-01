@@ -620,14 +620,14 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
         def advance(self, thread: object) -> None:
             return None
 
-    service = _reason_service(project_root=tmp_path, advancer=EmptyAdvancer())
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("No fake steps")
 
     with pytest.raises(
         ReasonAdvanceError,
         match="did not produce a structured step",
     ):
-        service.advance_thread(thread.id)
+        service.advance_thread(thread.id, advancer=EmptyAdvancer())
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:

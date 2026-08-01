@@ -28,7 +28,6 @@ class ReasonService(_ReasonService):
         repository: ReasonRepository | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         trace_recorder: TraceRecorder | None = None,
-        advancer: ReasonAdvancerProtocol | None = None,
         prompt_generator: Callable[..., str] | None = None,
     ) -> None:
         if repository is not None and project_root is None:
@@ -55,7 +54,6 @@ class ReasonService(_ReasonService):
             repository=selected_repository,
             workspace_store=selected_workspace,
             trace_recorder=selected_trace,
-            advancer=advancer,
             prompt_generator=prompt_generator,
         )
 

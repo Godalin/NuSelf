@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason service no longer retains an unused constructor-time advancer;
+  advancement receives its narrow advancer or structured step explicitly at
+  the operation boundary, removing two competing dependency sources.
 - Reason scheduler composition now requires its advancer protocol capability,
   removing an unused missing-dependency mode that silently disabled background
   advancement at runtime.

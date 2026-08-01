@@ -371,6 +371,10 @@ explicitly. The service stores that required recorder as a non-null capability;
 trace failure isolation must not be modeled as optional composition. Reason
 scheduling and output export must receive an existing reason
 service and that workspace store.
+The service does not retain a model advancer. An explicit advance operation
+receives either the narrow advancer protocol for that call or a structured step
+already produced by an orchestrator; dependency source must not vary between a
+hidden constructor fallback and the operation input.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 `PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has

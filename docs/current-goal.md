@@ -9,21 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Require the Reason scheduler's sole execution capability at composition.
+Remove the Reason service's unused hidden advancer dependency.
 
 ## Ordered Steps
 
-1. Confirm every production and test scheduler composition already supplies a
-   `ReasonAdvancerProtocol` and no supported disabled-scheduler mode exists.
-2. Make the advancer required and delete the silent no-op runtime branch.
-3. Run focused Reason scheduler/daemon tests and the complete verification
-   gates; update evidence and commit without pushing.
+1. Confirm production never injects an advancer into `ReasonService`; CLI
+   supplies it per operation and daemon supplies a generated step.
+2. Remove the stored constructor dependency and retain explicit per-call
+   advancer-or-step inputs for `advance_thread()`.
+3. Run focused Reason/CLI tests and the complete verification gates; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve thread selection, cooldown, failure isolation, and audit behavior.
-- Do not move advancement policy into the daemon or require a concrete agent.
+- Preserve advancement errors, state transitions, transactionality, and audits.
+- Do not couple the service to a concrete agent or merge model execution into
+  repository persistence.
 
 ## Constraints
 
@@ -35,6 +37,12 @@ Require the Reason scheduler's sole execution capability at composition.
 
 ## Phase Evidence
 
+- `ReasonService` no longer accepts or stores a constructor-time advancer,
+  which production composition never supplied. `advance_thread()` now has one
+  explicit operation boundary: receive either that call's narrow advancer or
+  an already-generated structured step. Updated the sole test that relied on
+  the hidden fallback. Focused Reason/CLI/REPL tests: 585 passed; full suite:
+  2444 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `ReasonScheduler` now requires its `ReasonAdvancerProtocol` capability at
   construction. Every production and test composition already supplied it;
   removed the unused optional type/default and the runtime branch that could
