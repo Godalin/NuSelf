@@ -59,13 +59,7 @@ def handle_daemon_stop(args: argparse.Namespace) -> int:
 def handle_daemon_restart(args: argparse.Namespace) -> int:
     try:
         result = restart_daemon_observed(args.project_root)
-    except lifecycle.DaemonStopError as exc:
-        print(
-            f"Failed to restart daemon: {format_lifecycle_failure(exc)}",
-            file=sys.stderr,
-        )
-        return 1
-    except lifecycle.DaemonStartError as exc:
+    except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
         print(
             f"Failed to restart daemon: {format_lifecycle_failure(exc)}",
             file=sys.stderr,

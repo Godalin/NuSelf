@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing result fields that merely encode object absence. Preserve
-typed result objects when every field carries independent information used by
-callers.
+Continue removing duplicated adapter branches only after confirming their
+effects and output are identical. Preserve domain-specific exception and audit
+paths below presentation boundaries.
 
 ## Constraints
 
@@ -743,6 +743,13 @@ callers.
   `terminal` flag; pending results contain only chunk diagnostics consumed by
   composition.
 - Reason-export focused suite: 24 passed. Post-pending-inspection cleanup
+  `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- One-shot and REPL restart adapters now each catch start/stop failures through
+  one identical presentation branch. The distinct lifecycle exception classes,
+  restart audit stages, and failure metadata remain owned by lifecycle
+  orchestration.
+- CLI/lifecycle focused suite: 377 passed. Post-restart-branch cleanup
   `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

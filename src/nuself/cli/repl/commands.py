@@ -341,9 +341,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
     try:
         result = restart_daemon_observed(project_root)
-    except lifecycle.DaemonStopError as exc:
-        return f"Failed to restart daemon: {format_lifecycle_failure(exc)}"
-    except lifecycle.DaemonStartError as exc:
+    except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
         return f"Failed to restart daemon: {format_lifecycle_failure(exc)}"
     return (
         f"Restarted daemon: {format_status(result.status)} "
