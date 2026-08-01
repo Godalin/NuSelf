@@ -260,13 +260,15 @@ def _build_registry() -> AuditDefinitionRegistry:
 MEMORY_AUDIT_REGISTRY = _build_registry()
 
 
-def _write_memory_audit(
+def write_memory_audit(
     event: MemoryAuditEvent,
     message: str,
     *,
     project_root: Path | None,
-    metadata: dict[str, object] | None,
+    metadata: dict[str, object] | None = None,
 ) -> LogEvent | None:
+    """Validate and project one memory-domain audit."""
+
     definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
     event_metadata = metadata or {}
     definition.validate(
@@ -283,40 +285,6 @@ def _write_memory_audit(
         level=definition.level,
         status=definition.status,
         metadata=dict(event_metadata),
-    )
-
-
-def write_curator_audit(
-    event: MemoryAuditEvent,
-    message: str,
-    *,
-    project_root: Path,
-    metadata: dict[str, object] | None = None,
-) -> LogEvent | None:
-    """Validate and project one curator audit."""
-
-    return _write_memory_audit(
-        event,
-        message,
-        project_root=project_root,
-        metadata=metadata,
-    )
-
-
-def write_optimizer_audit(
-    event: MemoryAuditEvent,
-    message: str,
-    *,
-    project_root: Path,
-    metadata: dict[str, object] | None = None,
-) -> LogEvent | None:
-    """Validate and project one optimizer audit."""
-
-    return _write_memory_audit(
-        event,
-        message,
-        project_root=project_root,
-        metadata=metadata,
     )
 
 

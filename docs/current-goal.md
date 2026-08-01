@@ -9,26 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove two exact one-use curator helpers that only join observation fragments or
-strip the storage ID before immediate consumption. Keep signal classification,
-context assembly, codecs, and trace policy as named boundaries.
+Unify the byte-for-byte identical curator and optimizer audit writer façades.
+Keep one memory-domain audit operation; sealed event definitions continue to
+own event identity, metadata schema, level, and status.
 
 ## Ordered Steps
 
-1. Confirm `_render_observation()` and `_without_storage_id()` each have one
-   call and no independent policy consumer.
-2. Inline observation joining into prompt composition and storage-ID filtering
-   into the plan codec call.
-3. Retain named signal, context, corruption, locking, and trace boundaries.
-4. Run curator-plan/memory tests, Pyright, full pytest, and package build;
-   update evidence and commit without pushing.
+1. Confirm `write_curator_audit()` and `write_optimizer_audit()` have identical
+   signatures, validation, sink, and return behavior.
+2. Promote the existing shared implementation as `write_memory_audit()` and
+   delete both pass-through wrappers.
+3. Update curator, optimizer, and registry tests without changing event names
+   or metadata.
+4. Run memory audit/curator/optimizer tests, Pyright, full pytest, and package
+   build; update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change prompt text, fragment order, or newline layout.
-- Do not pass the backend storage `id` field into the strict plan codec.
-- Do not flatten policy-bearing curator methods merely because they have one
-  current caller.
+- Do not combine curator and optimizer event definitions or metadata schemas.
+- Do not change audit best-effort failure isolation or sink behavior.
+- Do not add a generic cross-domain audit façade.
 
 ## Constraints
 
@@ -40,6 +40,12 @@ context assembly, codecs, and trace policy as named boundaries.
 
 ## Phase Evidence
 
+- Curator and optimizer now call one public `write_memory_audit()` operation.
+  Removed two byte-for-byte identical writer façades while preserving the
+  optional metadata signature, sealed event registry, exact schemas,
+  unknown-event failure, and best-effort sink. Source removes 34 lines and adds
+  3. Focused memory audit/curator/optimizer tests: 81 passed; full suite: 2440
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Inlined observation-fragment joining into the sole curator prompt and
   backend-ID filtering into the sole strict plan codec call. Removed
   `_render_observation()` and `_without_storage_id()` while retaining named

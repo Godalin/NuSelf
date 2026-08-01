@@ -14,7 +14,7 @@ from nuself.agent.structured import StructuredAgent
 from nuself.config import RuntimePaths
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
-from nuself.memory.audit import write_optimizer_audit
+from nuself.memory.audit import write_memory_audit
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.contracts import ProfileRepositoryPort
@@ -133,7 +133,7 @@ class MemoryOptimizer:
 
         decision = self._decide_actions(entries)
         if decision.status == "deferred":
-            write_optimizer_audit(
+            write_memory_audit(
                 "optimizer_deferred",
                 "Memory optimizer deferred",
                 project_root=self._paths.project_root,
@@ -164,7 +164,7 @@ class MemoryOptimizer:
                     ignored += 1
             else:
                 ignored += 1
-        write_optimizer_audit(
+        write_memory_audit(
             "optimizer_completed",
             "Memory optimizer completed",
             project_root=self._paths.project_root,
@@ -282,7 +282,7 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        write_optimizer_audit(
+        write_memory_audit(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
             project_root=self._paths.project_root,
@@ -320,7 +320,7 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        write_optimizer_audit(
+        write_memory_audit(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
             project_root=self._paths.project_root,

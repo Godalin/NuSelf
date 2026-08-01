@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory curator and optimizer audits now use one sealed-domain
+  `write_memory_audit()` operation instead of two identical writer façades.
 - Memory curation now joins observation fragments and removes backend record
   identity directly at their sole consumption sites, eliminating two exact
   one-use helpers.

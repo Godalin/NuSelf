@@ -149,7 +149,7 @@ def test_memory_audit_rejects_unknown_event_before_sink(
     monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
 
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_curator_audit(
+        audit.write_memory_audit(
             cast(audit.MemoryAuditEvent, "candidate_saved"),
             "invalid",
             project_root=tmp_path,

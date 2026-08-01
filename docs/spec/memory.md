@@ -173,8 +173,9 @@ message, or identifier.
 - Deferred, candidate, and completion events are structured
   `memory` log events. The curator never appends raw text to `memory.log`;
   that file remains JSONL under the shared log contract.
-- Memory curation owns one sealed audit registry shared by curator and
-  optimizer. Unknown events and invalid status/error/metadata fail before the
+- Memory curation owns one sealed audit registry and one
+  `write_memory_audit()` operation shared by curator and optimizer. Unknown
+  events and invalid status/error/metadata fail before the
   best-effort sink. Candidate audit metadata is identity-only: it may contain
   candidate ID, target ID, action, memory type, observation/source identity, and
   aggregate counts, but never candidate title/body or free-form model reason.
