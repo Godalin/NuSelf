@@ -43,6 +43,7 @@ from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
+from nuself.runtime.jobs import JobMessage, JobSink
 from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
 from nuself.runtime.events import EventPublisher
@@ -92,6 +93,7 @@ def _chat_tool(
     *,
     query_service: MemoryService | None = None,
     reflection_repository: object | None = None,
+    job_sink: JobSink | None = None,
 ) -> BaseTool:
     from nuself.agent.tools.composition import build_langchain_chat_tools
     from nuself.application.composition import compose_application
@@ -128,6 +130,7 @@ def _chat_tool(
         ),
         traces=trace.query,
         persona_tools=(),
+        job_sink=job_sink,
     )
     tools = build_langchain_chat_tools(
         resources=resources,
@@ -1589,15 +1592,32 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
     )
 
     monkeypatch.setattr("builtins.input", _input)
-    tool = _chat_tool(tmp_path, "reason_export")
+    jobs: list[JobMessage] = []
+    tool = _chat_tool(tmp_path, "reason_export", job_sink=jobs.append)
     result = _invoke_chat_tool(tool, {"thread_id": conversation.id, "segment_size": 1})
     inner = json.loads(result)
 
     assert inner.get("queued") is True
     assert inner.get("job", {}).get("thread_id") == conversation.id
+    assert len(jobs) == 1
     # No file-based queue — the event went to the in-memory callback.
     assert not (Path(inner["paths"]["root"]) / "queue").exists()
     assert not Path(inner["paths"]["combined"]).exists()
+
+
+def test_reason_export_tool_rejects_missing_scheduler_before_planning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "y")
+
+    result = _invoke_chat_tool(
+        _chat_tool(tmp_path, "reason_export"),
+        {"thread_id": "reason-missing-scheduler"},
+    )
+
+    assert result == "Error: reason export requires daemon job scheduling"
+    assert not tuple(tmp_path.rglob("manifest.json"))
 
 
 # --- Memory management tools ---

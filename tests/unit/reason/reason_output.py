@@ -67,6 +67,7 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
         mode="narrative",
         output_format="markdown",
         segment_size=1,
+        job_sink=lambda _message: None,
     )
     def compose_steps(
         _thread: ReasoningThread,
@@ -124,8 +125,16 @@ def test_reason_output_section_plan_is_independent_of_chunk_size(tmp_path: Path,
         return paths.pdf
 
     monkeypatch.setattr(ReasonOutputService, "_generate_pdf", _fake_generate_pdf)
-    narrow = output_service.plan_job(thread.id, segment_size=1)
-    wide = output_service.plan_job(thread.id, segment_size=4)
+    narrow = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=lambda _message: None,
+    )
+    wide = output_service.plan_job(
+        thread.id,
+        segment_size=4,
+        job_sink=lambda _message: None,
+    )
 
     narrow_sections = [
         {
@@ -167,7 +176,10 @@ def test_reason_output_get_job_is_strict_for_corrupt_manifest(
         project_root=tmp_path,
         reason_service=service,
     )
-    manifest = output_service.plan_job(thread.id)
+    manifest = output_service.plan_job(
+        thread.id,
+        job_sink=lambda _message: None,
+    )
     manifest_path = output_service.job_paths(
         thread.id,
         manifest.job_id,
@@ -194,7 +206,10 @@ def test_reason_output_manifest_io_failures_propagate(
         project_root=tmp_path,
         reason_service=service,
     )
-    manifest = output_service.plan_job(thread.id)
+    manifest = output_service.plan_job(
+        thread.id,
+        job_sink=lambda _message: None,
+    )
     manifest_path = output_service.job_paths(
         thread.id,
         manifest.job_id,
@@ -244,7 +259,7 @@ def test_reason_output_manifest_rejects_invalid_wire_fields(
     manifest = ReasonOutputService(
         project_root=tmp_path,
         reason_service=service,
-    ).plan_job(thread.id)
+    ).plan_job(thread.id, job_sink=lambda _message: None)
     wire = manifest.to_wire()
     wire[field_name] = value
 
@@ -264,7 +279,7 @@ def test_reason_output_manifest_rejects_shape_drift(
     manifest = ReasonOutputService(
         project_root=tmp_path,
         reason_service=service,
-    ).plan_job(thread.id)
+    ).plan_job(thread.id, job_sink=lambda _message: None)
     wire = manifest.to_wire()
     del wire["updated_at"]
     wire["unexpected"] = True

@@ -7,8 +7,6 @@ from pathlib import Path
 from nuself.config import runtime_paths
 from nuself.reason.output import ReasonOutputService as _ReasonOutputService
 from nuself.reason.output_contracts import SectionPlanner
-from nuself.runtime.job_definitions import JobDefinitionRegistry
-from nuself.runtime.jobs import JobSink
 from nuself.reason.service import ReasonService
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -21,8 +19,6 @@ class ReasonOutputService(_ReasonOutputService):
         project_root: Path,
         reason_service: ReasonService,
         *,
-        job_sink: JobSink | None = None,
-        job_definitions: JobDefinitionRegistry | None = None,
         section_planner: SectionPlanner | None = None,
     ) -> None:
         super().__init__(
@@ -32,7 +28,5 @@ class ReasonOutputService(_ReasonOutputService):
                 runtime_paths(project_root),
                 scope="reason",
             ),
-            job_sink=job_sink,
-            job_definitions=job_definitions,
             section_planner=section_planner,
         )

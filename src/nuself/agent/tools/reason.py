@@ -304,12 +304,13 @@ def build_reason_tools(
         tid = thread_id.strip()
         if not tid:
             return "Error: thread_id must be a non-empty string"
+        if job_sink is None:
+            return "Error: reason export requires daemon job scheduling"
         try:
             output_service = ReasonOutputService(
                 project_root,
                 reason_service=service,
                 workspace_store=workspace_store,
-                job_sink=job_sink,
                 section_planner=section_planner,
             )
             manifest = output_service.plan_job(
@@ -323,6 +324,7 @@ def build_reason_tools(
                     else None
                 ),
                 segment_size=int(segment_size),
+                job_sink=job_sink,
             )
         except (RuntimeError, ValueError, TypeError) as exc:
             return _json_error(diagnostic_exception_message(exc))

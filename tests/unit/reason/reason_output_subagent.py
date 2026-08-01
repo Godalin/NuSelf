@@ -31,7 +31,11 @@ def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     service.advance_thread(thread.id, step=_step(thread.id, "B", "Out B", "D B"))
 
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
-    manifest = output_service.plan_job(thread.id, segment_size=1)
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=lambda _message: None,
+    )
 
     def _fake_generate_pdf(
         self: ReasonOutputService,
@@ -90,7 +94,11 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
         project_root=tmp_path,
         reason_service=service,
     )
-    manifest = output_service.plan_job(thread.id, segment_size=1)
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=lambda _message: None,
+    )
     primary_error = RuntimeError("runner failed")
 
     def fail_runner(

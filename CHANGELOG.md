@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason export planning now requires a concrete job sink per operation;
+  surfaces without daemon scheduling fail before creating artifacts instead of
+  reporting a job as queued without submitting it.
 - Reason output persistence now writes manifests/progress directly in their
   owning flows and resolves one-call section/PDF branches in place, removing
   four policy-free internal forwarding helpers.

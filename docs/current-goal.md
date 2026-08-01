@@ -9,16 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline policy-free Reason output forwarding helpers into their owning flow.
+Make Reason export planning require a real job-scheduling capability.
 
 ## Ordered Steps
 
-1. Separate one-line JSON forwarding and one-call selection helpers from
-   helpers that own validation, rendering, or external process behavior.
-2. Inline the policy-free helpers without changing manifest/progress ordering
-   or PDF result semantics.
-3. Run focused Reason output/daemon tests and full gates, then commit without
-   pushing.
+1. Remove optional job-sink and unused job-registry injection from persistent
+   `ReasonOutputService` state.
+2. Require a sink at `plan_job()` and make the chat tool fail before planning
+   when its surface cannot schedule daemon work.
+3. Update tests/spec, run focused Reason output/chat/daemon tests and full
+   gates, then commit without pushing.
 
 ## Exclusions
 
@@ -27,8 +27,8 @@ Inline policy-free Reason output forwarding helpers into their owning flow.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve section planning, chunk resume, manifest/progress write order, PDF
-  handling, retry/backoff, and the daemon's model-backed text runner.
+- Preserve durable manifests after an actual enqueue failure so daemon recovery
+  remains possible; prevent only the no-sink false-success mode.
 
 ## Constraints
 
@@ -40,6 +40,13 @@ Inline policy-free Reason output forwarding helpers into their owning flow.
 
 ## Phase Evidence
 
+- Reason export planning now receives a required `JobSink` at the operation
+  boundary instead of retaining an optional sink and unused registry override
+  in service state. Chat surfaces without daemon scheduling fail before
+  artifact creation; configured surfaces submit exactly one typed job, while a
+  real enqueue failure still preserves the durable manifest for recovery.
+  Focused Reason output/chat/daemon tests: 97 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reason output planning/composition now writes manifest and progress records
   directly in the owning flows, resolves the sole section-plan fallback at its
   use site, and keeps PDF result classification beside PDF generation. Removed

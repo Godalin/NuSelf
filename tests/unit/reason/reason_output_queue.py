@@ -42,9 +42,12 @@ def test_plan_publishes_typed_job_message(tmp_path: Path) -> None:
     output_service = ReasonOutputService(
         project_root=tmp_path,
         reason_service=service,
+    )
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
         job_sink=q.put,
     )
-    manifest = output_service.plan_job(thread.id, segment_size=1)
     paths = output_service.job_paths(thread.id, manifest.job_id)
 
     assert not (paths.root / "queue").exists()
@@ -53,21 +56,6 @@ def test_plan_publishes_typed_job_message(tmp_path: Path) -> None:
     assert message.envelope.name == "reason.output.export"
     assert message.resource_id == thread.id
     assert message.job_id == manifest.job_id
-
-
-def test_plan_without_job_sink_skips_enqueue(tmp_path: Path) -> None:
-    """plan_job does not fail without a job sink (CLI / test mode)."""
-    service = _reason_service(tmp_path)
-    thread = service.start_thread("No callback")
-    service.advance_thread(thread.id, step=_step(thread.id, "A", "Out A", "D A"))
-
-    output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
-    manifest = output_service.plan_job(thread.id, segment_size=1)
-    paths = output_service.job_paths(thread.id, manifest.job_id)
-
-    # No queue file, no callback — but manifest was still written
-    assert not (paths.root / "queue").exists()
-    assert paths.manifest.is_file()
 
 
 def test_plan_preserves_durable_job_when_wakeup_fails(
@@ -89,10 +77,13 @@ def test_plan_preserves_durable_job_when_wakeup_fails(
     output_service = ReasonOutputService(
         project_root=tmp_path,
         reason_service=service,
-        job_sink=fail_wakeup,
     )
 
-    manifest = output_service.plan_job(thread.id, segment_size=1)
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=fail_wakeup,
+    )
     paths = output_service.job_paths(thread.id, manifest.job_id)
 
     assert paths.manifest.is_file()
@@ -159,8 +150,14 @@ def test_section_planners_are_isolated_per_service(tmp_path: Path) -> None:
         section_planner=planner("Planner B"),
     )
 
-    manifest_a = output_a.plan_job(thread_a.id)
-    manifest_b = output_b.plan_job(thread_b.id)
+    manifest_a = output_a.plan_job(
+        thread_a.id,
+        job_sink=lambda _message: None,
+    )
+    manifest_b = output_b.plan_job(
+        thread_b.id,
+        job_sink=lambda _message: None,
+    )
 
     assert manifest_a.sections[0].title == "Planner A"
     assert manifest_b.sections[0].title == "Planner B"
@@ -176,7 +173,11 @@ def test_compose_from_enqueued_job(
     service.advance_thread(thread.id, step=_step(thread.id, "B", "Out B", "D B"))
 
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
-    manifest = output_service.plan_job(thread.id, segment_size=1)
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=lambda _message: None,
+    )
     paths = output_service.job_paths(thread.id, manifest.job_id)
 
     def _fake_generate_pdf(
