@@ -250,7 +250,7 @@ def test_chat_tool_collection_does_not_resolve_authority() -> None:
 
 
 def test_domain_package_roots_are_import_light() -> None:
-    for package in ("persona", "reason", "reflection"):
+    for package in ("persona", "profile", "reason", "reflection", "trace"):
         path = _SOURCE_ROOT / package / "__init__.py"
         assert _imports(path) == ()
 

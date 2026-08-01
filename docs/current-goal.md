@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the smaller Trace and Profile package facades before deciding whether the
-larger Runtime and Chat roots are cohesive public APIs or accidental eager
-aggregators. Prefer direct owning-module imports over replacement facades.
+Measure the Runtime and Chat package-root dependency fans. Retain a root only
+if it is a cohesive, deliberately consumed public API; otherwise move internal
+callers to owning modules and remove eager aggregation without adding aliases.
 
 ## Constraints
 
@@ -226,6 +226,12 @@ aggregators. Prefer direct owning-module imports over replacement facades.
   relevance, scheduler, repository, organizer, and service aggregation had no
   production consumer. Tests now name the modules whose behavior they verify.
 - Reflection/boundary focused suite: 159 passed. Post-Reflection cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Profile's unused package facade and Trace's domain/repository/service facade
+  are gone. The Trace CLI now imports only its repository-owned error and
+  visibility filter, while tests name their domain and service modules.
+- Trace/Profile/CLI/boundary focused suite: 394 passed. Post-facade cleanup
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
