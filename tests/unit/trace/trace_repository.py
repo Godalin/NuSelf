@@ -7,7 +7,8 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
-from nuself.trace import ThoughtTrace, TraceNotFound, TraceRepository, TraceRecorder
+from nuself.trace import ThoughtTrace, TraceNotFound, TraceRecorder
+from nuself.trace.repository import TraceRepository
 
 
 def _repository(root: Path) -> TraceRepository:

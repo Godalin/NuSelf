@@ -6260,15 +6260,21 @@ def test_trace_cli_lists_shows_and_searches_records(
         ["--workspace", str(tmp_path), "trace", "search", "observed_at"]
     )
     search_output = capsys.readouterr().out
+    reindex_result = main(
+        ["--workspace", str(tmp_path), "trace", "reindex"]
+    )
+    reindex_output = capsys.readouterr().out
 
     assert list_result == 0
     assert show_result == 0
     assert search_result == 0
+    assert reindex_result == 0
     assert "Temporal memory answer" in list_output
     assert "kind=chat_turn" in list_output
     assert trace.id in show_output
     assert "mem_123" in show_output
     assert "Temporal memory answer" in search_output
+    assert "Rebuilt trace index:" in reindex_output
 
 
 def test_trace_cli_lists_records_related_to_artifact(

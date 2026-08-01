@@ -12,10 +12,7 @@ from nuself.application import TraceServices
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
 from nuself.trace.domain import TRACE_KINDS, TraceKind
-from nuself.trace.repository import (
-    TraceNotFound,
-    TraceVisibilityFilter,
-)
+from nuself.trace import TraceNotFound, TraceVisibilityFilter
 from nuself.tui.trace import render_trace_detail, render_trace_row
 
 
@@ -59,13 +56,13 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 
 
 def handle_trace_show(args: argparse.Namespace) -> int:
-    repository = _trace_services(args.project_root).repository
+    service = _trace_services(args.project_root).query
     try:
-        trace = repository.resolve_trace(args.trace_id)
+        trace = service.show_trace(args.trace_id)
     except TraceNotFound:
         print(f"Trace not found: {args.trace_id}", file=sys.stderr)
         return 1
-    links = repository.links_for(trace.id)
+    links = service.links_for(trace.id)
     if args.as_json:
         payload = trace.to_wire()
         payload["links"] = [link.to_wire() for link in links]
@@ -129,6 +126,6 @@ def handle_trace_related(args: argparse.Namespace) -> int:
 
 
 def handle_trace_reindex(args: argparse.Namespace) -> int:
-    path = _trace_services(args.project_root).repository.reindex()
+    path = _trace_services(args.project_root).query.rebuild_index()
     print(f"Rebuilt trace index: {path}")
     return 0

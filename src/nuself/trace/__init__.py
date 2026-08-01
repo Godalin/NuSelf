@@ -7,7 +7,7 @@ from nuself.trace.domain import (
     TraceRelation,
     TraceVisibility,
 )
-from nuself.trace.repository import TraceNotFound, TraceRepository
+from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
 from nuself.trace.service import TraceQueryService, TraceRecorder
 
 __all__ = [
@@ -18,6 +18,6 @@ __all__ = [
     "TraceQueryService",
     "TraceRecorder",
     "TraceRelation",
-    "TraceRepository",
     "TraceVisibility",
+    "TraceVisibilityFilter",
 ]

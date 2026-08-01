@@ -35,3 +35,5 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert graph.reason_service.repository is graph.reason
     assert graph.reflection_service._repository is graph.reflection
     assert graph.reflection_service._reason_service is graph.reason_service
+    assert not hasattr(graph.trace, "repository")
+    assert graph.trace.recorder._repository is graph.trace.query._repository

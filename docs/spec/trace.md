@@ -247,7 +247,8 @@ Layers:
 - `ThoughtTrace` / `TraceLink`: domain models and validation.
 - `TraceRepository`: SQLite persistence and derived index rebuild.
 - `TraceRecorder`: service interface used by other subsystems to create traces and links.
-- `TraceQueryService`: service interface for list/show/search.
+- `TraceQueryService`: service interface for list/show/search and rebuilding
+  the derived query index.
 - Trace renderers: human-readable CLI/REPL output.
 - Tool-facing adapter: read-only search/show/list tools for agents in v0.2.0.
 
@@ -277,6 +278,7 @@ search_traces(...)
 traces_for_artifact(...)
 links_for(...)
 links_for_artifact(...)
+rebuild_index()
 ```
 
 ## Recording Requirements

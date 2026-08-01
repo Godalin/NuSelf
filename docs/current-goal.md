@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit remaining application service APIs for pass-through methods, duplicated
-authority state, or adapter-shaped CRUD while preserving complete domain use
-cases.
+Audit Reason and Reflection application boundaries for repository exposure
+that can be replaced by already-complete domain services without adding narrow
+facades.
 
 ## Constraints
 
@@ -109,6 +109,15 @@ cases.
   the production single-scheduler boundary. The private owned runner no longer
   returns a constant exit code; `run_daemon()` alone owns process status.
 - Server lifecycle focused suite: 98 passed. Post-server-composition
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `DataAdminService` generic list/get remain justified by the explicit
+  user-maintenance contract; editability, codecs, identity, and internal
+  visibility stay enforced at that boundary.
+- Trace CLI show, links, and derived-index rebuilding now use
+  `TraceQueryService`. `TraceServices` and the trace package no longer expose
+  `TraceRepository`; recorder and query still share one composed repository.
+- Trace service/CLI focused suite: 14 passed. Post-trace-boundary
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

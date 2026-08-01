@@ -14,7 +14,6 @@ from nuself.trace.service import TraceQueryService, TraceRecorder
 class TraceServices:
     """Concrete trace capabilities for one authority."""
 
-    repository: TraceRepository
     recorder: TraceRecorder
     query: TraceQueryService
 
@@ -27,7 +26,6 @@ def compose_trace_services(
 
     repository = TraceRepository(paths, backend=backend)
     return TraceServices(
-        repository=repository,
         recorder=TraceRecorder(repository),
         query=TraceQueryService(repository),
     )
