@@ -351,12 +351,7 @@ def start(
             "owner_unready",
             status=current,
         )
-    if current.phase == "inconsistent":
-        raise DaemonStartError(
-            "status_failed",
-            status=current,
-        )
-    if current.phase == "unknown":
+    if current.phase in {"inconsistent", "unknown"}:
         raise DaemonStartError(
             "status_failed",
             status=current,
@@ -398,11 +393,7 @@ def start(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise DaemonStartError(
-                "timeout",
-                status=current,
-                timeout_seconds=startup_policy.timeout_seconds,
-            )
+            break
         current = _status_for_start(
             paths.project_root,
             ping_timeout=remaining,
@@ -422,12 +413,13 @@ def start(
             )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise DaemonStartError(
-                "timeout",
-                status=current,
-                timeout_seconds=startup_policy.timeout_seconds,
-            )
+            break
         time.sleep(min(startup_policy.poll_interval_seconds, remaining))
+    raise DaemonStartError(
+        "timeout",
+        status=current,
+        timeout_seconds=startup_policy.timeout_seconds,
+    )
 
 
 def _status_for_start(
@@ -530,11 +522,7 @@ def stop(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            _raise_daemon_stop_timeout(
-                current,
-                policy=shutdown_policy,
-                request_error=request_error,
-            )
+            break
         current = _status_for_stop(
             paths.project_root,
             ping_timeout=min(
@@ -552,12 +540,13 @@ def stop(
             )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            _raise_daemon_stop_timeout(
-                current,
-                policy=shutdown_policy,
-                request_error=request_error,
-            )
+            break
         time.sleep(min(shutdown_policy.poll_interval_seconds, remaining))
+    _raise_daemon_stop_timeout(
+        current,
+        policy=shutdown_policy,
+        request_error=request_error,
+    )
 
 
 def _raise_daemon_stop_timeout(

@@ -60,11 +60,9 @@ behavior, grouped by subsystem. Configurable defaults live in
 | `MAX_EXPORT_ATTEMPTS` | `daemon/reason_export.py` | 5 | Max export job composition retries |
 | `EXPORT_RETRY_BASE_SECONDS` | `daemon/reason_export.py` | 10 s | Export retry base backoff |
 | `EXPORT_RETRY_MAX_SECONDS` | `daemon/reason_export.py` | 600 s | Export retry max backoff |
-| `EXPORT_QUEUE_POLL_SECONDS` | `daemon/reason_export.py` | 1 s | Export queue poll timeout |
-| `EXPORT_QUEUE_CAPACITY` | `daemon/reason_export.py` | 256 | Maximum distinct pending Reason export wake-ups |
 | startup readiness timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for a spawned daemon to become ready |
 | startup poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and child-exit checks |
-| shutdown ownership timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for request delivery, cleanup, and instance-lock release |
+| shutdown ownership timeout | `daemon/lifecycle.py` | 30 s | Maximum monotonic wait for request delivery, cleanup, and instance-lock release |
 | shutdown poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and instance-lock checks |
 | `timeout=2.0` | `daemon/client.py:21` | 2 s | Daemon socket connection timeout |
 | `MAX_DAEMON_FRAME_BYTES` | `daemon/protocol.py` | 1 MiB | Maximum request/response JSONL frame including newline |

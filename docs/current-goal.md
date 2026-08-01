@@ -9,29 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Close the unused derived JSON index subsystem removal, then resume the
-cross-module simplification audit. SQLite remains the sole structured-data
-authority; graph/search views compute from repositories, and explicit
-`data export`/memory export remain the user-controlled exchange paths.
+Audit daemon lifecycle and Reason export after scheduler unification. Preserve
+their typed composable boundaries, remove duplicated polling branches, and
+correct specifications that still describe the deleted export-worker queue.
 
 ## Ordered Steps
 
-1. Correct architecture, storage, memory, trace, CLI ownership, and scoped
-   development contracts before implementation.
-2. Remove the shared derived writer and repository/service reindex APIs.
-3. Remove automatic post-mutation reindex calls and explicit reindex commands.
-4. Remove index-only tests and strengthen evidence that mutation, query, graph,
-   and explicit export still operate directly from SQLite.
-5. Run focused boundary/CLI/domain tests, Pyright, full pytest, and package build;
-   commit the complete reduction without pushing.
+1. Trace lifecycle result models and Reason export service methods through all
+   production consumers; retain typed boundaries with real semantic use.
+2. Correct Reason output and hardcoded-constant specifications to describe the
+   unified daemon scheduler rather than the removed private worker queue.
+3. Simplify duplicated monotonic deadline branches in daemon start/stop without
+   changing ownership checks, error causes, or polling policy.
+4. Run lifecycle, export scheduler, specification, Pyright, full pytest, and
+   package build gates; commit the complete reduction without pushing.
 
 ## Exclusions
 
-- Do not remove in-memory symbolic graph computation or trace/reason queries.
-- Do not remove explicit pack, `data export`, or memory export files.
-- Do not add a replacement cache, compatibility command, migration, worker, or
-  filesystem cleanup path; derived files are non-authoritative and may simply
-  become stale remnants until users delete them.
+- Do not collapse typed lifecycle results into dictionaries or tuples.
+- Do not merge Reason domain composition with daemon scheduling ownership.
+- Do not add a generic job adapter, queue, timer, worker, lock, or compatibility
+  path.
 
 ## Constraints
 
@@ -43,6 +41,18 @@ authority; graph/search views compute from repositories, and explicit
 
 ## Phase Evidence
 
+- Lifecycle/result and Reason-export call-graph audit found both typed boundaries
+  semantically active: lifecycle transitions feed CLI audit/rendering, while the
+  export service owns durable recovery/retry policy and delegates execution to
+  the single daemon scheduler. Neither was replaced by a generic facade.
+- Daemon start and stop now each have one timeout construction/raise exit rather
+  than duplicated pre-probe and pre-sleep branches. Focused lifecycle/export/
+  boundary tests: 129 passed; full suite: 2437 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
+- Reason-output and hardcoded-constant specifications now describe scheduler
+  task identity, resource-lane serialization, startup recovery, and the actual
+  30-second shutdown ownership timeout; stale private queue/worker constants
+  and contracts are gone.
 - Removed the shared derived-file writer, five repository/service reindex APIs,
   automatic post-mutation rewrites, and the memory/profile/trace reindex CLI
   surface. Direct memory graph/relation/search and trace queries remain backed
