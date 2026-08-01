@@ -13,7 +13,6 @@ from nuself.application.composition import ApplicationGraph
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import (
     compose_reason_advancer,
-    compose_reason_service,
 )
 from nuself.config import ConfigSystem
 from nuself.conversation import CompletedTurn
@@ -86,7 +85,7 @@ class DaemonState:
         )
         self.reason_export_service = ReasonExportService(
             self.project_root,
-            reason_service=compose_reason_service(self.application),
+            reason_service=self.application.reason_service,
             workspace_store=PrivateWorkspaceStore(
                 paths,
                 scope="reason",
@@ -139,7 +138,7 @@ class DaemonState:
             ),
             interval_seconds=self.reason_scheduler_interval_seconds,
             repository=self.application.reason,
-            service=compose_reason_service(self.application),
+            service=self.application.reason_service,
         )
         handlers = {
             "memory.scan": self._scan_memory_observations,

@@ -33,8 +33,7 @@ from nuself.memory.source_repository import (
 )
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.application.reason import compose_reason_service
-from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
+from nuself.reason.service import ReasonService
 from nuself.reflection.repository import (
     ReflectionEntryNotFound,
     ReflectionRepository,
@@ -68,13 +67,8 @@ def _reflection_repository(
 
 def _reason_service(
     project_root: Path | None,
-    *,
-    advancer: ReasonAdvancerProtocol | None = None,
 ) -> ReasonService:
-    return compose_reason_service(
-        compose_cli_application(project_root),
-        advancer=advancer,
-    )
+    return compose_cli_application(project_root).reason_service
 
 
 def indent_lines(lines: list[str], prefix: str) -> list[str]:
@@ -185,9 +179,11 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         advancer = compose_reason_advancer(
             compose_cli_application(project_root)
         )
-        service = _reason_service(project_root, advancer=advancer)
         try:
-            thread = service.advance_thread(conversation_id)
+            thread = service.advance_thread(
+                conversation_id,
+                advancer=advancer,
+            )
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
@@ -572,12 +568,10 @@ def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: 
         repo.archive(entry_id)
         return f"Archived: {entry_id}"
     if subcmd == "promote":
-        from nuself.application.reflection import compose_reflection_service
-
         try:
-            thread = compose_reflection_service(
-                compose_cli_application(project_root)
-            ).promote_to_reason(entry_id)
+            thread = compose_cli_application(
+                project_root
+            ).reflection_service.promote_to_reason(entry_id)
         except RuntimeError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"

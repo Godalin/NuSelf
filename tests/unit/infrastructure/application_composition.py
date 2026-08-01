@@ -32,3 +32,6 @@ def test_application_graph_reuses_one_authority_repository_graph(
         is graph.memory.candidates
     )
     assert graph.memory.sources._profile_repository is graph.memory.profile
+    assert graph.reason_service.repository is graph.reason
+    assert graph.reflection_service._repository is graph.reflection
+    assert graph.reflection_service._reason_service is graph.reason_service

@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the next adapter and domain composition seams after removing redundant
-runtime state, lifecycle aliases, and hidden daemon composition fallback.
+Audit the remaining daemon and service adapters for redundant composition or
+pass-through APIs; remove only seams whose callers and lifecycle ownership are
+already explicit.
 
 ## Constraints
 
@@ -50,6 +51,14 @@ runtime state, lifecycle aliases, and hidden daemon composition fallback.
 - Composition/lifecycle focused suite: 62 passed.
 - Post-ownership `uv run --locked pytest -q`: 2448 passed; Pyright remains
   0 errors and 0 warnings.
+- `ApplicationGraph` now composes one authority-scoped memory query, reason,
+  and reflection service; Chat, CLI, REPL, and daemon consumers reuse them.
+- Removed the repeated reason/reflection service factories; a model-backed
+  reason advancer is a one-operation method input rather than a parallel
+  service graph.
+- Post-service-composition `uv run --locked pytest -q`: 2448 passed;
+  `uv run --locked pyright`: 0 errors, 0 warnings; `uv build`: sdist and wheel
+  succeeded.
 
 ## Last Completed Goal
 

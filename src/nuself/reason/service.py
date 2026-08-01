@@ -187,6 +187,7 @@ class ReasonService:
         id_or_index: str,
         *,
         step: ReasoningStep | None = None,
+        advancer: ReasonAdvancerProtocol | None = None,
     ) -> ReasoningThread:
         thread = self._repository.resolve_thread(id_or_index)
 
@@ -202,10 +203,11 @@ class ReasonService:
             metadata={"thread_id": thread.id},
         )
 
+        selected_advancer = advancer or self._advancer
         if step is not None:
             pass
-        elif self._advancer is not None:
-            generated = self._advancer.advance(thread)
+        elif selected_advancer is not None:
+            generated = selected_advancer.advance(thread)
             if generated is not None:
                 step = generated
             else:

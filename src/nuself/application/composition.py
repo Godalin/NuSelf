@@ -13,10 +13,14 @@ from nuself.application.trace import TraceServices, compose_trace_services
 from nuself.config import RuntimePaths
 from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification import NotificationOutbox
+from nuself.memory.query import MemoryQueryService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
+from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
+from nuself.reflection.service import ReflectionService
 from nuself.storage import StorageBackend, StorageCollection
+from nuself.workspace import PrivateWorkspaceStore
 
 
 @dataclass(frozen=True)
@@ -27,10 +31,13 @@ class ApplicationGraph:
     conversations: ConversationStore
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
+    memory_query: MemoryQueryService
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
     reason: ReasonRepository
+    reason_service: ReasonService
     reflection: ReflectionRepository
+    reflection_service: ReflectionService
     reflection_schedule: StorageCollection
     trace: TraceServices
     data: DataAdminService
@@ -44,20 +51,40 @@ def compose_application(
 
     conversations = ConversationStore(paths, backend=backend)
     memory = compose_memory_repositories(paths, backend)
+    trace = compose_trace_services(paths, backend)
+    reason = ReasonRepository(paths, backend=backend)
+    reflection = ReflectionRepository(paths, backend=backend)
+    reason_service = ReasonService(
+        paths.project_root,
+        repository=reason,
+        workspace_store=PrivateWorkspaceStore(paths, scope="reason"),
+        trace_recorder=trace.recorder,
+    )
     return ApplicationGraph(
         paths=paths,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,
+        memory_query=MemoryQueryService(
+            memory.entries,
+            memory.sources,
+            memory.profile,
+        ),
         notifications=NotificationOutbox(paths, backend),
         persona_prompts=PersonaPromptRepository(
             backend.collection("persona_prompts"),
             paths,
         ),
-        reason=ReasonRepository(paths, backend=backend),
-        reflection=ReflectionRepository(paths, backend=backend),
+        reason=reason,
+        reason_service=reason_service,
+        reflection=reflection,
+        reflection_service=ReflectionService(
+            reflection,
+            reason_service,
+            trace.recorder,
+        ),
         reflection_schedule=backend.collection("scheduler_state"),
-        trace=compose_trace_services(paths, backend),
+        trace=trace,
         data=DataAdminService(
             backend,
             conversations=conversations,

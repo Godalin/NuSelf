@@ -11,11 +11,9 @@ from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.application.composition import ApplicationGraph
-from nuself.memory.query import MemoryQueryService
 from nuself.persona.tools import build_persona_tools
 from nuself.application.persona import load_personas_from_memory
 from nuself.reason.output_contracts import SectionPlanner
-from nuself.application.reason import compose_reason_service
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.jobs import JobSink
@@ -42,14 +40,10 @@ def compose_conversation_runtime(
     resources = ConversationResources(
         tools=ToolResources(
             project_root=paths.project_root,
-            memory_query=MemoryQueryService(
-                application.memory.entries,
-                application.memory.sources,
-                application.memory.profile,
-            ),
+            memory_query=application.memory_query,
             memory=application.memory.entries,
             reflections=application.reflection,
-            reasons=compose_reason_service(application),
+            reasons=application.reason_service,
             reason_workspace=PrivateWorkspaceStore(
                 paths,
                 scope="reason",

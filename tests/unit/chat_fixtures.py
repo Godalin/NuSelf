@@ -18,7 +18,6 @@ from nuself.agent.tools.resources import ToolResources
 from nuself.agent.text import TextAgent
 from nuself.application.composition import compose_application
 from nuself.application.persona import load_personas_from_memory
-from nuself.application.reason import compose_reason_service
 from nuself.config import runtime_paths
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQueryService
@@ -84,7 +83,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 reflections=reflection_repository
                 or application.reflection,
                 reasons=reason_service
-                or compose_reason_service(application),
+                or application.reason_service,
                 reason_workspace=PrivateWorkspaceStore(
                     runtime_paths(project_root),
                     scope="reason",

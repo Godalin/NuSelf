@@ -8,12 +8,11 @@ import sys
 
 from nuself.application.reason import (
     compose_reason_advancer,
-    compose_reason_service,
 )
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.reason.service import ReasonAdvancerProtocol
+from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail, render_reason_row
 
@@ -28,13 +27,8 @@ REASON_VERBS: dict[str, tuple[str, str]] = {
 
 def _service(
     args: argparse.Namespace,
-    *,
-    advancer: ReasonAdvancerProtocol | None = None,
-):
-    return compose_reason_service(
-        compose_cli_application(args.project_root),
-        advancer=advancer,
-    )
+) -> ReasonService:
+    return compose_cli_application(args.project_root).reason_service
 
 
 def _print_json(*entities: object) -> None:
@@ -102,14 +96,18 @@ def handle_reason_start(args: argparse.Namespace) -> int:
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
     service = _service(args)
+    advancer = None
     if args.action == "advance":
         advancer = compose_reason_advancer(
             compose_cli_application(args.project_root)
         )
-        service = _service(args, advancer=advancer)
     method = getattr(service, method_name)
     try:
-        thread = method(args.thread_id)
+        thread = (
+            service.advance_thread(args.thread_id, advancer=advancer)
+            if args.action == "advance"
+            else method(args.thread_id)
+        )
     except ReasonError as exc:
         print(
             f"Error: {diagnostic_exception_message(exc)}",

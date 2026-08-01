@@ -8,24 +8,10 @@ from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
-from nuself.reflection.service import ReflectionService
 from nuself.persona import SharedPersonaDiscussionService
-from nuself.application.reason import compose_reason_service
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph
-
-
-def compose_reflection_service(
-    application: "ApplicationGraph",
-) -> ReflectionService:
-    """Compose reflection user operations from one application graph."""
-
-    return ReflectionService(
-        application.reflection,
-        compose_reason_service(application),
-        application.trace.recorder,
-    )
 
 
 def compose_reflection_scheduler(

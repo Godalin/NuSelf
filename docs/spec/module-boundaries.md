@@ -208,6 +208,11 @@ when they enforce adapter-specific authority or capability rules.
 adapters may borrow domain-facing capabilities from it, but raw
 `StorageBackend`, `StorageCollection`, and repository construction remain
 inside application composition, storage administration, and migrations.
+Stable authority-scoped query and user-intent services are composed once in
+the graph alongside their repositories. Chat, daemon, CLI, and cross-domain
+services borrow those instances rather than reconstructing services and their
+internal caches. One-operation strategies such as a model-backed reason
+advancer are method inputs, not a reason to create a parallel service graph.
 Initialized CLI and REPL commands always run inside one `ApplicationRuntime`;
 helper functions must not create a fallback graph when that scope is absent.
 The daemon server likewise owns its `ApplicationRuntime` and injects the
