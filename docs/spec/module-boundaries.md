@@ -374,7 +374,9 @@ service and that workspace store.
 The service does not retain a model advancer. An explicit advance operation
 receives either the narrow advancer protocol for that call or a structured step
 already produced by an orchestrator; dependency source must not vary between a
-hidden constructor fallback and the operation input.
+hidden constructor fallback and the operation input. Input resolution must
+produce one concrete step or raise before mutation, so persistence and audit
+code operate on a non-optional domain value rather than repeat fallback checks.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 `PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has

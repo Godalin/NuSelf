@@ -9,21 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the Reason service's unused hidden advancer dependency.
+Make the resolved Reason advancement step non-optional throughout mutation.
 
 ## Ordered Steps
 
-1. Confirm production never injects an advancer into `ReasonService`; CLI
-   supplies it per operation and daemon supplies a generated step.
-2. Remove the stored constructor dependency and retain explicit per-call
-   advancer-or-step inputs for `advance_thread()`.
-3. Run focused Reason/CLI tests and the complete verification gates; update
+1. Confirm `advance_thread()` either raises during input resolution or has one
+   concrete `ReasoningStep` before state construction and persistence.
+2. Express that invariant once; remove the pass branch, downstream optional
+   checks, and the one-use optional-summary helper.
+3. Run focused Reason tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve advancement errors, state transitions, transactionality, and audits.
+- Preserve advancement errors, state transitions, transactionality, and audit
+  values.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -37,6 +38,13 @@ Remove the Reason service's unused hidden advancer dependency.
 
 ## Phase Evidence
 
+- `ReasonService.advance_thread()` now resolves its optional operation inputs
+  into one concrete `ReasoningStep` before any mutation. Removed the empty
+  success branch, nine impossible downstream null fallbacks, and the one-use
+  optional-summary helper; state, persistence, trace, and audit paths now share
+  the same non-null domain invariant. Focused Reason tests: 61 passed; full
+  suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `ReasonService` no longer accepts or stores a constructor-time advancer,
   which production composition never supplied. `advance_thread()` now has one
   explicit operation boundary: receive either that call's narrow advancer or

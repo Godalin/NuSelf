@@ -28,12 +28,6 @@ class ReasonAdvancerProtocol(Protocol):
         """Generate one reasoning step for a thread."""
 
 
-def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -> str:
-    if step is not None and step.summary:
-        return step.summary
-    return thread.working_summary
-
-
 def _merge_str_lists(
     existing: Sequence[str],
     new_items: Sequence[str],
@@ -174,9 +168,7 @@ class ReasonService:
             metadata={"thread_id": thread.id},
         )
 
-        if step is not None:
-            pass
-        elif advancer is not None:
+        if step is None and advancer is not None:
             generated = advancer.advance(thread)
             if generated is not None:
                 step = generated
@@ -185,7 +177,7 @@ class ReasonService:
                     f"Cannot advance thread {thread.id}: advancer did not "
                     "produce a structured step"
                 )
-        else:
+        elif step is None:
             raise ReasonAdvanceError(
                 f"Cannot advance thread {thread.id}: no reason advancer configured"
             )
@@ -197,17 +189,29 @@ class ReasonService:
             id=thread.id,
             topic=thread.topic,
             status=final_status,
-            working_summary=_pick_working_summary(step, thread),
-            evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS),
+            working_summary=step.summary or thread.working_summary,
+            evidence_refs=_merge_str_lists(
+                thread.evidence_refs,
+                step.evidence_refs,
+                max_items=_MAX_EVIDENCE_REFS,
+            ),
             priority=thread.priority,
             last_advanced_at=now,
             next_review_after=thread.next_review_after,
             skip_next_advance_until=thread.skip_next_advance_until,
             created_at=thread.created_at,
             updated_at=now,
-            active_items_data=_merge_tracked_items(thread.active_items_data, step.new_findings_data if step else (), step.retired_findings_data if step else ()),
-            pending_items_data=_merge_tracked_items(thread.pending_items_data, step.new_pending_data if step else (), ()),
-            next_steps_data=step.next_steps_data if step and step.next_steps_data else thread.next_steps_data,
+            active_items_data=_merge_tracked_items(
+                thread.active_items_data,
+                step.new_findings_data,
+                step.retired_findings_data,
+            ),
+            pending_items_data=_merge_tracked_items(
+                thread.pending_items_data,
+                step.new_pending_data,
+                (),
+            ),
+            next_steps_data=step.next_steps_data or thread.next_steps_data,
             mandates_data=thread.mandates_data,
             reasoning_prompt=thread.reasoning_prompt,
         )
@@ -235,10 +239,10 @@ class ReasonService:
                 "thread_id": thread.id,
                 "step_id": step.id,
                 "step_kind": step.kind,
-                "new_findings": len(step.new_findings_data) if step else 0,
-                "new_pending": len(step.new_pending_data) if step else 0,
-                "retired_findings": len(step.retired_findings_data) if step else 0,
-                "next_steps": len(step.next_steps_data) if step else 0,
+                "new_findings": len(step.new_findings_data),
+                "new_pending": len(step.new_pending_data),
+                "retired_findings": len(step.retired_findings_data),
+                "next_steps": len(step.next_steps_data),
             },
         )
         if final_status != thread.status:

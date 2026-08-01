@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason advancement now resolves one concrete step before mutation, removing
+  repeated impossible null branches and a one-use optional-summary helper from
+  state construction, persistence, and auditing.
 - Reason service no longer retains an unused constructor-time advancer;
   advancement receives its narrow advancer or structured step explicitly at
   the operation boundary, removing two competing dependency sources.
