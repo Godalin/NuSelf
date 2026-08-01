@@ -145,7 +145,8 @@ def send_one_shot_chat(
     )
     if result.reply is not None:
         print_reply(result.reply)
-        _run_after_reply(result.after_reply)
+        if result.after_reply is not None:
+            result.after_reply()
     return result.code
 
 
@@ -250,11 +251,6 @@ def run_one_shot_chat(
         conversation_id=conversation_id,
         turn_id=turn_id,
     )
-
-
-def _run_after_reply(callback: Callable[[], None] | None) -> None:
-    if callback is not None:
-        callback()
 
 
 def _compress_after_reply(

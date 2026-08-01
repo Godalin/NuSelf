@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing constructor assignments and single-use private methods for
-mirrored state or pass-through calls. Preserve real policy and make tests use
-the owning production object shape instead of private seams.
+Continue AST-assisted auditing of single-use private helpers. Remove only
+helpers without policy or reusable domain meaning; retain callbacks and
+validators that own failure, protocol, or composition semantics.
 
 ## Constraints
 
@@ -275,6 +275,13 @@ the owning production object shape instead of private seams.
   state crosses into request handling; transport tests use a real server shell
   instead of injecting the removed private seam.
 - Socket/transport/request focused suite: 80 passed. Post-state-accessor cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- The one-shot Chat adapter's `_run_after_reply()` only performed one optional
+  callback check for its adjacent caller. That check is now direct; the actual
+  compression callback remains separate because it owns failure isolation and
+  audit reporting.
+- CLI/Chat focused suite: 511 passed. Post-callback cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
