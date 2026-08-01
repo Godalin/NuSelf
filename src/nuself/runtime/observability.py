@@ -303,7 +303,7 @@ def publish_observed_event(
             payload=payload,
         )
     except EventDeliveryError as exc:
-        report_internal_event_delivery_failure(
+        _report_internal_event_delivery_failure(
             exc,
             component=failure_component,
             project_root=project_root,
@@ -311,7 +311,7 @@ def publish_observed_event(
         return exc.event
 
 
-def report_internal_event_delivery_failure(
+def _report_internal_event_delivery_failure(
     exc: EventDeliveryError,
     *,
     component: LogComponent,

@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit shared observability helpers for wrappers that duplicate envelope
-construction, failure interpretation, or sink invocation. Preserve the
-validated pre-persistence boundary and domain-owned event selection.
+Audit application and daemon composition for duplicated observability wiring
+after the shared helper surface is reduced. Preserve domain-owned definitions,
+the validated pre-persistence boundary, and the single scheduler.
 
 ## Constraints
 
@@ -53,6 +53,12 @@ validated pre-persistence boundary and domain-owned event selection.
 - `logs.py` consumes the model through a private alias and no longer re-exports
   `LogEvent`; executable boundary tests enforce both dependency directions.
 - Log-model/runtime/daemon/UI focused suite: 270 passed. Post-model split
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Shared observability helpers with domain callers or distinct contract tests
+  remain public. The internal event-delivery failure interpreter is now private
+  to `publish_observed_event`; no standalone production caller existed.
+- Observability/chat focused suite: 112 passed. Post-helper cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
