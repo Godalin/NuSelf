@@ -6,7 +6,7 @@ from typing import Protocol
 
 from nuself.config import RuntimePaths
 from nuself.notification.audit import write_notification_audit
-from nuself.notification.outbox import OutboxEntry
+from nuself.notification.model import OutboxEntry
 
 
 class NotificationAdapter(Protocol):

@@ -9,10 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the remaining Notification outbox module: decide whether its immutable
-wire model/codec and persistent repository have independently useful consumers,
-or should remain one cohesive aggregate. Remove duplication rather than merely
-moving lines between files.
+Audit the 371-line CLI composition root for separable parser, dispatch, and
+interactive-chat policy. Preserve its one-root lifecycle role; extract only
+concerns with independent consumers or dependency direction.
 
 ## Constraints
 
@@ -273,6 +272,13 @@ moving lines between files.
 - Notification/Reflection/daemon/boundary focused suite: 220 passed.
   Post-Notification-boundary `uv run --locked pytest -q`: 2451 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Notification records and strict codecs now live in the dependency-light
+  `notification.model`; the persistent repository and cross-process entry lock
+  remain together in `notification.outbox`. Email, macOS, TUI, delivery, and
+  adapter code no longer load storage or `fcntl` merely to inspect an entry.
+- Model/outbox focused suite: 220 passed. Post-model separation
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

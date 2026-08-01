@@ -13,9 +13,9 @@ from nuself.cli.composition import compose_cli_application
 from nuself.cli.exit_codes import CliExitCode
 from nuself.notification.outbox import (
     NotificationOutbox,
-    NotificationClearStatus,
     OutboxEntryNotFound,
 )
+from nuself.notification.model import NotificationClearStatus
 from nuself.notification.composition import build_notification_adapters
 from nuself.notification.delivery import deliver_entry_once
 from nuself.tui.render import render_outbox_detail, render_outbox_summary

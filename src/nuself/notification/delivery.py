@@ -7,9 +7,9 @@ from dataclasses import replace
 from nuself.notification.adapters import NotificationAdapter
 from nuself.notification.outbox import (
     NotificationOutbox,
-    OutboxEntry,
     validate_adapter_ids,
 )
+from nuself.notification.model import OutboxEntry
 from nuself.runtime.context import use_runtime_context
 
 

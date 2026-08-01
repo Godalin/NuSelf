@@ -3387,7 +3387,7 @@ def test_open_with_message_sends_then_enters_repl(
 
 
 def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     private = _authority(tmp_path)
     private.mkdir(exist_ok=True)
@@ -3444,7 +3444,7 @@ def test_notify_send_preserves_existing_adapter_plan_and_history(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3520,7 +3520,7 @@ def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) ->
 
 
 def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3543,7 +3543,7 @@ def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -
 def test_notify_dismiss_by_numeric_handle(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3566,7 +3566,7 @@ def test_notify_dismiss_by_numeric_handle(
 def test_notify_numeric_handle_out_of_range(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3589,7 +3589,7 @@ def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
 
 
 def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3627,7 +3627,7 @@ def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -
 
 
 def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3651,7 +3651,7 @@ def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> N
 
 
 def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3682,7 +3682,7 @@ def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
 def test_repl_notify_list_shows_all(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3708,7 +3708,7 @@ def test_repl_notify_list_shows_all(
 def test_repl_notify_show_detail(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3832,7 +3832,7 @@ def test_interactive_whoami_shows_profile_items(
 def test_interactive_notify_lists_pending(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -3860,7 +3860,7 @@ def test_interactive_notify_lists_pending(
 def test_interactive_notify_send_and_dismiss(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -4607,7 +4607,7 @@ def test_notify_clear_defaults_to_all_terminal(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.notification.outbox import (
+    from nuself.notification.model import (
         OutboxEntry,
         OutboxStatus,
     )
@@ -4643,12 +4643,12 @@ def test_notify_clear_selects_failed_including_uncertain_plan(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.notification.outbox import (
+    from nuself.notification.model import (
         AdapterDelivery,
-        NotificationOutbox,
         OutboxEntry,
         OutboxStatus,
     )
+    from nuself.notification.outbox import NotificationOutbox
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -6066,7 +6066,7 @@ def test_third_level_subcommand_help(argv: list[str]) -> None:
 def test_notify_watch_detects_new_entries(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -6158,7 +6158,7 @@ def test_notify_watch_stops_on_q_or_eof(
 def test_repl_watch_detects_new_entries(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(
@@ -6203,7 +6203,7 @@ def test_repl_watch_detects_new_entries(
 def test_repl_notify_watch_subcommand(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.outbox import OutboxEntry
+    from nuself.notification.model import OutboxEntry
 
     outbox = notification_outbox(_authority(tmp_path))
     outbox.add(

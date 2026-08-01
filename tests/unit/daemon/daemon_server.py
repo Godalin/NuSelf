@@ -21,7 +21,7 @@ from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
 from nuself.logs import read_log_events
 from nuself.memory.observation import MemoryObservation
-from nuself.notification.outbox import OutboxEntry
+from nuself.notification.model import OutboxEntry
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.daemon.scheduler import (

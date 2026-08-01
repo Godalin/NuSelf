@@ -18,7 +18,7 @@ import nuself.notification.outbox as notification_module
 from nuself.logs import read_log_events
 from nuself.config import runtime_paths
 from nuself.notification.adapters import LogOnlyNotificationAdapter
-from nuself.notification.outbox import OutboxEntry
+from nuself.notification.model import OutboxEntry
 from nuself.notification.delivery import (
     NotificationDeliveryLoop,
     deliver_entry_once,

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from nuself.notification.outbox import OutboxEntry
+from nuself.notification.model import OutboxEntry
 from nuself.notification.audit import (
     report_notification_failure,
     write_notification_audit,

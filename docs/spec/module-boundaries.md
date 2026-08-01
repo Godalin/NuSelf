@@ -260,11 +260,14 @@ composition graph. By contrast, `nuself.decorators` is the deliberate public
 spelling for the cohesive inert feature-declaration DSL and may re-export the
 policies and decorators owned by `runtime.features`.
 
-The `nuself.notification` package root is also import-light. Durable outbox
-models, storage, and locking belong to `notification.outbox`; delivery
-orchestration belongs to `notification.delivery`; concrete adapters and their
-composition remain separate. These modules import one another only in that
-direction, and the package root must not recreate their former circular facade.
+The `nuself.notification` package root is also import-light. Immutable records
+and strict codecs belong to `notification.model`; storage and entry locking
+belong to `notification.outbox`; adapter contracts and delivery orchestration
+belong to `notification.adapters` and `notification.delivery`; concrete
+adapters and their composition remain separate. These modules import one
+another only in that direction, and the package root must not recreate their
+former circular facade. Renderers and concrete adapters that only inspect an
+entry depend on the model, not on storage and filesystem locking.
 
 Cross-domain APIs stay coarse enough to represent a use case. Do not wrap
 every repository method in a one-method interface, introduce a generic service
