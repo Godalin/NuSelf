@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon chat response confidence decoding now lives beside its range policy,
+  removing a generic helper with one caller.
 - Daemon chat request decoding now keeps its two optional ID defaults directly
   in the owning codec, removing a two-call overloaded helper.
 - The log-only notification adapter now receives the resolved project path

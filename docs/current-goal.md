@@ -9,14 +9,13 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline the daemon chat codec's two optional-string branches.
+Keep confidence decoding inside the daemon chat response codec.
 
 ## Ordered Steps
 
-1. Confirm the overloaded optional-string helper serves only conversation and
-   turn IDs in `ChatRequestPayload.from_wire()`.
-2. Decode those two defaults at their owning codec and remove the helper plus
-   typing-only overload import.
+1. Confirm `_optional_number()` serves only chat-response confidence.
+2. Decode the optional finite-range input beside its existing range check and
+   remove the generic one-call helper.
 3. Run focused daemon payload tests and full gates, then commit without pushing.
 
 ## Exclusions
@@ -26,7 +25,8 @@ Inline the daemon chat codec's two optional-string branches.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve exact daemon wire defaults and strict blank/type rejection.
+- Preserve omitted/null distinction, bool rejection, numeric coercion, and
+  confidence range validation.
 
 ## Constraints
 
@@ -38,6 +38,11 @@ Inline the daemon chat codec's two optional-string branches.
 
 ## Phase Evidence
 
+- `ChatResponsePayload.from_wire()` now owns confidence presence, numeric type,
+  conversion, and range validation in one block. Removed the sole-use generic
+  `_optional_number()` helper without weakening null/bool/NaN/infinity rejection.
+  Focused daemon payload/handler tests: 28 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `ChatRequestPayload.from_wire()` now owns its two optional ID defaults and
   strict decoding directly. Removed a two-call helper, two overload
   declarations, and the `overload` import while preserving message-first

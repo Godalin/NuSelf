@@ -240,10 +240,18 @@ class ChatResponsePayload:
             raise ProtocolError(
                 "chat response field 'epistemic_status' is invalid"
             )
-        confidence = _optional_number(
-            payload,
-            "confidence",
-            context="chat response",
+        confidence_value = payload.get("confidence")
+        if "confidence" in payload and (
+            isinstance(confidence_value, bool)
+            or not isinstance(confidence_value, int | float)
+        ):
+            raise ProtocolError(
+                "chat response field 'confidence' must be a number"
+            )
+        confidence = (
+            float(confidence_value)
+            if isinstance(confidence_value, int | float)
+            else None
         )
         if confidence is not None and not 0 <= confidence <= 1:
             raise ProtocolError(
@@ -478,22 +486,6 @@ def _required_nullable_string(
             f"{context} field '{field_name}' must be a string or null"
         )
     return value
-
-
-def _optional_number(
-    payload: dict[str, JsonValue],
-    field_name: str,
-    *,
-    context: str,
-) -> float | None:
-    if field_name not in payload:
-        return None
-    value = payload[field_name]
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ProtocolError(
-            f"{context} field '{field_name}' must be a number"
-        )
-    return float(value)
 
 
 def _expect_fields(
