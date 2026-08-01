@@ -502,6 +502,8 @@ REPL commands mirror the same model:
 Interactive inbox reflection and notification handlers each own one rendering
 path parameterized by pending versus all entries; command dispatch selects the
 view without maintaining duplicate list handlers.
+REPL command-local formatting and one-branch queries stay at their owning
+branch rather than being exposed as single-use command APIs.
 
 ## Command Group Reference
 

@@ -59,23 +59,19 @@ def _reflection_service(
     return compose_cli_application(project_root).reflection_service
 
 
-def indent_lines(lines: list[str], prefix: str) -> list[str]:
-    return [f"{prefix}{line}" if line else "" for line in lines]
-
-
-def handle_interactive_memory_search(query: str, project_root: Path | None) -> str:
-    entries = compose_cli_application(project_root).memory.entries.search(query)
-    if not entries:
-        return "No matching memory entries."
-    return "\n".join(render_memory_entry_row(entry) for entry in entries)
-
-
 def handle_interactive_memory_command(command: str, project_root: Path | None) -> str:
     if command == "why":
         return "No memory-context trace is available for the last answer yet."
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
-        return handle_interactive_memory_search(query, project_root)
+        entries = compose_cli_application(
+            project_root
+        ).memory.entries.search(query)
+        if not entries:
+            return "No matching memory entries."
+        return "\n".join(
+            render_memory_entry_row(entry) for entry in entries
+        )
     memory = compose_cli_application(project_root).memory
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
@@ -480,7 +476,13 @@ def handle_interactive_reflection_command(
         else "Pending reflection ideas:"
     ]
     for idx, entry in enumerate(entries):
-        lines.extend(indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
+        lines.extend(
+            f"  {line}" if line else ""
+            for line in render_reflection_entry_summary(
+                entry,
+                index=idx,
+            ).splitlines()
+        )
     return "\n".join(lines)
 
 

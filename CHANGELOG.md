@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- REPL memory search and reflection indentation now stay at their sole command
+  branches, removing two one-use public helpers.
 - Interactive reflection and notification pending/all views now share one
   domain handler each, replacing two duplicate public list handlers.
 - Interactive Reason commands now name their ID/index inputs as Reason thread

@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Collapse duplicate pending/all reflection and notification REPL list handlers
-into one parameterized handler per domain.
+Inline two one-use REPL command helpers that add no policy or capability
+boundary.
 
 ## Ordered Steps
 
-1. Confirm reflection pending/all and notification pending/all pairs differ
-   only in repository filter and empty/header text.
-2. Add `include_all` to each domain handler, delete two public list handlers,
-   and let dispatcher select the requested view.
+1. Confirm `indent_lines()` and `handle_interactive_memory_search()` each have
+   one caller and no independent tests, errors, or injected dependencies.
+2. Keep indentation and memory-search behavior at those owning branches and
+   remove both public helpers.
 3. Run REPL/CLI tests, Pyright, full pytest, and package build; update evidence
    and commit without pushing.
 
 ## Exclusions
 
-- Do not create a cross-domain generic list renderer.
-- Do not change pending/all filtering, visible indexes, or exact text.
+- Do not change memory search results, empty text, or reflection indentation.
+- Do not merge unrelated REPL command handlers.
 - Do not move repository access into the dispatcher.
 
 ## Constraints
@@ -37,6 +37,11 @@ into one parameterized handler per domain.
 
 ## Phase Evidence
 
+- Memory search now queries/renders at its sole REPL branch and reflection
+  indentation stays at its sole list loop. Removed the public one-use
+  `handle_interactive_memory_search()` and `indent_lines()` helpers without
+  changing output. Focused REPL/CLI tests: 570 passed; full suite: 2443 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Interactive reflection pending/all views now share one reflection handler,
   and notification pending/all views share one notification handler. Dispatcher
   selects `include_all`; removed two public list functions and duplicate
