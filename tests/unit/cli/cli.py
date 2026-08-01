@@ -4488,7 +4488,6 @@ def test_daemon_stop_failure_is_safe_and_audited(
     failure = DaemonStopError(
         "timeout",
         status=running,
-        owner_active=True,
         timeout_seconds=2,
     )
 
@@ -4532,10 +4531,15 @@ def test_interactive_restart_stop_failure_keeps_repl_alive(
         socket_path=_authority(tmp_path) / "runtime" / "nuself.sock",
         pid_path=_authority(tmp_path) / "runtime" / "nuself.pid",
     )
+    unknown = DaemonStatus(
+        phase="unknown",
+        pid=None,
+        socket_path=_authority(tmp_path) / "runtime" / "nuself.sock",
+        pid_path=_authority(tmp_path) / "runtime" / "nuself.pid",
+    )
     failure = DaemonStopError(
         "ownership_check_failed",
-        status=running,
-        owner_active=None,
+        status=unknown,
     )
 
     def fake_status(project_root: Path | None) -> DaemonStatus:

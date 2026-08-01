@@ -9,8 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit daemon lifecycle state/result types for duplicated projections and
-adapter-only wrappers while preserving ownership and shutdown guarantees.
+Audit daemon activity streaming and client adapters for duplicated state or
+transport wrappers while preserving bounded delivery and cancellation.
 
 ## Constraints
 
@@ -75,6 +75,13 @@ adapter-only wrappers while preserving ownership and shutdown guarantees.
   complete construction dependencies. Removed nullable dependency mirrors,
   `prepare()`, late sink binding, and their runtime guards.
 - Reason-export focused suite: 91 passed. Post-export-composition
+  `uv run --locked pytest -q`: 2448 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Lifecycle start/stop/restart result types remain justified by their distinct
+  transition and audit consumers. `DaemonStopError` no longer mirrors an
+  independently supplied ownership value; it derives ownership from its sole
+  authoritative status snapshot.
+- Lifecycle/CLI focused suite: 444 passed. Post-lifecycle-state
   `uv run --locked pytest -q`: 2448 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

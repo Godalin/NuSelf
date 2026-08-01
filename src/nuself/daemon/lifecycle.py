@@ -268,7 +268,6 @@ class DaemonStopError(RuntimeError):
         reason: DaemonStopFailureReason,
         *,
         status: DaemonStatus,
-        owner_active: bool | None,
         timeout_seconds: float | None = None,
     ) -> None:
         if reason == "request_failed":
@@ -283,8 +282,11 @@ class DaemonStopError(RuntimeError):
         super().__init__(message)
         self.reason = reason
         self.status = status
-        self.owner_active = owner_active
         self.timeout_seconds = timeout_seconds
+
+    @property
+    def owner_active(self) -> bool | None:
+        return self.status.owner_active
 
 
 def status(
@@ -507,7 +509,6 @@ def stop(
     if remaining <= 0:
         _raise_daemon_stop_timeout(
             current,
-            owner_active=owner_active,
             policy=shutdown_policy,
             request_error=None,
         )
@@ -523,7 +524,6 @@ def stop(
         raise DaemonStopError(
             "request_failed",
             status=current,
-            owner_active=owner_active,
         ) from exc
     except client.DaemonConnectionError as exc:
         request_error = exc
@@ -532,7 +532,6 @@ def stop(
         if remaining <= 0:
             _raise_daemon_stop_timeout(
                 current,
-                owner_active=owner_active,
                 policy=shutdown_policy,
                 request_error=request_error,
             )
@@ -555,7 +554,6 @@ def stop(
         if remaining <= 0:
             _raise_daemon_stop_timeout(
                 current,
-                owner_active=owner_active,
                 policy=shutdown_policy,
                 request_error=request_error,
             )
@@ -565,14 +563,12 @@ def stop(
 def _raise_daemon_stop_timeout(
     status_snapshot: DaemonStatus,
     *,
-    owner_active: bool,
     policy: DaemonWaitPolicy,
     request_error: client.DaemonConnectionError | None,
 ) -> Never:
     error = DaemonStopError(
         "timeout",
         status=status_snapshot,
-        owner_active=owner_active,
         timeout_seconds=policy.timeout_seconds,
     )
     if request_error is not None:
@@ -591,7 +587,6 @@ def _status_for_stop(
         raise DaemonStopError(
             "ownership_check_failed",
             status=exc.status,
-            owner_active=None,
         ) from exc
 
 

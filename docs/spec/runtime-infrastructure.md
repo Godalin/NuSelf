@@ -1022,7 +1022,10 @@ Client lifecycle observation uses one explicit phase model:
 | `unknown` | known or unknown | inspection failed | partial snapshot attached to a typed status error |
 
 `DaemonStatus.running` is derived solely from `phase == "ready"`; it is not
-stored independently. Only `ready` may carry a PID; construction rejects PID
+stored independently. Instance ownership is likewise derived from the phase;
+lifecycle errors retain the authoritative status snapshot rather than storing
+a second ownership value that could disagree with it. Only `ready` may carry a
+PID; construction rejects PID
 identity on every other phase. PID metadata is read only for `ready`. Lock
 inspection failure must never collapse to `stopped`: the lifecycle raises a
 typed status error retaining an `unknown` partial snapshot and the original
