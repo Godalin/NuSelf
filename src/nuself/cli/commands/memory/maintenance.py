@@ -89,7 +89,6 @@ def handle_memory_import(args: argparse.Namespace) -> int:
             "import",
         )
         imported += 1
-    repository.reindex()
     print(
         f"Imported {imported} memory entries from {args.path}"
     )

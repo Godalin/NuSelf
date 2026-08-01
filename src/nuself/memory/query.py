@@ -118,12 +118,11 @@ class MemoryService:
         return len(entries)
 
     def archive(self, entry_id: str) -> MemoryEntry:
-        """Archive one entry and refresh derived indexes."""
+        """Archive one entry."""
 
         entry = self._repository.get(entry_id)
         updated = entry.with_updates(review_state="archived")
         self._repository.save(updated)
-        self._repository.reindex()
         return updated
 
     def update_importance(
@@ -132,14 +131,13 @@ class MemoryService:
         *,
         importance: float,
     ) -> MemoryEntry:
-        """Update entry importance and refresh derived indexes."""
+        """Update entry importance."""
 
         if not 0.0 <= importance <= 1.0:
             raise ValueError("importance must be between 0.0 and 1.0")
         entry = self._repository.get(entry_id)
         updated = entry.with_updates(importance=importance)
         self._repository.save(updated)
-        self._repository.reindex()
         return updated
 
     def _search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:

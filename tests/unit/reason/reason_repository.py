@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from nuself.config import runtime_paths
@@ -108,18 +107,3 @@ def test_list_empty_threads(tmp_path: Path) -> None:
 def test_list_empty_steps(tmp_path: Path) -> None:
     repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     assert repo.list_steps("reason-nonexistent") == []
-
-
-def test_reindex(tmp_path: Path) -> None:
-    repo = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
-    t = ReasoningThread(topic="Test")
-    repo.save_thread(t)
-    s = ReasoningStep(thread_id=t.id, summary="Step")
-    repo.save_step(s)
-    path = repo.reindex()
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload["version"] == 1
-    assert {item["_record_kind"] for item in payload["records"]} == {
-        "thread",
-        "step",
-    }

@@ -561,7 +561,7 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 - **Behavior**: Loads the memory entry, sets `review_state="archived"`, and saves it back.
 - **Returns**: Confirmation with entry title, or error if not found.
 - **Error boundary**: Only `MemoryEntryNotFound` is rendered as a missing-entry
-  result. Repository, decoding, persistence, reindexing, invariant, and
+  result. Repository, decoding, persistence, invariant, and
   programming failures propagate to the shared tool middleware and are
   recorded as failed tool outcomes.
 - **When to use**: When the user indicates a memory is outdated, no longer relevant, or should be hidden from active context.
@@ -572,7 +572,7 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 - **Behavior**: Updates the entry's importance score and saves it back.
 - **Returns**: Confirmation with new importance value, or error if not found.
 - **Error boundary**: Only `MemoryEntryNotFound` is rendered as a missing-entry
-  result. Repository, decoding, persistence, reindexing, invariant, and
+  result. Repository, decoding, persistence, invariant, and
   programming failures propagate to the shared tool middleware and are
   recorded as failed tool outcomes.
 - **When to use**: When the user emphasizes or downplays the significance of a memory during conversation.

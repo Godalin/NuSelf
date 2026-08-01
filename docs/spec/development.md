@@ -464,7 +464,7 @@ application runtime.
   dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
 - `cli/commands/reason.py` owns one-shot reason list/show/start/action/delete handlers.
   The long-running terminal watch loop remains with REPL/session orchestration.
-- `cli/commands/trace.py` owns one-shot trace list/show/search/related/reindex handlers
+- `cli/commands/trace.py` owns one-shot trace list/show/search/related handlers
   and their command-line filter normalization.
 - `cli/commands/reflections.py` owns one-shot reflection list/show/lifecycle/promote/
   organize handlers; reflection REPL shortcuts remain in the REPL layer.
@@ -485,7 +485,7 @@ application runtime.
   remain in `nuself.cli`.
 - Memory CLI commands live together under the `cli/commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
-  `cli/commands/memory/profile.py` owns profile list/search/show/delete/reindex
+  `cli/commands/memory/profile.py` owns profile list/search/show/delete
   handlers and their list ordering and handle resolution.
   `cli/commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
   extract handlers and source-specific output formatting.
@@ -495,7 +495,7 @@ application runtime.
   `cli/commands/memory/graph.py` owns symbolic graph nodes/edges/search/path/closure
   handlers and graph-specific text formatting.
   `cli/commands/memory/entries.py` owns durable entry CRUD/search/preview/stats/
-  relations/types/reindex/unquarantine handlers. It also exposes parser type
+  relations/types/unquarantine handlers. It also exposes parser type
   choices and REPL preview rendering as explicit shared CLI interfaces.
   `cli/commands/memory/maintenance.py` owns explicit curator/optimizer runs and
   durable entry import/export commands.
@@ -562,7 +562,8 @@ boundary and re-exports caller-facing names.
 - Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
 - Descriptors own validation, summarization, merge, decay, conflict, retrieval, and reflection rules.
 - Symbolic memory evolves as a derived open graph with `RelationDescriptor` rules.
-- SQLite private memory is authoritative; all indexes are derived and rebuildable.
+- SQLite private memory is authoritative; graph views derive from repository
+  records at query time rather than from JSON index sidecars.
 
 ## Private Memory
 

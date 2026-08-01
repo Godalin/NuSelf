@@ -126,14 +126,5 @@ def handle_memory_profile_delete(
             file=sys.stderr,
         )
         return 1
-    repository.reindex()
     print(f"Deleted profile item: {profile_id}")
-    return 0
-
-
-def handle_memory_profile_reindex(
-    args: argparse.Namespace,
-) -> int:
-    path = compose_cli_application(args.project_root).memory.profile.reindex()
-    print(f"Rebuilt profile index: {path}")
     return 0

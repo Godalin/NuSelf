@@ -19,7 +19,7 @@ Trace is not hidden raw model chain-of-thought. It stores inspectable system-lev
 ## Design Principles
 
 - **Provenance, not transcript duplication**: a trace summarizes why an artifact exists; it does not copy a whole chat transcript.
-- **Structured enough to query**: records are JSON files with stable typed fields.
+- **Structured enough to query**: records use stable typed fields in SQLite.
 - **Human-readable by default**: CLI and REPL output must use the shared record renderer style from `cli.md`.
 - **Privacy first**: default visibility is `private`; `internal` traces are hidden from default list/search/export.
 - **Append-friendly**: traces are durable records. Later traces can revise or link to earlier traces instead of mutating history casually.
@@ -27,27 +27,24 @@ Trace is not hidden raw model chain-of-thought. It stores inspectable system-lev
 
 ## Storage Contract
 
-Trace storage lives under:
+Trace storage uses the selected authority's SQLite collections:
 
 ```text
-<authority-root>/traces/
-  traces/{trace_id}.json
-  links/{link_id}.json
-  index.json
+trace_nodes
+trace_edges
 ```
 
 Rules:
 
-- `traces/` contains one `ThoughtTrace` JSON object per file.
-- `links/` contains one `TraceLink` JSON object per file.
-- `index.json` is derived and rebuildable from `traces/` and `links/`.
+- `trace_nodes` contains one typed `ThoughtTrace` record per ID.
+- `trace_edges` contains one typed `TraceLink` record per ID.
+- List, search, and artifact queries read these authoritative collections
+  directly; no JSON query index is written.
 - Record timestamps are timezone-aware ISO strings.
 - Human-readable output renders timestamps in the current system timezone per `cli.md`.
-- Repository writes must be atomic enough for local CLI and concurrent tool use:
-  write to a unique temporary sibling file, then replace the target file.
-- Writes in the same local process are serialized per trace repository root so
-  concurrent trace recording cannot race while rebuilding `index.json`.
-- Invalid JSON files are skipped by list/search but surfaced by a dev diagnostic later. First implementation may ignore invalid files silently in normal commands.
+- Repository writes use the selected backend's transaction and concurrency
+  contract. Invalid records are skipped through shared observed-record
+  diagnostics in list/search paths.
 
 ## IDs
 
@@ -209,7 +206,6 @@ traces_for_artifact(artifact_ref, visibility=default) -> list[ThoughtTrace]
 save_link(link) -> TraceLink
 links_for(trace_id) -> list[TraceLink]
 links_for_artifact(artifact_ref) -> list[TraceLink]
-reindex() -> Path
 ```
 
 Default visibility filter:
@@ -245,12 +241,12 @@ Trace is a subsystem service, not only a repository.
 Layers:
 
 - `ThoughtTrace` / `TraceLink`: domain models and validation.
-- `TraceRepository`: SQLite persistence and derived index rebuild.
+- `TraceRepository`: SQLite persistence and deterministic queries.
 - `TraceRecorder`: typed service interface used by other subsystems to record
   domain outcomes. Generic model construction and link persistence remain
   private implementation details.
-- `TraceQueryService`: service interface for list/show/search and rebuilding
-  the derived query index.
+- `TraceQueryService`: service interface for list/show/search and artifact
+  relationships.
 - Trace renderers: human-readable CLI/REPL output.
 - Tool-facing adapter: read-only search/show/list tools for agents in v0.2.0.
 
@@ -282,7 +278,6 @@ search_traces(...)
 traces_for_artifact(...)
 links_for(...)
 links_for_artifact(...)
-rebuild_index()
 ```
 
 ## Recording Requirements
@@ -384,8 +379,7 @@ Rules:
 - `shareable` traces must avoid raw private context beyond intentionally summarized provenance.
 - Trace records may contain sensitive summaries; they stay under `<authority-root>/` and are not committed.
 - Trace content is intentional provenance and is not diagnostic text:
-  persistence preserves it exactly. File-backed trace records inherit the
-  shared private atomic-write contract (`0700` directory, `0600` files).
+  persistence preserves it exactly through the managed SQLite authority.
 - Future transcript export may include trace summaries only when explicitly requested.
 
 ## Logging Contract
@@ -393,7 +387,7 @@ Rules:
 Trace writes should emit structured logs:
 
 - component: `memory` or a future `trace` component only if `logs.py` is expanded;
-- event examples: `trace_saved`, `trace_link_saved`, `trace_reindexed`;
+- event examples: `trace_saved`, `trace_link_saved`;
 - logs must not duplicate large trace summaries or raw inputs.
 
 First implementation may use the existing `memory` log component to avoid widening the log component enum.

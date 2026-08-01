@@ -109,11 +109,6 @@ def test_profile_repository_delete_missing_raises(tmp_path: Path) -> None:
     raise AssertionError("expected ProfileItemNotFound")
 
 
-def test_profile_repository_reindex_on_empty_repo(tmp_path: Path) -> None:
-    repo = _repository(tmp_path)
-    repo.reindex()
-
-
 def test_profile_repository_search_no_matches_returns_empty(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
     repo.save(ProfileItem(type="profile_fact", title="Style", body="Concise."))

@@ -26,7 +26,7 @@
 8. The generated type must be registered and the normalized title and tags
    must remain non-empty.
 9. Result is written directly to `MemoryEntryRepository` (bypasses candidate
-   queue), then `reindex()` is called.
+   queue); SQLite is immediately authoritative and no sidecar index is written.
 
 ## Temporal Memory Contract
 
@@ -383,8 +383,8 @@ ProfileItem and delete targets have no MemoryEntry review-state transition.
 
 The application composes one service for user-facing retrieval and bounded
 entry mutation. It owns context packing, filtered counts, archive, and
-importance updates; mutations refresh the derived memory index before
-returning. Agent tools receive only this service and never the entry repository.
+importance updates; successful mutations are complete when the repository write
+returns. Agent tools receive only this service and never the entry repository.
 Repository bundles remain internal application resources for workflows that
 coordinate candidates, sources, observations, curator plans, and profiles.
 Memory intake, curation, and optimization receive typed structured agents from
@@ -501,7 +501,8 @@ disagree with chat for multi-keyword queries.
 ### Derived Graph Contract
 
 - Graph is **derived and rebuildable**, not authoritative.
-- `reindex()` writes `<authority-root>/derived/symbolic_graph.json` and `<authority-root>/derived/relation_index.json`.
+- Nodes and edges are computed from current SQLite memory entries when queried;
+  there is no persisted graph or relation-index sidecar.
 - Nodes are memory entries; edges generated from `entry.relations`.
 - Edge IDs are deterministic: `{source_id}:{relation}:{target_id}`.
 

@@ -9,9 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue narrowing command-shaped service methods that expose unused internal
-results. Preserve query results and domain objects wherever callers actually
-compose further work from them.
+Close the unused derived JSON index subsystem removal, then resume the
+cross-module simplification audit. SQLite remains the sole structured-data
+authority; graph/search views compute from repositories, and explicit
+`data export`/memory export remain the user-controlled exchange paths.
+
+## Ordered Steps
+
+1. Correct architecture, storage, memory, trace, CLI ownership, and scoped
+   development contracts before implementation.
+2. Remove the shared derived writer and repository/service reindex APIs.
+3. Remove automatic post-mutation reindex calls and explicit reindex commands.
+4. Remove index-only tests and strengthen evidence that mutation, query, graph,
+   and explicit export still operate directly from SQLite.
+5. Run focused boundary/CLI/domain tests, Pyright, full pytest, and package build;
+   commit the complete reduction without pushing.
+
+## Exclusions
+
+- Do not remove in-memory symbolic graph computation or trace/reason queries.
+- Do not remove explicit pack, `data export`, or memory export files.
+- Do not add a replacement cache, compatibility command, migration, worker, or
+  filesystem cleanup path; derived files are non-authoritative and may simply
+  become stale remnants until users delete them.
 
 ## Constraints
 
@@ -23,6 +43,14 @@ compose further work from them.
 
 ## Phase Evidence
 
+- Removed the shared derived-file writer, five repository/service reindex APIs,
+  automatic post-mutation rewrites, and the memory/profile/trace reindex CLI
+  surface. Direct memory graph/relation/search and trace queries remain backed
+  by the injected SQLite repositories; explicit exports are unchanged.
+- The change deletes 319 lines while adding 77 lines, mostly specification and
+  goal evidence. Focused memory/profile/source/reason/CLI tests: 383 passed;
+  full suite: 2437 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - The remaining large REPL command and dispatcher modules have no dead public
   handlers or duplicated parser boundary: the sealed handler table exactly
   covers registry command identities, while metadata and execution remain
@@ -79,7 +107,7 @@ compose further work from them.
 - Data CLI/boundary focused suite: 63 passed. Post-service-reuse
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
-- Memory add/search/reindex, source delete/extract, system status, and REPL
+- Memory add/search, source delete/extract, system status, and REPL
   memory dispatch now each resolve the invocation application once and reuse
   its resource graph. A full CLI AST audit finds no handler with more than one
   application/conversation lookup.
@@ -497,9 +525,9 @@ compose further work from them.
   sdist and wheel build succeeded.
 - The former query-only memory helper is now the complete user-facing
   `MemoryService`: search, context packing, filtered count, archive, and
-  importance mutation share one composed repository and index-refresh policy.
+  importance mutation share one composed repository and authority boundary.
 - Agent tools now receive only `MemoryService`; the parallel entry-repository
-  capability and duplicated save/reindex mutations are gone. Curator, source,
+  capability and duplicated save mutations are gone. Curator, source,
   projection, repair, and migration workflows retain explicit repositories
   instead of being forced through a universal memory facade.
 - Memory/chat focused suite: 98 passed. Post-memory-service

@@ -175,7 +175,7 @@ and tool runtimes borrow only their respective snapshot and must not resolve a
 backend or compose a second repository graph.
 The tool snapshot exposes one `MemoryService`, not the entry repository beside
 a query helper. Search, context packing, count, archive, and importance updates
-are service use cases so tool code cannot bypass reindexing or acquire unrelated
+are service use cases so tool code cannot bypass domain validation or acquire unrelated
 memory mutations. Curator, source ingestion, projection, repair, and migration
 remain domain/infrastructure workflows and may receive the repositories they
 actually coordinate; they are not routed through a universal memory facade.
@@ -306,7 +306,7 @@ repository merely to call one capability.
 Profile consumers use the stable `ProfileRepositoryPort` contract rather than
 the concrete storage adapter. The contract exposes only list/search and the
 mutations required by memory candidate workflows; authority paths, collections,
-reindexing, and storage implementation remain private to profile composition.
+and storage implementation remain private to profile composition.
 Memory intake receives that port explicitly; it is classification policy and
 must not open storage when a caller omits profile context.
 Memory optimization likewise receives resolved paths plus entry, candidate,

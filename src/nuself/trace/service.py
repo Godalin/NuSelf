@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceRelation, TraceVisibility
@@ -310,12 +309,6 @@ class TraceQueryService:
 
     def links_for_artifact(self, artifact_ref: str) -> list[TraceLink]:
         return self._repository.links_for_artifact(artifact_ref)
-
-    def rebuild_index(self) -> Path:
-        """Rebuild the derived trace query index."""
-
-        return self._repository.reindex()
-
 
 def _short(value: str, limit: int = 80) -> str:
     normalized = " ".join(value.split())

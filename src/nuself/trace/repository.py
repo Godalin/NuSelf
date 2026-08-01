@@ -1,15 +1,13 @@
-"""File-backed trace repository."""
+"""SQLite-backed trace repository."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 import threading
 from typing import Literal, cast
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
@@ -153,17 +151,6 @@ class TraceRepository:
             if link.source_id == normalized or link.target_id == normalized:
                 links.append(link)
         return sorted(links, key=lambda link: (link.created_at, link.id))
-
-    def reindex(self) -> Path:
-        records: list[object] = [
-            {"_record_kind": "trace", **item.to_wire()}
-            for item in self.list_traces(visibility="all")
-        ]
-        for wire in self._links.list():
-            records.append({"_record_kind": "link", **wire})
-        return write_derived_index(
-            self._paths, "trace_index.json", records
-        )
 
     def _decode_link(self, wire: dict[str, object]) -> TraceLink | None:
         return decode_observed_record(

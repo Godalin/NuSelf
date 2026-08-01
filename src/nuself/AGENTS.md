@@ -43,8 +43,8 @@ Development constraints for `src/nuself/`.
 - Do not add new long-term memory categories as only closed `Literal` tags when the behavior is type-specific; prefer a descriptor/registry path aligned with root memory architecture docs.
 - Future typed memory descriptors should own validation, summarization, merge, decay, conflict, retrieval, and reflection behavior.
 - Future symbolic graph relations should be registered through relation descriptors rather than hard-coded relation enums.
-- Derived indexes belong under the selected authority's `derived/` directory
-  and should be rebuildable from entries.
+- Symbolic graph views are derived directly from authoritative entries; do not
+  add continuously rewritten JSON index sidecars.
 - Chat prompts must use `MemoryService` instead of loading all entries indiscriminately.
 - Memory query and context packing must remain independently testable without live LLM calls.
 - Memory curator logic must write structured memory entries through

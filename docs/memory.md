@@ -1,7 +1,7 @@
 # Memory Guide
 
 NuSelf separates conversation history, durable memory, profile facts, imported
-sources, and derived indexes. This keeps raw chat from automatically becoming
+sources, and query views. This keeps raw chat from automatically becoming
 long-term memory.
 
 All personal data lives under the selected authority. The default user
@@ -111,13 +111,8 @@ uv run nuself memory graph edges
 uv run nuself memory graph search "retrieval"
 ```
 
-Rebuild derived indexes when diagnosing projection state:
-
-```bash
-uv run nuself memory reindex
-```
-
-Derived indexes can be rebuilt; the authoritative records cannot.
+Graph and relation views are computed directly from authoritative SQLite
+records, so they do not require a separate rebuild step.
 
 ## Optimize Existing Memory
 

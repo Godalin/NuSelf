@@ -157,8 +157,8 @@ Installed NuSelf defaults to a durable user authority under `~/.nuself`.
 Explicit workspace scope uses `<workspace>/.nuself`; configuration may inherit
 user defaults, but persisted state always belongs to exactly one selected
 authority. The source checkout is not an implicit data root. Authoritative
-domain records are preserved independently from derived indexes so projections
-can be rebuilt without changing identity or evidence.
+domain records remain directly queryable through typed repositories; NuSelf
+does not mirror them into continuously rewritten JSON index files.
 
 SQLite is the only authoritative structured-data store. Typed repositories
 isolate domain models from SQL, and the validated `nuself data` service gives

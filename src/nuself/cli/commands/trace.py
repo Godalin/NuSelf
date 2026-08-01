@@ -123,9 +123,3 @@ def handle_trace_related(args: argparse.Namespace) -> int:
                 f"{link.target_id} ({link.summary})"
             )
     return 0
-
-
-def handle_trace_reindex(args: argparse.Namespace) -> int:
-    path = _trace_services(args.project_root).query.rebuild_index()
-    print(f"Rebuilt trace index: {path}")
-    return 0

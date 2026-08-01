@@ -222,7 +222,6 @@ def handle_memory_add(args: argparse.Namespace) -> int:
     )
     repository = application.memory.entries
     repository.save(entry)
-    repository.reindex()
     record_memory_trace(
         application.trace.recorder,
         args.project_root,
@@ -254,7 +253,6 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
         review_state=args.review_state,
     )
     repository.save(updated)
-    repository.reindex()
     print_ansi(render_memory_entry_row(updated))
     return 0
 
@@ -273,7 +271,6 @@ def handle_memory_delete(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-    repository.reindex()
     for entry_id in entry_ids:
         print(f"Deleted memory entry: {entry_id}")
     return 0
@@ -383,22 +380,6 @@ def handle_memory_types(args: argparse.Namespace) -> int:
                 f"{name}: {registry.describe(name)} "
                 f"(default importance {default_importance})"
             )
-    return 0
-
-
-def handle_memory_reindex(args: argparse.Namespace) -> int:
-    memory = compose_cli_application(args.project_root).memory
-    repository = memory.entries
-    memory_path = repository.reindex()
-    relation_path = repository.reindex_relations()
-    graph_path = repository.reindex_symbolic_graph()
-    source_path = memory.sources.reindex()
-    profile_path = memory.profile.reindex()
-    print(f"Rebuilt memory index: {memory_path}")
-    print(f"Rebuilt relation index: {relation_path}")
-    print(f"Rebuilt symbolic graph: {graph_path}")
-    print(f"Rebuilt source index: {source_path}")
-    print(f"Rebuilt profile index: {profile_path}")
     return 0
 
 

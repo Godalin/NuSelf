@@ -194,7 +194,7 @@ These paths may remain files:
 - JSONL operational logs;
 - pack exports/imports and backups;
 - PID, socket, and advisory lock files;
-- rebuildable derived indexes.
+- explicit user-requested data exports.
 
 Chat threads, memory, profile, curator state, scheduler state, reasoning,
 traces, reflections, and notifications are structured data and therefore live

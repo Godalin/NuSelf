@@ -128,8 +128,6 @@ def handle_memory_source_delete(
             file=sys.stderr,
         )
         return 1
-    repository.reindex()
-    memory.profile.reindex()
     print(f"Deleted source document: {source_id}")
     return 0
 

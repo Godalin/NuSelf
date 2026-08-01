@@ -19,7 +19,6 @@ from nuself.cli.commands.memory.entries import (
     handle_memory_edit,
     handle_memory_list,
     handle_memory_preview,
-    handle_memory_reindex,
     handle_memory_relations,
     handle_memory_search,
     handle_memory_show,
@@ -49,7 +48,6 @@ from nuself.cli.commands.memory.plan import (
 from nuself.cli.commands.memory.profile import (
     handle_memory_profile_delete,
     handle_memory_profile_list,
-    handle_memory_profile_reindex,
     handle_memory_profile_search,
     handle_memory_profile_show,
 )
@@ -286,12 +284,6 @@ def add_memory_parser(
     )
     profile_delete_parser.add_argument("profile_id")
     bind_handler(profile_delete_parser, handle_memory_profile_delete)
-    bind_handler(
-        profile_subparsers.add_parser(
-            "reindex", help="Rebuild derived profile entries."
-        ),
-        handle_memory_profile_reindex,
-    )
     source_parser = memory_subparsers.add_parser(
         "source",
         help="Manage source documents and extracted chunks.",
@@ -399,10 +391,6 @@ def add_memory_parser(
     )
     types_parser.add_argument("--json", action="store_true")
     bind_handler(types_parser, handle_memory_types)
-    bind_handler(
-        memory_subparsers.add_parser("reindex", help="Rebuild memory derived indexes."),
-        handle_memory_reindex,
-    )
     unquarantine_parser = memory_subparsers.add_parser(
         "unquarantine", help="Move one quarantined memory entry back to draft."
     )

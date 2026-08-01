@@ -94,7 +94,6 @@ from nuself.cli.commands.conversations import (
 )
 from nuself.cli.commands.trace import (
     handle_trace_list,
-    handle_trace_reindex,
     handle_trace_related,
     handle_trace_search,
     handle_trace_show,
@@ -657,11 +656,6 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         "--json", action="store_true", default=False, dest="as_json"
     )
     bind_handler(trace_related_parser, handle_trace_related)
-    bind_handler(
-        trace_subparsers.add_parser("reindex", help="Rebuild thought trace indexes."),
-        handle_trace_reindex,
-    )
-
     persona_parser = subparsers.add_parser(
         "persona",
         help="Manage synthesized persona snapshots.",

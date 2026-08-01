@@ -1,4 +1,4 @@
-"""File-backed source document and chunk repository."""
+"""SQLite-backed source document and chunk repository."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
 from nuself.clock import utc_now_iso
 from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
@@ -140,19 +139,6 @@ class SourceRepository:
                 matches.append(match)
         normalized_limit = max(limit, 1)
         return sorted(matches, key=lambda match: (-match.score, match.chunk.source_ref))[:normalized_limit]
-
-    def reindex(self) -> Path:
-        records: list[object] = [
-            {"_record_kind": "document", **item.to_wire()}
-            for item in self.list_documents()
-        ]
-        records.extend(
-            {"_record_kind": "chunk", **item.to_wire()}
-            for item in self.list_chunks()
-        )
-        return write_derived_index(
-            self._paths, "source_index.json", records
-        )
 
     def extract_candidates(self, source_id: str) -> list[MemoryCandidate]:
         document = self.get_document(source_id)

@@ -1882,7 +1882,6 @@ def test_incomplete_memory_command_shows_subcommand_help(
     assert "Show the memory preview used by chat context." in captured.out
     assert "review" in captured.out
     assert "Review pending memory candidates." in captured.out
-    assert "reindex" in captured.out
 
 
 def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> None:
@@ -2155,8 +2154,6 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
         ("trace",): [
             "search",
             "Search thought traces.",
-            "reindex",
-            "Rebuild thought trace indexes.",
         ],
         ("persona",): [
             "list",
@@ -2843,7 +2840,7 @@ def test_memory_source_ingest_list_show_and_chunks(
     assert "A durable source paragraph." in chunks_output
 
 
-def test_memory_source_search_and_reindex(
+def test_memory_source_search(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     source_path = tmp_path / "searchable.md"
@@ -2884,19 +2881,10 @@ def test_memory_source_search_and_reindex(
         ]
     )
     search_output = capsys.readouterr().out
-    reindex_result = main(["--workspace", str(tmp_path), "memory", "reindex"])
-    reindex_output = capsys.readouterr().out
-
     assert search_result == 0
-    assert reindex_result == 0
     assert "source:" in search_output
     assert "Searchable Source" in search_output
     assert "durable citation material" in search_output
-    assert "Rebuilt memory index:" in reindex_output
-    assert "Rebuilt relation index:" in reindex_output
-    assert "Rebuilt symbolic graph:" in reindex_output
-    assert "Rebuilt source index:" in reindex_output
-    assert "Rebuilt profile index:" in reindex_output
 
 
 def test_memory_source_extract_creates_reviewable_profile_candidate(
@@ -2995,7 +2983,7 @@ def test_memory_source_delete_cascades_profile_items(
     assert "No profile items." in profile_list_output
 
 
-def test_memory_profile_delete_removes_item_and_reindexes(
+def test_memory_profile_delete_removes_accepted_source_candidate(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     source_path = tmp_path / "profile-source.md"
@@ -4750,8 +4738,6 @@ def test_interactive_search_finds_memory(
             type="belief", title="Focus", body="Deep work requires long blocks."
         )
     )
-    repo.reindex()
-
     monkeypatch.setattr("sys.stdin", _TextInput(":mem search deep work\n:q\n"))
     monkeypatch.setattr(
         "nuself.daemon.lifecycle.status",
@@ -5262,15 +5248,6 @@ def test_memory_profile_delete_removes_item(
     assert len(_profile_repository(tmp_path).list()) == 0
 
 
-def test_memory_profile_reindex_rebuilds_index(
-    tmp_path: Path, capsys: CaptureFixture
-) -> None:
-    result = main(["--workspace", str(tmp_path), "memory", "profile", "reindex"])
-    captured = capsys.readouterr()
-    assert result == 0
-    assert "Rebuilt profile index:" in captured.out
-
-
 def test_memory_relations_empty_shows_message(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
@@ -5647,18 +5624,6 @@ def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> No
     assert updated.body == "Focus deeply."
 
 
-def test_memory_reindex_rebuilds_indexes(
-    tmp_path: Path, capsys: CaptureFixture
-) -> None:
-    result = main(["--workspace", str(tmp_path), "memory", "reindex"])
-    captured = capsys.readouterr()
-    assert result == 0
-    assert "Rebuilt memory index:" in captured.out
-    assert "Rebuilt relation index:" in captured.out
-    assert "Rebuilt symbolic graph:" in captured.out
-    assert "Rebuilt source index:" in captured.out
-
-
 def test_memory_types_lists_registered_types(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
@@ -5739,7 +5704,6 @@ def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> Non
     # Clear and import
     for entry in memory_entry_repository(_authority(tmp_path)).list():
         repo.delete(entry.id)
-    repo.reindex()
     assert len(memory_entry_repository(_authority(tmp_path)).list()) == 0
 
     result = main(
@@ -5954,7 +5918,6 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
         ["memory", "review", "--help"],
         ["memory", "types", "--help"],
         ["memory", "source", "--help"],
-        ["memory", "reindex", "--help"],
         ["conversation", "list", "--help"],
         ["conversation", "show", "--help"],
         ["conversation", "new", "--help"],
@@ -6037,7 +6000,6 @@ def test_cli_version_matches_project_metadata(capsys: CaptureFixture) -> None:
         ["memory", "profile", "search", "--help"],
         ["memory", "profile", "show", "--help"],
         ["memory", "profile", "delete", "--help"],
-        ["memory", "profile", "reindex", "--help"],
         ["memory", "review", "list", "--help"],
         ["memory", "review", "show", "--help"],
         ["memory", "review", "accept", "--help"],
@@ -6266,21 +6228,14 @@ def test_trace_cli_lists_shows_and_searches_records(
         ["--workspace", str(tmp_path), "trace", "search", "observed_at"]
     )
     search_output = capsys.readouterr().out
-    reindex_result = main(
-        ["--workspace", str(tmp_path), "trace", "reindex"]
-    )
-    reindex_output = capsys.readouterr().out
-
     assert list_result == 0
     assert show_result == 0
     assert search_result == 0
-    assert reindex_result == 0
     assert "Temporal memory answer" in list_output
     assert "kind=chat_turn" in list_output
     assert trace.id in show_output
     assert "mem_123" in show_output
     assert "Temporal memory answer" in search_output
-    assert "Rebuilt trace index:" in reindex_output
 
 
 def test_trace_cli_lists_records_related_to_artifact(

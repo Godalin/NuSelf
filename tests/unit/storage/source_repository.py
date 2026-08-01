@@ -132,27 +132,6 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     assert "tag" in matches[0].reasons
 
 
-def test_source_repository_reindex(tmp_path: Path) -> None:
-    source_path = tmp_path / "note.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Indexed Source",
-                "tags: [index]",
-                "privacy: shareable",
-                "---",
-                "Indexed source body.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    repo = source_repository(tmp_path)
-    repo.ingest_path(source_path)
-
-    repo.reindex()
-
-
 def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
     source_path = tmp_path / "profile.md"
     source_path.write_text(

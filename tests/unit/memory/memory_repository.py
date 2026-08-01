@@ -153,8 +153,6 @@ def test_memory_repository_search_graph_supports_depth(tmp_path: Path) -> None:
     # Chain a -> b -> c via related_to
     repo.save(MemoryEntry(type="belief", title="Start node", body="Beginning.", id=a.id, relations={"related_to": [b.id]}))
     repo.save(MemoryEntry(type="belief", title="Middle node", body="Connected.", id=b.id, relations={"related_to": [c.id]}))
-    repo.reindex()
-
     depth0 = repo.search_graph("Start", depth=0)
     depth1 = repo.search_graph("Start", depth=1)
     depth2 = repo.search_graph("Start", depth=2)
@@ -171,8 +169,6 @@ def test_memory_repository_find_path(tmp_path: Path) -> None:
     c = repo.save(MemoryEntry(type="belief", title="C", body="Node C."))
     repo.save(MemoryEntry(type="belief", title="A", body="Node A.", id=a.id, relations={"related_to": [b.id]}))
     repo.save(MemoryEntry(type="belief", title="B", body="Node B.", id=b.id, relations={"related_to": [c.id]}))
-    repo.reindex()
-
     path_ac = repo.find_path(a.id, c.id)
     path_ca = repo.find_path(c.id, a.id)
     path_none = repo.find_path(a.id, "nonexistent")
@@ -193,8 +189,6 @@ def test_memory_repository_transitive_closure(tmp_path: Path) -> None:
     repo.save(MemoryEntry(type="goal", title="A", body="Goal A.", id=a.id, relations={"depends_on": [b.id]}))
     repo.save(MemoryEntry(type="goal", title="B", body="Goal B.", id=b.id, relations={"depends_on": [c.id]}))
     repo.save(MemoryEntry(type="goal", title="C", body="Goal C.", id=c.id, relations={"depends_on": [d.id]}))
-    repo.reindex()
-
     closure_a = repo.transitive_closure(a.id, "depends_on")
     closure_c = repo.transitive_closure(c.id, "depends_on")
 

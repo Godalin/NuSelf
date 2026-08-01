@@ -1,13 +1,11 @@
-"""File-backed repository for derived profile items."""
+"""SQLite-backed repository for derived profile items."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from nuself.clock import utc_now_iso
 from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.runtime.observability import decode_observed_record
@@ -120,14 +118,6 @@ class ProfileItemRepository:
         item = ProfileItem.from_candidate(candidate)
         self.save(item)
         return item
-
-    def reindex(self) -> Path:
-        return write_derived_index(
-            self._paths,
-            "profile_index.json",
-            [item.to_wire() for item in self.list()],
-        )
-
 
 def profile_stats(repository: ProfileItemRepository) -> ProfileStats:
     items = repository.list()

@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Removed the continuously rewritten JSON indexes for memory, profile, source,
+  reason, and trace data, along with their `reindex` commands. Graph,
+  relation, search, and trace views now read authoritative SQLite records
+  directly; explicit user-requested exports remain unchanged.
 - Daemon control success payloads no longer duplicate request type and status
   as fixed acknowledgement strings. Ping carries only the runtime
   `authority_id`, while shutdown and idempotent activity close return the

@@ -73,8 +73,8 @@ configuration model. Diagnostics identify the layer containing malformed YAML
 or an invalid value without exposing secrets.
 
 Configuration layering does not layer runtime state. SQLite, memory, threads,
-profile, persona, reason, trace, reflection, notification, logs, and derived
-runtime preferences read and write only the selected authority.
+profile, persona, reason, trace, reflection, notification, logs, and runtime
+preferences read and write only the selected authority.
 
 ## Initialization
 
