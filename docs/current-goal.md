@@ -9,15 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Move single-use tool prompt rendering into its runtime owner.
+Align ActivityBroker close API with idempotent protocol semantics.
 
 ## Ordered Steps
 
-1. Confirm `_tool_prompt_sections()` is called only by
-   `ConversationToolRuntime.prompt_sections()`.
-2. Move rendering into that method and remove the helper/import used only for
-   forwarding an iterable.
-3. Run focused chat tests and full gates, then commit without pushing.
+1. Confirm production ignores `ActivityBroker.close()`'s boolean and the wire
+   protocol always returns an empty idempotent success response.
+2. Make close a `None`-returning command and remove test-only result semantics.
+3. Run focused daemon tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -26,7 +25,7 @@ Move single-use tool prompt rendering into its runtime owner.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve tool order, descriptions, signatures, and prompt guidance text.
+- Preserve close idempotence, expiry, blocking reads, and wire responses.
 
 ## Constraints
 
@@ -38,6 +37,11 @@ Move single-use tool prompt rendering into its runtime owner.
 
 ## Phase Evidence
 
+- `ActivityBroker.close()` now mirrors the daemon protocol as an idempotent
+  command with no return value. Removed the production-ignored boolean and its
+  test-only semantics; absence is still proved by the existing rejected-read
+  assertion. Focused daemon activity/request tests: 36 passed; full suite: 2441
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `ConversationToolRuntime.prompt_sections()` now directly owns rendering of
   its composed tool registry. Removed the sole-use `_tool_prompt_sections()`
   and `Iterable` import while preserving prompt text, tool order, signatures,

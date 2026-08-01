@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- `ActivityBroker.close()` now matches the idempotent empty daemon response and
+  returns no test-only removal boolean.
 - Chat tool prompt rendering now lives directly in `ConversationToolRuntime`,
   removing its single-use module helper and iterable-only import.
 - Chat prompt composition now checks its composed tool registry directly,

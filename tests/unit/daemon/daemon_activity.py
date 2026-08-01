@@ -60,8 +60,8 @@ def test_activity_broker_filters_turns_and_bounds_queues() -> None:
 def test_activity_broker_close_and_expiry() -> None:
     broker = ActivityBroker(subscription_ttl_seconds=0.001)
     subscription_id = broker.open("turn-1")
-    assert broker.close(subscription_id) is True
-    assert broker.close(subscription_id) is False
+    broker.close(subscription_id)
+    broker.close(subscription_id)
 
     with pytest.raises(ActivitySubscriptionNotFound):
         broker.next_events(

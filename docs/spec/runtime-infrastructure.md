@@ -227,6 +227,10 @@ Success response payload field sets are also exact:
   list of complete log-event records; idempotent activity close returns the
   shared exact empty payload.
 
+The in-process `ActivityBroker.close()` command mirrors that protocol: it is
+idempotent and returns no status value. Callers verify absence through later
+subscription operations rather than a test-only removal boolean.
+
 The open response and close request share one exact subscription-identity
 codec. Direction-specific wrappers around the same single field are prohibited;
 next retains its separate request model because timeout and batch limit are
