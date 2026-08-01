@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from nuself.notification.adapters import NotificationAdapter
@@ -19,14 +20,13 @@ class NotificationDeliveryLoop:
     def __init__(
         self,
         outbox: NotificationOutbox,
-        adapters: list[NotificationAdapter],
+        adapters: Sequence[NotificationAdapter],
     ) -> None:
         self._outbox = outbox
-        self._adapters = adapters
+        self._adapters = _index_adapters(adapters)
 
     def run_once(self) -> int:
         """Deliver all pending entries. Return count delivered."""
-        _index_adapters(self._adapters)
         delivered = 0
         for entry in self._outbox.list(status="pending"):
             delivery_context = replace(
@@ -34,7 +34,7 @@ class NotificationDeliveryLoop:
                 source="daemon.worker.notification_delivery",
             )
             with use_runtime_context(delivery_context):
-                final = deliver_entry_once(
+                final = _deliver_entry_once(
                     self._outbox,
                     entry.id,
                     self._adapters,
@@ -48,10 +48,17 @@ class NotificationDeliveryLoop:
 def deliver_entry_once(
     outbox: NotificationOutbox,
     entry_id: str,
-    adapters: list[NotificationAdapter],
+    adapters: Sequence[NotificationAdapter],
 ) -> OutboxEntry:
     """Run or recover one frozen adapter plan without implicit retries."""
-    indexed = _index_adapters(adapters)
+    return _deliver_entry_once(outbox, entry_id, _index_adapters(adapters))
+
+
+def _deliver_entry_once(
+    outbox: NotificationOutbox,
+    entry_id: str,
+    indexed: Mapping[str, NotificationAdapter],
+) -> OutboxEntry:
     with outbox.lock_entry(entry_id):
         entry = outbox.get(entry_id)
         if entry.status != "pending":
@@ -74,7 +81,7 @@ def deliver_entry_once(
 
 
 def _index_adapters(
-    adapters: list[NotificationAdapter],
+    adapters: Sequence[NotificationAdapter],
 ) -> dict[str, NotificationAdapter]:
     indexed: dict[str, NotificationAdapter] = {}
     for adapter in adapters:

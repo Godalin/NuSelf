@@ -180,6 +180,29 @@ def test_delivery_loop_sends_pending_entries(tmp_path: Path) -> None:
     assert len(outbox.list(status="sent")) == 2
 
 
+def test_delivery_loop_freezes_adapter_plan_at_composition(
+    tmp_path: Path,
+) -> None:
+    outbox = notification_outbox(tmp_path)
+    outbox.add(
+        OutboxEntry(
+            id="frozen",
+            title="Frozen",
+            body="Body",
+            status="pending",
+            idempotency_key="frozen",
+        )
+    )
+    adapter = FakeAdapter()
+    adapters = [adapter]
+    loop = NotificationDeliveryLoop(outbox, adapters)
+
+    adapters.clear()
+
+    assert loop.run_once() == 1
+    assert [entry.id for entry in adapter.sent_entries] == ["frozen"]
+
+
 def test_outbox_context_round_trip_and_legacy_decode(
     tmp_path: Path,
 ) -> None:

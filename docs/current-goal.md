@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Require an explicit resolved authority path in reflection organizer
+Freeze and validate the notification delivery loop's adapter plan once at
 composition.
 
 ## Ordered Steps
 
-1. Confirm every organizer construction already supplies `project_root` while
-   its optional default can mis-scope `organizer_completed` audit records.
-2. Require `Path` at the organizer boundary without adding path discovery or
-   another service interface.
-3. Run focused reflection tests and the complete verification gates; update
+1. Confirm the loop currently reindexes the same mutable adapter list once per
+   run and again for every pending entry.
+2. Validate/index the loop-owned plan once; retain immediate validation for
+   standalone CLI/REPL single-entry delivery.
+3. Run focused notification tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not make the organizer resolve an authority itself.
-- Do not move merge/archive behavior out of the reflection domain.
-- Do not change best-effort audit semantics or organization results.
+- Do not change adapter order, stable IDs, or frozen per-entry plans.
+- Do not replay interrupted delivery or weaken per-entry locking.
+- Do not introduce an adapter registry or generic delivery framework.
 
 ## Constraints
 
@@ -37,6 +37,12 @@ composition.
 
 ## Phase Evidence
 
+- `NotificationDeliveryLoop` now validates and indexes its adapter sequence at
+  composition, then reuses that private ordered plan for every poll and entry.
+  Standalone single-entry delivery still validates at its own boundary. Added
+  a regression proving later mutation of the caller's list cannot change the
+  live worker. Focused notification/daemon tests: 52 passed; full suite: 2444
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `ReflectionOrganizer` now requires an explicit `Path` project root. Removed
   its unused `None` default so successful merge observations remain scoped to
   the application graph's selected authority; all existing callers already

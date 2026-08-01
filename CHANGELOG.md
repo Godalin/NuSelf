@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Notification delivery loops now validate and freeze their adapter index once
+  at composition instead of rebuilding it for every poll and pending entry.
 - Reflection organizer composition now requires an explicit resolved project
   root so successful merge audits cannot silently lose authority scope.
 - Reason scheduler composition now requires an explicit resolved project root,

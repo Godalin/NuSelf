@@ -103,14 +103,18 @@ pending entries.
 
 ### `NotificationDeliveryLoop.run_once()`
 
+Loop composition validates and indexes its ordered adapter plan once. Invalid
+or duplicate stable IDs therefore fail before polling begins; later caller
+mutation of the source list cannot alter the live loop. Standalone
+single-entry delivery validates its supplied plan at that call boundary.
+
 1. Lists only entries with `status="pending"`.
 2. For each pending entry, exactly installs its saved correlation context and
    replaces `source` with `daemon.worker.notification_delivery` for the
    complete adapter/state-transition operation.
-3. Validates that configured adapters expose non-empty, unique stable
-   `delivery_id` values, then atomically freezes those IDs as the entry's
-   required plan if it has no plan yet. Duplicate or invalid IDs fail before
-   any adapter side effect.
+3. Atomically freezes the already-validated adapter IDs as the entry's required
+   plan if it has no plan yet. Duplicate or invalid IDs fail before any adapter
+   side effect.
 4. Converts any recovered `delivering` state to `uncertain`; such an attempt is
    never automatically replayed because the external effect may already have
    occurred.
