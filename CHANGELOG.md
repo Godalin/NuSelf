@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Private workspace paths now expose only the distinct export root and
+  authority database, removing an unused notes path and an artifacts alias of
+  the root; artifact writers derive their owned child paths directly.
 - Private workspace consumers now use the side-effect-free `paths()` resolver
   directly, removing a misleading `ensure()` alias that created nothing.
 - Memory and profile statistics now use standard-library counting directly,

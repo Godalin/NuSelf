@@ -9,21 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the no-op workspace `ensure()` alias and use the truthful path resolver.
+Remove duplicate workspace path aliases while preserving its two independent
+authority identities.
 
 ## Ordered Steps
 
-1. Confirm `PrivateWorkspaceStore.ensure()` only returns `paths()` and never
-   creates a directory, database, or other resource.
-2. Replace every caller and validation test with `paths()` and delete the
-   misleading alias.
-3. Run focused workspace/reason tests and the complete verification gates;
-   update evidence and commit without pushing.
+1. Confirm `artifacts` always aliases `root` and `notes` has no consumer.
+2. Specify and implement a workspace path value containing only its distinct
+   export root and authority database; derive writer-owned child paths locally.
+3. Run focused workspace/reason/daemon tests and the complete verification
+   gates; update evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve owner-ID validation and all returned paths.
+- Preserve owner-ID validation and every consumed resolved path.
 - Do not rename the workspace store or introduce a lifecycle object.
 
 ## Constraints
@@ -36,6 +36,12 @@ Remove the no-op workspace `ensure()` alias and use the truthful path resolver.
 
 ## Phase Evidence
 
+- `PrivateWorkspacePaths` now contains only its distinct owner export root and
+  shared authority database. Removed the unused `notes` path and the
+  `artifacts` alias that was always identical to `root`; Reason output and
+  daemon recovery derive their writer-owned `jobs/` paths from `root`.
+  Focused workspace/reason/daemon tests: 269 passed; full suite: 2444 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reason service, advancer, and output composition now call
   `PrivateWorkspaceStore.paths()` directly. Removed `ensure()`, a no-op alias
   that created no directory or resource, and aligned workspace validation

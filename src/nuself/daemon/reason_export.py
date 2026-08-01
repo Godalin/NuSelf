@@ -291,7 +291,7 @@ class ReasonExportService:
         )
 
         manifest_path = (
-            self._workspace_store.paths(thread_id).artifacts
+            self._workspace_store.paths(thread_id).root
             / "jobs"
             / job_id
             / "manifest.json"
@@ -425,7 +425,7 @@ class ReasonExportService:
 
         reconciled = 0
         for owner_id in self._workspace_store.list_owners():
-            jobs_dir = self._workspace_store.paths(owner_id).artifacts / "jobs"
+            jobs_dir = self._workspace_store.paths(owner_id).root / "jobs"
             if not jobs_dir.exists():
                 continue
             for job_dir in sorted(jobs_dir.iterdir()):

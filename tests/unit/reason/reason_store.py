@@ -25,8 +25,6 @@ def _paths(tmp_path: Path) -> PrivateWorkspacePaths:
     return PrivateWorkspacePaths(
         root=root,
         database=root / "workspace.sqlite",
-        artifacts=root / "artifacts",
-        notes=root / "notes",
     )
 
 

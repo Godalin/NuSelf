@@ -12,8 +12,6 @@ from nuself.config import RuntimePaths
 class PrivateWorkspacePaths:
     root: Path
     database: Path
-    artifacts: Path
-    notes: Path
 
 
 class PrivateWorkspaceStore:
@@ -30,8 +28,6 @@ class PrivateWorkspaceStore:
         return PrivateWorkspacePaths(
             root=root,
             database=self._db_path,
-            artifacts=root,
-            notes=root / "notes",
         )
 
     def list_owners(self) -> list[str]:
