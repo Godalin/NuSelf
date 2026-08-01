@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline one-use persona audit forwarding methods into their owning chat-persona
-lifecycle points.
+Remove the discarded scope-kind parameter from authority ID generation so the
+API matches the root-only identity contract.
 
 ## Ordered Steps
 
-1. Confirm the three private audit methods each have one caller and no failure,
-   redaction, schema, or fallback policy beyond `write_persona_audit()`.
-2. Write each closed event at its lifecycle owner and remove the forwarding
-   methods plus discarded parameters.
-3. Run chat/persona tests, Pyright, full pytest, and package build; update
+1. Confirm specification and regression tests require identical IDs for the
+   same canonical root selected as user or workspace scope.
+2. Let `_authority_id()` accept only the actual root input and simplify all
+   three composition call sites.
+3. Run scope/config tests, Pyright, full pytest, and package build; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change event names, metadata, levels, statuses, or ordering.
-- Do not put persona content into audit metadata.
-- Do not replace the closed persona audit registry with generic logging.
+- Do not change the v1 digest input or resulting IDs.
+- Do not merge the user and workspace scope records or configuration layers.
+- Do not broaden authority discovery.
 
 ## Constraints
 
@@ -37,6 +37,12 @@ lifecycle points.
 
 ## Phase Evidence
 
+- Authority ID generation now accepts only the canonical root that actually
+  enters the versioned digest. Removed the immediately discarded `ScopeKind`
+  argument from the helper and all user/workspace/internal-root call sites;
+  same-root selection equivalence and v1 hash bytes are unchanged. Focused
+  scope/config tests: 31 passed; full suite: 2440 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - Chat persona consultation now writes summary, host-decision, and discussion-
   step audits at their owning lifecycle points. Removed three one-use methods,
   two immediately discarded parameters, and an escalation-reason value that

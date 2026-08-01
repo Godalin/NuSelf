@@ -19,7 +19,8 @@ because one exists in the current directory.
 The canonical authority root determines a stable `authority_id`. The ID is a
 versioned cryptographic digest of the canonical root, suitable for filenames
 and protocol comparison. Selecting the same root through different explicit
-means identifies the same authority. The ID is an identity, not a secret.
+means identifies the same authority; scope kind is not an identity input. The
+ID is an identity, not a secret.
 
 ## Resolved Paths
 

@@ -104,14 +104,14 @@ def resolve_scope(
             root=authority_root,
             workspace_root=workspace_root,
             user_root=user_root,
-            authority_id=_authority_id("workspace", authority_root),
+            authority_id=_authority_id(authority_root),
         )
 
     return NuSelfScope(
         kind="user",
         root=user_root,
         user_root=user_root,
-        authority_id=_authority_id("user", user_root),
+        authority_id=_authority_id(user_root),
     )
 
 
@@ -151,7 +151,7 @@ def scope_from_authority_root(root: Path) -> NuSelfScope:
         kind="user",
         root=authority_root,
         user_root=authority_root,
-        authority_id=_authority_id("user", authority_root),
+        authority_id=_authority_id(authority_root),
     )
 
 
@@ -185,8 +185,7 @@ def _canonical(path: Path) -> Path:
     return path.expanduser().resolve(strict=False)
 
 
-def _authority_id(kind: ScopeKind, root: Path) -> str:
-    del kind
+def _authority_id(root: Path) -> str:
     identity = f"{_AUTHORITY_ID_VERSION}\0{root}".encode()
     digest = hashlib.sha256(identity).hexdigest()[:24]
     return f"{_AUTHORITY_ID_VERSION}-{digest}"

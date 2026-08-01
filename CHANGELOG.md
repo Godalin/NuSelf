@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Authority ID generation now accepts only its canonical-root identity input,
+  removing a discarded scope-kind parameter while preserving v1 IDs.
 - Chat-persona lifecycle points now write their closed persona audits directly,
   removing three one-use forwarding methods and two discarded parameters.
 - Reason workspace and persona tools now share one thread-scoped workspace
