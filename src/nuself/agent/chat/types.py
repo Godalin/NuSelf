@@ -69,6 +69,16 @@ class ChatResult:
     trace_id: str | None = None
     completed_turn: CompletedTurn | None = None
 
+    def require_completed_turn(self) -> CompletedTurn:
+        """Return the committed turn required by post-response projections."""
+
+        if self.completed_turn is None:
+            raise RuntimeError(
+                "conversation result is missing its committed turn"
+            )
+        return self.completed_turn
+
+
 @dataclass(frozen=True)
 class ConversationTurnState:
     """Typed state passed between conversation pipeline stages."""

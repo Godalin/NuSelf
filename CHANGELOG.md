@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Successful chat follow-up adapters now obtain committed-turn evidence through
+  one `ChatResult` invariant. Direct CLI and daemon paths no longer maintain
+  separate missing-turn validation branches; memory projection, curation, and
+  compression ownership remain unchanged.
 - Application storage lifetime is now owned directly by `ApplicationRuntime`.
   The process-global default-backend cache, lock, override/reset API, and
   aggregate reset error were removed; manual scripts and tests now use explicit

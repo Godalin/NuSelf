@@ -9,28 +9,28 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove `AgentCapabilitySnapshot`, whose sole daemon consumer immediately
-unpacks a model tuple it already owns plus readonly tools. Keep one public
-immutable readonly-tool query on the conversation runtime and reuse the
-composition-owned model tuple directly.
+Centralize the successful-chat committed-turn invariant on `ChatResult`.
+Remove the daemon-only validator and the duplicate direct-CLI branch while
+keeping projection, curation, compression, and failure behavior unchanged.
 
 ## Ordered Steps
 
-1. Correct agent-tool and Reason contracts to distinguish composition-owned
-   endpoints from runtime-owned readonly tool membership.
-2. Replace `capability_snapshot()` with `readonly_tools()` returning a copied
-   immutable tuple selected by the sole tool-runtime owner.
-3. Make daemon Reason composition reuse its existing `langchain_models`; delete
-   the snapshot dataclass, import, source module, and wrapper-specific test.
-4. Run chat/daemon/reason tests, Pyright, full pytest, and package build; update
+1. Update the conversation contract so callers use one result-owned committed
+   turn requirement after successful execution.
+2. Add the narrow `ChatResult.require_completed_turn()` operation and replace
+   the daemon and direct-CLI copies of that invariant.
+3. Remove the daemon-only helper and its now-unused domain import; add focused
+   result-contract coverage.
+4. Run chat/daemon/CLI tests, Pyright, full pytest, and package build; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not expose the mutable tool registry or chat runtime private fields.
-- Do not duplicate readonly tag filtering in daemon composition.
-- Do not change endpoint identity/order, readonly membership, tool identity,
-  ReasonAdvancer behavior, or runtime mutability semantics.
+- Do not make `completed_turn` non-optional; degraded and synthetic result
+  construction remains representable.
+- Do not move projection or curation policy into the result value.
+- Do not change reply delivery, conversation commit order, observation
+  identity, compression scheduling, or failure translation.
 
 ## Constraints
 
@@ -42,6 +42,13 @@ composition-owned model tuple directly.
 
 ## Phase Evidence
 
+- `ChatResult.require_completed_turn()` now owns the single successful-result
+  invariant used before post-response projection. Direct CLI and daemon
+  adapters call it instead of maintaining duplicate validation; the
+  daemon-only helper and unused `CompletedTurn` import are gone. Projection,
+  curation, compression, and degraded-result representation remain separate.
+  Focused chat/CLI/daemon tests: 119 passed; full suite: 2436 passed; Pyright:
+  0 errors, 0 warnings; sdist and wheel build succeeded.
 - Removed `AgentCapabilitySnapshot` and its dedicated source module. Daemon
   Reason composition now reuses the endpoint tuple it already owns and asks
   conversation runtime only for copied immutable readonly-tool membership;

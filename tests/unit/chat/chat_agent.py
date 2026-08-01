@@ -26,6 +26,7 @@ from nuself.agent.chat.types import (
     ConversationGraphRuntimeError,
 )
 from nuself.conversation import (
+    CompletedTurn,
     ConversationMessage,
     ConversationState,
     ConversationTurnConflictError,
@@ -53,6 +54,29 @@ from nuself.workspace import PrivateWorkspaceStore
 from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.tui.approval import TerminalApprovalPort
 from nuself.agent.tools.resources import ToolResources
+
+
+def test_chat_result_requires_its_committed_turn() -> None:
+    turn = CompletedTurn(
+        conversation_id="conversation-1",
+        start_index=0,
+        end_index=1,
+        user_content="hello",
+        assistant_content="hi",
+    )
+
+    assert ChatResult(
+        answer="hi",
+        conversation_id="conversation-1",
+        completed_turn=turn,
+    ).require_completed_turn() is turn
+
+
+def test_chat_result_rejects_missing_committed_turn() -> None:
+    result = ChatResult(answer="hi", conversation_id="conversation-1")
+
+    with pytest.raises(RuntimeError, match="missing its committed turn"):
+        result.require_completed_turn()
 
 
 def _trace_repository(root: Path) -> TraceRepository:

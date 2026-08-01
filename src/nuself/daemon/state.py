@@ -13,7 +13,6 @@ from nuself.application.composition import ApplicationGraph
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import compose_reason_advancer
 from nuself.agent.text import LangChainTextAgent
-from nuself.conversation import CompletedTurn
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
     ReasonExportService,
@@ -46,13 +45,6 @@ class _ChatTaskPayload:
     message: str
     conversation_id: str
     turn_id: str | None
-
-
-def _require_completed_turn(result: ChatResult) -> CompletedTurn:
-    turn = result.completed_turn
-    if turn is None:
-        raise RuntimeError("conversation result is missing its committed turn")
-    return turn
 
 
 class DaemonUnavailableError(RuntimeError):
@@ -258,7 +250,7 @@ class DaemonState:
         )
         observation = publish_chat_observation(
             self.application.memory.observations,
-            turn=_require_completed_turn(result),
+            turn=result.require_completed_turn(),
             source_trace_id=result.trace_id,
         )
         self._request_memory_curation(observation.id)

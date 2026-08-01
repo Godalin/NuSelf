@@ -172,14 +172,9 @@ def send_one_shot_chat_interactive(
                 turn_id=turn_id,
             )
             application = compose_cli_application(project_root)
-            turn = result.completed_turn
-            if turn is None:
-                raise RuntimeError(
-                    "conversation result is missing its committed turn"
-                )
             observation = publish_chat_observation(
                 application.memory.observations,
-                turn=turn,
+                turn=result.require_completed_turn(),
                 source_trace_id=result.trace_id,
             )
             write_chat_audit(

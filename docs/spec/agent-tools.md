@@ -332,6 +332,10 @@ stages:
 
 Conversation compression is a scheduler-owned maintenance task, not part of
 reply delivery. The completed turn commits before the result becomes visible.
+Surfaces that require a committed turn for follow-up projection use the typed
+result's single `require_completed_turn()` invariant. CLI and daemon adapters
+do not independently reinterpret a missing committed turn; projection and
+curation policy remain outside the result value.
 The daemon then admits `conversation.compress:<conversation_id>` on the same
 `conversation:<conversation_id>` resource used by chat, so compression cannot
 overlap another turn. A subsequent turn may use the still-valid uncompressed
