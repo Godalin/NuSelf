@@ -38,6 +38,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   module and the REPL's typed callback directly. The dedicated one-method
   presenter class and source module were removed without changing status
   refresh or rendered output.
+- Daemon Reason composition now reuses its already-resolved model endpoints and
+  queries only immutable readonly-tool membership from conversation runtime.
+  The redundant two-field agent capability snapshot and its source module were
+  removed without exposing the mutable tool registry.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

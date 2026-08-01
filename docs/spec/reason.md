@@ -447,10 +447,11 @@ themselves. Explicit endpoint/tool/workspace arguments remain authoritative
 for daemon reuse and tests; an explicitly empty endpoint tuple means no model,
 not "load defaults".
 
-When daemon scheduling reuses the conversation runtime's configured endpoints
-and readonly tools, it receives them through the runtime's immutable public
-capability snapshot. Daemon code does not inspect chat runtime private fields
-or reproduce the readonly-tag selection rule.
+Daemon composition supplies the same already-resolved endpoint tuple to chat
+and Reason scheduling. When scheduling reuses chat's readonly tools, it obtains
+their immutable membership through `ConversationGraphRuntime.readonly_tools()`.
+Daemon code does not inspect chat runtime private fields or reproduce the
+readonly-tag selection rule.
 
 Readonly, workspace, and persona tools reach `ReasonAdvancer` as framework
 `BaseTool` values. The advancer validates optional service-component metadata

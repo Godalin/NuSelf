@@ -1069,7 +1069,7 @@ def test_conversation_runtime_tools_declare_service_ownership(
         assert tool_service_component(tool) == expected_by_prefix[prefix]
 
 
-def test_conversation_runtime_capability_snapshot_is_stable(
+def test_conversation_runtime_readonly_tool_membership_is_stable(
     tmp_path: Path,
 ) -> None:
     runtime = ConversationGraphRuntime(
@@ -1077,18 +1077,15 @@ def test_conversation_runtime_capability_snapshot_is_stable(
         response_service=FakeResponseService(),
     )
 
-    snapshot = runtime.capability_snapshot()
-    original_readonly_tools = snapshot.readonly_tools
+    original_readonly_tools = runtime.readonly_tools()
     runtime._tool_runtime.tools.clear()  # pyright: ignore[reportPrivateUsage]
 
-    assert snapshot.endpoints == ()
     assert original_readonly_tools
-    assert snapshot.readonly_tools == original_readonly_tools
     assert all(
         "readonly" in (tool.tags or [])
-        for tool in snapshot.readonly_tools
+        for tool in original_readonly_tools
     )
-    assert runtime.capability_snapshot().readonly_tools == ()
+    assert runtime.readonly_tools() == ()
 
 
 def test_chat_agent_injects_language_instruction(tmp_path: Path) -> None:

@@ -126,13 +126,12 @@ class DaemonState:
             ),
         )
         reason_interval = config.daemon.reason_scheduler.interval_seconds
-        capabilities = self.conversation_runtime.capability_snapshot()
         self.reason_scheduler = ReasonScheduler(
             self.project_root,
             advancer=compose_reason_advancer(
                 self.application,
-                readonly_tools=capabilities.readonly_tools,
-                langchain_models=capabilities.endpoints,
+                readonly_tools=self.conversation_runtime.readonly_tools(),
+                langchain_models=langchain_models,
             ),
             interval_seconds=reason_interval,
             service=self.application.reason_service,

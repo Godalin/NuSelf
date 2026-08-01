@@ -9,29 +9,28 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the one-use, one-method `SessionHeaderPresenter` wrapper and its source
-module. Keep presentation rendering in the existing CLI presentation module
-and keep the REPL callback boundary as the actual composable interface.
+Remove `AgentCapabilitySnapshot`, whose sole daemon consumer immediately
+unpacks a model tuple it already owns plus readonly tools. Keep one public
+immutable readonly-tool query on the conversation runtime and reuse the
+composition-owned model tuple directly.
 
 ## Ordered Steps
 
-1. Record that `ReplCallbacks.show_session_header` is the composition boundary;
-   presentation does not require an object wrapper.
-2. Move the pure status/conversation rendering effect into
-   `cli.presentation` and bind live daemon-status lookup with a local callback
-   at REPL composition.
-3. Delete `cli/repl/presentation.py`, the dataclass, provider alias, and class-
-   specific test shape without adding a replacement class.
-4. Run presentation/REPL tests, Pyright, full pytest, and package build; update
+1. Correct agent-tool and Reason contracts to distinguish composition-owned
+   endpoints from runtime-owned readonly tool membership.
+2. Replace `capability_snapshot()` with `readonly_tools()` returning a copied
+   immutable tuple selected by the sole tool-runtime owner.
+3. Make daemon Reason composition reuse its existing `langchain_models`; delete
+   the snapshot dataclass, import, source module, and wrapper-specific test.
+4. Run chat/daemon/reason tests, Pyright, full pytest, and package build; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not move rendering logic into the REPL loop or duplicate it in
-  composition.
-- Do not change header text, refresh timing, status lookup, output styling, or
-  callback signatures.
-- Do not replace the removed class with another presenter protocol or wrapper.
+- Do not expose the mutable tool registry or chat runtime private fields.
+- Do not duplicate readonly tag filtering in daemon composition.
+- Do not change endpoint identity/order, readonly membership, tool identity,
+  ReasonAdvancer behavior, or runtime mutability semantics.
 
 ## Constraints
 
@@ -43,6 +42,13 @@ and keep the REPL callback boundary as the actual composable interface.
 
 ## Phase Evidence
 
+- Removed `AgentCapabilitySnapshot` and its dedicated source module. Daemon
+  Reason composition now reuses the endpoint tuple it already owns and asks
+  conversation runtime only for copied immutable readonly-tool membership;
+  readonly tag filtering and the mutable registry remain encapsulated by the
+  tool runtime. Source/tests remove 23 net lines. Focused chat/daemon/reason
+  tests: 609 passed; full suite: 2434 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Removed the one-use `SessionHeaderPresenter`, its provider alias, and the
   dedicated `cli/repl/presentation.py` module. Session-header output now lives
   with existing CLI presentation functions; REPL composition binds current

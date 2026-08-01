@@ -13,7 +13,7 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
 )
-from nuself.agent.capabilities import AgentCapabilitySnapshot
+from langchain_core.tools import BaseTool
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.agent.chat.types import (
     ChatAgentSettings,
@@ -156,15 +156,13 @@ class ConversationGraphRuntime:
                 report_tool_log_failure=self._tool_runtime.report_log_failure,
             )
         )
-    def capability_snapshot(self) -> AgentCapabilitySnapshot:
-        """Return stable endpoint and readonly-tool membership."""
-        return AgentCapabilitySnapshot(
-            endpoints=tuple(self._langchain_models),
-            readonly_tools=tuple(
-                tool
-                for tool in self._tool_runtime.tools.values()
-                if "readonly" in (tool.tags or [])
-            ),
+    def readonly_tools(self) -> tuple[BaseTool, ...]:
+        """Return immutable readonly-tool membership."""
+
+        return tuple(
+            tool
+            for tool in self._tool_runtime.tools.values()
+            if "readonly" in (tool.tags or [])
         )
 
     def respond(

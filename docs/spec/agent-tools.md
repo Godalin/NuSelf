@@ -143,14 +143,14 @@ resolved `ToolResources` snapshot. `ConversationToolRuntime` is the sole owner
 of the materialized tool-name catalog; `ConversationGraphRuntime` must not
 mirror the same dictionary.
 
-Cross-subsystem reuse does not read this registry or configured endpoints
-through private runtime fields. `ConversationGraphRuntime` exposes an
-immutable capability snapshot containing the endpoint tuple and only tools
-tagged `readonly`. The snapshot copies collection membership at call time, so
-later registry mutation cannot alter an already-issued snapshot; endpoint and
-tool objects themselves are shared by identity.
+Cross-subsystem reuse does not read this registry through private runtime
+fields. `ConversationGraphRuntime.readonly_tools()` returns only tools tagged
+`readonly` and copies collection membership at call time, so later registry
+mutation cannot alter an already-issued tuple; tool objects themselves are
+shared by identity. Configured endpoints remain owned by application/daemon
+composition, which already supplies the same tuple to chat and Reason.
 
-Daemon reason-scheduler composition consumes this public snapshot. It must not
+Daemon reason-scheduler composition consumes this public tuple. It must not
 use `getattr` against `_tools` or `_langchain_models`, silently treat missing
 private fields as empty capabilities, or repeat tag filtering outside the
 conversation runtime.
