@@ -52,8 +52,6 @@ def test_signal_owner_sets_shutdown_and_restores_in_reverse_order(
 
     assert owner.install() is True
     assert owner.install() is False
-    assert owner.installed is True
-    assert owner.owned_signals == (signal.SIGINT, signal.SIGTERM)
 
     installed = current[signal.SIGINT]
     assert callable(installed)
@@ -62,8 +60,6 @@ def test_signal_owner_sets_shutdown_and_restores_in_reverse_order(
 
     assert owner.restore() is True
     assert owner.restore() is False
-    assert owner.installed is False
-    assert owner.owned_signals == ()
     assert current == previous
     assert [signal_number for signal_number, _ in writes[-2:]] == [
         signal.SIGTERM,
@@ -104,8 +100,7 @@ def test_partial_install_rolls_back_successful_signal(
         owner.install()
 
     assert current == previous
-    assert owner.owned_signals == ()
-    assert owner.installed is False
+    assert owner.restore() is False
 
 
 def test_partial_install_retains_failed_rollback_for_retry(
@@ -148,11 +143,9 @@ def test_partial_install_retains_failed_rollback_for_retry(
 
     assert isinstance(captured.value.__cause__, OSError)
     assert captured.value.failures[0].signal_number == signal.SIGINT
-    assert owner.owned_signals == (signal.SIGINT,)
 
     allow_restore = True
     assert owner.restore() is True
-    assert owner.owned_signals == ()
     assert current == previous
 
 
@@ -196,12 +189,9 @@ def test_restore_attempts_all_signals_and_failed_one_is_retryable(
     assert [item.signal_number for item in captured.value.failures] == [
         signal.SIGTERM
     ]
-    assert owner.owned_signals == (signal.SIGTERM,)
     assert current[signal.SIGINT] is previous[signal.SIGINT]
-    assert owner.installed is True
 
     term_restore_fails = False
     assert owner.restore() is True
-    assert owner.owned_signals == ()
-    assert owner.installed is False
+    assert owner.restore() is False
     assert current == previous

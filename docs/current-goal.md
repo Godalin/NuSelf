@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue production/test call-surface comparison. Remove introspection exposed
-only for redundant tests while retaining executable construction invariants and
-their failure-path coverage.
+Continue auditing lifecycle objects for mirrored booleans and test-only state
+inspection. Derive state from the resource ownership structure that already
+governs behavior.
 
 ## Constraints
 
@@ -317,6 +317,13 @@ their failure-path coverage.
   registry with `expected_keys=command_names()`, and the mismatch failure test
   remains.
 - REPL/handler/boundary focused suite: 135 passed. Post-introspection cleanup
+  `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `DaemonSignalOwner.installed` and `.owned_signals` were test-only views, and
+  `_installed` duplicated the authoritative ownership map. All three are gone;
+  install idempotence now derives from owning both signals, while partial
+  ownership still fails closed and remains retryable.
+- Signal/daemon-lifecycle focused suite: 28 passed. Post-signal-state cleanup
   `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
