@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.persona.discussion import SharedPersonaDiscussionService
 
@@ -35,9 +36,27 @@ class _FakeDiscussion:
         return _FakeResult()
 
 
-def test_shared_persona_discussion_service_delegates_to_engine(tmp_path: Path) -> None:
+def test_shared_persona_discussion_service_uses_composed_inputs_and_delegates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
     fake = _FakeDiscussion()
-    service = SharedPersonaDiscussionService(project_root=tmp_path, discussion=fake)  # type: ignore[arg-type]
+
+    def build_discussion(**kwargs: object) -> _FakeDiscussion:
+        captured.update(kwargs)
+        return fake
+
+    monkeypatch.setattr(
+        "nuself.persona.discussion.ProactivePersonaDiscussion",
+        build_discussion,
+    )
+    config = ReflectionSettings()
+    service = SharedPersonaDiscussionService(
+        project_root=tmp_path,
+        config=config,
+        language_preference="zh-CN",
+    )
     candidate = IdeaCandidate(
         id="cand-1",
         title="Discuss architecture",
@@ -54,28 +73,10 @@ def test_shared_persona_discussion_service_delegates_to_engine(tmp_path: Path) -
 
     result = service.discuss(candidate)
 
+    assert captured["project_root"] == tmp_path
+    assert captured["config"] is config
+    assert captured["language_preference"] == "zh-CN"
     assert fake.calls == [candidate]
     assert result.approved is True
     assert result.reason == "delegated"
     assert result.winner_persona_ids == ("analyst_self",)
-
-
-def test_shared_persona_discussion_service_passes_project_root_to_engine(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    captured: dict[str, object] = {}
-    fake = _FakeDiscussion()
-
-    def build_discussion(**kwargs: object) -> _FakeDiscussion:
-        captured.update(kwargs)
-        return fake
-
-    monkeypatch.setattr(
-        "nuself.persona.discussion.ProactivePersonaDiscussion",
-        build_discussion,
-    )
-
-    SharedPersonaDiscussionService(project_root=tmp_path)
-
-    assert captured["project_root"] == tmp_path

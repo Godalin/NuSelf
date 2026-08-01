@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nuself.agent.failover import is_recoverable_agent_failure
+from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryService
@@ -36,9 +37,10 @@ class ConversationPersonaOrchestrator:
     def __init__(
         self,
         *,
-        project_root: Path | None,
+        project_root: Path,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         language_preference: str,
+        reflection_settings: ReflectionSettings,
         memory_query_service: MemoryService,
         persona_definitions: tuple[PersonaDefinition, ...],
     ) -> None:
@@ -84,6 +86,7 @@ class ConversationPersonaOrchestrator:
         )
         self._discussion_service = SharedPersonaDiscussionService(
             project_root=project_root,
+            config=reflection_settings,
             synthesis_agent=(
                 graph_agents.synthesis
                 if graph_agents is not None

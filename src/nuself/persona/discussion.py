@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import ConfigSystem, ReflectionSettings
+from nuself.config import ReflectionSettings
 from nuself.llm import LangChainLLMEndpoint
 from nuself.domain.proactive import IdeaCandidate
 from nuself.persona.definition import (
@@ -542,24 +542,14 @@ class SharedPersonaDiscussionService:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         *,
-        config: ReflectionSettings | None = None,
-        discussion: ProactivePersonaDiscussion | None = None,
+        config: ReflectionSettings,
         agents: PersonaDiscussionAgents | None = None,
         synthesis_agent: StructuredAgent[PersonaSynthesisOutput] | None = None,
-        language_preference: str | None = None,
+        language_preference: str,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
-        if discussion is not None:
-            self._discussion = discussion
-            return
-        if config is None or language_preference is None:
-            system_config = ConfigSystem.load(project_root=project_root)
-            if config is None:
-                config = system_config.reflection
-            if language_preference is None:
-                language_preference = system_config.chat.language_preference
         if agents is None:
             agents = default_persona_discussion_agents(
                 project_root,

@@ -76,6 +76,7 @@ def compose_conversation_runtime(
             project_root=paths.project_root,
         ),
         conversation_store=application.conversations,
+        reflection_settings=config.reflection,
         language_preference=config.chat.language_preference,
     )
     publisher = event_publisher

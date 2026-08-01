@@ -129,6 +129,7 @@ class ConversationGraphRuntime:
             project_root=project_root,
             langchain_models=self._langchain_models,
             language_preference=self._language_preference,
+            reflection_settings=resources.reflection_settings,
             memory_query_service=memory_query_service,
             persona_definitions=resources.personas,
         )

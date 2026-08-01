@@ -138,6 +138,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 project_root=project_root,
             ),
             conversation_store=conversation_store or application.conversations,
+            reflection_settings=application.config.reflection,
             language_preference=application.config.chat.language_preference,
         )
         publisher = event_publisher

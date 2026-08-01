@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make the Email adapter a pure composed delivery capability.
+Give shared Persona discussion one explicit composition path.
 
 ## Ordered Steps
 
-1. Confirm every production Email adapter is built by notification composition
-   with a resolved project path and `EmailConfig`.
-2. Require both inputs, remove adapter-owned configuration/path resolution, and
-   update the one test that depended on implicit disabled-email defaults.
-3. Run focused Notification/composition tests and full gates, then commit
-   without pushing.
+1. Confirm full `ProactivePersonaDiscussion` injection has no production caller
+   and hidden config loading exists only because Chat omits Reflection settings.
+2. Require resolved path/settings/language, thread settings through
+   `ConversationResources`, and retain only narrow agent injection points.
+3. Consolidate the redundant discussion-service tests, run focused Persona/Chat/
+   Reflection tests and full gates, then commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve SMTP/TLS/authentication behavior, dry-run audit, disabled-email
-  failure, credential secrecy, deep-link validation, and delivery recovery.
+- Preserve bounded discussion behavior, typed structured agents, model endpoint
+  injection, degradation policy, trace callbacks, and language selection.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,13 @@ Make the Email adapter a pure composed delivery capability.
 
 ## Phase Evidence
 
+- `SharedPersonaDiscussionService` now has one construction path requiring a
+  resolved project `Path`, `ReflectionSettings`, and language preference.
+  Removed full-engine injection and internal `ConfigSystem.load()`; Chat carries
+  Reflection settings in its immutable resource snapshot, while narrow agent
+  injection remains. Consolidated two construction/delegation tests into one.
+  Focused Persona/Chat/Reflection tests: 479 passed; full suite: 2438 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `EmailNotificationAdapter` now requires a resolved `Path` and `EmailConfig`.
   Removed its optional inputs, internal `ConfigSystem.load()`, and
   `runtime_paths()` authority resolution; notification composition remains the
