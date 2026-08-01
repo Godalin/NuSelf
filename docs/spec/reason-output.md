@@ -455,6 +455,10 @@ Reasoning-side events:
 | `reason_output_chunk_started` | `info` | none | none | thread/job/chunk |
 | `reason_output_chunk_failed` | `error` | `error` | error required | thread/job/chunk |
 | `reason_output_chunk_completed` | `info` | `ok` | duration required | thread/job/chunk |
+
+All four chunk lifecycle definitions share one exact thread/job/chunk metadata
+validator. Their distinct status, error, and duration policies remain on the
+individual event definitions rather than duplicated metadata validators.
 | `reason_output_composed` | `info` | `completed` | none | thread/job/chunk count |
 | `reason_output_pdf_started` | `info` | none | none | thread/job |
 | `reason_output_pdf_timeout` | `warning` | `error` | none | thread/job |

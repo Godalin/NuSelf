@@ -9,26 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify the byte-for-byte identical curator and optimizer audit writer façades.
-Keep one memory-domain audit operation; sealed event definitions continue to
-own event identity, metadata schema, level, and status.
+Unify the duplicate Reason output chunk metadata validators. All skipped,
+started, failed, and completed chunk events share one thread/job/chunk identity
+schema; event definitions retain distinct status, error, and duration policies.
 
 ## Ordered Steps
 
-1. Confirm `write_curator_audit()` and `write_optimizer_audit()` have identical
-   signatures, validation, sink, and return behavior.
-2. Promote the existing shared implementation as `write_memory_audit()` and
-   delete both pass-through wrappers.
-3. Update curator, optimizer, and registry tests without changing event names
-   or metadata.
-4. Run memory audit/curator/optimizer tests, Pyright, full pytest, and package
-   build; update evidence and commit without pushing.
+1. Confirm `_chunk_identity()` and `_completed_chunk()` enforce identical exact
+   metadata fields and value types.
+2. Point completed chunk definitions at `_chunk_identity()` and delete the
+   duplicate validator.
+3. Preserve each definition's level, status, error policy, duration policy,
+   message, and event identity.
+4. Run Reason audit/output tests, Pyright, full pytest, and package build;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not combine curator and optimizer event definitions or metadata schemas.
-- Do not change audit best-effort failure isolation or sink behavior.
-- Do not add a generic cross-domain audit façade.
+- Do not merge distinct chunk event definitions.
+- Do not weaken completed duration or failed error requirements.
+- Do not change persisted event names, metadata, status, or rendering.
 
 ## Constraints
 
@@ -40,6 +40,12 @@ own event identity, metadata schema, level, and status.
 
 ## Phase Evidence
 
+- Skipped, started, failed, and completed Reason output chunk definitions now
+  share `_chunk_identity()`. Removed the byte-for-byte duplicate completed
+  validator while retaining each event's level, status, error policy, duration
+  policy, and identity. Focused Reason audit/output tests: 93 passed; full
+  suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Curator and optimizer now call one public `write_memory_audit()` operation.
   Removed two byte-for-byte identical writer façades while preserving the
   optional metadata signature, sealed event registry, exact schemas,

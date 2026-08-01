@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason output chunk lifecycle audits now share one exact thread/job/chunk
+  metadata validator while retaining event-specific status, error, and duration
+  policies.
 - Memory curator and optimizer audits now use one sealed-domain
   `write_memory_audit()` operation instead of two identical writer façades.
 - Memory curation now joins observation fragments and removes backend record

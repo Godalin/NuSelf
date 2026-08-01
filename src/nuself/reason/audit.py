@@ -366,16 +366,6 @@ def _output_mode(metadata: Mapping[str, object]) -> None:
     _enum(metadata, "mode", _OUTPUT_MODES)
 
 
-def _completed_chunk(metadata: Mapping[str, object]) -> None:
-    _require_exact(
-        metadata,
-        frozenset({"thread_id", "job_id", "chunk_index"}),
-    )
-    _string(metadata, "thread_id")
-    _string(metadata, "job_id")
-    _integer(metadata, "chunk_index")
-
-
 def _composed(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
@@ -508,7 +498,7 @@ def _build_registry() -> AuditDefinitionRegistry:
         AuditEventDefinition(
             "reasoning", "reason_output_chunk_completed", "info", "ok",
             duration_policy="required",
-            metadata_validator=_completed_chunk,
+            metadata_validator=_chunk_identity,
         ),
         AuditEventDefinition(
             "reasoning", "reason_output_composed", "info", "completed",
