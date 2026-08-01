@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
 import errno
+import fcntl
 import os
 from pathlib import Path
 import stat
@@ -10,6 +13,19 @@ import stat
 
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
+
+
+@contextmanager
+def blocking_private_file_lock(path: Path) -> Generator[None]:
+    """Hold one blocking advisory lock on a managed private file."""
+
+    ensure_private_file(path)
+    with path.open("ab") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def ensure_private_directory(path: Path) -> None:

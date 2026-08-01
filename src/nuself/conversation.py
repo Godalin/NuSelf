@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from contextlib import ExitStack, contextmanager
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass, field, replace
-import fcntl
 import hashlib
 import time
-from pathlib import Path
 from typing import Generator, Literal, TypeVar, cast
 
 from nuself.config import RuntimePaths
-from nuself.private_fs import ensure_private_directory, ensure_private_file
+from nuself.private_fs import (
+    blocking_private_file_lock,
+    ensure_private_directory,
+)
 from nuself.storage import StorageBackend
 
 ConversationRole = Literal["user", "assistant"]
@@ -308,10 +309,15 @@ class ConversationStore:
     def _save_unlocked(self, state: ConversationState) -> None:
         self._collection.put(state.conversation_id, state.to_wire())
 
-    def _locked(self, conversation_id: str) -> "_ConversationLock":
+    def _locked(
+        self,
+        conversation_id: str,
+    ) -> AbstractContextManager[None]:
         self._validate_id(conversation_id)
         ensure_private_directory(self._locks_dir)
-        return _ConversationLock(self._locks_dir / f"{conversation_id}.lock")
+        return blocking_private_file_lock(
+            self._locks_dir / f"{conversation_id}.lock"
+        )
 
     @contextmanager
     def _locked_many(
@@ -556,30 +562,3 @@ def _finish_turn_attempt(
             if pending.turn_id != turn_id
         ),
     )
-
-
-class _ConversationLock:
-    """Stable advisory lock for one working-memory stream."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._file = None
-
-    def __enter__(self) -> None:
-        ensure_private_file(self._path)
-        self._file = self._path.open("ab")
-        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
-
-    def __exit__(
-        self,
-        exc_type: object,
-        exc_value: object,
-        traceback: object,
-    ) -> None:
-        if self._file is None:
-            return
-        try:
-            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
-        finally:
-            self._file.close()
-            self._file = None

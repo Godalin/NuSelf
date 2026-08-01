@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import fcntl
 from contextlib import AbstractContextManager
 from dataclasses import replace
-from pathlib import Path
 
 from nuself.clock import utc_now, utc_now_iso
 from nuself.config import RuntimePaths
@@ -19,8 +17,8 @@ from nuself.notification.model import (
 )
 from nuself.runtime.observability import decode_observed_record
 from nuself.private_fs import (
+    blocking_private_file_lock,
     ensure_private_directory,
-    ensure_private_file,
 )
 from nuself.storage import (
     StorageBackend,
@@ -49,7 +47,7 @@ class NotificationOutbox:
         """Serialize one entry across delivery, dismiss, and deletion."""
         validate_storage_key(entry_id)
         ensure_private_directory(self._entry_lock_directory)
-        return _NotificationEntryLock(
+        return blocking_private_file_lock(
             self._entry_lock_directory / f"{entry_id}.lock"
         )
 
@@ -280,34 +278,6 @@ class NotificationOutbox:
             if entry.idempotency_key == key:
                 return entry
         return None
-
-
-class _NotificationEntryLock:
-    """One stable blocking cross-process lock for an outbox entry."""
-
-    def __init__(self, path: Path) -> None:
-        self._path = path
-        self._file = None
-
-    def __enter__(self) -> None:
-        ensure_private_file(self._path)
-        self._file = self._path.open("ab")
-        fcntl.flock(self._file.fileno(), fcntl.LOCK_EX)
-
-    def __exit__(
-        self,
-        exc_type: object,
-        exc_value: object,
-        traceback: object,
-    ) -> None:
-        del exc_type, exc_value, traceback
-        if self._file is None:
-            return
-        try:
-            fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
-        finally:
-            self._file.close()
-            self._file = None
 
 
 class OutboxEntryNotFound(ValueError):

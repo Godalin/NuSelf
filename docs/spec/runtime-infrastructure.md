@@ -338,6 +338,14 @@ primitives introduced here are the existing single-daemon instance lock and the
 scheduler condition. Repository transactions, cross-process locks needed for
 direct CLI coexistence, and the activity broker condition remain independent.
 
+Behavior-identical blocking locks over NuSelf-managed resource files share the
+dependency-neutral context primitive in `nuself.private_fs`. Conversation and
+notification domains choose their own stable lock identity and mutation scope;
+the shared primitive only hardens the lock file and owns blocking `flock`
+acquisition and release. Non-blocking daemon ownership, schema migration,
+append-log, and curator locks retain their separate contention and cleanup
+contracts. There is no process-global lock registry or generic lock manager.
+
 ### JSONL Transport Framing
 
 The daemon transport is one request and one response per Unix-socket

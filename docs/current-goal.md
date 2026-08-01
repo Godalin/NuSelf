@@ -9,23 +9,24 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline the one-use visible-tool-call substring classifier into the chat response
-protocol rejection boundary.
+Unify the duplicate blocking managed-file lock lifecycle used by conversation
+and notification resources.
 
 ## Ordered Steps
 
-1. Confirm `_looks_like_tool_call()` has one caller and only checks one fixed
-   protocol-leak marker.
-2. Keep the marker test in `_reject_visible_tool_call()` and remove the
-   classifier helper.
-3. Run chat response tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Confirm conversation and notification use behavior-identical blocking
+   managed-file locks and that special-purpose lock contracts remain distinct.
+2. Add one dependency-neutral managed lock context to `private_fs` and replace
+   both duplicate stateful lock classes.
+3. Run private-filesystem, conversation, and notification tests, then Pyright,
+   full pytest, and package build; update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not remove the typed invalid-output error boundary.
-- Do not change the rejected marker or accepted response text.
-- Do not change retry, failover, or tool non-replay behavior.
+- Do not change resource identity, blocking behavior, or lock-file lifetime.
+- Do not merge non-blocking daemon ownership, schema migration, append-log, or
+  memory-curator lock contracts.
+- Do not add a lock registry, lock manager, or process-global state.
 
 ## Constraints
 
@@ -37,6 +38,14 @@ protocol rejection boundary.
 
 ## Phase Evidence
 
+- Conversation and notification resource locks now reuse
+  `blocking_private_file_lock()` for owner-only file preparation and blocking
+  `flock` lifecycle. Removed both duplicate stateful lock classes while each
+  domain retains its own resource identity and mutation scope; specialized
+  lock contracts remain separate. Implementation removes 65 lines and adds
+  30. Focused private-filesystem/conversation/notification tests: 50 passed;
+  full suite: 2443 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `_reject_visible_tool_call()` now checks its single protocol-leak marker
   directly. Removed the one-use `_looks_like_tool_call()` classifier while
   preserving both structured and compatible-message rejection paths and the

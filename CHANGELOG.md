@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Conversation and notification resource locking now share one managed-file
+  lock lifecycle primitive instead of maintaining duplicate stateful classes.
 - Visible tool-call leakage rejection now owns its sole marker check directly,
   removing a one-use substring-classifier helper.
 - Unconfigured and exhausted-endpoint chat fallbacks now share one last-user-
