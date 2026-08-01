@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove test-only ToolOutcome convenience factories.
+Remove the unconsumed Profile statistics API.
 
 ## Ordered Steps
 
-1. Confirm LangChain calls `wrap_tool_call()` by middleware contract, while
-   `ToolOutcome.succeeded()` and `failed()` are referenced only by tests.
-2. Remove the convenience factories and migrate fixtures to the canonical
-   validated dataclass constructor without a compatibility alias.
-3. Run focused Agent/Reason tests and complete verification gates; update
+1. Confirm `ProfileStats` and `profile_stats()` have no production, CLI, or
+   application-service consumers and exist only in their own test.
+2. Remove the unused type/function and narrow the statistics specification to
+   the real Memory stats capability.
+3. Run focused Profile/Memory tests and complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve middleware capture, cache, failure propagation, audit projection,
-  immutable arguments, and outcome validation.
+- Preserve profile CRUD/search/merge/accept behavior and the user-visible
+  Memory statistics operation.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove test-only ToolOutcome convenience factories.
 
 ## Phase Evidence
 
+- Removed `ProfileStats` and `profile_stats()`, which had no production, CLI,
+  or application-service consumer and were exercised only by their own test.
+  Profile CRUD/search/merge/accept remain unchanged; the specification now
+  limits immutable statistics snapshots to the real Memory API. Focused
+  Profile/Memory/CLI tests: 367 passed; full suite: 2440 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - `ToolOutcome` now has one validated construction path. Removed test-only
   `succeeded()`/`failed()` factories and migrated audit/advancer fixtures to
   explicit result/error construction; the LangChain `wrap_tool_call()` hook

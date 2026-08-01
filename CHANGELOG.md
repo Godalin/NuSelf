@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Removed the unused Profile statistics type/function; Memory statistics remain
+  the only statistics API because they have an actual product consumer.
 - Tool outcomes now use their validated dataclass constructor directly;
   removed success/failure convenience factories used only by tests.
 - Reason output now exposes only its active plan/get/compose/path operations;

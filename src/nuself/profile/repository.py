@@ -2,33 +2,13 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from nuself.clock import utc_now_iso
 from nuself.config import RuntimePaths
 from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.runtime.observability import decode_observed_record
-from nuself.runtime.messages import freeze_json_value
 from nuself.storage import StorageBackend
-
-
-@dataclass(frozen=True)
-class ProfileStats:
-    """Compact summary of derived profile state."""
-
-    items_total: int
-    items_by_type: Mapping[str, int] = field(
-        default_factory=dict[str, int]
-    )
-    items_with_evidence: int = 0
-
-    def __post_init__(self) -> None:
-        frozen = freeze_json_value(self.items_by_type)
-        if not isinstance(frozen, Mapping):
-            raise TypeError("field 'items_by_type' must be a mapping")
-        object.__setattr__(self, "items_by_type", frozen)
 
 
 @dataclass(frozen=True)
@@ -119,15 +99,6 @@ class ProfileItemRepository:
         item = ProfileItem.from_candidate(candidate)
         self.save(item)
         return item
-
-def profile_stats(repository: ProfileItemRepository) -> ProfileStats:
-    items = repository.list()
-    return ProfileStats(
-        items_total=len(items),
-        items_by_type=dict(Counter(item.type for item in items)),
-        items_with_evidence=sum(1 for item in items if item.evidence),
-    )
-
 
 def _matches_text(item: ProfileItem, normalized_query: str) -> bool:
     if normalized_query == "":
