@@ -540,6 +540,9 @@ protocol, or output failure, the fallback must instead state that the
 configured LLM request failed and direct the user to diagnostics. It must
 remain non-empty, must not claim the API is unconfigured, and must not expose
 provider response text, credentials, prompts, or endpoint URLs.
+Both fallback variants derive their optional last-message context through one
+shared last-user-message extractor; their cause-specific text and epistemic
+policies remain separate.
 
 Chat response synthesis prefers the exact typed LangChain
 `structured_response`. When an OpenAI-compatible agent successfully returns no

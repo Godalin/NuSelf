@@ -294,14 +294,7 @@ def _looks_like_tool_call(text: str) -> bool:
 def _local_response_output(
     prompt: list[BaseMessage],
 ) -> ChatStructuredOutput:
-    last_user = next(
-        (
-            message.text
-            for message in reversed(prompt)
-            if isinstance(message, HumanMessage)
-        ),
-        "",
-    )
+    last_user = _last_user_text(prompt)
     return ChatStructuredOutput(
         answer=(
             "LLM API is not configured yet. I saved the message and can use "
@@ -314,14 +307,7 @@ def _local_response_output(
 def _configured_failure_response_output(
     prompt: list[BaseMessage],
 ) -> ChatStructuredOutput:
-    last_user = next(
-        (
-            message.text
-            for message in reversed(prompt)
-            if isinstance(message, HumanMessage)
-        ),
-        "",
-    )
+    last_user = _last_user_text(prompt)
     return ChatStructuredOutput(
         answer=(
             "The configured LLM request failed, so I could not generate a "
@@ -330,6 +316,17 @@ def _configured_failure_response_output(
             f"Last message: {last_user}"
         ),
         epistemic_status="unsupported",
+    )
+
+
+def _last_user_text(prompt: list[BaseMessage]) -> str:
+    return next(
+        (
+            message.text
+            for message in reversed(prompt)
+            if isinstance(message, HumanMessage)
+        ),
+        "",
     )
 
 

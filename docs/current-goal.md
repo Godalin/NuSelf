@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline two one-use REPL command helpers that add no policy or capability
-boundary.
+Unify duplicate last-user-message extraction across the two distinct chat
+fallback response builders.
 
 ## Ordered Steps
 
-1. Confirm `indent_lines()` and `handle_interactive_memory_search()` each have
-   one caller and no independent tests, errors, or injected dependencies.
-2. Keep indentation and memory-search behavior at those owning branches and
-   remove both public helpers.
-3. Run REPL/CLI tests, Pyright, full pytest, and package build; update evidence
-   and commit without pushing.
+1. Confirm local-unconfigured and configured-request-failed builders use
+   byte-for-byte identical reverse HumanMessage selection.
+2. Extract that selection once while keeping both answer texts and configured-
+   failure epistemic status independent.
+3. Run chat response tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change memory search results, empty text, or reflection indentation.
-- Do not merge unrelated REPL command handlers.
-- Do not move repository access into the dispatcher.
+- Do not merge the two failure classifications or messages.
+- Do not expose prompt/system contents in fallback text.
+- Do not change retry, failover, or tool non-replay behavior.
 
 ## Constraints
 
@@ -37,6 +37,11 @@ boundary.
 
 ## Phase Evidence
 
+- Unconfigured-model and exhausted-configured-endpoint fallback builders now
+  share `_last_user_text()`. Removed duplicate reverse prompt scans while
+  retaining distinct cause guidance and the configured-failure `unsupported`
+  epistemic status. Focused chat response/agent tests: 95 passed; full suite:
+  2443 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Memory search now queries/renders at its sole REPL branch and reflection
   indentation stays at its sole list loop. Removed the public one-use
   `handle_interactive_memory_search()` and `indent_lines()` helpers without

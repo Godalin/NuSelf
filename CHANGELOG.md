@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Unconfigured and exhausted-endpoint chat fallbacks now share one last-user-
+  message extractor while retaining distinct cause text and epistemic policy.
 - REPL memory search and reflection indentation now stay at their sole command
   branches, removing two one-use public helpers.
 - Interactive reflection and notification pending/all views now share one
