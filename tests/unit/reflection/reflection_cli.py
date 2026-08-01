@@ -60,7 +60,7 @@ def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[Reflect
 
 
 def test_reflection_list_empty(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     args = argparse.Namespace(project_root=project_root, status=None, as_json=False)
@@ -68,7 +68,7 @@ def test_reflection_list_empty(project_root: Path) -> None:
 
 
 def test_reflection_list_with_entries(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     entries = _seed_reflection_entries(project_root, 3)
@@ -86,7 +86,7 @@ def test_reflection_list_with_entries(project_root: Path, capsys: pytest.Capture
 
 
 def test_reflection_list_filters_by_status(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     _seed_reflection_entries(project_root, 3)
@@ -99,7 +99,7 @@ def test_reflection_list_filters_by_status(project_root: Path, capsys: pytest.Ca
 
 
 def test_reflection_list_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     _seed_reflection_entries(project_root, 2)
@@ -115,7 +115,7 @@ def test_reflection_list_json(project_root: Path, capsys: pytest.CaptureFixture[
 
 
 def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     entries = _seed_reflection_entries(project_root, 3)
@@ -127,7 +127,7 @@ def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture
 
 
 def test_reflection_show_by_numeric_handle(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     _seed_reflection_entries(project_root, 3)
@@ -138,7 +138,7 @@ def test_reflection_show_by_numeric_handle(project_root: Path, capsys: pytest.Ca
 
 
 def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     entries = _seed_reflection_entries(project_root, 1)
@@ -150,7 +150,7 @@ def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[
 
 
 def test_reflection_show_invalid_index(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     _seed_reflection_entries(project_root, 2)
@@ -159,7 +159,7 @@ def test_reflection_show_invalid_index(project_root: Path) -> None:
 
 
 def test_reflection_show_empty(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     args = argparse.Namespace(project_root=project_root, entry_id="0", as_json=False)
@@ -167,7 +167,7 @@ def test_reflection_show_empty(project_root: Path) -> None:
 
 
 def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_dismiss
+    from nuself.cli.commands.reflections import handle_reflection_dismiss
     import argparse
 
     entries = _seed_reflection_entries(project_root, 2)
@@ -180,7 +180,7 @@ def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[st
 
 
 def test_reflection_dismiss_by_numeric_handle(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_dismiss
+    from nuself.cli.commands.reflections import handle_reflection_dismiss
     import argparse
 
     _seed_reflection_entries(project_root, 2)
@@ -191,7 +191,7 @@ def test_reflection_dismiss_by_numeric_handle(project_root: Path, capsys: pytest
 
 
 def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_archive
+    from nuself.cli.commands.reflections import handle_reflection_archive
     import argparse
 
     entries = _seed_reflection_entries(project_root, 2)
@@ -204,7 +204,7 @@ def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[st
 
 
 def test_reflection_dismiss_missing(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_dismiss
+    from nuself.cli.commands.reflections import handle_reflection_dismiss
     import argparse
 
     args = argparse.Namespace(project_root=project_root, entry_id="missing")
@@ -212,7 +212,7 @@ def test_reflection_dismiss_missing(project_root: Path) -> None:
 
 
 def test_reflection_archive_missing(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_archive
+    from nuself.cli.commands.reflections import handle_reflection_archive
     import argparse
 
     args = argparse.Namespace(project_root=project_root, entry_id="missing")

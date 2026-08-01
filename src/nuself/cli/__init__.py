@@ -42,19 +42,7 @@ with warnings.catch_warnings():
         send_one_shot_chat_interactive as _send_one_shot_chat_interactive,
     )
 
-from nuself.cli.commands.reflections import (
-    handle_reflection_archive as handle_reflection_archive,
-)
 from nuself.cli.exit_codes import CliExitCode
-from nuself.cli.commands.reflections import (
-    handle_reflection_dismiss as handle_reflection_dismiss,
-)
-from nuself.cli.commands.reflections import (
-    handle_reflection_list as handle_reflection_list,
-)
-from nuself.cli.commands.reflections import (
-    handle_reflection_show as handle_reflection_show,
-)
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.cli.entrypoints import (
     EntrypointCallbacks,
@@ -78,9 +66,6 @@ from nuself.cli.repl.activity import (
 from nuself.cli.repl.dispatcher import (
     ReplCommandDispatcher,
 )
-from nuself.cli.repl.input import (
-    InteractiveCompleter as _InteractiveCompleter,
-)
 from nuself.cli.repl.notices import (
     print_interactive_notices,
     startup_interactive_notices,
@@ -96,9 +81,6 @@ from nuself.cli.repl.session import (
 from nuself.cli.repl.transcript import (
     auto_save_interactive_transcripts as _auto_save_interactive_transcripts,
 )
-from nuself.cli.repl.transcript import (
-    render_chat_transcript as _render_chat_transcript,
-)
 from nuself.cli.repl.turns import (
     send_interactive_chat_turn as _run_interactive_chat_turn,
 )
@@ -109,14 +91,10 @@ from nuself.application.runtime import open_application_runtime
 from nuself.storage_audit import report_cli_cleanup_failure
 
 __all__ = [
-    "_InteractiveCompleter",
-    "_render_chat_transcript",
     "build_parser",
     "main",
 ]
 
-CHAT_REQUEST_TIMEOUT_SECONDS = 120.0
-DEFAULT_MEMORY_PREVIEW_LIMIT = 8
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
 

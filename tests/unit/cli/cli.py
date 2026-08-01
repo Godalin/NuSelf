@@ -31,7 +31,8 @@ from nuself import cli
 from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.cli import build_parser, main
-from nuself.config import runtime_paths
+from nuself.cli.repl.transcript import render_chat_transcript
+from nuself.config import ChatConfig, runtime_paths
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.lifecycle import (
     DaemonStartError,
@@ -1289,7 +1290,7 @@ def test_interactive_export_all_includes_all_logs(
 
 
 def test_render_transcript_share_includes_service_tool_logs() -> None:
-    render_transcript = cast(Callable[..., str], cli._render_chat_transcript)
+    render_transcript = cast(Callable[..., str], render_chat_transcript)
     service_log = LogEvent(
         time="2026-05-19T10:00:00Z",
         level="info",
@@ -1327,7 +1328,7 @@ def test_render_transcript_share_includes_service_tool_logs() -> None:
 
 
 def test_interactive_export_normalizes_markdown_body_fences() -> None:
-    render_transcript = cast(Callable[..., str], cli._render_chat_transcript)
+    render_transcript = cast(Callable[..., str], render_chat_transcript)
     content = render_transcript(
         conversation_id="default",
         connected_at=datetime.now(UTC),
@@ -1605,7 +1606,7 @@ def test_daemon_chat_uses_long_timeout(
 
     assert result == 0
     assert "daemon reply" in captured.out
-    assert captured_timeout == cli.CHAT_REQUEST_TIMEOUT_SECONDS
+    assert captured_timeout == ChatConfig().request_timeout_seconds
 
 
 def test_daemon_chat_uses_configured_request_timeout(
@@ -1834,14 +1835,16 @@ def test_interactive_activity_cursor_does_not_replay_seen_events(
         "chat", "turn_completed", "new turn", project_root=_authority(tmp_path), turn_id="turn-new"
     )
 
-    from nuself.cli import (
-        _interactive_activity_events,  # pyright: ignore[reportPrivateUsage]
+    from nuself.cli.repl.activity import (
+        read_interactive_activity_events,
     )
 
-    first_read = _interactive_activity_events(
+    first_read = read_interactive_activity_events(
         _authority(tmp_path), cursor, turn_id="turn-new"
     )
-    second_read = _interactive_activity_events(_authority(tmp_path), cursor)
+    second_read = read_interactive_activity_events(
+        _authority(tmp_path), cursor
+    )
 
     assert [event.event for event in first_read] == ["turn_completed"]
     assert second_read == []

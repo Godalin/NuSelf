@@ -82,10 +82,8 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `CHAT_REQUEST_TIMEOUT_SECONDS` | `cli/__init__.py:116` | 120 s | Interactive chat request timeout |
-| `DEFAULT_MEMORY_PREVIEW_LIMIT` | `cli/__init__.py:117` | 8 | Memory preview entry count |
-| `INTERACTIVE_CHAT_ATTEMPTS` | `cli/__init__.py:118` | 2 | Max interactive chat retries |
-| `INTERACTIVE_LOG_POLL_INTERVAL_SECONDS` | `cli/__init__.py:119` | 0.1 s | Log poll interval |
+| `INTERACTIVE_CHAT_ATTEMPTS` | `cli/__init__.py` | 2 | Max interactive chat retries |
+| `INTERACTIVE_LOG_POLL_INTERVAL_SECONDS` | `cli/__init__.py` | 0.1 s | Log poll interval |
 | profile display | `cli/repl/commands.py:467` | 6 | Max profile items shown inline |
 
 ## LLM

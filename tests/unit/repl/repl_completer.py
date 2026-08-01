@@ -10,13 +10,13 @@ from prompt_toolkit.document import Document
 
 from nuself.conversation import ConversationState
 from conversation_fixtures import ConversationStore
-from nuself.cli import _InteractiveCompleter
+from nuself.cli.repl.input import InteractiveCompleter
 from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository
 
 
 def test_completer_suggests_commands(tmp_path: Path) -> None:
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
     doc = Document(":co", cursor_position=3)
     completions = list(completer.get_completions(doc, None))
     texts = [c.text for c in completions]
@@ -26,7 +26,7 @@ def test_completer_suggests_commands(tmp_path: Path) -> None:
 def test_completer_suggests_conversation_ids(tmp_path: Path) -> None:
     ConversationStore(tmp_path).save(ConversationState.empty("alpha"))
     ConversationStore(tmp_path).save(ConversationState.empty("beta"))
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
     doc = Document(":conversation a", cursor_position=15)
     completions = list(completer.get_completions(doc, None))
     texts = [c.text for c in completions]
@@ -34,14 +34,14 @@ def test_completer_suggests_conversation_ids(tmp_path: Path) -> None:
 
 
 def test_completer_empty_for_non_command(tmp_path: Path) -> None:
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
     doc = Document("hello", cursor_position=5)
     completions = list(completer.get_completions(doc, None))
     assert len(completions) == 0
 
 
 def test_completer_multiple_command_matches(tmp_path: Path) -> None:
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
     doc = Document(":mem", cursor_position=4)
     completions = list(completer.get_completions(doc, None))
     texts = [c.text for c in completions]
@@ -54,7 +54,7 @@ def test_completer_suggests_archived_conversation_ids(tmp_path: Path) -> None:
     store.save(ConversationState.empty("alpha"))
     store.save(ConversationState.empty("beta"))
     store.archive("alpha")
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
     doc = Document(":unarchive a", cursor_position=12)
     completions = list(completer.get_completions(doc, None))
     texts = [c.text for c in completions]
@@ -89,7 +89,7 @@ def test_conversation_completion_failure_is_observed(
         "nuself.cli.repl.input.compose_cli_conversation_store",
         selected_store,
     )
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
 
     completions = list(
         completer.get_completions(
@@ -114,7 +114,7 @@ def test_reason_completion_failure_is_observed(
 
     monkeypatch.setattr(ReasonRepository, "list_threads", fail)
     command = ":reason show a"
-    completer = _InteractiveCompleter(tmp_path)
+    completer = InteractiveCompleter(tmp_path)
 
     completions = list(
         completer.get_completions(

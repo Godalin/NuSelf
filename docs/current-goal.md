@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the 371-line CLI composition root for separable parser, dispatch, and
-interactive-chat policy. Preserve its one-root lifecycle role; extract only
-concerns with independent consumers or dependency direction.
+Move REPL composition out of the CLI process root so `cli.__init__` owns only
+process lifecycle, parser binding, and one-shot presentation. Preserve the
+single application runtime and existing interrupt/cleanup behavior.
 
 ## Constraints
 
@@ -277,6 +277,14 @@ concerns with independent consumers or dependency direction.
   remain together in `notification.outbox`. Email, macOS, TUI, delivery, and
   adapter code no longer load storage or `fcntl` merely to inspect an entry.
 - Model/outbox focused suite: 220 passed. Post-model separation
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- CLI root no longer re-exports four Reflection handlers or private REPL
+  completer/transcript helpers solely for tests. Tests import each owning
+  command or REPL module directly.
+- Removed the unused memory-preview constant and duplicate chat-timeout
+  constant; `ChatConfig.request_timeout_seconds` remains the sole default.
+- CLI/REPL/Reflection focused suite: 532 passed. Post-CLI-surface cleanup
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

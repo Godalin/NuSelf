@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from nuself import cli
 from nuself.conversation import ConversationStore
 from nuself.cli.chat import chat_request_timeout_seconds
 from nuself.cli.commands.reason import handle_reason_start
@@ -12,7 +11,7 @@ from nuself.cli.repl.commands import (
     handle_interactive_persona_command,
     handle_interactive_reason_command,
 )
-from nuself.config import ConfigSystem
+from nuself.config import ChatConfig, ConfigSystem
 from nuself.logs import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
@@ -42,7 +41,7 @@ def test_chat_timeout_uses_default_after_malformed_yaml(
 
     timeout = chat_request_timeout_seconds(tmp_path)
 
-    assert timeout == cli.CHAT_REQUEST_TIMEOUT_SECONDS
+    assert timeout == ChatConfig().request_timeout_seconds
     assert "ignoring unreadable config" in capsys.readouterr().err
 
 
