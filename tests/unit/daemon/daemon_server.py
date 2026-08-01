@@ -412,7 +412,7 @@ def test_memory_curator_worker_coalesces_requested_observation_ids(
     state._request_memory_curation("obs_project")  # pyright: ignore[reportPrivateUsage]
     state.scheduler.start()
     assert state.shutdown_requested.wait(timeout=1)
-    state.stop_background_tasks()
+    state.scheduler.shutdown()
 
     assert calls == ["obs_project"]
 
@@ -451,7 +451,7 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
         interval_seconds=0.01,
     )
     assert state.shutdown_requested.wait(timeout=1)
-    state.stop_background_tasks()
+    state.scheduler.shutdown()
 
     assert set(calls) == expected_ids
 
@@ -705,7 +705,7 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
         assert reflected.wait(timeout=1)
     finally:
         state.shutdown_requested.set()
-        state.stop_background_tasks()
+        state.scheduler.shutdown()
 
     entries = outbox.list()
     assert len(entries) >= 1

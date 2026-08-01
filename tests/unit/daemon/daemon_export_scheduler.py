@@ -94,7 +94,7 @@ def test_export_wakeups_share_the_unified_scheduler_identity(
     snapshot = state.scheduler.snapshot()
     assert snapshot.pending == 1
     assert snapshot.in_flight == 0
-    state.stop_background_tasks()
+    state.scheduler.shutdown()
 
 
 def test_export_task_uses_reason_resource_and_job_context(
@@ -119,7 +119,7 @@ def test_export_task_uses_reason_resource_and_job_context(
     deadline = time.monotonic() + 1
     while not observed and time.monotonic() < deadline:
         time.sleep(0.001)
-    state.stop_background_tasks()
+    state.scheduler.shutdown()
 
     assert len(observed) == 1
     assert observed[0] == RuntimeContext(
@@ -142,7 +142,7 @@ def test_export_recovery_admits_incomplete_manifest_once(
     state.reason_export_service.recover()
 
     assert state.scheduler.snapshot().pending == 1
-    state.stop_background_tasks()
+    state.scheduler.shutdown()
 
 
 def test_export_recovery_ignores_terminal_manifest(
@@ -157,7 +157,7 @@ def test_export_recovery_ignores_terminal_manifest(
     state.reason_export_service.recover()
 
     assert state.scheduler.snapshot().pending == 0
-    state.stop_background_tasks()
+    state.scheduler.shutdown()
 
 
 def test_export_rejects_unknown_job_before_scheduler_admission(
@@ -179,4 +179,4 @@ def test_export_rejects_unknown_job_before_scheduler_admission(
     with pytest.raises(UnknownJobDefinitionError):
         state.reason_export_service.enqueue(unknown)
     assert state.scheduler.snapshot().pending == 0
-    state.stop_background_tasks()
+    state.scheduler.shutdown()

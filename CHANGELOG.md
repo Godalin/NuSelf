@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon lifecycle cleanup now shuts down its sole scheduler directly. The
+  state-level plural `stop_background_tasks` pass-through API was removed;
+  startup still owns durable recovery and recurring task admission.
 - Successful chat follow-up adapters now obtain committed-turn evidence through
   one `ChatResult` invariant. Direct CLI and daemon paths no longer maintain
   separate missing-turn validation branches; memory projection, curation, and

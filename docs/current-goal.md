@@ -9,28 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Centralize the successful-chat committed-turn invariant on `ChatResult`.
-Remove the daemon-only validator and the duplicate direct-CLI branch while
-keeping projection, curation, compression, and failure behavior unchanged.
+Remove the false plural daemon stop façade. Lifecycle ownership, fixtures, and
+failure injection should stop the sole scheduler directly; retain the startup
+orchestrator because it also recovers durable work and admits periodic tasks.
 
 ## Ordered Steps
 
-1. Update the conversation contract so callers use one result-owned committed
-   turn requirement after successful execution.
-2. Add the narrow `ChatResult.require_completed_turn()` operation and replace
-   the daemon and direct-CLI copies of that invariant.
-3. Remove the daemon-only helper and its now-unused domain import; add focused
-   result-contract coverage.
-4. Run chat/daemon/CLI tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Update the daemon contract to identify the scheduler as the shutdown
+   capability rather than a plural state-level background-task API.
+2. Delete `DaemonState.stop_background_tasks()` and bind server cleanup to
+   `scheduler.shutdown` directly.
+3. Make daemon test ownership and lifecycle failure doubles target the same
+   scheduler capability; retain recovery/start orchestration unchanged.
+4. Run daemon tests, Pyright, full pytest, and package build; update evidence
+   and commit without pushing.
 
 ## Exclusions
 
-- Do not make `completed_turn` non-optional; degraded and synthetic result
-  construction remains representable.
-- Do not move projection or curation policy into the result value.
-- Do not change reply delivery, conversation commit order, observation
-  identity, compression scheduling, or failure translation.
+- Do not remove or split the single scheduler.
+- Do not move durable recovery or periodic admission into server lifecycle.
+- Do not change cleanup order, cleanup aggregation, readiness, shutdown
+  timeout, pending-task cancellation, or scheduler lifecycle semantics.
 
 ## Constraints
 
@@ -42,6 +41,13 @@ keeping projection, curation, compression, and failure behavior unchanged.
 
 ## Phase Evidence
 
+- Daemon server cleanup, test ownership, and lifecycle failure injection now
+  call the sole scheduler's `shutdown()` capability directly. Removed the
+  state-level `stop_background_tasks()` pass-through while retaining startup's
+  export recovery and periodic admission orchestration. Cleanup ordering,
+  aggregated failures, readiness, and scheduler behavior are unchanged.
+  Focused daemon tests: 169 passed; full suite: 2436 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 - `ChatResult.require_completed_turn()` now owns the single successful-result
   invariant used before post-response projection. Direct CLI and daemon
   adapters call it instead of maintaining duplicate validation; the

@@ -22,6 +22,6 @@ class DaemonStateOwner:
 
     def close(self) -> None:
         while self._states:
-            self._states.pop().stop_background_tasks()
+            self._states.pop().scheduler.shutdown()
         while self._runtimes:
             self._runtimes.pop().close()

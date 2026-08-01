@@ -395,6 +395,7 @@ class _TestScheduler:
     def __init__(self, state: _UnstartedDaemonState) -> None:
         self._state = state
         self.error: RuntimeError | None = None
+        self.stop_error: RuntimeError | None = None
 
     def snapshot(self) -> _SchedulerSnapshot:
         self._state.readiness_checks += 1
@@ -403,6 +404,11 @@ class _TestScheduler:
         return _SchedulerSnapshot(
             running=not self._state.shutdown_requested.is_set()
         )
+
+    def shutdown(self) -> None:
+        self._state.stop_calls.append("scheduler")
+        if self.stop_error is not None:
+            raise self.stop_error
 
 
 class _UnstartedDaemonState:
@@ -416,10 +422,6 @@ class _UnstartedDaemonState:
 
     def start_background_tasks(self) -> None:
         self.start_calls.append("scheduler")
-
-    def stop_background_tasks(self) -> None:
-        self.stop_calls.append("scheduler")
-
 
 def test_pid_is_published_only_after_successful_bind(
     tmp_path: Path,
@@ -860,13 +862,9 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
             backend.close()
             raise RuntimeError("storage close failed")
 
-    class FailingCleanupState(_UnstartedDaemonState):
-        def stop_background_tasks(self) -> None:
-            self.stop_calls.append("scheduler")
-            raise RuntimeError("scheduler stop failed")
-
-    def make_state(application: object) -> FailingCleanupState:
-        state = FailingCleanupState(paths.project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(paths.project_root)
+        state.scheduler.stop_error = RuntimeError("scheduler stop failed")
         states.append(state)
         return state
 

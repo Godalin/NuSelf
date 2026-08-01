@@ -162,7 +162,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> None:
         cleanup_steps.extend(
             (
                 ("shutdown.signal", state.shutdown_requested.set),
-                ("scheduler.stop", state.stop_background_tasks),
+                ("scheduler.stop", state.scheduler.shutdown),
             )
         )
     if signal_owner is not None:

@@ -173,11 +173,6 @@ class DaemonState:
                 interval_seconds=interval,
             )
 
-    def stop_background_tasks(self) -> None:
-        """Stop the single scheduler owned by this daemon lifecycle."""
-
-        self.scheduler.shutdown()
-
     def _request_memory_curation(self, observation_id: str) -> bool:
         """Admit one coalesced curator task for a durable observation."""
 
