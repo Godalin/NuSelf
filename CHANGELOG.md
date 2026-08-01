@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason export composition now has one injected-runner path; removed the
+  production-unused deterministic `compose_job()` renderer that could bypass
+  the daemon's model-backed body composition policy.
 - Reflection relevance now exposes only its complete score operation; removed
   an unused boolean facade that discarded the rest of the LLM decision.
 - Reflection candidate generation no longer accepts the full reflection

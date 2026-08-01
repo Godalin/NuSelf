@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 import json
 
 import pytest
 
 from nuself.config import runtime_paths
+from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
@@ -66,7 +68,19 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
         output_format="markdown",
         segment_size=1,
     )
-    manifest = output_service.compose_job(thread.id, planned.job_id)
+    def compose_steps(
+        _thread: ReasoningThread,
+        _manifest: ReasonOutputManifest,
+        steps: Sequence[ReasoningStep],
+        **_kwargs: object,
+    ) -> str:
+        return "\n".join(step.output for step in steps if step.output)
+
+    manifest = output_service.compose_with_runner(
+        thread.id,
+        planned.job_id,
+        compose_steps,
+    )
 
     paths = output_service.job_paths(thread.id, manifest.job_id)
     assert paths.manifest.is_file()

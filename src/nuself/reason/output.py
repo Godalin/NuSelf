@@ -188,9 +188,6 @@ class ReasonOutputService:
                 )
         return manifest
 
-    def compose_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        return self.compose_with_runner(thread_id, job_id, _compose_runner)
-
     def compose_with_runner(self, thread_id: str, job_id: str, runner: Callable[..., str]) -> ReasonOutputManifest:
         """Compose the job using an injected runner callable for each segment.
 
@@ -445,39 +442,6 @@ class ReasonOutputService:
         if paths.pdf.exists():
             return ("generated", str(paths.pdf))
         return ("failed", None)
-
-
-def _compose_runner(
-    thread: ReasoningThread,
-    manifest: ReasonOutputManifest,
-    steps: Sequence[ReasoningStep],
-    *,
-    index: int,
-    total: int,
-    **kw: object,
-) -> str:
-    """Default chunk runner used by compose_job."""
-    return _render_chunk(thread, manifest, steps, index=index, total=total)
-
-
-def _render_chunk(
-    thread: ReasoningThread,
-    manifest: ReasonOutputManifest,
-    steps: Sequence[ReasoningStep],
-    *,
-    index: int,
-    total: int,
-) -> str:
-    lines: list[str] = []
-    for step in steps:
-        lines.append(f"## {step.summary}")
-        lines.append("")
-        if step.output:
-            lines.append(step.output)
-        elif step.delta:
-            lines.append(step.delta)
-        lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
 
 
 def _combine_chunks(

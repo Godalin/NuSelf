@@ -225,6 +225,12 @@ LangChain system and human messages for every section chunk. The handler does
 not construct `default_llm`, call `ChatLLM.complete()`, or use the deterministic
 local chat response as export content.
 
+`ReasonOutputService` exposes one body-composition boundary:
+`compose_with_runner(...)`. It owns durable chunk/manifest/progress handling
+while the caller supplies the text capability. There is no alternate local
+renderer or convenience `compose_job()` path that can bypass the daemon's
+model-backed composition policy.
+
 `TextAgent` guarantees a stripped, non-empty result. Endpoint exhaustion,
 empty output, or invocation failure is a composition failure and enters the
 existing durable export attempt/backoff/final-failure state machine; it must
