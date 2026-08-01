@@ -204,7 +204,6 @@ def _handle_chat(
     duration_ms = int((time.monotonic() - started_at) * 1000)
     payload = ChatResponsePayload(
         answer=result.answer,
-        reply=result.reply,
         conversation_id=result.conversation_id,
         evidence_references=result.evidence_references,
         epistemic_status=result.epistemic_status,

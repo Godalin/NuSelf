@@ -265,7 +265,7 @@ def test_one_shot_failure_survives_broken_exception_renderer(
     assert event.error == "BrokenMessageError"
 
 
-def test_daemon_success_projects_reply(
+def test_daemon_success_projects_answer_as_reply(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -275,8 +275,7 @@ def test_daemon_success_projects_reply(
         del args, kwargs
         observed.append(current_runtime_context())
         return ChatResponsePayload(
-            answer="answer",
-            reply="reply",
+            answer="reply",
             conversation_id="server-thread",
             evidence_references=(),
             epistemic_status=None,
@@ -324,8 +323,7 @@ def test_daemon_success_survives_uncertain_completion_audit(
     def succeed_chat(*args: object, **kwargs: object) -> ChatResponsePayload:
         del args, kwargs
         return ChatResponsePayload(
-            answer="answer",
-            reply="reply",
+            answer="reply",
             conversation_id="thread-1",
             evidence_references=(),
             epistemic_status=None,

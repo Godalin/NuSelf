@@ -148,9 +148,7 @@ def test_daemon_chat_uses_agent_and_persists_thread(tmp_path: Path) -> None:
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    assert isinstance(response.payload["reply"], str)
-    assert response.payload["reply"] == "stubbed: hello"
-    assert response.payload["answer"] == response.payload["reply"]
+    assert response.payload["answer"] == "stubbed: hello"
     assert response.payload["evidence_references"] == ["mem_1", "source:note:0"]
     assert response.payload["confidence"] == 0.8
     assert response.payload["epistemic_status"] == "grounded"

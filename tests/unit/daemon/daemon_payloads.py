@@ -72,7 +72,6 @@ def test_empty_request_payload_rejects_fields() -> None:
 def test_chat_response_payload_omits_absent_optional_fields() -> None:
     payload = ChatResponsePayload(
         answer="answer",
-        reply="answer",
         conversation_id="default",
         evidence_references=("m1",),
         epistemic_status="grounded",
@@ -80,7 +79,6 @@ def test_chat_response_payload_omits_absent_optional_fields() -> None:
 
     assert payload.to_wire() == {
         "answer": "answer",
-        "reply": "answer",
         "conversation_id": "default",
         "evidence_references": ["m1"],
         "epistemic_status": "grounded",
@@ -136,7 +134,6 @@ def test_health_response_payload_projects_scheduler_model() -> None:
         (
             {
                 "answer": "answer",
-                "reply": "answer",
                 "conversation_id": "default",
                 "evidence_references": [1],
                 "epistemic_status": "grounded",
@@ -146,7 +143,6 @@ def test_health_response_payload_projects_scheduler_model() -> None:
         (
             {
                 "answer": "answer",
-                "reply": "answer",
                 "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": "invented",
@@ -156,7 +152,6 @@ def test_health_response_payload_projects_scheduler_model() -> None:
         (
             {
                 "answer": "answer",
-                "reply": "answer",
                 "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,

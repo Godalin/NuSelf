@@ -117,7 +117,7 @@ def send_daemon_chat_interactive(
             )
         return InteractiveChatResult(
             code=CliExitCode.SUCCESS,
-            reply=response.reply,
+            reply=response.answer,
         )
 
 
@@ -188,7 +188,7 @@ def send_one_shot_chat_interactive(
             run_memory_curator(project_root, observation.id)
             return InteractiveChatResult(
                 code=CliExitCode.SUCCESS,
-                reply=result.reply,
+                reply=result.answer,
                 after_reply=lambda: _compress_after_reply(
                     conversation_id,
                     project_root,

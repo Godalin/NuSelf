@@ -233,7 +233,6 @@ class ChatResponsePayload:
     """Stable daemon chat response projection."""
 
     answer: str
-    reply: str
     conversation_id: str
     evidence_references: tuple[str, ...]
     epistemic_status: str | None
@@ -242,7 +241,6 @@ class ChatResponsePayload:
     def to_wire(self) -> dict[str, JsonValue]:
         payload: dict[str, JsonValue] = {
             "answer": self.answer,
-            "reply": self.reply,
             "conversation_id": self.conversation_id,
             "evidence_references": list(self.evidence_references),
             "epistemic_status": self.epistemic_status,
@@ -261,7 +259,6 @@ class ChatResponsePayload:
             required=frozenset(
                 {
                     "answer",
-                    "reply",
                     "conversation_id",
                     "evidence_references",
                     "epistemic_status",
@@ -306,12 +303,6 @@ class ChatResponsePayload:
             answer=_required_string(
                 payload,
                 "answer",
-                context="chat response",
-                allow_blank=True,
-            ),
-            reply=_required_string(
-                payload,
-                "reply",
                 context="chat response",
                 allow_blank=True,
             ),

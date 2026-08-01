@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit repeated DTO mappings at daemon health/chat and lifecycle-result
-boundaries. Consolidate only when one source model maps identically to one wire
-model; keep transport codecs separate from application/domain DTOs.
+Audit remaining duplicate domain aliases and wire fields, starting with
+request/response identifiers and status names. Preserve vocabulary differences
+that represent real lifecycle, presentation, or transport semantics.
 
 ## Constraints
 
@@ -217,6 +217,16 @@ model; keep transport codecs separate from application/domain DTOs.
   now serves command, default-entrypoint, and interactive restart surfaces;
   observed start/stop/restart audit paths remain distinct.
 - Lifecycle/CLI/entrypoint focused suite: 384 passed. Post-formatter cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Chat domain and daemon response previously carried the same generated text as
+  both `answer` and `reply`. `ChatResult.reply`, the duplicate wire field, and
+  their mapping are gone. The CLI explicitly projects wire `answer` into its
+  presentation-only `InteractiveChatResult.reply` field.
+- Scheduler-health mapping remains at the request handler because it is the
+  sole boundary between the scheduler model and strict wire codec; moving it
+  into either model would add a dependency rather than consolidate repetition.
+- Chat/daemon/CLI focused suite: 465 passed. Post-DTO cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

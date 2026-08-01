@@ -69,14 +69,9 @@ class ChatResult:
     trace_id: str | None = None
     completed_turn: CompletedTurn | None = None
 
-    @property
-    def reply(self) -> str:
-        return self.answer
-
     def to_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
             "answer": self.answer,
-            "reply": self.answer,
             "conversation_id": self.conversation_id,
             "evidence_references": list(self.evidence_references),
             "epistemic_status": self.epistemic_status,

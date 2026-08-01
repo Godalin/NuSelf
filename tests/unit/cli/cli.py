@@ -1022,7 +1022,6 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
             status="ok",
             payload={
                 "answer": "daemon reply",
-                "reply": "daemon reply",
                 "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
@@ -1585,7 +1584,6 @@ def test_daemon_chat_uses_long_timeout(
             status="ok",
             payload={
                 "answer": "daemon reply",
-                "reply": "daemon reply",
                 "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
@@ -1637,7 +1635,6 @@ def test_daemon_chat_uses_configured_request_timeout(
             status="ok",
             payload={
                 "answer": "daemon reply",
-                "reply": "daemon reply",
                 "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,

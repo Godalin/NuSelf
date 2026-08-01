@@ -209,9 +209,10 @@ Success response payload field sets are also exact:
 
 - `ping` and `shutdown` return one string `message`;
 - `health` returns one complete typed `scheduler` snapshot;
-- `chat` returns string `answer`, `reply`, and non-blank `conversation_id`, a string
-  list `evidence_references`, nullable string `epistemic_status`, and optional
-  numeric `confidence`;
+- `chat` returns string `answer`, non-blank `conversation_id`, a string list
+  `evidence_references`, nullable string `epistemic_status`, and optional numeric
+  `confidence`; terminal adapters may name that answer `reply` in their local
+  presentation result, but the wire does not duplicate it;
 - activity open/next/close return, respectively, non-blank
   `subscription_id`, a list of complete log-event records, and boolean
   `closed`.

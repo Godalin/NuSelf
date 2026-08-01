@@ -208,7 +208,6 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
     
     # Verify expected fields are present and correct
     assert payload["answer"] == "Final answer."
-    assert payload["reply"] == "Final answer."
     assert payload["conversation_id"] == "payload-test"
     assert isinstance(payload["evidence_references"], list)
     assert isinstance(payload["epistemic_status"], str)

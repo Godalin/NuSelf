@@ -189,7 +189,7 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
 
     result = agent.respond("clarity assumptions")
 
-    assert result.reply == "agent reply"
+    assert result.answer == "agent reply"
     system_prompt = llm.calls[0][0].text
     assert "Clarity matters" in system_prompt
     assert "Prefer explicit assumptions." in system_prompt
@@ -284,7 +284,6 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     result = agent.respond("profile context")
 
     assert result.answer == "Use the profile context."
-    assert result.reply == "Use the profile context."
     assert result.evidence_references == ("mem_123", "source:note:0")
     assert result.confidence == 0.92
     assert result.epistemic_status == "grounded"
@@ -794,7 +793,7 @@ def test_chat_completed_event_is_published_after_conversation_persistence(
         turn_id="turn-1",
     )
 
-    assert result.reply == "agent reply"
+    assert result.answer == "agent reply"
     assert [event.name for event in observed] == [
         "turn.started",
         "turn.completed",
@@ -913,7 +912,7 @@ def test_chat_reused_event_does_not_rerun_graph(
 
     result = agent.respond("same turn", turn_id="turn-1")
 
-    assert result.reply == "agent reply"
+    assert result.answer == "agent reply"
     assert len(llm.calls) == 1
     assert [event.name for event in observed] == ["turn.reused"]
 
@@ -995,7 +994,7 @@ def test_chat_event_subscriber_failure_does_not_replace_completed_turn(
 
     result = agent.respond("complete despite subscriber")
 
-    assert result.reply == "agent reply"
+    assert result.answer == "agent reply"
     assert ConversationStore(tmp_path).load("default").messages[-1].content == (
         "agent reply"
     )
