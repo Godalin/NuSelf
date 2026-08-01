@@ -380,7 +380,7 @@ def _optimize_action_from_item(
     if item.action == "update" and (
         not title
         or not body
-        or _looks_like_raw_transcript(body)
+        or looks_like_raw_transcript(body)
     ):
         raise ValueError("optimizer update requires a summary title and body")
     memory_type = _optional_memory_type(item.type, allowed_types=allowed_types)
@@ -402,5 +402,3 @@ def _optional_memory_type(value: str | None, *, allowed_types: tuple[str, ...]) 
     if value in allowed_types:
         return cast(MemoryEntryType, value)
     raise ValueError(f"unsupported memory type: {value}")
-def _looks_like_raw_transcript(text: str) -> bool:
-    return looks_like_raw_transcript(text)

@@ -9,29 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Delete proven zero-consumer public helpers left by earlier file-storage, agent
-tool, CLI, memory parsing, and rendering designs. Preserve the live replacement
-paths and semantic rollback tests; add no compatibility exports.
+Remove exact pass-through aliases that add no policy or test seam, plus the
+single-child configuration migration error base that no caller catches.
+Preserve compatibility paths still required to decode durable user data or
+perform the supported v0.2.5 configuration upgrade.
 
 ## Ordered Steps
 
-1. Correct the development contract to remove the unused file-delete helper
-   and its dedicated durability exception.
-2. Delete the orphan reasoning-prompt tool factory and imports, legacy system
-   config handler, unused memory parsing helpers, tool-result helper, and
-   incomplete relation renderer.
-3. Keep memory candidate compensation coverage using an ordinary repository
-   delete failure instead of manufacturing the deleted file-helper error.
-4. Run storage/reason/memory/CLI tests, Pyright, full pytest, and package build;
+1. Verify the `RuntimeContext.thread_id` decoder and v0.2.5 email migration
+   still protect persisted/upgrade inputs; retain them.
+2. Inline the memory raw-transcript classifier and endpoint-availability
+   classifier at their sole pass-through call sites.
+3. Make the one legacy-email migration error inherit `ValueError` directly and
+   delete its unused abstract family layer.
+4. Run memory/agent/config tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not delete registry-dispatched handlers, protocol members, codecs, or
-  framework-discovered tools based only on textual reference counts.
-- Do not replace removed helpers with aliases or a new utility module.
-- Do not change live config inspection, reasoning prompt generation, memory
-  validation, relation output, or transactional compensation behavior.
+- Do not remove compatibility merely because it is old when current durable
+  SQLite records may still contain that wire shape.
+- Do not change availability classification, transcript rejection, config
+  validation, warning, or migration messages.
+- Do not introduce new aliases, error bases, adapters, or facades.
 
 ## Constraints
 
@@ -43,6 +43,13 @@ paths and semantic rollback tests; add no compatibility exports.
 
 ## Phase Evidence
 
+- Memory optimization and endpoint failover now call their shared classifiers
+  directly; the exact pass-through aliases are gone. The sole legacy-email
+  migration error now inherits `ValueError` directly because no caller catches
+  a migration-error family. Durable pre-v0.3.1 RuntimeContext decoding and the
+  supported v0.2.5 email upgrade remain intentionally intact. Focused
+  memory/agent/config tests: 188 passed; full suite: 2434 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Removed seven zero-consumer public helpers spanning the obsolete reasoning
   prompt tool factory, old system config handler, memory parsing, tool-result
   conversion, relation rendering, and File-era durable deletion, plus the

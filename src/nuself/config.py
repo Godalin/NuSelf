@@ -254,11 +254,7 @@ class SystemConfig(_ConfigModel):
     experimental: ExperimentalConfig = ExperimentalConfig()
 
 
-class ConfigurationMigrationError(ValueError):
-    """A supported legacy configuration requires an explicit user migration."""
-
-
-class LegacyEmailConfigurationMigrationError(ConfigurationMigrationError):
+class LegacyEmailConfigurationMigrationError(ValueError):
     """Legacy email configuration cannot be used without a v0.3 recipient."""
 
 

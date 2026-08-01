@@ -31,6 +31,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   configuration, memory parsing, tool-result, and relation-rendering paths.
   Active configuration inspection, reasoning prompt generation, relation
   output, and repository compensation behavior are unchanged.
+- Memory optimization and endpoint failover now call their shared classifiers
+  directly, and the single legacy-email migration error no longer has an
+  unused one-child exception hierarchy.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

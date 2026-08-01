@@ -70,7 +70,7 @@ def invoke_agent_endpoint(
         raise ValueError(
             "retry_delay_seconds must be finite and non-negative"
         )
-    should_failover = failover_if or _is_availability_failure
+    should_failover = failover_if or is_endpoint_availability_error
 
     last_error: Exception | None = None
     for position, endpoint in enumerate(endpoints):
@@ -114,7 +114,3 @@ def invoke_agent_endpoint(
         "all configured LLM endpoints failed: "
         f"{redact_llm_error(last_error)}"
     ) from last_error
-
-
-def _is_availability_failure(exc: Exception) -> bool:
-    return is_endpoint_availability_error(exc)
