@@ -28,6 +28,7 @@ from nuself.daemon.reason_export import (
     build_reason_export_section_planner,
 )
 from nuself.daemon.scheduler import DaemonScheduler, DaemonTask
+from nuself.daemon.tasks import DAEMON_TASK_KINDS, PeriodicTaskKind
 from nuself.logs import runtime_event_log_sink
 from nuself.notification import (
     NotificationDeliveryLoop,
@@ -134,17 +135,20 @@ class DaemonState:
             repository=self.application.reason,
             service=compose_reason_service(self.application),
         )
+        handlers = {
+            "memory.scan": self._scan_memory_observations,
+            "memory.curate": self._curate_memory_observation,
+            "chat.turn": self._run_chat_task,
+            "conversation.compress": self._compress_conversation,
+            "reflection.check": self._check_reflection,
+            "reason.check": self._check_reasons,
+            "notification.deliver": self._deliver_notifications,
+            "reason.export": self._run_reason_export,
+        }
+        if set(handlers) != set(DAEMON_TASK_KINDS):
+            raise RuntimeError("daemon task catalog and handlers differ")
         self.scheduler = DaemonScheduler(
-            {
-                "memory.scan": self._scan_memory_observations,
-                "memory.curate": self._curate_memory_observation,
-                "chat.turn": self._run_chat_task,
-                "conversation.compress": self._compress_conversation,
-                "reflection.check": self._check_reflection,
-                "reason.check": self._check_reasons,
-                "notification.deliver": self._deliver_notifications,
-                "reason.export": self._run_reason_export,
-            },
+            handlers,
             event_publisher=self.event_publisher,
             project_root=project_root,
         )
@@ -242,7 +246,11 @@ class DaemonState:
             raise TypeError("chat task returned an invalid result")
         return result
 
-    def _schedule_periodic(self, kind: str, interval: float) -> None:
+    def _schedule_periodic(
+        self,
+        kind: PeriodicTaskKind,
+        interval: float,
+    ) -> None:
         self.scheduler.submit(
             DaemonTask(kind, f"periodic:{kind}", f"schedule:{kind}"),
             delay_seconds=interval,

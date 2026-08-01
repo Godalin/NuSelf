@@ -38,6 +38,7 @@ from nuself.runtime.frontend import ApprovalPort
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
+from nuself.config import ConfigSystem
 
 
 class ConversationGraphRuntime(_ConversationGraphRuntime):
@@ -109,6 +110,9 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 project_root=project_root,
             ),
             conversation_store=conversation_store or application.conversations,
+            language_preference=ConfigSystem.load(
+                project_root=project_root
+            ).chat.language_preference,
         )
         super().__init__(
             resources,

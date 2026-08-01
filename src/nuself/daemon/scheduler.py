@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 import threading
@@ -93,7 +93,7 @@ class DaemonScheduler:
 
     def __init__(
         self,
-        handlers: dict[str, TaskHandler],
+        handlers: Mapping[str, TaskHandler],
         *,
         max_concurrency: int = 4,
         queue_capacity: int = 256,

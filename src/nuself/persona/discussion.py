@@ -550,11 +550,12 @@ class SharedPersonaDiscussionService:
         if discussion is not None:
             self._discussion = discussion
             return
-        system_config = ConfigSystem.load(project_root=project_root)
-        if config is None:
-            config = system_config.reflection
-        if language_preference is None:
-            language_preference = system_config.chat.language_preference
+        if config is None or language_preference is None:
+            system_config = ConfigSystem.load(project_root=project_root)
+            if config is None:
+                config = system_config.reflection
+            if language_preference is None:
+                language_preference = system_config.chat.language_preference
         if agents is None:
             agents = default_persona_discussion_agents(project_root)
         if synthesis_agent is None:

@@ -15,10 +15,15 @@ from nuself.config import (
     ReflectionSettings,
     runtime_paths,
 )
+from nuself.application.composition import compose_application
+from nuself.application.reflection import compose_reflection_scheduler
 from nuself.eval import EvalResult
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
-from nuself.reflection import ReflectionScheduler
+from nuself.reflection.schedule_state import (
+    REFLECTION_SCHEDULE_STATE_VERSION,
+    ReflectionScheduleState,
+)
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage import auto_backend
 
@@ -155,15 +160,25 @@ def _evaluate_scheduler(
         else None
     )
     now = datetime.fromisoformat(_required_str(scenario, "now"))
-    scheduler = ReflectionScheduler.__new__(ReflectionScheduler)
-    scheduler._config = settings  # pyright: ignore[reportPrivateUsage]
     project_root.mkdir(parents=True, exist_ok=True)
-    scheduler._project_root = project_root  # pyright: ignore[reportPrivateUsage]
-    scheduler._schedule_collection = auto_backend(  # pyright: ignore[reportPrivateUsage]
-        project_root
-    ).collection("scheduler_state")
+    backend = auto_backend(project_root)
+    application = compose_application(runtime_paths(project_root), backend)
+    scheduler = compose_reflection_scheduler(
+        application,
+        config=settings,
+        language_preference="en",
+    )
     if last is not None:
-        scheduler._write_last_reflection(last)  # pyright: ignore[reportPrivateUsage]
+        state = ReflectionScheduleState(
+            schema_version=REFLECTION_SCHEDULE_STATE_VERSION,
+            timestamp=last,
+            daily_count=1,
+            daily_date=last.astimezone().date(),
+        )
+        backend.collection("scheduler_state").put(
+            "reflection",
+            state.to_record(),
+        )
     actual = scheduler.should_reflect(now)
     expected = _required_bool(
         scenario,

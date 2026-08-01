@@ -42,7 +42,6 @@ from nuself.conversation import (
     ConversationState,
 )
 from nuself.agent.text import LangChainTextAgent, TextAgent
-from nuself.config import ConfigSystem
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
@@ -114,8 +113,7 @@ class ConversationGraphRuntime:
             else self._build_event_publisher(project_root)
         )
         self._conversation_store = resources.conversation_store
-        system_config = ConfigSystem.load(project_root=project_root)
-        self._language_preference = system_config.chat.language_preference
+        self._language_preference = resources.language_preference
         self._trace_recorder = resources.trace_recorder
         self._memory_query_service = resources.tools.memory_query
         self._context_preparer = ConversationContextPreparer(

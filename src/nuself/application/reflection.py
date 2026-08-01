@@ -86,5 +86,6 @@ def compose_reflection_scheduler(
         discussion=SharedPersonaDiscussionService(
             project_root=paths.project_root,
             config=config,
+            language_preference=language_preference,
         ),
     )

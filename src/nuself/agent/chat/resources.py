@@ -17,3 +17,4 @@ class ConversationResources:
     trace_recorder: TraceRecorder
     conversation_store: ConversationStore
     personas: tuple[PersonaDefinition, ...]
+    language_preference: str = "en"

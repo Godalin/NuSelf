@@ -11,6 +11,18 @@ import pytest
 from nuself.config import runtime_paths
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.storage import get_default_backend
+from nuself.application.runtime import open_application_runtime
+from nuself.cli.composition import use_cli_application_runtime
+
+
+@pytest.fixture(autouse=True)
+def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
+    runtime = open_application_runtime(tmp_path)
+    try:
+        with use_cli_application_runtime(runtime):
+            yield
+    finally:
+        runtime.close()
 
 
 @pytest.fixture

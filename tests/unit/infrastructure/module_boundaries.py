@@ -300,6 +300,55 @@ def test_migrated_profile_package_does_not_resolve_authority() -> None:
     assert violations == []
 
 
+def test_process_adapters_only_resolve_storage_for_infrastructure_commands() -> None:
+    allowed = {
+        "cli/commands/dev.py",
+        "cli/commands/pack.py",
+        "cli/commands/scope.py",
+    }
+    offenders: list[str] = []
+    for path in _package_files("cli"):
+        if any(
+            module == "nuself.storage"
+            and name in {"auto_backend", "get_default_backend"}
+            for module, name in _from_imports(path)
+        ):
+            relative = str(path.relative_to(_SOURCE_ROOT))
+            if relative not in allowed:
+                offenders.append(relative)
+
+    assert offenders == []
+
+
+def test_cross_domain_projection_lives_in_application() -> None:
+    assert _violations(("persona",), ("nuself.memory",)) == ()
+    projector = _SOURCE_ROOT / "application" / "knowledge_projection.py"
+    forbidden = {"nuself.application.composition"}
+    assert not forbidden.intersection(_imports(projector))
+
+
+def test_data_cli_does_not_decode_or_mutate_storage_records() -> None:
+    path = _SOURCE_ROOT / "cli" / "commands" / "data.py"
+    forbidden = (
+        "nuself.storage",
+        "nuself.domain.memory",
+        "nuself.conversation",
+    )
+    assert not any(
+        imported.startswith(forbidden) for imported in _imports(path)
+    )
+
+
+def test_reflection_scheduler_receives_foreign_capabilities() -> None:
+    path = _SOURCE_ROOT / "reflection" / "scheduler.py"
+    forbidden = {
+        "nuself.notification.outbox",
+        "nuself.persona.discussion",
+        "nuself.trace.service",
+    }
+    assert not forbidden.intersection(_imports(path))
+
+
 def test_migrated_reason_repository_does_not_resolve_authority() -> None:
     path = _SOURCE_ROOT / "reason" / "repository.py"
     forbidden = {
