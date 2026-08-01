@@ -142,12 +142,12 @@ class MemoryService:
         self._repository.reindex()
         return updated
 
-    def search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
+    def _search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
         if self._source_repository is None:
             return []
         return self._source_repository.search(query.text, limit=query.limit)
 
-    def search_profiles(self, query: MemoryQuery) -> list[ProfileMatch]:
+    def _search_profiles(self, query: MemoryQuery) -> list[ProfileMatch]:
         if self._profile_repository is None:
             return []
         matches: list[ProfileMatch] = []
@@ -161,8 +161,8 @@ class MemoryService:
 
     def pack(self, query: MemoryQuery) -> PackedMemoryContext:
         matches = tuple(self.search(query))
-        profile_matches = tuple(self.search_profiles(query))
-        source_matches = tuple(self.search_sources(query))
+        profile_matches = tuple(self._search_profiles(query))
+        source_matches = tuple(self._search_sources(query))
         if not matches and not profile_matches and not source_matches:
             return PackedMemoryContext(text="", matches=(), profile_matches=(), source_matches=())
         lines: list[str] = []

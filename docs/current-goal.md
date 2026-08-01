@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Return to daemon and application service APIs: audit concrete public methods
-and fields for production consumers, duplicated lifecycle state, or repository
-escape hatches. Do not replace useful domain services with generic facades.
+Continue auditing service APIs for test-only or implementation-only public
+methods while preserving complete domain use cases such as Reason workspace
+access and generic Trace recording/linking.
 
 ## Constraints
 
@@ -115,6 +115,17 @@ escape hatches. Do not replace useful domain services with generic facades.
 - Reflection and trace helpers already perform one service lookup per handler;
   their shared accessors remain justified and unchanged.
 - Notification/Reason focused suite: 660 passed. Post-lookup cleanup
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Daemon lifecycle/request methods and ApplicationRuntime lazy ownership,
+  closure, context binding, and worker propagation all have production
+  consumers. ApplicationGraph raw resources remain required by specialized
+  application composition rather than external domain adapters.
+- `MemoryService.search_sources` and `search_profiles` had no production
+  consumer beyond `pack()` and no documented external contract; both are now
+  private packing steps. Reason workspace-path access and generic Trace
+  record/link remain explicit, independently tested domain capabilities.
+- Memory/Chat/agent focused suite: 192 passed. Post-service-surface cleanup
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
