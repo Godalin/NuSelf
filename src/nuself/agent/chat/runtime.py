@@ -103,9 +103,9 @@ class ConversationGraphRuntime:
         self._conversation_store = resources.conversation_store
         self._language_preference = resources.language_preference
         self._trace_recorder = resources.trace_recorder
-        self._memory_query_service = resources.tools.memory
+        memory_query_service = resources.tools.memory
         self._context_preparer = ConversationContextPreparer(
-            self._memory_query_service
+            memory_query_service
         )
         self._state_manager = ConversationStateManager(
             text_agent=(
@@ -132,7 +132,7 @@ class ConversationGraphRuntime:
             project_root=project_root,
             langchain_models=self._langchain_models,
             language_preference=self._language_preference,
-            memory_query_service=self._memory_query_service,
+            memory_query_service=memory_query_service,
             persona_definitions=resources.personas,
         )
         self._tool_runtime = ConversationToolRuntime(

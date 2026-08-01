@@ -252,6 +252,11 @@ aliases that merely retain another owner's object.
 - Chat/agent/daemon/boundary focused suite: 367 passed. Post-tool-catalog
   cleanup `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- `ConversationGraphRuntime._memory_query_service` was read only during its own
+  constructor. One local reference now injects the same MemoryService identity
+  into context and persona components without retaining a third owner.
+- Post-memory-service cleanup `uv run --locked pytest -q`: 2455 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
