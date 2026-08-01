@@ -9,26 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify the duplicate Reason output chunk metadata validators. All skipped,
-started, failed, and completed chunk events share one thread/job/chunk identity
-schema; event definitions retain distinct status, error, and duration policies.
+Remove the chat runtime's two exact response-service pass-through methods. The
+single respond stage should call its injected `ConversationResponseService`
+directly; completion and finalization remain separate service operations.
 
 ## Ordered Steps
 
-1. Confirm `_chunk_identity()` and `_completed_chunk()` enforce identical exact
-   metadata fields and value types.
-2. Point completed chunk definitions at `_chunk_identity()` and delete the
-   duplicate validator.
-3. Preserve each definition's level, status, error policy, duration policy,
-   message, and event identity.
-4. Run Reason audit/output tests, Pyright, full pytest, and package build;
+1. Confirm `_complete_response()` and `_finalize_draft_response()` each have one
+   caller and add no policy, state, observation, or pipeline node.
+2. Call `complete()` and `finalize()` directly from `respond_node()` and delete
+   both wrappers.
+3. Preserve injected response-service substitution, final-response audit,
+   structured output, saved messages, and node tracing.
+4. Run chat runtime/response tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not merge distinct chunk event definitions.
-- Do not weaken completed duration or failed error requirements.
-- Do not change persisted event names, metadata, status, or rendering.
+- Do not merge `complete()` and `finalize()` or move their service policy.
+- Do not bypass the injected `ConversationResponseService`.
+- Do not change pipeline stages, response persistence, audit, or failure
+  translation.
 
 ## Constraints
 
@@ -40,6 +41,12 @@ schema; event definitions retain distinct status, error, and duration policies.
 
 ## Phase Evidence
 
+- `respond_node()` now invokes its injected response service's `complete()` and
+  `finalize()` operations directly. Removed `_complete_response()` and
+  `_finalize_draft_response()`, which had one caller each and added no node,
+  hook, observation, or policy. Focused chat runtime/response tests: 95 passed;
+  full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Skipped, started, failed, and completed Reason output chunk definitions now
   share `_chunk_identity()`. Removed the byte-for-byte duplicate completed
   validator while retaining each event's level, status, error policy, duration

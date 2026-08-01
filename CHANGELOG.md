@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The chat respond stage now calls its injected response service directly,
+  removing two exact runtime pass-through methods while retaining separate
+  completion and finalization operations.
 - Reason output chunk lifecycle audits now share one exact thread/job/chunk
   metadata validator while retaining event-specific status, error, and duration
   policies.

@@ -452,8 +452,8 @@ class ConversationGraphRuntime:
 
     def respond_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         prompt = self._build_prompt(state)
-        response = self._complete_response(prompt)
-        final = self._finalize_draft_response(state, response)
+        response = self._response_synthesizer.complete(prompt)
+        final = self._response_synthesizer.finalize(state, response)
         saved = (
             *state.active_messages,
             ConversationMessage(role="assistant", content=final.answer, turn_id=state.turn_id),
@@ -542,19 +542,6 @@ class ConversationGraphRuntime:
                 "based on a user's mere agreement that a topic is 'interesting'.",
             ])
         return "\n".join(parts)
-
-    # ------------------------------------------------------------------
-    # Response generation
-    # ------------------------------------------------------------------
-
-    def _complete_response(
-        self,
-        prompt: list[BaseMessage],
-    ) -> ChatStructuredOutput:
-        return self._response_synthesizer.complete(prompt)
-
-    def _finalize_draft_response(self, state: ConversationTurnState, draft: ChatStructuredOutput) -> ChatStructuredOutput:
-        return self._response_synthesizer.finalize(state, draft)
 
     # ------------------------------------------------------------------
     # Selves consultation (exposed as the selves_consult tool)

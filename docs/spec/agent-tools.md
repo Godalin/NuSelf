@@ -330,6 +330,10 @@ stages:
 2. **respond** — delegate to `create_agent` with LangChain-native tool calling and structured output
 3. **state_update** — atomically persist the completed turn
 
+The respond stage calls the injected `ConversationResponseService.complete()`
+and `finalize()` operations directly. Runtime pass-through methods are not
+separate pipeline stages or extension hooks.
+
 Conversation compression is a scheduler-owned maintenance task, not part of
 reply delivery. The completed turn commits before the result becomes visible.
 Surfaces that require a committed turn for follow-up projection use the typed
