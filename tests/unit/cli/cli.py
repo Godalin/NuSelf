@@ -31,7 +31,12 @@ from nuself import cli
 from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.cli import build_parser, main
+from nuself.cli.presentation import print_assistant_reply
+from nuself.cli.repl.activity import print_interactive_activity_events
+from nuself.cli.repl.composition import send_interactive_chat_turn
+from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.transcript import render_chat_transcript
+from nuself.cli.repl.types import InteractiveChatResult
 from nuself.config import ChatConfig, runtime_paths
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.lifecycle import (
@@ -276,10 +281,6 @@ def test_assistant_reply_prints_plain_text_when_stdout_is_not_tty(
     capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     monkeypatch.setattr("sys.stdout.isatty", lambda: False)
-    print_assistant_reply = cast(
-        Callable[[str], None],
-        cli._print_assistant_reply,  # pyright: ignore[reportPrivateUsage]
-    )
 
     print_assistant_reply("**hello**")
 
@@ -292,11 +293,7 @@ def test_assistant_reply_uses_rich_renderer_when_stdout_is_tty(
 ) -> None:
     rendered: list[str] = []
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
-    monkeypatch.setattr("nuself.cli._render_assistant_reply_rich", rendered.append)
-    print_assistant_reply = cast(
-        Callable[[str], None],
-        cli._print_assistant_reply,  # pyright: ignore[reportPrivateUsage]
-    )
+    monkeypatch.setattr("nuself.cli.presentation._render_assistant_reply_rich", rendered.append)
 
     print_assistant_reply("**hello**")
 
@@ -633,7 +630,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
     publisher.attach_projection(runtime_event_log_sink(_authority(tmp_path)))
     original_print_events = cast(
         Callable[[list[LogEvent]], None],
-        cli._print_interactive_activity_events,  # pyright: ignore[reportPrivateUsage]
+        print_interactive_activity_events,
     )
 
     def fake_print_events(events: list[LogEvent]) -> None:
@@ -642,7 +639,7 @@ def test_interactive_turn_prints_activity_events_while_waiting(
 
     def fake_send(
         message: str, conversation_id: str, turn_id: str | None
-    ) -> cli.InteractiveChatResult:
+    ) -> InteractiveChatResult:
         assert turn_id is not None
         publisher.publish(
             producer="chat",
@@ -674,18 +671,18 @@ def test_interactive_turn_prints_activity_events_while_waiting(
             },
         )
         if not printed.wait(1.0):
-            return cli.InteractiveChatResult(code=1, reply="log was not printed live")
-        return cli.InteractiveChatResult(code=0, reply="final reply")
+            return InteractiveChatResult(code=1, reply="log was not printed live")
+        return InteractiveChatResult(code=0, reply="final reply")
 
     monkeypatch.setattr(
-        "nuself.cli._print_interactive_activity_events", fake_print_events
+        "nuself.cli.repl.composition.print_interactive_activity_events", fake_print_events
     )
-    monkeypatch.setattr("nuself.cli.INTERACTIVE_LOG_POLL_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr("nuself.cli.repl.composition.INTERACTIVE_LOG_POLL_INTERVAL_SECONDS", 0.01)
 
-    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
+    session = InteractiveSession(connected_at=datetime.now(UTC))
     send_turn = cast(
         Callable[..., int],
-        cli._send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
+        send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
     )
     result = send_turn(
         fake_send,
@@ -727,7 +724,7 @@ def test_interactive_turn_interrupt_cancels_owned_send_before_return(
         message: str,
         conversation_id: str,
         turn_id: str | None,
-    ) -> cli.InteractiveChatResult:
+    ) -> InteractiveChatResult:
         del message, conversation_id, turn_id
         cancellation = current_cancellation()
         assert cancellation is not None
@@ -735,7 +732,7 @@ def test_interactive_turn_interrupt_cancels_owned_send_before_return(
         started.set()
         try:
             released.wait()
-            return cli.InteractiveChatResult(code=1)
+            return InteractiveChatResult(code=1)
         finally:
             unregister()
 
@@ -747,10 +744,10 @@ def test_interactive_turn_interrupt_cancels_owned_send_before_return(
         "nuself.cli.repl.activity.time.sleep",
         interrupt_poll,
     )
-    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
+    session = InteractiveSession(connected_at=datetime.now(UTC))
 
     with pytest.raises(KeyboardInterrupt):
-        cli._send_interactive_chat_turn(
+        send_interactive_chat_turn(
             fake_send,
             _authority(tmp_path),
             "default",
@@ -777,7 +774,7 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
         message: str,
         conversation_id: str,
         turn_id: str | None,
-    ) -> cli.InteractiveChatResult:
+    ) -> InteractiveChatResult:
         del message
         assert turn_id is not None
         pending.append(
@@ -796,7 +793,7 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
             )
         )
         assert printed.wait(1.0)
-        return cli.InteractiveChatResult(code=0, reply="done")
+        return InteractiveChatResult(code=0, reply="done")
 
     def fake_next(*args: object, **kwargs: object) -> tuple[LogEvent, ...]:
         del args, kwargs
@@ -845,14 +842,14 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
         fake_close,
     )
     monkeypatch.setattr(
-        "nuself.cli._interactive_activity_events",
+        "nuself.cli.repl.composition.read_interactive_activity_events",
         fail_log_poll,
     )
 
-    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
+    session = InteractiveSession(connected_at=datetime.now(UTC))
     send_turn = cast(
         Callable[..., int],
-        cli._send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
+        send_interactive_chat_turn,  # pyright: ignore[reportPrivateUsage]
     )
     result = send_turn(
         fake_send,
@@ -873,7 +870,7 @@ def test_interactive_turn_hides_background_activity_events(
 
     def fake_send(
         message: str, conversation_id: str, turn_id: str | None
-    ) -> cli.InteractiveChatResult:
+    ) -> InteractiveChatResult:
         assert turn_id is not None
         write_log_event(
             "reflection",
@@ -906,10 +903,10 @@ def test_interactive_turn_hides_background_activity_events(
                 "result": "visible service result",
             },
         )
-        return cli.InteractiveChatResult(code=0, reply="final reply")
+        return InteractiveChatResult(code=0, reply="final reply")
 
-    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
-    send_turn = cast(Callable[..., int], cli._send_interactive_chat_turn)
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    send_turn = cast(Callable[..., int], send_interactive_chat_turn)
     result = send_turn(
         fake_send,
         _authority(tmp_path),
@@ -937,15 +934,15 @@ def test_interactive_turn_binds_exact_context_to_send_conversation(
 
     def fake_send(
         message: str, conversation_id: str, turn_id: str | None
-    ) -> cli.InteractiveChatResult:
+    ) -> InteractiveChatResult:
         assert message == "hello"
         assert conversation_id == "default"
         assert turn_id is not None
         observed.append(current_runtime_context())
-        return cli.InteractiveChatResult(code=0, reply="final reply")
+        return InteractiveChatResult(code=0, reply="final reply")
 
-    session = cli.InteractiveSession(connected_at=datetime.now(UTC))
-    send_turn = cast(Callable[..., int], cli._send_interactive_chat_turn)
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    send_turn = cast(Callable[..., int], send_interactive_chat_turn)
     with runtime_context(
         request_id="stale-request",
         job_id="stale-job",

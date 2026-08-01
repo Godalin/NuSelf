@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Move REPL composition out of the CLI process root so `cli.__init__` owns only
-process lifecycle, parser binding, and one-shot presentation. Preserve the
-single application runtime and existing interrupt/cleanup behavior.
+Audit the REPL command/dispatcher pair for duplicated command taxonomy,
+parsing, and routing. Keep one explicit registry and direct handlers; avoid a
+generic command bus or a second parser framework.
 
 ## Constraints
 
@@ -285,6 +285,16 @@ single application runtime and existing interrupt/cleanup behavior.
 - Removed the unused memory-preview constant and duplicate chat-timeout
   constant; `ChatConfig.request_timeout_seconds` remains the sole default.
 - CLI/REPL/Reflection focused suite: 532 passed. Post-CLI-surface cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Interactive callback composition now belongs to `cli.repl.composition`, and
+  shared chat reply/banner rendering belongs to `cli.presentation`. The CLI
+  root retains the sole application-runtime lifecycle plus parser and Chat
+  adapter binding; it fell from 349 to 194 lines.
+- Interrupt cancellation, daemon activity transport, log fallback, transcript
+  capture, curation, startup notices, and session headers retain their existing
+  paths through the moved callback graph.
+- CLI/REPL focused suite: 574 passed. Post-REPL-composition
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

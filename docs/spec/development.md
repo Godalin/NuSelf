@@ -352,6 +352,12 @@ delay values, diagnostics, and recovery policy.
 public entrypoint. Parser, command, and REPL implementations live beside it
 under the same package.
 
+The root owns process lifecycle, parser/entrypoint binding, and the narrow
+binding of Chat adapters into REPL composition. `cli.repl.composition` owns the
+interactive callback graph and turn policy; `cli.presentation` owns shared
+one-shot and interactive reply rendering. Neither module opens or closes the
+application runtime.
+
 - Importing the composition root must not replace process-global warning
   callables. A known third-party import warning may be filtered only with
   `warnings.catch_warnings()` around the exact dependency-owning adapter import,
