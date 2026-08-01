@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing Memory source/profile/graph helpers for authority lookup
-hidden behind handle resolution or secondary tracing. Prefer already-owned
-repositories and recorders; add no generic CLI context object.
+Audit notification, reason, reflection, and trace CLI helpers for authority
+lookup hidden behind local accessors or handle resolution. Preserve shared
+workflows used by both one-shot and REPL adapters.
 
 ## Constraints
 
@@ -100,6 +100,13 @@ repositories and recorders; add no generic CLI context object.
   between handle resolution and mutation. Memory add/import/candidate tracing
   receives the already-composed recorder instead of reopening the CLI graph.
 - Memory/CLI/observability focused suite: 329 passed. Post-capability-reuse
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Memory source show/delete/chunks/extract and profile show/delete now pass one
+  repository through handle resolution and execution. The profile-only
+  repository pass-through helper is gone. Symbolic graph handlers already
+  performed exactly one lookup each and remain unchanged.
+- Memory source/profile focused suite: 320 passed. Post-repository-reuse
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.output import print_ansi, resolve_handle
@@ -17,16 +16,12 @@ from nuself.profile.repository import (
 from nuself.tui.memory import render_profile_detail, render_profile_row
 
 
-def _repository(project_root: Path | None) -> ProfileItemRepository:
-    return compose_cli_application(project_root).memory.profile
-
-
 def _items_for_list(
-    project_root: Path | None,
+    repository: ProfileItemRepository,
     *,
     sort_by: str = "updated_at",
 ) -> list[ProfileItem]:
-    items = _repository(project_root).list()
+    items = repository.list()
     if sort_by == "importance":
         return sorted(
             items,
@@ -50,10 +45,11 @@ def _items_for_list(
 
 def _resolve_profile_id(
     args: argparse.Namespace,
+    repository: ProfileItemRepository,
 ) -> str | None:
     return resolve_handle(
         args.profile_id,
-        _items_for_list(args.project_root),
+        _items_for_list(repository),
         label="profile",
         get_id=lambda item: item.id,
     )
@@ -62,8 +58,9 @@ def _resolve_profile_id(
 def handle_memory_profile_list(
     args: argparse.Namespace,
 ) -> int:
+    repository = compose_cli_application(args.project_root).memory.profile
     items = _items_for_list(
-        args.project_root, sort_by=args.sort_by
+        repository, sort_by=args.sort_by
     )
     if not items:
         print("No profile items.")
@@ -76,7 +73,8 @@ def handle_memory_profile_list(
 def handle_memory_profile_search(
     args: argparse.Namespace,
 ) -> int:
-    items = _repository(args.project_root).search(
+    repository = compose_cli_application(args.project_root).memory.profile
+    items = repository.search(
         args.query,
         ProfileSearchFilters(
             type=args.type,
@@ -97,13 +95,12 @@ def handle_memory_profile_search(
 def handle_memory_profile_show(
     args: argparse.Namespace,
 ) -> int:
-    profile_id = _resolve_profile_id(args)
+    repository = compose_cli_application(args.project_root).memory.profile
+    profile_id = _resolve_profile_id(args, repository)
     if profile_id is None:
         return 1
     try:
-        item = _repository(args.project_root).get(
-            profile_id
-        )
+        item = repository.get(profile_id)
     except ProfileItemNotFound:
         print(
             f"Profile item not found: {profile_id}",
@@ -117,8 +114,8 @@ def handle_memory_profile_show(
 def handle_memory_profile_delete(
     args: argparse.Namespace,
 ) -> int:
-    repository = _repository(args.project_root)
-    profile_id = _resolve_profile_id(args)
+    repository = compose_cli_application(args.project_root).memory.profile
+    profile_id = _resolve_profile_id(args, repository)
     if profile_id is None:
         return 1
     try:
@@ -137,6 +134,6 @@ def handle_memory_profile_delete(
 def handle_memory_profile_reindex(
     args: argparse.Namespace,
 ) -> int:
-    path = _repository(args.project_root).reindex()
+    path = compose_cli_application(args.project_root).memory.profile.reindex()
     print(f"Rebuilt profile index: {path}")
     return 0

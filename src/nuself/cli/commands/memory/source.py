@@ -12,6 +12,7 @@ from nuself.domain.source import SourceChunk
 from nuself.memory.source_repository import (
     SourceChunkMatch,
     SourceDocumentNotFound,
+    SourceRepository,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.memory import render_source_detail, render_source_row
@@ -51,10 +52,11 @@ def _privacy_arg(value: object) -> PrivacyLevel:
 
 def _resolve_source_id(
     args: argparse.Namespace,
+    repository: SourceRepository,
 ) -> str | None:
     return resolve_handle(
         args.source_id,
-        compose_cli_application(args.project_root).memory.sources.list_documents(),
+        repository.list_documents(),
         label="source",
         get_id=lambda document: document.id,
     )
@@ -90,7 +92,7 @@ def handle_memory_source_list(args: argparse.Namespace) -> int:
 
 def handle_memory_source_show(args: argparse.Namespace) -> int:
     repository = compose_cli_application(args.project_root).memory.sources
-    source_id = _resolve_source_id(args)
+    source_id = _resolve_source_id(args, repository)
     if source_id is None:
         return 1
     try:
@@ -115,7 +117,7 @@ def handle_memory_source_delete(
 ) -> int:
     memory = compose_cli_application(args.project_root).memory
     repository = memory.sources
-    source_id = _resolve_source_id(args)
+    source_id = _resolve_source_id(args, repository)
     if source_id is None:
         return 1
     try:
@@ -135,15 +137,16 @@ def handle_memory_source_delete(
 def handle_memory_source_chunks(
     args: argparse.Namespace,
 ) -> int:
+    repository = compose_cli_application(args.project_root).memory.sources
     source_ref = getattr(args, "source_id", None)
     source_id = (
-        _resolve_source_id(args) if source_ref is not None else None
+        _resolve_source_id(args, repository)
+        if source_ref is not None
+        else None
     )
     if source_ref is not None and source_id is None:
         return 1
-    chunks = compose_cli_application(args.project_root).memory.sources.list_chunks(
-        source_id
-    )
+    chunks = repository.list_chunks(source_id)
     if not chunks:
         print("No source chunks.")
         return 0
@@ -169,10 +172,10 @@ def handle_memory_source_search(
 def handle_memory_source_extract(
     args: argparse.Namespace,
 ) -> int:
-    source_id = _resolve_source_id(args)
+    memory = compose_cli_application(args.project_root).memory
+    source_id = _resolve_source_id(args, memory.sources)
     if source_id is None:
         return 1
-    memory = compose_cli_application(args.project_root).memory
     try:
         candidates = memory.sources.extract_candidates(source_id)
     except SourceDocumentNotFound:
