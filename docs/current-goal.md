@@ -9,22 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove redundant daemon handler and admission state operations.
+Remove stale Reflection model re-exports.
 
 ## Ordered Steps
 
-1. Confirm scheduler `running` already implies admission is open and identify
-   handlers that receive but do not consume the uniform task argument.
-2. Remove the duplicate Chat admission predicate and statement-level argument
-   disposal while preserving the single typed handler contract.
-3. Run focused daemon tests and complete verification gates; update
+1. Confirm Reflection scheduler does not consume its same-name imports of the
+   candidate-list and relevance-score structured output models.
+2. Remove the migration-era implicit re-exports so each framework output model
+   has one owning module and import path.
+3. Run focused Reflection and module-boundary tests and complete verification
+   gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve scheduler lifecycle, work-plane fail-closed behavior, task identity,
-  resource serialization, and the uniform typed handler contract.
+- Preserve the Reflection scheduler, candidate generation and relevance gate
+  contracts, including framework-native structured output validation.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +39,12 @@ Remove redundant daemon handler and admission state operations.
 
 ## Phase Evidence
 
+- Reflection scheduler no longer imports and implicitly re-exports the
+  candidate-list and relevance-score Pydantic models it does not consume. Each
+  structured output now has one truthful owner/import path while scheduler,
+  candidate, and gate behavior remain unchanged. Focused Reflection/boundary
+  tests: 160 passed; full suite: 2439 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Chat work admission now checks the scheduler's authoritative `running`
   projection once; that phase already implies `accepting`, which remains in the
   health snapshot for lifecycle visibility. Five periodic handlers retain the

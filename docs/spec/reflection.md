@@ -92,6 +92,8 @@ The gate is LLM-driven (L2 judgment). The agent receives the candidate, recent
 reflection history, and cooldown state, then returns an actual typed
 `RelevanceScoreOutput` through the shared framework-native
 `structured_response` boundary.
+The model is owned and imported from `nuself.reflection.relevance`; the
+scheduler does not re-export it.
 
 - The model is strict and forbids extra fields. It requires `novelty`,
   `confidence`, `urgency`, `interruption_cost`, and `composite` floats in
@@ -117,6 +119,8 @@ extra fields. Each item requires a non-empty title of at most 80 characters,
 a non-empty body, a declared `IdeaCandidateType`, and explicit confidence,
 novelty, urgency, and interruption-cost floats in `[0, 1]`. The complete list
 contains at most three items.
+The model is owned and imported from `nuself.reflection.candidates`; the
+scheduler does not re-export it.
 
 A malformed item rejects the complete generated batch and produces the
 existing empty result plus `candidate_generation_failed`. Candidate text is

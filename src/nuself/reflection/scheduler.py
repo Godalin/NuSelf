@@ -13,13 +13,7 @@ from nuself.reflection.audit import (
     report_reflection_failure,
     write_reflection_audit,
 )
-from nuself.reflection.candidates import (
-    CandidateListOutput as CandidateListOutput,
-)
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.reflection.relevance import (
-    RelevanceScoreOutput as RelevanceScoreOutput,
-)
 from nuself.reflection.schedule_state import (
     REFLECTION_SCHEDULE_STATE_VERSION,
     ReflectionScheduleState,
