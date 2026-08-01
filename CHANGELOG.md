@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason workspace and persona tools now share one thread-scoped workspace
+  resolver instead of duplicating authority and namespace composition.
 - Reflection-promotion trace recording now persists its owned link directly,
   removing a one-use generic link pass-through from `TraceRecorder`.
 - Trace, reflection, and Reason commands now use one shared JSONL output

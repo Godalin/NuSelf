@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the one-use TraceRecorder link pass-through while preserving typed
-reflection-promotion ownership of link creation.
+Unify Reason workspace and persona tool composition around one thread-scoped
+workspace resolver.
 
 ## Ordered Steps
 
-1. Confirm `_link()` adds no validation, policy, observation, or capability
-   boundary beyond repository `save_link()`.
-2. Construct and persist the promotion link in
-   `record_reflection_promoted()`, then delete `_link()` and its unused type.
-3. Run trace/reflection tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Confirm both tool groups derive the same workspace database and namespace
+   from the active Reason runtime context.
+2. Extract that existing capability once and inject the same resolver into
+   workspace and persona tool builders.
+3. Run Reason/persona tool tests, Pyright, full pytest, and package build;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not expose generic cross-domain link mutation.
-- Do not change link identity, relation, summary, or persistence ordering.
-- Do not merge trace recording and trace querying capabilities.
+- Do not cache a workspace across Reason threads.
+- Do not add process globals, locks, or a workspace facade.
+- Do not change the durable namespace or LangGraph `BaseStore` adapter.
 
 ## Constraints
 
@@ -37,6 +37,12 @@ reflection-promotion ownership of link creation.
 
 ## Phase Evidence
 
+- Reason workspace tools and thread-local persona tools now receive the same
+  `_thread_workspace()` resolver. Removed duplicate closures, imports, authority
+  lookup, and namespace construction while retaining per-call runtime-context
+  selection and the LangGraph store adapter. Focused Reason/persona tool tests:
+  50 passed; full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - `TraceRecorder.record_reflection_promoted()` now constructs and saves the
   promotion link it owns. Removed the one-use `_link()` repository
   pass-through and the otherwise-unused `TraceRelation` service import;

@@ -456,7 +456,9 @@ readonly-tag selection rule.
 Readonly, workspace, and persona tools reach `ReasonAdvancer` as framework
 `BaseTool` values. The advancer validates optional service-component metadata
 instead of using dynamic attribute detection or accepting arbitrary tool
-objects.
+objects. Workspace and persona tool groups share one thread-scoped workspace
+resolver, so both derive the same authority and namespace from the active
+runtime context.
 
 `ReasonAdvancer` builds one equivalent tool-enabled agent per configured
 endpoint and uses the shared agent endpoint-failover primitive only for

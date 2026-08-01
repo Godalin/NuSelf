@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 from threading import Lock
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy
@@ -40,6 +40,9 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.runtime.context import current_runtime_context, runtime_context
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
+
+if TYPE_CHECKING:
+    from nuself.store import ScopedWorkspace
 
 
 def _current_reason_thread_id() -> str:
@@ -359,47 +362,38 @@ class ReasonAdvancer:
 
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
         """Build workspace tools once that resolve the active reason thread."""
-        ws_store = self._workspace_store
         from nuself.agent.tools.workspace import (
             build_workspace_tools_from_provider,
         )
-        from nuself.store import ScopedWorkspace, SqliteStore
 
-        def _resolve() -> ScopedWorkspace:
-            thread_id = _current_reason_thread_id()
-            wpath = ws_store.ensure(thread_id)
-            sqlite = SqliteStore(wpath.database)
-            return ScopedWorkspace(
-                sqlite,
-                ("workspace", "reason", thread_id),
-            )
-
-        return build_workspace_tools_from_provider(_resolve)
+        return build_workspace_tools_from_provider(self._thread_workspace)
 
     def _build_persona_tools(self) -> tuple[BaseTool, ...]:
         """Build thread-scoped persona tools that resolve the current thread."""
-        ws_store = self._workspace_store
         from nuself.persona.tools import build_reason_persona_tools
-        from nuself.store import ScopedWorkspace, SqliteStore
-
-        def _thread_workspace() -> ScopedWorkspace:
-            thread_id = _current_reason_thread_id()
-            wpath = ws_store.ensure(thread_id)
-            return ScopedWorkspace(
-                SqliteStore(wpath.database),
-                ("workspace", "reason", thread_id),
-            )
 
         return build_reason_persona_tools(
             paths=self._paths,
             global_repository=self._persona_repository,
             trace_recorder=self._trace_recorder,
-            get_thread_workspace=_thread_workspace,
+            get_thread_workspace=self._thread_workspace,
             text_agent=LangChainTextAgent(
                 endpoints=self._langchain_models,
                 project_root=self._paths.project_root,
                 component="persona",
             ),
+        )
+
+    def _thread_workspace(self) -> ScopedWorkspace:
+        """Resolve one workspace from the active Reason thread context."""
+
+        from nuself.store import ScopedWorkspace, SqliteStore
+
+        thread_id = _current_reason_thread_id()
+        workspace = self._workspace_store.ensure(thread_id)
+        return ScopedWorkspace(
+            SqliteStore(workspace.database),
+            ("workspace", "reason", thread_id),
         )
 
 
