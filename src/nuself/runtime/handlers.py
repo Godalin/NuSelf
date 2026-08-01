@@ -96,11 +96,6 @@ class HandlerRegistry(
         self._lock = Lock()
 
     @property
-    def sealed(self) -> bool:
-        with self._lock:
-            return self._sealed
-
-    @property
     def registered_keys(self) -> tuple[HandlerKey, ...]:
         with self._lock:
             return tuple(self._handlers)

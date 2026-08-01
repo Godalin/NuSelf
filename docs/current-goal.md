@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing test-only resource-state views. Prefer behavior-level proof
-through contention, reacquisition, and cleanup over boolean projections of
-private handles.
+Continue removing test-only infrastructure-state views. Preserve state-machine
+contracts through permitted/rejected operations and catalog validation rather
+than read-only flags.
 
 ## Constraints
 
@@ -333,6 +333,12 @@ private handles.
 - Daemon-instance/memory-plan lock focused suite: 28 passed. Post-lock-view
   cleanup `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- `HandlerRegistry.sealed` was read only by tests. It is gone; unsealed
+  dispatch, post-seal mutation/resolution, and incomplete/extra catalogs remain
+  executable errors. The composable `handler()` decorator is retained.
+- Handler/daemon-request/REPL focused suite: 31 passed. Post-sealed-view cleanup
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

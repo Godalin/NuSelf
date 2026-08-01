@@ -23,7 +23,6 @@ def test_handler_registry_dispatches_registered_handler() -> None:
 
     assert registry.dispatch("add", 2, 3) == 5
     assert registry.registered_keys == ("add",)
-    assert registry.sealed
 
 
 def test_handler_registry_decorator_returns_original_handler() -> None:
@@ -90,7 +89,6 @@ def test_handler_registry_rejects_incomplete_closed_catalog_before_seal(
 
     assert captured.value.missing == frozenset({"missing"})
     assert captured.value.extra == frozenset()
-    assert not registry.sealed
     with pytest.raises(HandlerRegistryUnsealedError):
         registry.dispatch("present", "value")
 
@@ -111,7 +109,6 @@ def test_handler_registry_rejects_extra_closed_catalog_handler() -> None:
     assert captured.value.extra == frozenset({"extra"})
     assert "missing=[]" in str(captured.value)
     assert "extra=[\"'extra'\"]" in str(captured.value)
-    assert not registry.sealed
 
 
 def test_handler_registry_revalidates_coverage_after_seal() -> None:
