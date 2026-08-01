@@ -176,7 +176,11 @@ class DaemonState:
         self.reason_export_service.recover()
         self.scheduler.start()
         for kind, interval in self._periodic_tasks:
-            self._schedule_periodic(kind, interval)
+            self.scheduler.submit(
+                daemon_task(kind, f"periodic:{kind}", f"schedule:{kind}"),
+                delay_seconds=interval,
+                interval_seconds=interval,
+            )
 
     def stop_background_tasks(self) -> None:
         """Stop the single scheduler owned by this daemon lifecycle."""
@@ -225,17 +229,6 @@ class DaemonState:
         if not isinstance(result, ChatResult):
             raise TypeError("chat task returned an invalid result")
         return result
-
-    def _schedule_periodic(
-        self,
-        kind: PeriodicTaskKind,
-        interval: float,
-    ) -> None:
-        self.scheduler.submit(
-            daemon_task(kind, f"periodic:{kind}", f"schedule:{kind}"),
-            delay_seconds=interval,
-            interval_seconds=interval,
-        )
 
     def _scan_memory_observations(self, task: DaemonTask) -> None:
         del task

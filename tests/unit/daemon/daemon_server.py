@@ -29,6 +29,7 @@ from nuself.daemon.scheduler import (
     DaemonTask,
     DaemonTaskSubmission,
 )
+from nuself.daemon.tasks import daemon_task
 
 _STATE_OWNER = DaemonStateOwner()
 
@@ -441,8 +442,14 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
 
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
     state.scheduler.start()
-    state._schedule_periodic(  # pyright: ignore[reportPrivateUsage]
-        "memory.scan", 0.01
+    state.scheduler.submit(
+        daemon_task(
+            "memory.scan",
+            "periodic:memory.scan",
+            "schedule:memory.scan",
+        ),
+        delay_seconds=0.01,
+        interval_seconds=0.01,
     )
     assert state.shutdown_requested.wait(timeout=1)
     state.stop_background_tasks()
@@ -696,8 +703,14 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
 
     state.reflection_scheduler = MockScheduler()  # type: ignore[assignment]
     state.scheduler.start()
-    state._schedule_periodic(  # pyright: ignore[reportPrivateUsage]
-        "reflection.check", 0.05
+    state.scheduler.submit(
+        daemon_task(
+            "reflection.check",
+            "periodic:reflection.check",
+            "schedule:reflection.check",
+        ),
+        delay_seconds=0.05,
+        interval_seconds=0.05,
     )
     try:
         assert reflected.wait(timeout=1)

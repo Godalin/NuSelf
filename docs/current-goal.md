@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing constructor assignments for mirrored immutable inputs or
-derived collections. Keep cached objects that avoid real recomputation; remove
-aliases that merely retain another owner's object.
+Continue auditing constructor assignments and single-use private methods for
+mirrored state or pass-through calls. Preserve real policy and test through
+the owning public capability instead of retaining production test seams.
 
 ## Constraints
 
@@ -261,6 +261,13 @@ aliases that merely retain another owner's object.
   16-item resource catalog. Name and collection aliases resolve directly from
   the sole catalog; exact storage-schema coverage validation remains intact.
 - Data/application/boundary focused suite: 64 passed. Post-admin-index cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `DaemonState._schedule_periodic()` only wrapped scheduler submission for its
+  sole startup caller. Startup now submits the immutable periodic catalog
+  directly; focused tests exercise the real scheduler API instead of that
+  production-private test seam.
+- Daemon/boundary focused suite: 226 passed. Post-periodic-pass-through cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
