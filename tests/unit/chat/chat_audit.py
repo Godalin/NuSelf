@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 
 from nuself.agent.chat import audit
+from nuself.runtime import observability
 from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
@@ -130,7 +131,11 @@ def test_chat_retry_rejects_endpoint_url_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "report_observed_failure", unexpected_sink)
+    monkeypatch.setattr(
+        observability,
+        "report_observed_failure",
+        unexpected_sink,
+    )
     with pytest.raises(AuditSchemaError, match="metadata"):
         audit.report_chat_failure(
             RuntimeError("provider failed"),

@@ -19,6 +19,7 @@ from nuself.agent.errors import (
     AgentProtocolError,
 )
 from nuself.agent.structured import LangChainStructuredAgent
+from nuself.runtime.audit_definitions import AuditEventDefinition
 from nuself.llm import (
     LLMSettings,
     LangChainLLMEndpoint,
@@ -171,8 +172,9 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         error: BaseException,
         **kwargs: object,
     ) -> None:
+        definition = cast(AuditEventDefinition, kwargs["definition"])
         events.append(
-            (str(kwargs["event"]), str(kwargs["status"]))
+            (definition.event, str(definition.status))
         )
 
     def record_success(
@@ -188,7 +190,7 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
     )
     monkeypatch.setattr(
         endpoint_audit,
-        "report_observed_failure",
+        "report_defined_failure",
         report_failure,
     )
     monkeypatch.setattr(

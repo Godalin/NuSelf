@@ -11,6 +11,7 @@ from nuself.agent.endpoint_audit import (
 )
 from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistrySealedError,
+    AuditEventDefinition,
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
@@ -110,7 +111,7 @@ def test_agent_endpoint_failure_uses_fixed_safe_projection(
 
     monkeypatch.setattr(
         endpoint_audit,
-        "report_observed_failure",
+        "report_defined_failure",
         report_failure,
     )
 
@@ -129,13 +130,15 @@ def test_agent_endpoint_failure_uses_fixed_safe_projection(
     diagnostic, kwargs = calls[0]
     assert "api_key=secret" not in str(diagnostic)
     assert "api_key=***" in str(diagnostic)
+    definition = kwargs.pop("definition")
+    assert isinstance(definition, AuditEventDefinition)
+    assert definition.component == "reflection"
+    assert definition.event == event
+    assert definition.level == "warning"
+    assert definition.status == status
     assert kwargs == {
-        "component": "reflection",
-        "event": event,
         "message": message,
         "project_root": tmp_path,
-        "level": "warning",
-        "status": status,
         "metadata": {
             "endpoint_index": 3,
             "model": "safe-model",

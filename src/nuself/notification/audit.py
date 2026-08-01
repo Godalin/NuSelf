@@ -13,9 +13,8 @@ from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     require_exact_metadata as _exact,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    report_observed_failure,
+    report_defined_failure,
 )
 
 NotificationAuditEvent = Literal[
@@ -149,24 +148,10 @@ def report_notification_failure(
     """Validate and report one caught Notification failure."""
 
     definition = NOTIFICATION_AUDIT_REGISTRY.resolve("outbox", event)
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error=diagnostic_exception_chain(exc),
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=definition.component,
-        event=definition.event,
+        definition=definition,
         message=_MESSAGES[event],
         project_root=project_root,
         metadata=dict(metadata),
-        level=definition.level,
-        status=status,
     )

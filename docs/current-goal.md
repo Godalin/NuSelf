@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the next high-cost infrastructure seams after completing shared audit
-metadata validation and daemon lifecycle metadata deduplication.
+Audit the next high-cost composition and lifecycle seams after completing
+shared registered-failure projection across infrastructure and domain audit
+adapters.
 
 ## Constraints
 
@@ -31,6 +32,14 @@ metadata validation and daemon lifecycle metadata deduplication.
 - Focused affected-domain suite: 325 passed.
 - `uv run --locked pytest -q`: 2447 passed.
 - `uv run --locked pyright`: 0 errors, 0 warnings.
+- Registered daemon, storage, endpoint, Chat, memory, notification, persona,
+  reason, reflection, and observability failure producers now share one narrow
+  interpreter for diagnostic derivation, definition validation, and sink
+  invocation; event/message/metadata selection remains domain-owned.
+- Registered-failure focused suite: 272 passed; endpoint failover integration:
+  45 passed.
+- Post-interpreter `uv run --locked pytest -q`: 2447 passed; Pyright remains
+  0 errors and 0 warnings.
 
 ## Last Completed Goal
 

@@ -173,6 +173,41 @@ def run_observed_best_effort(
         return None
 
 
+def report_defined_failure(
+    exc: BaseException,
+    *,
+    definition: AuditEventDefinition,
+    message: str,
+    project_root: Path | None,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Validate and project one domain-selected audit failure definition."""
+
+    event_metadata = metadata or {}
+    error = diagnostic_exception_chain(exc)
+    definition.validate(
+        level=definition.level,
+        status=definition.status,
+        error=error,
+        metadata=event_metadata,
+    )
+    if definition.status is None:
+        raise AuditSchemaError(
+            f"{definition.component}/{definition.event} failure "
+            "requires a status"
+        )
+    report_observed_failure(
+        exc,
+        component=definition.component,
+        event=definition.event,
+        message=message,
+        project_root=project_root,
+        metadata=dict(event_metadata),
+        level=definition.level,
+        status=definition.status,
+    )
+
+
 def write_observed_log_event(
     component: LogComponent,
     event: str,
@@ -242,22 +277,12 @@ def report_observability_projection_failure(
         component=component,
         event=OBSERVABILITY_PROJECTION_FAILED,
     )
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=component,
-        event=OBSERVABILITY_PROJECTION_FAILED,
+        definition=definition,
         message="Secondary observability projection failed",
         project_root=project_root,
         metadata=metadata,
-        level=definition.level,
-        status=definition.status or "degraded",
     )
 
 
@@ -303,22 +328,12 @@ def report_internal_event_delivery_failure(
         component,
         INTERNAL_EVENT_DELIVERY_FAILED,
     )
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=component,
-        event=INTERNAL_EVENT_DELIVERY_FAILED,
+        definition=definition,
         message="Internal event delivery failed",
         project_root=project_root,
         metadata=metadata,
-        level=definition.level,
-        status=definition.status or "degraded",
     )
 
 

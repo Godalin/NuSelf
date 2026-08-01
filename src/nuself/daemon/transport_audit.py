@@ -13,8 +13,7 @@ from nuself.runtime.audit_definitions import (
     require_exact_metadata,
 )
 from nuself.runtime.context import runtime_context
-from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.observability import report_defined_failure
 
 DaemonTransportAuditEvent = Literal[
     "request_transport_failed",
@@ -118,26 +117,16 @@ def report_daemon_transport_failure(
 
     definition = DAEMON_TRANSPORT_AUDIT_REGISTRY.resolve("daemon", event)
     event_metadata = metadata or {}
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=event_metadata,
-    )
     context = (
         runtime_context(request_id=request_id, source="daemon")
         if request_id is not None
         else runtime_context(source="daemon")
     )
     with context:
-        report_observed_failure(
+        report_defined_failure(
             exc,
-            component=definition.component,
-            event=definition.event,
+            definition=definition,
             message=_MESSAGES[event],
             project_root=project_root,
             metadata=dict(event_metadata),
-            level=definition.level,
-            status=definition.status or "error",
         )

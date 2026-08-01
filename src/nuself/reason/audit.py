@@ -13,9 +13,8 @@ from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     require_exact_metadata as _require_exact,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    report_observed_failure,
+    report_defined_failure,
     run_observed_best_effort,
     write_observed_log_event,
 )
@@ -653,25 +652,11 @@ def report_reason_failure(
 
     definition = REASON_AUDIT_REGISTRY.resolve(_component(event), event)
     event_metadata = metadata or {}
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error=diagnostic_exception_chain(exc),
-        metadata=event_metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=definition.component,
-        event=definition.event,
+        definition=definition,
         message=_MESSAGES[event],
         project_root=project_root,
-        level=definition.level,
-        status=status,
         metadata=dict(event_metadata),
     )
 

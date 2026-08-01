@@ -90,6 +90,12 @@ separate sealed registries, messages, producers, and semantic validators.
 Audit events without a current production producer are not retained as
 speculative API surface.
 
+Registered failure producers select the domain definition, fixed message, and
+schema metadata. One shared observability interpreter derives the sanitized
+exception chain, validates the selected definition, and invokes the
+best-effort failure sink. Domains must not duplicate those mechanics or lose
+control of event selection and metadata construction to a generic event bus.
+
 `restart_failed` is one event with two explicit metadata variants selected by
 `stage`: the `start` variant carries start-failure reason/phase/PID/socket/exit
 code, while the `stop` variant carries stop-failure

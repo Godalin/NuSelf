@@ -16,8 +16,7 @@ from nuself.runtime.cleanup import (
     CleanupFailure,
     cleanup_failure_records,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.observability import report_defined_failure
 
 
 def _backend_close(metadata: Mapping[str, object]) -> None:
@@ -108,22 +107,12 @@ def report_backend_close_failure(
         "storage",
         "backend_close_failed",
     )
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=definition.component,
-        event=definition.event,
+        definition=definition,
         message="Default storage backend could not be closed",
         project_root=project_root,
         metadata=metadata,
-        level=definition.level,
-        status=definition.status or "degraded",
     )
 
 
@@ -144,20 +133,10 @@ def report_cli_cleanup_failure(
         "storage",
         "cli_cleanup_failed",
     )
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=definition.component,
-        event=definition.event,
+        definition=definition,
         message="CLI storage cleanup failed",
         project_root=project_root,
         metadata=metadata,
-        level=definition.level,
-        status=definition.status or "error",
     )

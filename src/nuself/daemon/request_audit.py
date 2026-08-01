@@ -14,9 +14,8 @@ from nuself.runtime.audit_definitions import (
     require_exact_metadata,
 )
 from nuself.runtime.context import runtime_context
-from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
-    report_observed_failure,
+    report_defined_failure,
     write_observed_log_event,
 )
 
@@ -158,21 +157,11 @@ def report_daemon_request_failure(
 
     definition = DAEMON_REQUEST_AUDIT_REGISTRY.resolve("daemon", event)
     event_metadata = metadata or {}
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=event_metadata,
-    )
     with runtime_context(request_id=request_id):
-        report_observed_failure(
+        report_defined_failure(
             exc,
-            component=definition.component,
-            event=definition.event,
+            definition=definition,
             message=_MESSAGES[event],
             project_root=project_root,
             metadata=dict(event_metadata),
-            level=definition.level,
-            status=definition.status or "error",
         )

@@ -13,6 +13,7 @@ from nuself.agent import failover as failover_module
 from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.text import LangChainTextAgent
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
+from nuself.runtime.audit_definitions import AuditEventDefinition
 
 
 class _FakeModel:
@@ -107,8 +108,9 @@ def test_text_agent_uses_shared_endpoint_failover(
         **kwargs: object,
     ) -> None:
         del error
+        definition = cast(AuditEventDefinition, kwargs["definition"])
         events.append(
-            (str(kwargs["event"]), str(kwargs["status"]))
+            (definition.event, str(definition.status))
         )
 
     def record_success(
@@ -119,7 +121,7 @@ def test_text_agent_uses_shared_endpoint_failover(
 
     monkeypatch.setattr(
         endpoint_audit,
-        "report_observed_failure",
+        "report_defined_failure",
         report_failure,
     )
     monkeypatch.setattr(

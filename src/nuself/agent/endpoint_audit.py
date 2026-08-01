@@ -13,8 +13,7 @@ from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.observability import report_defined_failure
 
 AgentEndpointComponent = Literal[
     "chat",
@@ -116,19 +115,10 @@ def report_agent_endpoint_failure(
         "model": model,
     }
     diagnostic = redacted_llm_diagnostic(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=diagnostic_exception_chain(diagnostic),
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         diagnostic,
-        component=definition.component,
-        event=definition.event,
+        definition=definition,
         message=_MESSAGES[event],
         project_root=project_root,
-        level=definition.level,
-        status=definition.status or "exhausted",
         metadata=metadata,
     )
