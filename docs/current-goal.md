@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit CLI helpers that hide application lookup inside trace, handle-resolution,
-or presentation workflows. Pass already-owned capabilities when the caller has
-resolved the graph; do not introduce a generic CLI context object.
+Continue auditing Memory source/profile/graph helpers for authority lookup
+hidden behind handle resolution or secondary tracing. Prefer already-owned
+repositories and recorders; add no generic CLI context object.
 
 ## Constraints
 
@@ -94,6 +94,12 @@ resolved the graph; do not introduce a generic CLI context object.
   into lifecycle observation. The internal multi-handle resolver is no longer
   a pseudo-public CLI helper.
 - Persona/CLI/observability focused suite: 334 passed. Post-persona-reuse
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Memory candidate list/show/accept/reject/edit/merge now share one repository
+  between handle resolution and mutation. Memory add/import/candidate tracing
+  receives the already-composed recorder instead of reopening the CLI graph.
+- Memory/CLI/observability focused suite: 329 passed. Post-capability-reuse
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

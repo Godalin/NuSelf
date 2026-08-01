@@ -48,7 +48,12 @@ def test_memory_trace_failure_is_observed_without_failing_command(
         fail,
     )
 
-    record_memory_trace(tmp_path, _Memory(), "add")
+    record_memory_trace(
+        compose_cli_application(tmp_path).trace.recorder,
+        tmp_path,
+        _Memory(),
+        "add",
+    )
 
     event = read_log_events(project_root=tmp_path, component="memory")[-1]
     assert event.event == "trace_recording_failed"

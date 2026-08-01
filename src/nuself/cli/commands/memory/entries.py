@@ -223,7 +223,12 @@ def handle_memory_add(args: argparse.Namespace) -> int:
     repository = application.memory.entries
     repository.save(entry)
     repository.reindex()
-    record_memory_trace(args.project_root, entry, "add")
+    record_memory_trace(
+        application.trace.recorder,
+        args.project_root,
+        entry,
+        "add",
+    )
     print_ansi(render_memory_entry_row(entry))
     return 0
 

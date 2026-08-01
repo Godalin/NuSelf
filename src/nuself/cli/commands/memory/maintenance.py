@@ -71,7 +71,8 @@ def handle_memory_import(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    repository = compose_cli_application(args.project_root).memory.entries
+    application = compose_cli_application(args.project_root)
+    repository = application.memory.entries
     data = cast(list[object], raw)
     imported = 0
     for item in data:
@@ -82,7 +83,10 @@ def handle_memory_import(args: argparse.Namespace) -> int:
         )
         repository.save(entry)
         record_memory_trace(
-            args.project_root, entry, "import"
+            application.trace.recorder,
+            args.project_root,
+            entry,
+            "import",
         )
         imported += 1
     repository.reindex()
