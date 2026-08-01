@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import cast
 
 from langchain_core.tools import BaseTool
@@ -72,7 +72,30 @@ class ConversationToolRuntime:
         return self._tools
 
     def prompt_sections(self) -> list[str]:
-        return _tool_prompt_sections(self._tools.values())
+        lines = [
+            "",
+            "Available tools:",
+            "The following LangChain tools are loaded in the current "
+            "NuSelf runtime.",
+            "CRITICAL: When the user asks a question that a tool can "
+            "answer, you MUST call the tool before generating your final "
+            "answer. Always use the tool to get the actual current state.",
+            "Tools are bound through LangChain's native tool-calling API.",
+            "Do not write visible markers such as "
+            '"[Tool call: memory_search]" or JSON tool fields in the '
+            "answer body.",
+            "The tool will be executed and its result injected back into "
+            "context. Only then generate your final answer.",
+            "Service skills define when and how to use tools. Use "
+            "`load_skill` to load a skill's behavioral policy.",
+            "Tools available:",
+        ]
+        lines.extend(
+            f"- {tool.name}({_tool_args_signature(tool)}): "
+            f"{tool.description}"
+            for tool in self._tools.values()
+        )
+        return lines
 
     def log_outcome(self, outcome: ToolOutcome) -> None:
         """Project one immutable middleware tool outcome."""
@@ -166,34 +189,6 @@ class ConversationToolRuntime:
             executor=self._feature_executor,
         )
 
-
-def _tool_prompt_sections(
-    tools: Iterable[BaseTool],
-) -> list[str]:
-    lines = [
-        "",
-        "Available tools:",
-        "The following LangChain tools are loaded in the current "
-        "NuSelf runtime.",
-        "CRITICAL: When the user asks a question that a tool can "
-        "answer, you MUST call the tool before generating your final "
-        "answer. Always use the tool to get the actual current state.",
-        "Tools are bound through LangChain's native tool-calling API.",
-        "Do not write visible markers such as "
-        '"[Tool call: memory_search]" or JSON tool fields in the '
-        "answer body.",
-        "The tool will be executed and its result injected back into "
-        "context. Only then generate your final answer.",
-        "Service skills define when and how to use tools. Use "
-        "`load_skill` to load a skill's behavioral policy.",
-        "Tools available:",
-    ]
-    for tool in tools:
-        lines.append(
-            f"- {tool.name}({_tool_args_signature(tool)}): "
-            f"{tool.description}"
-        )
-    return lines
 
 def _tool_args_signature(tool: BaseTool) -> str:
     raw_schema = cast(object, getattr(tool, "args"))

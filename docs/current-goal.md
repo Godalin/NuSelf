@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the single-use chat tool-membership facade.
+Move single-use tool prompt rendering into its runtime owner.
 
 ## Ordered Steps
 
-1. Confirm `ConversationToolRuntime.has_tool()` has one caller and owns no
-   policy beyond dictionary membership.
-2. Use the already-public runtime tool registry at the prompt composition site
-   and remove the facade.
+1. Confirm `_tool_prompt_sections()` is called only by
+   `ConversationToolRuntime.prompt_sections()`.
+2. Move rendering into that method and remove the helper/import used only for
+   forwarding an iterable.
 3. Run focused chat tests and full gates, then commit without pushing.
 
 ## Exclusions
@@ -26,7 +26,7 @@ Remove the single-use chat tool-membership facade.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve conditional Reason prompt guidance and the composed tool registry.
+- Preserve tool order, descriptions, signatures, and prompt guidance text.
 
 ## Constraints
 
@@ -38,6 +38,11 @@ Remove the single-use chat tool-membership facade.
 
 ## Phase Evidence
 
+- `ConversationToolRuntime.prompt_sections()` now directly owns rendering of
+  its composed tool registry. Removed the sole-use `_tool_prompt_sections()`
+  and `Iterable` import while preserving prompt text, tool order, signatures,
+  and descriptions. Focused Chat tests: 182 passed; full suite: 2441 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Chat prompt composition now checks `reason_propose` membership in the
   already-public composed tool registry. Removed the sole-use `has_tool()`
   facade without changing conditional Reason guidance. Focused Chat tests: 182

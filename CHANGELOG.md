@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat tool prompt rendering now lives directly in `ConversationToolRuntime`,
+  removing its single-use module helper and iterable-only import.
 - Chat prompt composition now checks its composed tool registry directly,
   removing the single-use `has_tool()` membership facade.
 - Chat skill registration now computes its explicit tool intersection directly,
