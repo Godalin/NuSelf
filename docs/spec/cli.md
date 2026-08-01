@@ -109,6 +109,8 @@ Logs, `memory list/show`, `reflection list/show`, `notify list/show`, and REPL v
 - Single-item `show` prints one JSON object.
 - Disables color automatically.
 - Uses `sort_keys=True, ensure_ascii=True`.
+- Command adapters use the shared `cli.output` JSONL printer rather than
+  defining domain-specific serialization wrappers.
 
 ## Generic Data Commands
 

@@ -3,22 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 import sys
 from typing import cast
 
 from nuself.application.trace import TraceServices
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.output import print_ansi
+from nuself.cli.output import print_ansi, print_json_lines
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
 from nuself.tui.trace import render_trace_detail, render_trace_row
-
-
-def _print_json(*entities: object) -> None:
-    for entity in entities:
-        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
 def _optional_trace_kind(value: str | None) -> TraceKind | None:
@@ -48,7 +42,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
         print("No trace records.")
         return 0
     if args.as_json:
-        _print_json(*(trace.to_wire() for trace in traces))
+        print_json_lines(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces):
         print_ansi(render_trace_row(trace, index=index))
@@ -66,7 +60,7 @@ def handle_trace_show(args: argparse.Namespace) -> int:
     if args.as_json:
         payload = trace.to_wire()
         payload["links"] = [link.to_wire() for link in links]
-        _print_json(payload)
+        print_json_lines(payload)
         return 0
     print_ansi(render_trace_detail(trace, links))
     return 0
@@ -82,7 +76,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
         print("No matching trace records.")
         return 0
     if args.as_json:
-        _print_json(*(trace.to_wire() for trace in traces))
+        print_json_lines(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces):
         print_ansi(render_trace_row(trace, index=index))
@@ -103,7 +97,7 @@ def handle_trace_related(args: argparse.Namespace) -> int:
         )
         return 0
     if args.as_json:
-        _print_json(
+        print_json_lines(
             {
                 "artifact_ref": args.artifact_ref,
                 "traces": [trace.to_wire() for trace in traces],

@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
 from nuself.application.reason import (
     compose_reason_advancer,
 )
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.output import print_ansi
+from nuself.cli.output import print_ansi, print_json_lines
 from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
@@ -32,11 +31,6 @@ def _service(
     return compose_cli_application(args.project_root).reason_service
 
 
-def _print_json(*entities: object) -> None:
-    for entity in entities:
-        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
-
-
 def handle_reason_list(args: argparse.Namespace) -> int:
     threads = _service(args).list_threads(
         status=args.status
@@ -45,7 +39,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
         print("No reason threads.")
         return 0
     if args.as_json:
-        _print_json(*(thread.to_wire() for thread in threads))
+        print_json_lines(*(thread.to_wire() for thread in threads))
         return 0
     for index, thread in enumerate(threads):
         print_ansi(render_reason_row(thread, index=index))
@@ -66,7 +60,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
     if args.as_json:
         payload = thread.to_wire()
         payload["steps"] = [step.to_wire() for step in steps]
-        _print_json(payload)
+        print_json_lines(payload)
         return 0
     print_ansi(
         render_reason_detail(

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Trace, reflection, and Reason commands now use one shared JSONL output
+  primitive instead of maintaining identical domain-local printers.
 - Daemon state now borrows the authority-scoped application graph only during
   composition and retains explicit task capabilities instead of exposing the
   complete graph as a long-lived service locator.

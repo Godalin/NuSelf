@@ -9,24 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Narrow daemon runtime ownership after composition. `DaemonState` should borrow
-the application graph while wiring services, then retain only the explicit
-capabilities needed by request and task handlers.
+Unify the byte-for-byte identical JSONL printers in trace, reflection, and
+Reason CLI adapters under the existing shared terminal-output module.
 
 ## Ordered Steps
 
-1. Inventory graph capabilities used after `DaemonState.__init__()`.
-2. Keep the application graph constructor-only and retain the observation
-   repository as the sole additional task-time domain capability.
-3. Run daemon/application boundary tests, Pyright, full pytest, and package
+1. Preserve the CLI JSON mode's per-record line, sorted-key, and ASCII-safe
+   contract in one `cli.output` operation.
+2. Delete the three local printers and their direct JSON imports.
+3. Run trace/reflection/Reason CLI tests, Pyright, full pytest, and package
    build; update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not introduce a daemon facade or duplicate application graph.
-- Do not change scheduler task identity, resource keys, priorities, or retry
-  behavior.
-- Do not move domain composition into task handlers.
+- Do not change pretty-printed data administration or memory export output.
+- Do not convert JSONL lists into arrays.
+- Do not move domain wire conversion into the shared printer.
 
 ## Constraints
 
@@ -38,6 +36,13 @@ capabilities needed by request and task handlers.
 
 ## Phase Evidence
 
+- Trace, reflection, and Reason command adapters now call one
+  `print_json_lines()` terminal-output primitive. Removed three identical local
+  printers and their JSON imports while preserving record-owned wire
+  conversion, one object per line, sorted keys, and ASCII-safe encoding. The
+  source diff removes 28 lines and adds 20. Focused CLI tests: 518 passed; full
+  suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `DaemonState` now borrows `ApplicationGraph` only during construction and
   retains the observation repository as its sole task-time domain repository;
   already-composed chat, curator, reflection, notification, Reason, export,

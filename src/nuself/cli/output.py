@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from collections.abc import Callable, Sequence
 from typing import Any, TypeVar
@@ -24,6 +25,13 @@ def print_ansi(text: str, **kwargs: Any) -> None:
         print_formatted_text(ANSI(text), **kwargs)
     else:
         print(text, **kwargs)
+
+
+def print_json_lines(*entities: object) -> None:
+    """Print machine-readable entities using the shared CLI JSONL contract."""
+
+    for entity in entities:
+        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
 def resolve_handle(
