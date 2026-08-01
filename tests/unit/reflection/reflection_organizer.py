@@ -33,7 +33,7 @@ def _entry(entry_id: str, *, title: str, body: str, score: float, created_at: st
 
 def test_reflection_organizer_merges_similar_pending_entries(tmp_path: Path) -> None:
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    weaker = repo.add(
+    weaker = repo.save(
         _entry(
             "reflection-a",
             title="Memory trace design",
@@ -42,7 +42,7 @@ def test_reflection_organizer_merges_similar_pending_entries(tmp_path: Path) -> 
             created_at="2026-05-18T10:00:00+00:00",
         )
     )
-    stronger = repo.add(
+    stronger = repo.save(
         _entry(
             "reflection-b",
             title="Memory trace provenance design",
@@ -71,7 +71,7 @@ def test_reflection_organizer_merges_similar_pending_entries(tmp_path: Path) -> 
 
 def test_reflection_organizer_leaves_distinct_entries_pending(tmp_path: Path) -> None:
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    repo.add(
+    repo.save(
         _entry(
             "reflection-a",
             title="Memory trace design",
@@ -80,7 +80,7 @@ def test_reflection_organizer_leaves_distinct_entries_pending(tmp_path: Path) ->
             created_at="2026-05-18T10:00:00+00:00",
         )
     )
-    repo.add(
+    repo.save(
         _entry(
             "reflection-b",
             title="Exercise routine",
@@ -105,7 +105,7 @@ def test_organizer_audit_failure_cannot_replace_merged_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    weaker = repo.add(
+    weaker = repo.save(
         _entry(
             "reflection-a",
             title="Memory trace design",
@@ -114,7 +114,7 @@ def test_organizer_audit_failure_cannot_replace_merged_result(
             created_at="2026-05-18T10:00:00+00:00",
         )
     )
-    stronger = repo.add(
+    stronger = repo.save(
         _entry(
             "reflection-b",
             title="Memory trace provenance design",

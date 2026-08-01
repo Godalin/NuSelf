@@ -61,7 +61,7 @@ def _reflection_entry(entry_id: str = "reflection-test") -> ReflectionEntry:
 
 def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    entry = repo.add(_reflection_entry())
+    entry = repo.save(_reflection_entry())
     service = _service(tmp_path, repo)
 
     conversation = service.promote_to_reason(entry.id)
@@ -88,8 +88,8 @@ def test_promote_reflection_to_reason_records_trace(tmp_path: Path) -> None:
 
 def test_promote_rejects_non_pending_reflection(tmp_path: Path) -> None:
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    entry = repo.add(_reflection_entry()).with_status("archived")
-    repo.update(entry)
+    entry = repo.save(_reflection_entry()).with_status("archived")
+    repo.save(entry)
 
     service = _service(tmp_path, repo)
 

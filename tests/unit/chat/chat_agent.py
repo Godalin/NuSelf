@@ -1222,7 +1222,7 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    repo.add(
+    repo.save(
         ReflectionEntry(
             id="r1",
             title="Explore recursion in habits",
@@ -1241,7 +1241,7 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
             reviewed_at=None,
         )
     )
-    repo.add(
+    repo.save(
         ReflectionEntry(
             id="r2",
             title="Sleep and creativity link",
@@ -1272,7 +1272,7 @@ def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     for i in range(5):
-        repo.add(
+        repo.save(
             ReflectionEntry(
                 id=f"r{i}",
                 title=f"Idea {i}",
@@ -1300,7 +1300,7 @@ def test_reflection_count_tool(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    repo.add(
+    repo.save(
         ReflectionEntry(
             id="r1",
             title="Count this reflection",
@@ -1330,7 +1330,7 @@ def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    repo.add(
+    repo.save(
         ReflectionEntry(
             id="r1",
             title="Explore recursion in habits",
@@ -1383,7 +1383,7 @@ def test_reflection_archive_success(tmp_path: Path) -> None:
     from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    repo.add(
+    repo.save(
         ReflectionEntry(
             id="r1",
             title="Explore recursion in habits",

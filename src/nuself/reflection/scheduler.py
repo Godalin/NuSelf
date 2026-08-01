@@ -180,7 +180,7 @@ class ReflectionScheduler:
             discussion_approved=discussion_approved,
             discussion_trace=discussion_trace,
         )
-        self._reflection_repo.add(entry)
+        self._reflection_repo.save(entry)
         try:
             decision_points: list[str] = [
                 f"Relevance gate passed: composite={score.composite:.2f} threshold={self._config.gate.relevance_threshold}",

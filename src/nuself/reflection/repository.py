@@ -155,21 +155,18 @@ class ReflectionRepository:
             raise ReflectionEntryNotFound(entry_id)
         return ReflectionEntry.from_wire(wire)
 
-    def add(self, entry: ReflectionEntry) -> ReflectionEntry:
+    def save(self, entry: ReflectionEntry) -> ReflectionEntry:
         self._col.put(entry.id, entry.to_wire())
         return entry
-
-    def update(self, entry: ReflectionEntry) -> ReflectionEntry:
-        return self.add(entry)
 
     def dismiss(self, entry_id: str) -> ReflectionEntry:
         entry = self.get(entry_id)
         updated = entry.with_status("dismissed")
-        self.add(updated)
+        self.save(updated)
         return updated
 
     def archive(self, entry_id: str) -> ReflectionEntry:
         entry = self.get(entry_id)
         updated = entry.with_status("archived")
-        self.add(updated)
+        self.save(updated)
         return updated

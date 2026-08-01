@@ -54,7 +54,7 @@ def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[Reflect
             created_at=f"2024-01-0{i + 1}T12:00:00+00:00",
             reviewed_at=None,
         )
-        repo.add(entry)
+        repo.save(entry)
         entries.append(entry)
     return entries
 

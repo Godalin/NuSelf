@@ -42,7 +42,7 @@ def _sample_entry(index: int = 0) -> ReflectionEntry:
 
 def test_add_and_get(repo: ReflectionRepository) -> None:
     entry = _sample_entry()
-    repo.add(entry)
+    repo.save(entry)
     retrieved = repo.get(entry.id)
     assert retrieved.id == entry.id
     assert retrieved.title == entry.title
@@ -54,8 +54,8 @@ def test_get_missing(repo: ReflectionRepository) -> None:
 
 
 def test_list_all(repo: ReflectionRepository) -> None:
-    repo.add(_sample_entry(0))
-    repo.add(_sample_entry(1))
+    repo.save(_sample_entry(0))
+    repo.save(_sample_entry(1))
     entries = repo.list()
     assert len(entries) == 2
 
@@ -64,8 +64,8 @@ def test_list_filter_by_status(repo: ReflectionRepository) -> None:
     pending = _sample_entry(0)
     dismissed = _sample_entry(1)
     dismissed = dismissed.with_status("dismissed")
-    repo.add(pending)
-    repo.add(dismissed)
+    repo.save(pending)
+    repo.save(dismissed)
     assert len(repo.list(status="pending")) == 1
     assert len(repo.list(status="dismissed")) == 1
     assert len(repo.list(status="archived")) == 0
@@ -73,7 +73,7 @@ def test_list_filter_by_status(repo: ReflectionRepository) -> None:
 
 def test_dismiss(repo: ReflectionRepository) -> None:
     entry = _sample_entry()
-    repo.add(entry)
+    repo.save(entry)
     updated = repo.dismiss(entry.id)
     assert updated.status == "dismissed"
     assert updated.reviewed_at is not None
@@ -83,7 +83,7 @@ def test_dismiss(repo: ReflectionRepository) -> None:
 
 def test_archive(repo: ReflectionRepository) -> None:
     entry = _sample_entry()
-    repo.add(entry)
+    repo.save(entry)
     updated = repo.archive(entry.id)
     assert updated.status == "archived"
     assert updated.reviewed_at is not None
@@ -91,11 +91,11 @@ def test_archive(repo: ReflectionRepository) -> None:
     assert retrieved.status == "archived"
 
 
-def test_update(repo: ReflectionRepository) -> None:
+def test_save_replaces_existing_entry(repo: ReflectionRepository) -> None:
     entry = _sample_entry()
-    repo.add(entry)
+    repo.save(entry)
     updated = entry.with_status("dismissed")
-    repo.update(updated)
+    repo.save(updated)
     retrieved = repo.get(entry.id)
     assert retrieved.status == "dismissed"
 

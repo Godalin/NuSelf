@@ -494,7 +494,7 @@ def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: Reflect
         relevance_threshold=0.0,
         persona_discussion_threshold=1.0,
     )
-    scheduler._reflection_repo.add(_sample_reflection_entry())
+    scheduler._reflection_repo.save(_sample_reflection_entry())
 
     result = scheduler.reflect(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC))
 

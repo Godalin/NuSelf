@@ -42,7 +42,7 @@ class ReflectionOrganizer:
             duplicates = [entry for entry in group if entry.id != primary.id]
             if not duplicates:
                 continue
-            self._repository.update(_merge_entries(primary, duplicates))
+            self._repository.save(_merge_entries(primary, duplicates))
             for entry in duplicates:
                 self._repository.archive(entry.id)
             archived_count += len(duplicates)

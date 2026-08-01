@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection persistence now uses one stable-ID `save()` operation, removing
+  identical `add()` and `update()` repository APIs while retaining explicit
+  status-transition operations.
 - Reason pause, resume, resolve, and archive keep their explicit service API
   while their shared transition rule now owns ID-or-index resolution, removing
   four repeated adapter steps.

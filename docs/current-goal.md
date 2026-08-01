@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Centralize Reason status-reference resolution in the shared transition rule.
+Unify Reflection repository writes under one truthful save operation.
 
 ## Ordered Steps
 
-1. Confirm pause, resume, resolve, and archive are distinct public use cases but
-   repeat identical thread-reference resolution before `_transition()`.
-2. Let the shared transition rule resolve the reference once and reduce each
-   public operation to its semantic target status.
-3. Run focused Reason/CLI tests and the complete verification gates; update
-   evidence and commit without pushing.
+1. Confirm `ReflectionRepository.add()` and `update()` are identical stable-ID
+   upserts with no distinct validation or lifecycle rule.
+2. Replace both with `save()` across scheduler, organizer, service tests, and
+   adapters; retain semantic dismiss/archive operations without aliases.
+3. Run focused Reflection/chat/CLI tests and the complete verification gates;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve transition validation, reference semantics, persistence, and audit
-  values.
+- Preserve reflection identity, wire format, status mutations, scheduling,
+  organization, promotion, and audit behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Centralize Reason status-reference resolution in the shared transition rule.
 
 ## Phase Evidence
 
+- `ReflectionRepository` now exposes one truthful stable-ID `save()` operation
+  for both creation and replacement. Removed identical `add()`/`update()` APIs
+  and migrated scheduler, organizer, tests, and adapters without compatibility
+  aliases; dismiss/archive retain their status-transition semantics. Focused
+  Reflection/chat/CLI tests: 496 passed; full suite: 2444 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Reason pause, resume, resolve, and archive remain distinct public use cases,
   while `_transition()` now owns their common ID-or-index resolution alongside
   validation, persistence, and audit. Removed four repeated resolution steps
