@@ -10,6 +10,7 @@ from typing import Literal, Protocol
 
 from nuself.cli.commands.output import print_ansi
 from nuself.agent.chat.audit import report_chat_failure
+from nuself.application.runtime import bind_application_runtime
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.cli.exit_codes import CliExitCode
 from nuself.daemon import client
@@ -103,8 +104,10 @@ def run_live_activity_send(
     )
     send_call = OwnedCall(
         name="nuself-interactive-send",
-        target=bind_runtime_context(
-            lambda: send_message(message, conversation_id, turn_id)
+        target=bind_application_runtime(
+            bind_runtime_context(
+                lambda: send_message(message, conversation_id, turn_id)
+            )
         ),
     )
     captured_events: list[LogEvent] = []

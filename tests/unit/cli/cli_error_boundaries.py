@@ -17,6 +17,18 @@ from nuself.logs import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
 from nuself.reason.service import ReasonService
+from nuself.application.runtime import open_application_runtime
+from nuself.cli.composition import use_cli_application_runtime
+
+
+@pytest.fixture(autouse=True)
+def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
+    runtime = open_application_runtime(tmp_path)
+    try:
+        with use_cli_application_runtime(runtime):
+            yield
+    finally:
+        runtime.close()
 
 
 def test_chat_timeout_uses_default_after_malformed_yaml(
