@@ -139,7 +139,9 @@ Adding a tool requires three local steps:
 
 The top-level conversation runtime does not register individual tool names.
 `build_langchain_chat_tools(...)` only concatenates subsystem tuples using one
-resolved `ToolResources` snapshot.
+resolved `ToolResources` snapshot. `ConversationToolRuntime` is the sole owner
+of the materialized tool-name catalog; `ConversationGraphRuntime` must not
+mirror the same dictionary.
 
 Cross-subsystem reuse does not read this registry or configured endpoints
 through private runtime fields. `ConversationGraphRuntime` exposes an

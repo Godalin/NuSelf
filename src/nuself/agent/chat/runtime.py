@@ -7,7 +7,6 @@ from dataclasses import replace
 import logging
 import time
 
-from langchain_core.tools import BaseTool
 from langchain_core.messages import (
     AIMessage,
     BaseMessage,
@@ -145,14 +144,14 @@ class ConversationGraphRuntime:
             ),
             event_publisher=self._event_publisher,
         )
-        self._tools: dict[str, BaseTool] = self._tool_runtime.tools
+        tools = self._tool_runtime.tools
         self._response_synthesizer = (
             response_service
             if response_service is not None
             else ConversationResponseSynthesizer(
                 project_root=project_root,
                 langchain_models=self._langchain_models,
-                tools=self._tools.values(),
+                tools=tools.values(),
                 log_tool_outcome=self._tool_runtime.log_outcome,
                 report_tool_log_failure=self._tool_runtime.report_log_failure,
             )
@@ -163,7 +162,7 @@ class ConversationGraphRuntime:
             endpoints=tuple(self._langchain_models),
             readonly_tools=tuple(
                 tool
-                for tool in self._tools.values()
+                for tool in self._tool_runtime.tools.values()
                 if "readonly" in (tool.tags or [])
             ),
         )

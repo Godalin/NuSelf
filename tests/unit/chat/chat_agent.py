@@ -1041,7 +1041,7 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
         response_service=FakeResponseService(),
         memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
-    tools = getattr(runtime, "_tools")
+    tools = runtime._tool_runtime.tools  # pyright: ignore[reportPrivateUsage]
 
     assert "memory_search" in tools
     assert all(isinstance(tool, BaseTool) for tool in tools.values())
@@ -1054,7 +1054,7 @@ def test_conversation_runtime_tools_declare_service_ownership(
         tmp_path,
         response_service=FakeResponseService(),
     )
-    tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
+    tools = runtime._tool_runtime.tools  # pyright: ignore[reportPrivateUsage]
     expected_by_prefix = {
         "memory": "memory",
         "reflection": "reflection",
@@ -1082,7 +1082,7 @@ def test_conversation_runtime_capability_snapshot_is_stable(
 
     snapshot = runtime.capability_snapshot()
     original_readonly_tools = snapshot.readonly_tools
-    cast(Any, runtime)._tools.clear()
+    runtime._tool_runtime.tools.clear()  # pyright: ignore[reportPrivateUsage]
 
     assert snapshot.endpoints == ()
     assert original_readonly_tools
@@ -1446,7 +1446,7 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
         response_service=FakeResponseService(),
         memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
-    tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
+    tools = runtime._tool_runtime.tools  # pyright: ignore[reportPrivateUsage]
 
     reason = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason"})
     proposal = _invoke_chat_tool(tools["load_skill"], {"skill_name": "reason_proposal"})

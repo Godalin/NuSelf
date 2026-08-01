@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing resource and composition objects for fields never consumed
-after construction. Retain fields that provide a stable capability even when
-their underlying value is simple; remove mirrors with no caller.
+Continue auditing constructor assignments for mirrored immutable inputs or
+derived collections. Keep cached objects that avoid real recomputation; remove
+aliases that merely retain another owner's object.
 
 ## Constraints
 
@@ -240,6 +240,16 @@ their underlying value is simple; remove mirrors with no caller.
   consumer. Owner paths remain the explicit workspace capability, so both
   properties and the mirrored `_scope` field are removed.
 - Workspace/Reason/agent/Chat focused suite: 340 passed. Post-workspace-surface
+  cleanup `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
+- Every `ConversationResources`, `ToolResources`, `ApplicationGraph`,
+  `MemoryRepositories`, and `TraceServices` field has a production consumer.
+  They remain explicit capability bundles rather than becoming service-locator
+  lookups.
+- `ConversationGraphRuntime._tools` mirrored the exact dictionary already owned
+  by `ConversationToolRuntime`. Response composition uses one local reference
+  and capability snapshots now read the sole catalog directly.
+- Chat/agent/daemon/boundary focused suite: 367 passed. Post-tool-catalog
   cleanup `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
 
