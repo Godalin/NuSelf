@@ -23,9 +23,8 @@ from nuself.daemon.payloads import (
     ActivityOpenResponsePayload,
     ChatRequestPayload,
     ChatResponsePayload,
-    EmptyRequestPayload,
+    EmptyPayload,
     HealthResponsePayload,
-    MessagePayload,
     SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import (
@@ -136,7 +135,7 @@ def _handle_ping(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
+    _decode_request_payload(EmptyPayload.from_wire, request.payload)
     return DaemonResponse.ok(
         request,
         DaemonIdentityPayload(
@@ -149,7 +148,7 @@ def _handle_health(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
+    _decode_request_payload(EmptyPayload.from_wire, request.payload)
     snapshot = state.scheduler.snapshot()
     payload = HealthResponsePayload(
         SchedulerHealthPayload(
@@ -223,7 +222,7 @@ def _handle_shutdown(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
+    _decode_request_payload(EmptyPayload.from_wire, request.payload)
     state.shutdown_requested.set()
     write_daemon_request_audit(
         "shutdown_requested",
@@ -232,7 +231,7 @@ def _handle_shutdown(
     )
     return DaemonResponse.ok(
         request,
-        MessagePayload("shutdown requested").to_wire(),
+        EmptyPayload().to_wire(),
     )
 
 

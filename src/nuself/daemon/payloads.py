@@ -11,44 +11,19 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 @dataclass(frozen=True)
-class EmptyRequestPayload:
-    """Validated empty payload for control requests."""
-
-    @classmethod
-    def from_wire(
-        cls,
-        payload: dict[str, JsonValue],
-    ) -> EmptyRequestPayload:
-        _expect_fields(payload)
-        return cls()
-
-
-@dataclass(frozen=True)
-class MessagePayload:
-    """One human-readable daemon response message."""
-
-    message: str
+class EmptyPayload:
+    """Validated empty daemon request or response payload."""
 
     def to_wire(self) -> dict[str, JsonValue]:
-        return {"message": self.message}
+        return {}
 
     @classmethod
     def from_wire(
         cls,
         payload: dict[str, JsonValue],
-    ) -> MessagePayload:
-        _expect_fields(
-            payload,
-            required=frozenset({"message"}),
-        )
-        return cls(
-            message=_required_string(
-                payload,
-                "message",
-                context="message response",
-                allow_blank=True,
-            )
-        )
+    ) -> EmptyPayload:
+        _expect_fields(payload)
+        return cls()
 
 
 @dataclass(frozen=True)

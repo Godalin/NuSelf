@@ -210,7 +210,9 @@ Success response payload field sets are also exact:
 - `ping` returns one non-blank `authority_id`; request type plus successful
   response status already express readiness and must not be duplicated as a
   fixed `pong` message;
-- `shutdown` returns one string `message`;
+- `shutdown` returns an exact empty object; request type plus successful
+  response status already acknowledge shutdown and must not be duplicated as a
+  fixed message;
 - `health` returns one complete typed `scheduler` snapshot;
 - `chat` returns string `answer`, non-blank `conversation_id`, a string list
   `evidence_references`, nullable string `epistemic_status`, and optional numeric

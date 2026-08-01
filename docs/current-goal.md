@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing duplicated daemon protocol state when request type, response
-status, or authority already carries the same meaning; preserve exact codecs
-and lifecycle identity checks.
+Continue auditing daemon protocol and service results for values that duplicate
+their typed envelope. Preserve user-facing diagnostics, exact validation, and
+domain-owned state.
 
 ## Constraints
 
@@ -709,6 +709,13 @@ and lifecycle identity checks.
   another authority and exact decoding rejects the removed field.
 - Daemon payload/transport/server/lifecycle focused suite: 144 passed.
   Post-ping-payload cleanup `uv run --locked pytest -q`: 2444 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Empty daemon requests and responses now share one exact `EmptyPayload` codec.
+  Shutdown success returns `{}` and the fixed response-only `MessagePayload`
+  plus client string comparison are gone; the separate shutdown audit message
+  remains user-facing observability.
+- Daemon payload/transport/server/lifecycle focused suite: 144 passed.
+  Post-shutdown-payload cleanup `uv run --locked pytest -q`: 2444 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal

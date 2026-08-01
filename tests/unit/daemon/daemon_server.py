@@ -573,7 +573,7 @@ def test_daemon_shutdown_sets_flag(tmp_path: Path) -> None:
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    assert response.payload["message"] == "shutdown requested"
+    assert response.payload == {}
     assert state.shutdown_requested.is_set()
 
 
@@ -606,7 +606,7 @@ def test_shutdown_audit_failure_cannot_block_accepted_request(
         response = handle_request(request, state)
 
     assert response.status == "ok"
-    assert response.payload["message"] == "shutdown requested"
+    assert response.payload == {}
     assert state.shutdown_requested.is_set()
 
 

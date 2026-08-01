@@ -15,9 +15,8 @@ from nuself.daemon.payloads import (
     ChatRequestPayload,
     ChatResponsePayload,
     DaemonIdentityPayload,
-    EmptyRequestPayload,
+    EmptyPayload,
     HealthResponsePayload,
-    MessagePayload,
     SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
@@ -64,10 +63,13 @@ def test_chat_request_rejects_invalid_optional_or_unknown_fields(
         ChatRequestPayload.from_wire(payload)
 
 
-def test_empty_request_payload_rejects_fields() -> None:
-    assert EmptyRequestPayload.from_wire({}) == EmptyRequestPayload()
+def test_empty_payload_round_trips_and_rejects_fields() -> None:
+    payload = EmptyPayload()
+
+    assert payload.to_wire() == {}
+    assert EmptyPayload.from_wire({}) == payload
     with pytest.raises(ProtocolError, match="unexpected"):
-        EmptyRequestPayload.from_wire({"unexpected": True})
+        EmptyPayload.from_wire({"unexpected": True})
 
 
 def test_daemon_identity_payload_contains_only_authority() -> None:
@@ -118,15 +120,9 @@ def test_health_response_payload_projects_scheduler_model() -> None:
             "last_error": None,
         }
     }
-    assert MessagePayload("shutdown requested").to_wire() == {
-        "message": "shutdown requested"
-    }
     assert HealthResponsePayload.from_wire(
         HealthResponsePayload(scheduler).to_wire()
     ) == HealthResponsePayload(scheduler)
-    assert MessagePayload.from_wire(
-        MessagePayload("shutdown requested").to_wire()
-    ) == MessagePayload("shutdown requested")
 
 
 @pytest.mark.parametrize(

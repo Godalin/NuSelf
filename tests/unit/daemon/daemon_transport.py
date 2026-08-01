@@ -15,7 +15,7 @@ from nuself.daemon.client import DaemonApplicationError
 from nuself.daemon.client import ActivityStreamGapError
 from nuself.daemon.payloads import (
     ActivityEventsResponsePayload,
-    MessagePayload,
+    EmptyPayload,
 )
 from nuself.daemon.protocol import (
     MAX_DAEMON_FRAME_BYTES,
@@ -961,7 +961,7 @@ def test_shutdown_forwards_remaining_timeout(
         return DaemonResponse(
             request_id="shutdown-request",
             status="ok",
-            payload=MessagePayload(message="shutdown requested").to_wire(),
+            payload=EmptyPayload().to_wire(),
         )
 
     monkeypatch.setattr(client, "request", fake_request)
@@ -1006,7 +1006,7 @@ def test_typed_response_decoder_distinguishes_application_failure() -> None:
     ):
         client.decode_response(
             DaemonResponse.fail("r", "request rejected"),
-            MessagePayload.from_wire,
+            EmptyPayload.from_wire,
             operation="ping",
         )
 
@@ -1019,7 +1019,7 @@ def test_typed_response_decoder_wraps_malformed_success() -> None:
                 status="ok",
                 payload={"unexpected": True},
             ),
-            MessagePayload.from_wire,
+            EmptyPayload.from_wire,
             operation="ping",
         )
 

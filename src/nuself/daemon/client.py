@@ -17,8 +17,8 @@ from nuself.daemon.payloads import (
     ActivityOpenResponsePayload,
     ChatRequestPayload,
     ChatResponsePayload,
+    EmptyPayload,
     HealthResponsePayload,
-    MessagePayload,
 )
 from nuself.daemon.protocol import (
     DaemonRequest,
@@ -292,17 +292,11 @@ def shutdown(
         project_root=project_root,
         timeout=timeout,
     )
-    payload = decode_response(
+    decode_response(
         response,
-        MessagePayload.from_wire,
+        EmptyPayload.from_wire,
         operation="shutdown",
     )
-    if payload.message != "shutdown requested":
-        raise DaemonConnectionError(
-            "daemon shutdown response is malformed: unexpected message",
-            phase="payload_decode",
-            request_id=response.request_id,
-        )
 
 
 def open_activity(
