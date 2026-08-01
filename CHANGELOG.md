@@ -19,6 +19,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   conversation-store composition shortcut and its separate mock surface were
   removed; explicit backend borrowing remains restricted to infrastructure
   commands.
+- Reflection scheduling state is now accessed through the authority-owned
+  reflection repository. The application graph, scheduler, and relevance gate
+  no longer expose, accept, or retain a raw scheduler-state collection; typed
+  decoding, cooldown behavior, and corruption handling are unchanged.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

@@ -9,29 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the CLI-only conversation-store composition shortcut. Every initialized
-CLI/REPL adapter must enter through the single authority-validating application
-accessor and select `conversations` from that graph; raw backend access remains
-an explicit infrastructure-only exception.
+Remove the raw reflection scheduler collection from `ApplicationGraph` and
+from scheduler/gate composition. Reflection persistence must own both entry and
+typed schedule-state access behind one repository selected from the application
+authority.
 
 ## Ordered Steps
 
-1. Record one CLI application composition entry and the narrow backend
-   infrastructure exception in the module-boundary contract.
-2. Migrate conversation commands, REPL state/input/transcript/dispatch, and
-   chat entrypoints to `compose_cli_application(...).conversations`.
-3. Delete `compose_cli_conversation_store` and its independent mock surface;
-   retain no alias or compatibility path.
-4. Run CLI/REPL/boundary tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Define repository ownership of the reflection schedule record in governing
+   reflection and module-boundary specifications.
+2. Add typed repository read/write operations over its private schedule
+   collection; migrate scheduler and relevance gate to those operations.
+3. Delete `ApplicationGraph.reflection_schedule`, duplicate constructor
+   dependencies, raw collection imports, and compatibility aliases.
+4. Migrate tests and run reflection/boundary tests, Pyright, full pytest, and
+   package build; update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not pass `ApplicationGraph` through command arguments or add another
-  conversation facade/service merely to replace the shortcut.
-- Do not expose backend access to conversation/domain handlers.
-- Do not change authority validation, persistence, command behavior, or the
-  invocation-owned runtime lifecycle.
+- Do not add a separate schedule repository, facade, or application bundle.
+- Do not move schedule policy, corruption reporting, or timing decisions into
+  persistence.
+- Do not change the scheduler-state wire format, collection/key, cooldown,
+  daily-cap, or fail-closed behavior.
 
 ## Constraints
 
@@ -43,6 +43,15 @@ an explicit infrastructure-only exception.
 
 ## Phase Evidence
 
+- Reflection schedule-state persistence now belongs to the existing
+  `ReflectionRepository` through typed read/save operations. Removed the raw
+  `ApplicationGraph.reflection_schedule` field, scheduler/gate collection
+  constructor parameters, and their direct collection ownership; scheduling
+  policy and fail-closed corruption reporting remain in their original owners.
+  The schedule-state module now decodes records only and no longer imports the
+  storage adapter. Focused reflection/daemon/boundary tests: 183 passed; final
+  reflection/boundary rerun: 160 passed; full suite: 2435 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Removed `compose_cli_conversation_store`; conversation commands, REPL
   completion/session/transcript/dispatch, and chat entrypoints now select the
   graph-owned store through the one authority-validating

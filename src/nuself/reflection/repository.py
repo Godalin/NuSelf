@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 from typing import Literal, cast
 
 from nuself.config import RuntimePaths
+from nuself.reflection.schedule_state import (
+    ReflectionScheduleState,
+    decode_reflection_schedule_state,
+)
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 
@@ -114,7 +118,20 @@ class ReflectionRepository:
         backend: StorageBackend,
     ) -> None:
         self._col = backend.collection("reflection_entries")
+        self._schedule_col = backend.collection("scheduler_state")
         self._paths = paths
+
+    def schedule_state(self) -> ReflectionScheduleState | None:
+        """Return the strictly decoded canonical scheduler state."""
+
+        return decode_reflection_schedule_state(
+            self._schedule_col.get("reflection")
+        )
+
+    def save_schedule_state(self, state: ReflectionScheduleState) -> None:
+        """Persist the canonical scheduler state."""
+
+        self._schedule_col.put("reflection", state.to_record())
 
     def list(self, status: str | None = None) -> list[ReflectionEntry]:
         entries: list[ReflectionEntry] = []

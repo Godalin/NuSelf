@@ -20,7 +20,7 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
-from nuself.storage import StorageBackend, StorageCollection
+from nuself.storage import StorageBackend
 from nuself.workspace import PrivateWorkspaceStore
 
 
@@ -40,7 +40,6 @@ class ApplicationGraph:
     reason_service: ReasonService
     reflection: ReflectionRepository
     reflection_service: ReflectionService
-    reflection_schedule: StorageCollection
     trace: TraceServices
     data: DataAdminService
 
@@ -91,7 +90,6 @@ def compose_application(
                 repository=reflection,
             ),
         ),
-        reflection_schedule=backend.collection("scheduler_state"),
         trace=trace,
         data=DataAdminService(
             backend,

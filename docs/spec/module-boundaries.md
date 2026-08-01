@@ -103,6 +103,12 @@ requires resolved paths and the selected backend, while concrete assembly is
 owned by the application layer. Reflection workflow constructors remain
 migration scope until the shared service graph owns their complete lifecycle;
 they may not move authority lookup back into the repository.
+The repository owns both reflection-entry persistence and typed access to the
+single reflection schedule record. Its schedule collection remains private:
+`ApplicationGraph`, the scheduler, and the relevance gate must not receive or
+mutate a raw `StorageCollection`. Scheduling policy and corruption reporting
+remain in the scheduler/gate; the repository only decodes and saves the typed
+state.
 
 Memory persistence is composed as one authority-scoped graph.
 `MemoryEntryRepository`, `MemoryCandidateRepository`, and `SourceRepository`

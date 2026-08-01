@@ -8,7 +8,6 @@ from typing import Literal, cast
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from nuself.runtime.messages import encode_json_value
-from nuself.storage import StorageCollection
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1
 
@@ -43,12 +42,11 @@ class ReflectionScheduleState(BaseModel):
         )
 
 
-def read_reflection_schedule_state(
-    collection: StorageCollection,
+def decode_reflection_schedule_state(
+    record: dict[str, object] | None,
 ) -> ReflectionScheduleState | None:
-    """Decode the one canonical reflection schedule record."""
+    """Decode one canonical reflection schedule record."""
 
-    record = collection.get("reflection")
     if record is None:
         return None
     try:

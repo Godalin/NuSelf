@@ -24,7 +24,6 @@ def compose_reflection_scheduler(
     """Compose reflection orchestration from one authority-owned graph."""
 
     paths = application.paths
-    schedule_collection = application.reflection_schedule
     generator = IdeaCandidateGenerator(
         paths.project_root,
         config=config,
@@ -38,14 +37,12 @@ def compose_reflection_scheduler(
     gate = LLMRelevanceGate(
         paths.project_root,
         config,
-        schedule_collection=schedule_collection,
         repository=application.reflection,
         langchain_models=langchain_models,
     )
     return ReflectionScheduler(
         paths.project_root,
         config,
-        schedule_collection=schedule_collection,
         repository=application.reflection,
         outbox=application.notifications,
         trace_recorder=application.trace.recorder,

@@ -2,10 +2,16 @@
 
 ## Architecture
 
-The reflection subsystem has two layers:
+The reflection subsystem has two durable surfaces behind one repository:
 
-1. **ReflectionRepository** (`<authority-root>/reflections/`) — durable store for reflection ideas
-2. ** reflection.log** — audit trail of scheduler events
+1. **ReflectionRepository** — reflection entries plus typed access to the
+   canonical scheduler-state record in the selected authority
+2. **reflection.log** — audit trail of scheduler events
+
+Scheduler and relevance policy receive `ReflectionRepository`, never the raw
+`scheduler_state` collection. The repository owns strict schedule decoding and
+saving; callers own cooldown, daily-cap, corruption reporting, and timing
+decisions.
 
 Reflection ideas are first-class domain objects. They are **not** notification intents.
 

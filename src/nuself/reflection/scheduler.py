@@ -24,11 +24,7 @@ from nuself.reflection.schedule_state import (
     REFLECTION_SCHEDULE_STATE_VERSION,
     ReflectionScheduleState,
     ReflectionScheduleStateError,
-    read_reflection_schedule_state,
 )
-from nuself.storage import StorageCollection
-
-_read_schedule_collection = read_reflection_schedule_state
 
 
 class CandidateGenerator(Protocol):
@@ -97,7 +93,6 @@ class ReflectionScheduler:
         project_root: Path,
         config: ReflectionSettings,
         *,
-        schedule_collection: StorageCollection,
         repository: ReflectionRepository,
         outbox: ReflectionPublisher,
         trace_recorder: ReflectionTraceRecorder,
@@ -108,7 +103,6 @@ class ReflectionScheduler:
     ) -> None:
         self._project_root = project_root
         self._config = config
-        self._schedule_collection = schedule_collection
         self._reflection_repo = repository
         self._outbox = outbox
         self._trace_recorder = trace_recorder
@@ -263,7 +257,7 @@ class ReflectionScheduler:
         if self._in_quiet_hours(now):
             return "quiet_hours"
         try:
-            state = _read_schedule_collection(self._schedule_collection)
+            state = self._reflection_repo.schedule_state()
         except ReflectionScheduleStateError as exc:
             self._report_schedule_state_corrupt(exc)
             return "state_corrupt"
@@ -325,7 +319,7 @@ class ReflectionScheduler:
         return 0
 
     def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
-        current = _read_schedule_collection(self._schedule_collection)
+        current = self._reflection_repo.schedule_state()
         count = self._reflection_count_today(now, current) + 1
         state = ReflectionScheduleState(
             schema_version=REFLECTION_SCHEDULE_STATE_VERSION,
@@ -335,7 +329,7 @@ class ReflectionScheduler:
             title=title,
             body=body,
         )
-        self._schedule_collection.put("reflection", state.to_record())
+        self._reflection_repo.save_schedule_state(state)
 
     def _report_schedule_state_corrupt(
         self,

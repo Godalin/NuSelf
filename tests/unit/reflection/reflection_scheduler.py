@@ -221,9 +221,6 @@ def _gate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        schedule_collection=owned_backend(project_root).collection(
-            "scheduler_state"
-        ),
         repository=application.reflection,
     )
 
@@ -444,7 +441,7 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
 
     assert result is True
     assert len(scheduler._reflection_repo.list()) == 1
-    record = scheduler._schedule_collection.get("reflection")
+    record = scheduler._reflection_repo._schedule_col.get("reflection")
     assert record is not None
     assert record["timestamp"] == "2024-01-01T12:00:00Z"
     assert read_log_events(
@@ -485,7 +482,7 @@ def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionSchedu
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler.reflect(now)
     # Clear last reflection so the second run is not blocked by novelty gate
-    scheduler._schedule_collection.delete("reflection")
+    scheduler._reflection_repo._schedule_col.delete("reflection")
     time.sleep(0.01)  # ensure unique candidate id timestamp
     scheduler.reflect(now)
     entries = scheduler._reflection_repo.list()
@@ -557,7 +554,7 @@ def test_write_last_reflection_persists_schedule_state(
 ) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
-    record = scheduler._schedule_collection.get("reflection")
+    record = scheduler._reflection_repo._schedule_col.get("reflection")
     assert record == {
         "id": "reflection",
         "daily_count": 1,
@@ -599,7 +596,7 @@ def test_corrupt_schedule_state_fails_closed(
     scheduler: ReflectionScheduler,
     record: dict[str, object],
 ) -> None:
-    scheduler._schedule_collection.put("reflection", record)
+    scheduler._reflection_repo._schedule_col.put("reflection", record)
 
     assert scheduler.should_reflect(
         datetime(2024, 1, 2, 12, tzinfo=UTC)
@@ -623,7 +620,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    scheduler._schedule_collection.put(
+    scheduler._reflection_repo._schedule_col.put(
         "reflection",
         {"schema_version": 1},
     )
@@ -650,7 +647,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
 def test_reflect_reports_corrupt_schedule_state_as_blocked(
     scheduler: ReflectionScheduler,
 ) -> None:
-    scheduler._schedule_collection.put(
+    scheduler._reflection_repo._schedule_col.put(
         "reflection",
         {"schema_version": 1},
     )
@@ -1031,7 +1028,7 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
     config = _reflection_settings(cooldown_seconds=600)
     gate = _gate(tmp_path, config=config)
     now = datetime.now(UTC)
-    gate._schedule_collection.put("reflection", {
+    gate._repository._schedule_col.put("reflection", {
         "schema_version": 1,
         "timestamp": now.isoformat(),
         "daily_count": 1,
@@ -1045,7 +1042,7 @@ def test_relevance_gate_corrupt_state_keeps_cooldown_active(
 ) -> None:
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
-    gate._schedule_collection.put(
+    gate._repository._schedule_col.put(
         "reflection",
         {"timestamp": "not-a-date"},
     )
@@ -1065,7 +1062,7 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
         raise OSError("audit store unavailable")
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
-    gate._schedule_collection.put(
+    gate._repository._schedule_col.put(
         "reflection",
         {"timestamp": "not-a-date"},
     )
