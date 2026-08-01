@@ -557,9 +557,10 @@ LLM-backed advance must preserve the graph nature of reasoning:
 
 Reason reflection is internal to the reason process. It audits existing reasoning state for contradictions, hallucination risk, weak evidence, or premature convergence. This differs from the reflection subsystem, which discovers new candidate topics.
 
-### Background Scheduler (ReasonScheduler)
+### Background Scheduling (`ReasonScheduler`)
 
-The daemon runs a `ReasonScheduler` background thread that periodically advances eligible threads:
+The daemon's unified scheduler periodically invokes `ReasonScheduler` to
+advance eligible threads:
 
 ```
 run_once()
@@ -570,7 +571,7 @@ run_once()
   ├─ call ReasonAdvancer.advance(thread)
   ├─ if step returned, call ReasonService.advance_thread(id, step=step)
   ├─ if advance raises, log scheduler_advance_failed and cool down the thread
-  ├─ set skip_next_advance_until to now + interval_seconds
+  ├─ call ReasonService.defer_advancement(id, until=now + interval_seconds)
   └─ log scheduler_advance_completed
 ```
 
@@ -582,8 +583,10 @@ retry.
 Config:
 
 - `daemon.reason_scheduler.interval_seconds` (default: 600) controls the check interval and per-thread cooldown.
-- The scheduler thread is daemonized and follows the same pattern as `memory_curator` and `reflection_scheduler`.
-- The scheduler is only active when the daemon is running. CLI and REPL manual advance use explicit user commands, not the scheduler loop.
+- The unified daemon scheduler submits the reason task on this interval; Reason
+  does not own a thread, loop, queue, or lifecycle lock.
+- Automatic scheduling is only active when the daemon is running. CLI and REPL
+  manual advance use explicit user commands, not the scheduler task.
 - A failed automatic advance must not kill the background scheduler. The failure
   is logged under the reasoning component, the selected thread receives the
   normal cooldown, and the scheduler can try again on a later pass.

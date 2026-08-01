@@ -11,7 +11,7 @@ from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
-from nuself.reflection.repository import ReflectionRepository
+from nuself.reflection.service import ReflectionService
 from nuself.runtime.jobs import JobSink
 from nuself.trace.service import TraceQueryService
 from nuself.workspace import PrivateWorkspaceStore
@@ -24,7 +24,7 @@ class ToolResources:
     project_root: Path
     memory_query: MemoryQueryService
     memory: MemoryEntryRepository
-    reflections: ReflectionRepository
+    reflections: ReflectionService
     reasons: ReasonService
     reason_workspace: PrivateWorkspaceStore
     traces: TraceQueryService

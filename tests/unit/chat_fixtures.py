@@ -31,6 +31,8 @@ from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
+from nuself.reflection.organizer import ReflectionOrganizer
+from nuself.reflection.service import ReflectionService
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.frontend import ApprovalPort
@@ -74,14 +76,26 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         entries = memory_repository or application.memory.entries
         sources = source_repository or application.memory.sources
         profile = profile_repository or application.memory.profile
+        reflections = (
+            application.reflection_service
+            if reflection_repository is None
+            else ReflectionService(
+                reflection_repository,
+                application.reason_service,
+                application.trace.recorder,
+                ReflectionOrganizer(
+                    project_root,
+                    repository=reflection_repository,
+                ),
+            )
+        )
         resources = ConversationResources(
             tools=ToolResources(
                 project_root=project_root,
                 memory_query=memory_query_service
                 or MemoryQueryService(entries, sources, profile),
                 memory=entries,
-                reflections=reflection_repository
-                or application.reflection,
+                reflections=reflections,
                 reasons=reason_service
                 or application.reason_service,
                 reason_workspace=PrivateWorkspaceStore(

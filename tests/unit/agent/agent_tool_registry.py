@@ -18,11 +18,11 @@ from nuself.agent.tools.reflection import build_reflection_tools
 from nuself.agent.tools.selves import build_selves_tools
 from nuself.agent.tools.trace import build_trace_tools
 from nuself.agent.tools.workspace import build_workspace_tools
+from nuself.application.composition import compose_application
 from nuself.config import runtime_paths
 from nuself.memory.query import MemoryQueryService
 from nuself.memory.repository import MemoryEntryRepository
 from reason_fixtures import ReasonService
-from nuself.reflection.repository import ReflectionRepository
 from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
@@ -52,7 +52,12 @@ def test_subsystem_tool_builders_own_their_registries(
         "memory_update_importance",
     }
     assert _names(
-        build_reflection_tools(ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+        build_reflection_tools(
+            compose_application(
+                runtime_paths(tmp_path),
+                get_default_backend(tmp_path),
+            ).reflection_service
+        )
     ) == {
         "reflection_list_pending",
         "reflection_count",

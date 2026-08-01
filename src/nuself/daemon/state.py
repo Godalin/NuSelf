@@ -123,7 +123,6 @@ class DaemonState:
                 langchain_models=capabilities.endpoints,
             ),
             interval_seconds=reason_interval,
-            repository=self.application.reason,
             service=self.application.reason_service,
         )
         memory_interval = config.daemon.memory_curator.interval_seconds

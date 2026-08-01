@@ -126,8 +126,13 @@ class InteractiveCompleter(Completer):
 
     def _all_thread_ids_with_status(self) -> list[str]:
         def load() -> list[str]:
-            repo = compose_cli_application(self._project_root).reason
-            return [f"{t.id} ({t.status}, {t.topic[:40]})" for t in repo.list_threads(status="all")]
+            service = compose_cli_application(
+                self._project_root
+            ).reason_service
+            return [
+                f"{thread.id} ({thread.status}, {thread.topic[:40]})"
+                for thread in service.list_threads(status="all")
+            ]
 
         return (
             run_reason_observed(

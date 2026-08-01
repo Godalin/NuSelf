@@ -262,9 +262,9 @@ Memory optimization likewise receives resolved paths plus entry, candidate,
 and profile repositories. CLI composition supplies the authority-scoped graph;
 the optimizer never selects storage.
 
-Reason operations used by CLI, REPL, chat, reflection, and daemon workers are
-constructed by `application.reason`. Process adapters do not instantiate a
-root-based reason service independently.
+Reason operations used by CLI, REPL, chat, reflection, and daemon tasks are
+composed once in `ApplicationGraph`. Process adapters reuse its reason service
+instead of instantiating a root-based service independently.
 Memory optimization likewise receives paths, entry/candidate repositories, and
 the profile port explicitly; CLI and daemon composition must reuse the active
 application graph rather than create a second authority graph.
@@ -285,16 +285,18 @@ belong to `reason.output_contracts`, including their strict wire codecs.
 workflow and imports those contracts; it must not define the durable schemas
 inline.
 
-Reason operations are composed by `application.reason`. Process surfaces must
-reuse that factory so repository, workspace, trace, prompt, and optional
-advancer dependencies originate at one application boundary.
+Reason operations are composed once in `ApplicationGraph`. Process surfaces
+reuse `reason_service` so repository, workspace, and trace dependencies
+originate at one application boundary; an optional model-backed advancer is a
+single-operation dependency rather than a second service graph.
 `ReasonService` itself receives repository, workspace store, and trace recorder
 as required dependencies. Reason scheduling and output export must receive an
-existing reason service and workspace store, and scheduling also receives its
-repository explicitly; daemon workers may own queues and workspace adapters,
-but must not create or infer a second reason persistence graph. Agent reason
-tools receive the export workspace capability from chat composition and never
-resolve runtime paths to construct it.
+existing reason service and workspace store. Cooldown mutation is a reason
+service use case; scheduling must not receive or expose the repository merely
+to persist it. Daemon workers may own queues and workspace adapters, but must
+not create or infer a second reason persistence graph. Agent reason tools
+receive the export workspace capability from chat composition and never resolve
+runtime paths to construct it.
 `ReasonAdvancer` receives workspace, persona repository, trace recorder, and
 resolved paths from application composition. `ReasonScheduler` receives an
 advancer explicitly and never constructs one from a project root.
@@ -304,8 +306,12 @@ Reflection promotion depends only on two consumer-owned capabilities:
 the complete reason service or trace recorder contract merely to start one
 thread and record one promotion.
 The reflection repository and both capabilities are mandatory constructor
-dependencies; CLI and REPL obtain the complete service from application
-composition rather than allowing the domain service to resolve authority.
+dependencies. `ReflectionService` owns user-facing list, show, status-change,
+organization, and promotion use cases; CLI, REPL, agent tools, and background
+scheduling obtain that complete service from application composition rather
+than accessing the repository or rebuilding the organizer. Reflection-owned
+candidate and relevance workflows may still receive their repository
+explicitly.
 
 ## Shared Infrastructure Extraction
 

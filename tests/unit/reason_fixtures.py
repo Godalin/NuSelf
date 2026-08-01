@@ -71,12 +71,10 @@ class ReasonScheduler(_ReasonScheduler):
         interval_seconds: int = 600,
         *,
         service: _ReasonService,
-        repository: ReasonRepository | None = None,
     ) -> None:
         super().__init__(
             project_root,
             advancer,
             interval_seconds,
             service=service,
-            repository=repository or service.repository,
         )

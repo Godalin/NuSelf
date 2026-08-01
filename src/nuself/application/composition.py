@@ -18,6 +18,7 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
+from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
 from nuself.storage import StorageBackend, StorageCollection
 from nuself.workspace import PrivateWorkspaceStore
@@ -34,7 +35,6 @@ class ApplicationGraph:
     memory_query: MemoryQueryService
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
-    reason: ReasonRepository
     reason_service: ReasonService
     reflection: ReflectionRepository
     reflection_service: ReflectionService
@@ -75,13 +75,16 @@ def compose_application(
             backend.collection("persona_prompts"),
             paths,
         ),
-        reason=reason,
         reason_service=reason_service,
         reflection=reflection,
         reflection_service=ReflectionService(
             reflection,
             reason_service,
             trace.recorder,
+            ReflectionOrganizer(
+                paths.project_root,
+                repository=reflection,
+            ),
         ),
         reflection_schedule=backend.collection("scheduler_state"),
         trace=trace,

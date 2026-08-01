@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from nuself.config import ReflectionSettings
-from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
@@ -39,10 +38,6 @@ def compose_reflection_scheduler(
         schedule_collection=schedule_collection,
         repository=application.reflection,
     )
-    organizer = ReflectionOrganizer(
-        paths.project_root,
-        repository=application.reflection,
-    )
     return ReflectionScheduler(
         paths.project_root,
         config,
@@ -52,7 +47,7 @@ def compose_reflection_scheduler(
         trace_recorder=application.trace.recorder,
         candidate_generator=generator,
         relevance_gate=gate,
-        organizer=organizer,
+        organizer=application.reflection_service,
         discussion=SharedPersonaDiscussionService(
             project_root=paths.project_root,
             config=config,

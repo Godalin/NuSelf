@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit Reason and Reflection application boundaries for repository exposure
-that can be replaced by already-complete domain services without adding narrow
-facades.
+Audit the memory application bundle and user-facing adapters for repository
+exposure or repeated composition that can be removed without weakening the
+complete memory use cases.
 
 ## Constraints
 
@@ -118,6 +118,17 @@ facades.
   `TraceQueryService`. `TraceServices` and the trace package no longer expose
   `TraceRepository`; recorder and query still share one composed repository.
 - Trace service/CLI focused suite: 14 passed. Post-trace-boundary
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Reason scheduling now persists cooldown through the existing complete
+  `ReasonService`; its repository property, scheduler repository dependency,
+  and manual thread reconstruction are gone. `ApplicationGraph` no longer
+  exposes the Reason repository to process adapters.
+- Reflection CLI, REPL, and agent tools now use the existing
+  `ReflectionService` for browse, status, organization, and promotion use
+  cases. The daemon reuses that service as its organizer capability while
+  candidate and relevance workflows retain their explicit domain repository.
+- Reason/Reflection boundary suite: 1012 passed. Post-boundary
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

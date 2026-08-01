@@ -42,7 +42,7 @@ def compose_conversation_runtime(
             project_root=paths.project_root,
             memory_query=application.memory_query,
             memory=application.memory.entries,
-            reflections=application.reflection,
+            reflections=application.reflection_service,
             reasons=application.reason_service,
             reason_workspace=PrivateWorkspaceStore(
                 paths,

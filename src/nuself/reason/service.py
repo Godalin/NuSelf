@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
@@ -82,12 +83,6 @@ class ReasonService:
         self._workspace_cache: dict[str, ScopedWorkspace] = {}
         self._advancer = advancer
         self._prompt_generator = prompt_generator or generate_reasoning_prompt
-
-    @property
-    def repository(self) -> ReasonRepository:
-        """Return the repository supplied by the composition root."""
-
-        return self._repository
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -318,6 +313,18 @@ class ReasonService:
             metadata={"thread_id": thread.id},
         )
         return thread.id
+
+    def defer_advancement(
+        self,
+        id_or_index: str,
+        *,
+        until: str,
+    ) -> ReasoningThread:
+        """Persist the next scheduler-eligible time for one thread."""
+
+        thread = self._repository.resolve_thread(id_or_index)
+        updated = replace(thread, skip_next_advance_until=until)
+        return self._repository.save_thread(updated)
 
     # ── Internal ───────────────────────────────────────────────────
 

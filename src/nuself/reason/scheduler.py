@@ -9,7 +9,6 @@ from nuself.clock import utc_now
 from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.audit import report_reason_failure, write_reason_audit
 from nuself.reason.domain import ReasoningThread
-from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.runtime.context import runtime_context
 
@@ -24,12 +23,10 @@ class ReasonScheduler:
         interval_seconds: int = 600,
         *,
         service: ReasonService,
-        repository: ReasonRepository,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
         self._service = service
-        self._repository = repository
         self._interval_seconds = interval_seconds
 
     def run_once(self) -> None:
@@ -86,22 +83,7 @@ class ReasonScheduler:
         cooldown_end = (
             utc_now() + timedelta(seconds=self._interval_seconds)
         ).isoformat()
-        cooled = ReasoningThread(
-            id=thread.id,
-            topic=thread.topic,
-            status=thread.status,
-            working_summary=thread.working_summary,
-            evidence_refs=list(thread.evidence_refs),
-            priority=thread.priority,
-            last_advanced_at=thread.last_advanced_at,
-            next_review_after=thread.next_review_after,
-            skip_next_advance_until=cooldown_end,
-            created_at=thread.created_at,
-            updated_at=thread.updated_at,
-            active_items_data=thread.active_items_data,
-            pending_items_data=thread.pending_items_data,
-            next_steps_data=thread.next_steps_data,
-            mandates_data=thread.mandates_data,
-            reasoning_prompt=thread.reasoning_prompt,
+        self._service.defer_advancement(
+            thread.id,
+            until=cooldown_end,
         )
-        self._repository.save_thread(cooled)

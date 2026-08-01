@@ -34,10 +34,8 @@ from nuself.memory.source_repository import (
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reason.service import ReasonService
-from nuself.reflection.repository import (
-    ReflectionEntryNotFound,
-    ReflectionRepository,
-)
+from nuself.reflection.repository import ReflectionEntryNotFound
+from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
@@ -59,10 +57,10 @@ from nuself.tui.trace import render_trace_detail, render_trace_row
 theme = TerminalTheme()
 
 
-def _reflection_repository(
+def _reflection_service(
     project_root: Path | None,
-) -> ReflectionRepository:
-    return compose_cli_application(project_root).reflection
+) -> ReflectionService:
+    return compose_cli_application(project_root).reflection_service
 
 
 def _reason_service(
@@ -516,7 +514,9 @@ def handle_interactive_whoami_command(project_root: Path | None) -> str:
 def handle_interactive_reflection_command(project_root: Path | None) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = _reflection_repository(project_root).list(status="pending")
+    entries = _reflection_service(project_root).list_entries(
+        status="pending"
+    )
     if not entries:
         return "No pending reflection ideas."
     lines = ["Pending reflection ideas:"]
@@ -536,7 +536,7 @@ def handle_interactive_inbox_command(project_root: Path | None) -> str:
 def handle_interactive_reflection_list_command(project_root: Path | None) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = _reflection_repository(project_root).list()
+    entries = _reflection_service(project_root).list_entries()
     if not entries:
         return "No reflection ideas."
     lines = ["All reflection ideas:"]
@@ -549,29 +549,27 @@ def handle_interactive_reflection_show_command(project_root: Path | None, entry_
     from nuself.tui.render import render_reflection_entry_detail
 
     try:
-        entry = _reflection_repository(project_root).get(entry_id)
-    except ReflectionEntryNotFound:
-        return f"Reflection entry not found: {entry_id}"
+        entry = _reflection_service(project_root).show_entry(entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        return diagnostic_exception_message(exc)
     return render_reflection_entry_detail(entry)
 
 
 def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    repo = _reflection_repository(project_root)
+    service = _reflection_service(project_root)
     try:
-        repo.get(entry_id)
-    except ReflectionEntryNotFound:
-        return f"Reflection entry not found: {entry_id}"
+        service.show_entry(entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        return diagnostic_exception_message(exc)
     if subcmd == "dismiss":
-        repo.dismiss(entry_id)
-        return f"Dismissed: {entry_id}"
+        entry = service.dismiss_entry(entry_id)
+        return f"Dismissed: {entry.id}"
     if subcmd == "archive":
-        repo.archive(entry_id)
-        return f"Archived: {entry_id}"
+        entry = service.archive_entry(entry_id)
+        return f"Archived: {entry.id}"
     if subcmd == "promote":
         try:
-            thread = compose_cli_application(
-                project_root
-            ).reflection_service.promote_to_reason(entry_id)
+            thread = service.promote_to_reason(entry_id)
         except RuntimeError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"

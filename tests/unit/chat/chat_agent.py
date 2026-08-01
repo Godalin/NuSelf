@@ -70,7 +70,10 @@ def _chat_tool(
     reflection_repository: object | None = None,
 ) -> BaseTool:
     from nuself.agent.tools import build_langchain_chat_tools
+    from nuself.application.composition import compose_application
     from nuself.reflection.repository import ReflectionRepository
+    from nuself.reflection.organizer import ReflectionOrganizer
+    from nuself.reflection.service import ReflectionService
 
     repo = reflection_repository if reflection_repository is not None else ReflectionRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
     if not isinstance(repo, ReflectionRepository):
@@ -80,12 +83,21 @@ def _chat_tool(
         runtime_paths(tmp_path),
         get_default_backend(tmp_path),
     )
+    application = compose_application(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    )
     resources = ToolResources(
         project_root=tmp_path,
         memory_query=query_service
         or MemoryQueryService(memory_repository),
         memory=memory_repository,
-        reflections=repo,
+        reflections=ReflectionService(
+            repo,
+            application.reason_service,
+            trace.recorder,
+            ReflectionOrganizer(tmp_path, repository=repo),
+        ),
         reasons=ReasonService(tmp_path),
         reason_workspace=PrivateWorkspaceStore(
             runtime_paths(tmp_path),

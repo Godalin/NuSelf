@@ -14,13 +14,13 @@ from nuself.decorators import (
     tool,
 )
 from nuself.handles import VisibleHandleError, parse_visible_index
-from nuself.reflection.repository import ReflectionRepository
+from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature_execution import FeatureExecutor
 
 
 def build_reflection_tools(
-    repository: ReflectionRepository,
+    service: ReflectionService,
     *,
     executor: FeatureExecutor | None = None,
 ) -> tuple[BaseTool, ...]:
@@ -41,7 +41,7 @@ def build_reflection_tools(
         """Count pending proactive reflection ideas."""
         return (
             "Pending reflection ideas: "
-            f"{len(repository.list(status='pending'))} total"
+            f"{len(service.list_entries(status='pending'))} total"
         )
 
     @tool(
@@ -64,7 +64,7 @@ def build_reflection_tools(
             return "Error: limit must be an integer"
         if limit_int < 1:
             return "Error: limit must be a positive integer"
-        entries = repository.list(status="pending")
+        entries = service.list_entries(status="pending")
         if not entries:
             return "No pending reflection ideas at the moment."
         lines = ["Pending reflection ideas:"]
@@ -90,7 +90,7 @@ def build_reflection_tools(
     def dismiss_reflection_by_numeric_handle(index: int) -> str:
         """Dismiss a pending reflection idea by 0-based list index."""
         try:
-            entries = repository.list(status="pending")
+            entries = service.list_entries(status="pending")
             selected = parse_visible_index(
                 str(index),
                 count=len(entries),
@@ -101,7 +101,7 @@ def build_reflection_tools(
         except (ValueError, TypeError):
             return "Error: index must be an integer"
         entry = entries[selected]
-        repository.dismiss(entry.id)
+        service.dismiss_entry(entry.id)
         return f'Dismissed "{entry.title}".'
 
     @tool(
@@ -118,7 +118,7 @@ def build_reflection_tools(
     def archive_reflection_by_numeric_handle(index: int) -> str:
         """Archive a pending reflection idea by 0-based list index."""
         try:
-            entries = repository.list(status="pending")
+            entries = service.list_entries(status="pending")
             selected = parse_visible_index(
                 str(index),
                 count=len(entries),
@@ -129,7 +129,7 @@ def build_reflection_tools(
         except (ValueError, TypeError):
             return "Error: index must be an integer"
         entry = entries[selected]
-        repository.archive(entry.id)
+        service.archive_entry(entry.id)
         return (
             f'Archived "{entry.title}". The discussion has been captured '
             "into memory through the conversation."

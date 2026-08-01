@@ -9,6 +9,7 @@ from nuself.application import compose_trace_services
 from nuself.config import runtime_paths
 from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
 from nuself.storage import get_default_backend
 
@@ -33,6 +34,7 @@ def _service(
         repository,
         _reason_service(project_root),
         trace,
+        ReflectionOrganizer(project_root, repository=repository),
     )
 
 

@@ -7,12 +7,9 @@ import json
 import sys
 
 from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi, resolve_handle
-from nuself.reflection.organizer import ReflectionOrganizer
-from nuself.reflection.repository import (
-    ReflectionEntryNotFound,
-    ReflectionRepository,
-)
+from nuself.cli.commands.output import print_ansi
+from nuself.reflection.repository import ReflectionEntryNotFound
+from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail
 from nuself.tui.render import (
@@ -26,21 +23,12 @@ def _print_json(*entities: object) -> None:
         print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
-def _repository(args: argparse.Namespace) -> ReflectionRepository:
-    return compose_cli_application(args.project_root).reflection
-
-
-def _resolve_entry_id(args: argparse.Namespace) -> str | None:
-    return resolve_handle(
-        args.entry_id,
-        _repository(args).list(),
-        label="reflection",
-        get_id=lambda entry: entry.id,
-    )
+def _service(args: argparse.Namespace) -> ReflectionService:
+    return compose_cli_application(args.project_root).reflection_service
 
 
 def handle_reflection_list(args: argparse.Namespace) -> int:
-    entries = _repository(args).list(
+    entries = _service(args).list_entries(
         status=args.status
     )
     if not entries:
@@ -58,13 +46,10 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_show(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
-    if entry_id is None:
-        return 1
     try:
-        entry = _repository(args).get(entry_id)
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
+        entry = _service(args).show_entry(args.entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
     if args.as_json:
         _print_json(entry.to_wire())
@@ -76,39 +61,30 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
 def _change_status(
     args: argparse.Namespace, *, action: str, past_tense: str
 ) -> int:
-    entry_id = _resolve_entry_id(args)
-    if entry_id is None:
-        return 1
-    repository = _repository(args)
     try:
-        getattr(repository, action)(entry_id)
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
+        entry = getattr(_service(args), action)(args.entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    print(f"{past_tense}: {entry_id}")
+    print(f"{past_tense}: {entry.id}")
     return 0
 
 
 def handle_reflection_dismiss(args: argparse.Namespace) -> int:
     return _change_status(
-        args, action="dismiss", past_tense="Dismissed"
+        args, action="dismiss_entry", past_tense="Dismissed"
     )
 
 
 def handle_reflection_archive(args: argparse.Namespace) -> int:
     return _change_status(
-        args, action="archive", past_tense="Archived"
+        args, action="archive_entry", past_tense="Archived"
     )
 
 
 def handle_reflection_promote(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
-    if entry_id is None:
-        return 1
     try:
-        thread = compose_cli_application(
-            args.project_root
-        ).reflection_service.promote_to_reason(entry_id)
+        thread = _service(args).promote_to_reason(args.entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
         print(
             f"Error: {diagnostic_exception_message(exc)}",
@@ -121,10 +97,7 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_organize(args: argparse.Namespace) -> int:
-    result = ReflectionOrganizer(
-        args.project_root,
-        repository=_repository(args),
-    ).organize_pending()
+    result = _service(args).organize_pending()
     print(
         "Organized reflections: "
         f"merged_groups={result.merged_groups} "
