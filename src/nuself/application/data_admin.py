@@ -55,9 +55,7 @@ class DataAdminService:
         self._backend = backend
         self._conversations = conversations
         self._memories = memories
-        self._by_name = {item.name: item for item in _RESOURCES}
-        self._by_collection = {item.collection: item for item in _RESOURCES}
-        if set(self._by_collection) != set(COLLECTION_NAMES):
+        if {item.collection for item in _RESOURCES} != set(COLLECTION_NAMES):
             raise RuntimeError("data admin resources differ from storage schema")
 
     def resources(self, *, include_internal: bool = False) -> tuple[DataResource, ...]:
@@ -66,7 +64,14 @@ class DataAdminService:
         )
 
     def resolve(self, name: str, *, internal: bool = False) -> DataResource:
-        resource = self._by_name.get(name) or self._by_collection.get(name)
+        resource = next(
+            (
+                item
+                for item in _RESOURCES
+                if name == item.name or name == item.collection
+            ),
+            None,
+        )
         if resource is None:
             raise ValueError(f"unknown data resource: {name}")
         if resource.internal and not internal:

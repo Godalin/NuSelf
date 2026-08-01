@@ -257,6 +257,12 @@ aliases that merely retain another owner's object.
   into context and persona components without retaining a third owner.
 - Post-memory-service cleanup `uv run --locked pytest -q`: 2455 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- `DataAdminService` no longer builds two per-instance indexes over its fixed
+  16-item resource catalog. Name and collection aliases resolve directly from
+  the sole catalog; exact storage-schema coverage validation remains intact.
+- Data/application/boundary focused suite: 64 passed. Post-admin-index cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
