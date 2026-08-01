@@ -249,8 +249,10 @@ branch per task.
 Each in-memory task has a registered kind, stable identity, one primary
 resource key, fixed priority, optional monotonic `run_at`, immutable runtime
 context and payload, and one completion handle. Identity coalesces pending and
-running duplicates. A busy resource prevents overlapping work on that resource
-without allocating a resource lock.
+running duplicates by returning the existing completion handle; admission does
+not allocate a second result wrapper or expose redundant admitted/coalesced
+status. A busy resource prevents overlapping work on that resource without
+allocating a resource lock.
 
 The queue is a wake-up mechanism, never authoritative business state. Durable
 state remains in SQLite, repositories, outboxes, or export manifests. Startup

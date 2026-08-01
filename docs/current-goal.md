@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing unused transport alternatives after confirming both peers
-share one stricter framing path.
+Continue auditing daemon and service composition for redundant result wrappers
+or duplicate construction paths; retain explicit domain services and the one
+scheduler authority.
 
 ## Constraints
 
@@ -457,10 +458,10 @@ share one stricter framing path.
 - Activity/client focused suite: 120 passed. Post-activity cleanup
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
-- Scheduler task, submission, completion, active identity, and busy-resource
-  state remain necessary for coalescing and serialization. Four lifecycle
-  booleans were replaced by one monotonic `created/running/stopping/stopped`
-  phase; running and accepting health now derive from that source.
+- Scheduler task, completion, active identity, and busy-resource state remain
+  necessary for coalescing and serialization. Four lifecycle booleans were
+  replaced by one monotonic `created/running/stopping/stopped` phase; running
+  and accepting health now derive from that source.
 - Scheduler/daemon focused suite: 50 passed. Post-scheduler-lifecycle
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
@@ -688,6 +689,12 @@ share one stricter framing path.
   module at all.
 - CLI/REPL/Memory focused suite: 768 passed. Post-REPL-adapter cleanup
   `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `DaemonScheduler.submit()` now returns its completion `Future` directly.
+  Duplicate identities return the same handle, so coalescing remains explicit
+  without a production-unused admission label or submission wrapper.
+- Scheduler/daemon focused suite: 47 passed. Post-submission-wrapper cleanup
+  `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 ## Last Completed Goal

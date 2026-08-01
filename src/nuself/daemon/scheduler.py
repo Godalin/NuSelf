@@ -21,7 +21,6 @@ from nuself.runtime.events import EventPublisher
 from nuself.runtime.observability import publish_observed_event
 
 TaskHandler = Callable[["DaemonTask"], object]
-TaskAdmission = Literal["admitted", "coalesced"]
 SchedulerPhase = Literal["created", "running", "stopping", "stopped"]
 
 
@@ -58,14 +57,6 @@ class DaemonTask:
                 raise ValueError(f"daemon task {name} must not be blank")
         if type(self.priority) is not int:
             raise TypeError("daemon task priority must be an integer")
-
-
-@dataclass(frozen=True)
-class DaemonTaskSubmission:
-    """Admission outcome and shared completion for one task identity."""
-
-    admission: TaskAdmission
-    completion: Future[object]
 
 
 @dataclass(frozen=True)
@@ -155,7 +146,7 @@ class DaemonScheduler:
         *,
         delay_seconds: float = 0.0,
         interval_seconds: float | None = None,
-    ) -> DaemonTaskSubmission:
+    ) -> Future[object]:
         """Admit one identity or reuse its existing completion."""
 
         if delay_seconds < 0:
@@ -171,9 +162,7 @@ class DaemonScheduler:
                 raise ValueError(f"unknown daemon task kind: {task.kind}")
             existing = self._active.get(task.identity)
             if existing is not None:
-                return DaemonTaskSubmission(
-                    "coalesced", existing.completion
-                )
+                return existing.completion
             if len(self._active) >= self._queue_capacity:
                 raise DaemonSchedulerCapacityError(
                     "daemon scheduler admission is full"
@@ -190,7 +179,7 @@ class DaemonScheduler:
             self._pending.append(queued)
             self._active[task.identity] = queued
             self._condition.notify()
-            return DaemonTaskSubmission("admitted", completion)
+            return completion
 
     def snapshot(self) -> DaemonSchedulerSnapshot:
         with self._condition:

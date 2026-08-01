@@ -28,11 +28,9 @@ def test_scheduler_coalesces_one_stable_identity() -> None:
     first = scheduler.submit(DaemonTask("test", "same", "resource:a"))
     second = scheduler.submit(DaemonTask("test", "same", "resource:a"))
 
-    assert first.admission == "admitted"
-    assert second.admission == "coalesced"
-    assert second.completion is first.completion
+    assert second is first
     release.set()
-    assert first.completion.result(timeout=1) == "done"
+    assert first.result(timeout=1) == "done"
     scheduler.shutdown()
     assert calls == ["same"]
 
@@ -68,12 +66,12 @@ def test_scheduler_serializes_same_resource_but_runs_unrelated_work() -> None:
 
     assert first_started.wait(1)
     assert unrelated_started.wait(1)
-    assert not second.completion.done()
+    assert not second.done()
     assert maximum == 2
     release.set()
-    first.completion.result(timeout=1)
-    second.completion.result(timeout=1)
-    unrelated.completion.result(timeout=1)
+    first.result(timeout=1)
+    second.result(timeout=1)
+    unrelated.result(timeout=1)
     scheduler.shutdown()
 
 
@@ -100,11 +98,11 @@ def test_scheduler_priority_bypasses_a_blocked_resource() -> None:
     ready = scheduler.submit(
         DaemonTask("test", "ready", "resource:b", priority=10)
     )
-    ready.completion.result(timeout=1)
+    ready.result(timeout=1)
     assert order == ["running", "ready"]
     release.set()
-    running.completion.result(timeout=1)
-    blocked.completion.result(timeout=1)
+    running.result(timeout=1)
+    blocked.result(timeout=1)
     scheduler.shutdown()
 
 
@@ -124,7 +122,7 @@ def test_scheduler_repeats_after_completion_without_overlap() -> None:
         DaemonTask("tick", "tick", "schedule:tick"),
         interval_seconds=0.01,
     )
-    first.completion.result(timeout=1)
+    first.result(timeout=1)
     assert called.wait(1)
     scheduler.shutdown()
     assert calls >= 2
@@ -148,7 +146,7 @@ def test_scheduler_replaces_task_source_and_preserves_correlation() -> None:
         submitted = scheduler.submit(
             DaemonTask("chat.turn", "turn-1", "thread:thread-1")
         )
-    submitted.completion.result(timeout=1)
+    submitted.result(timeout=1)
     scheduler.shutdown()
     assert observed is not None
     assert observed.conversation_id == "thread-1"
@@ -184,11 +182,11 @@ def test_scheduler_bounds_admission_and_cancels_pending_shutdown() -> None:
     stopper = threading.Thread(target=stop)
     stopper.start()
     deadline = time.monotonic() + 1
-    while not pending.completion.cancelled() and time.monotonic() < deadline:
+    while not pending.cancelled() and time.monotonic() < deadline:
         time.sleep(0.001)
-    assert pending.completion.cancelled()
+    assert pending.cancelled()
     release.set()
-    running.completion.result(timeout=1)
+    running.result(timeout=1)
     stopper.join(1)
     assert stopped.is_set()
     with pytest.raises(DaemonSchedulerStoppedError):
@@ -202,7 +200,7 @@ def test_scheduler_shutdown_before_start_cancels_recovery_tasks() -> None:
     scheduler.shutdown()
     scheduler.shutdown()
 
-    assert pending.completion.cancelled()
+    assert pending.cancelled()
     assert not scheduler.snapshot().accepting
     with pytest.raises(DaemonSchedulerStoppedError):
         scheduler.start()
@@ -240,10 +238,10 @@ def test_scheduler_health_is_safe_and_clears_after_success() -> None:
     scheduler.start()
     failed = scheduler.submit(DaemonTask("test", "fail", "resource:a"))
     with pytest.raises(SecretFailure):
-        failed.completion.result(timeout=1)
+        failed.result(timeout=1)
     assert scheduler.snapshot().last_error == "test:SecretFailure"
 
     succeeded = scheduler.submit(DaemonTask("test", "ok", "resource:a"))
-    succeeded.completion.result(timeout=1)
+    succeeded.result(timeout=1)
     assert scheduler.snapshot().last_error is None
     scheduler.shutdown()

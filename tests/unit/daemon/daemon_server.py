@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from notification_fixtures import notification_outbox
-from chat_fixtures import ConversationGraphRuntime
-
+from concurrent.futures import Future
 import threading
 from pathlib import Path
 
 import pytest
 from langchain_core.messages import BaseMessage
 
+from chat_fixtures import ConversationGraphRuntime
+from notification_fixtures import notification_outbox
 from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
@@ -27,7 +27,6 @@ from nuself.runtime.messages import RuntimeEnvelope
 from nuself.daemon.scheduler import (
     DaemonSchedulerCapacityError,
     DaemonTask,
-    DaemonTaskSubmission,
 )
 from nuself.daemon.tasks import daemon_task
 
@@ -469,7 +468,7 @@ def test_committed_chat_survives_followup_admission_failure(
         *,
         delay_seconds: float = 0.0,
         interval_seconds: float | None = None,
-    ) -> DaemonTaskSubmission:
+    ) -> Future[object]:
         if task.kind in {"memory.curate", "conversation.compress"}:
             raise DaemonSchedulerCapacityError("full")
         return submit(

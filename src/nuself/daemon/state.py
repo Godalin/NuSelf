@@ -216,7 +216,7 @@ class DaemonState:
             if turn_id is not None
             else f"chat.turn:{conversation_id}:{uuid4().hex}"
         )
-        submission = self.scheduler.submit(
+        completion = self.scheduler.submit(
             daemon_task(
                 "chat.turn",
                 identity,
@@ -225,7 +225,7 @@ class DaemonState:
                 priority=10,
             )
         )
-        result = submission.completion.result()
+        result = completion.result()
         if not isinstance(result, ChatResult):
             raise TypeError("chat task returned an invalid result")
         return result
