@@ -121,10 +121,14 @@ class ConversationPersonaOrchestrator:
         )
         updated_turn_state = self._persona_driver.run(turn_state)
         trigger = activation.trigger or "selves_consult"
-        self._write_summary_log(
-            updated_turn_state,
+        write_persona_audit(
+            "persona_summary",
+            project_root=self._project_root,
             conversation_id=conversation_id,
-            trigger=trigger,
+            metadata={
+                "persona_count": len(updated_turn_state.contributions),
+                "has_synthesis": updated_turn_state.synthesis is not None,
+            },
         )
 
         force_discussion = mode.strip().casefold() in {
@@ -134,15 +138,11 @@ class ConversationPersonaOrchestrator:
             "competitive",
         }
         should_escalate = activation.should_escalate or force_discussion
-        escalation_reason = activation.escalation_reason or (
-            "requested discussion mode"
-            if force_discussion
-            else "consultation only"
-        )
-        self._write_host_decision_log(
+        write_persona_audit(
+            "host_discussion_decision",
+            project_root=self._project_root,
             conversation_id=conversation_id,
-            should_escalate=should_escalate,
-            escalation_reason=escalation_reason,
+            metadata={"should_escalate": should_escalate},
         )
         discussion_note = self._run_discussion(
             topic=topic,
@@ -174,7 +174,12 @@ class ConversationPersonaOrchestrator:
             nonlocal step_number
             del entry
             step_number += 1
-            self._write_discussion_step_log(conversation_id, step_number)
+            write_persona_audit(
+                "persona_discussion_step",
+                project_root=self._project_root,
+                conversation_id=conversation_id,
+                metadata={"step_number": step_number},
+            )
 
         try:
             candidate = self._build_candidate(
@@ -233,51 +238,6 @@ class ConversationPersonaOrchestrator:
             if persona_id in by_id
         )
         return selected or tuple(self._persona_definitions[:3])
-
-    def _write_summary_log(
-        self,
-        turn_state: PersonaTurnState,
-        *,
-        conversation_id: str,
-        trigger: str,
-    ) -> None:
-        del trigger
-        write_persona_audit(
-            "persona_summary",
-            project_root=self._project_root,
-            conversation_id=conversation_id,
-            metadata={
-                "persona_count": len(turn_state.contributions),
-                "has_synthesis": turn_state.synthesis is not None,
-            },
-        )
-
-    def _write_host_decision_log(
-        self,
-        *,
-        conversation_id: str,
-        should_escalate: bool,
-        escalation_reason: str,
-    ) -> None:
-        del escalation_reason
-        write_persona_audit(
-            "host_discussion_decision",
-            project_root=self._project_root,
-            conversation_id=conversation_id,
-            metadata={"should_escalate": should_escalate},
-        )
-
-    def _write_discussion_step_log(
-        self,
-        conversation_id: str,
-        step_number: int,
-    ) -> None:
-        write_persona_audit(
-            "persona_discussion_step",
-            project_root=self._project_root,
-            conversation_id=conversation_id,
-            metadata={"step_number": step_number},
-        )
 
     @staticmethod
     def _build_candidate(

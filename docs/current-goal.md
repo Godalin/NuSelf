@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify Reason workspace and persona tool composition around one thread-scoped
-workspace resolver.
+Inline one-use persona audit forwarding methods into their owning chat-persona
+lifecycle points.
 
 ## Ordered Steps
 
-1. Confirm both tool groups derive the same workspace database and namespace
-   from the active Reason runtime context.
-2. Extract that existing capability once and inject the same resolver into
-   workspace and persona tool builders.
-3. Run Reason/persona tool tests, Pyright, full pytest, and package build;
-   update evidence and commit without pushing.
+1. Confirm the three private audit methods each have one caller and no failure,
+   redaction, schema, or fallback policy beyond `write_persona_audit()`.
+2. Write each closed event at its lifecycle owner and remove the forwarding
+   methods plus discarded parameters.
+3. Run chat/persona tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not cache a workspace across Reason threads.
-- Do not add process globals, locks, or a workspace facade.
-- Do not change the durable namespace or LangGraph `BaseStore` adapter.
+- Do not change event names, metadata, levels, statuses, or ordering.
+- Do not put persona content into audit metadata.
+- Do not replace the closed persona audit registry with generic logging.
 
 ## Constraints
 
@@ -37,6 +37,13 @@ workspace resolver.
 
 ## Phase Evidence
 
+- Chat persona consultation now writes summary, host-decision, and discussion-
+  step audits at their owning lifecycle points. Removed three one-use methods,
+  two immediately discarded parameters, and an escalation-reason value that
+  never entered behavior or the privacy-safe audit schema. Event ordering and
+  metadata remain unchanged. Focused chat/persona tests: 320 passed; full
+  suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Reason workspace tools and thread-local persona tools now receive the same
   `_thread_workspace()` resolver. Removed duplicate closures, imports, authority
   lookup, and namespace construction while retaining per-call runtime-context

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat-persona lifecycle points now write their closed persona audits directly,
+  removing three one-use forwarding methods and two discarded parameters.
 - Reason workspace and persona tools now share one thread-scoped workspace
   resolver instead of duplicating authority and namespace composition.
 - Reflection-promotion trace recording now persists its owned link directly,

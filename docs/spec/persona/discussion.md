@@ -165,6 +165,8 @@ candidate id, approval decision, participant/outcome counts, and step count.
 Persona owns every direct `component=persona` event, including events requested
 by Chat, Reflection, and CLI callers. Callers use Persona adapters; they do not
 construct raw log records or choose arbitrary levels/statuses.
+Chat's persona adapter writes these closed events at the lifecycle point that
+owns their metadata; it does not add one-use per-event forwarding methods.
 
 | Event | Level | Status | Metadata |
 |---|---|---|---|
