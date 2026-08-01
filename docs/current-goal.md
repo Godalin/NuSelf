@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the memory application bundle and user-facing adapters for repository
-exposure or repeated composition that can be removed without weakening the
-complete memory use cases.
+Remove the observed legacy-layout migration check/use race without expanding
+the migration protocol or adding another lock.
 
 ## Constraints
 
@@ -131,6 +130,19 @@ complete memory use cases.
 - Reason/Reflection boundary suite: 1012 passed. Post-boundary
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- The former query-only memory helper is now the complete user-facing
+  `MemoryService`: search, context packing, filtered count, archive, and
+  importance mutation share one composed repository and index-refresh policy.
+- Agent tools now receive only `MemoryService`; the parallel entry-repository
+  capability and duplicated save/reindex mutations are gone. Curator, source,
+  projection, repair, and migration workflows retain explicit repositories
+  instead of being forced through a universal memory facade.
+- Memory/chat focused suite: 98 passed. Post-memory-service
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- The first full run exposed an unrelated concurrent legacy-layout migration
+  race between directory enumeration and `lstat`; its isolated rerun passed,
+  so the next phase will remove the check/use window explicitly.
 
 ## Last Completed Goal
 

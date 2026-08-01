@@ -144,6 +144,12 @@ storage selection, or business behavior; they prevent the same resources from
 being forwarded independently through every nested constructor. Conversation
 and tool runtimes borrow only their respective snapshot and must not resolve a
 backend or compose a second repository graph.
+The tool snapshot exposes one `MemoryService`, not the entry repository beside
+a query helper. Search, context packing, count, archive, and importance updates
+are service use cases so tool code cannot bypass reindexing or acquire unrelated
+memory mutations. Curator, source ingestion, projection, repair, and migration
+remain domain/infrastructure workflows and may receive the repositories they
+actually coordinate; they are not routed through a universal memory facade.
 Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
 memory/profile/reflection/trace repositories and conversation storage always come

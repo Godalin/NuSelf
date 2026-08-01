@@ -13,7 +13,7 @@ from nuself.application.trace import TraceServices, compose_trace_services
 from nuself.config import RuntimePaths
 from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification import NotificationOutbox
-from nuself.memory.query import MemoryQueryService
+from nuself.memory.query import MemoryService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
@@ -32,7 +32,7 @@ class ApplicationGraph:
     conversations: ConversationStore
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
-    memory_query: MemoryQueryService
+    memory_service: MemoryService
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
     reason_service: ReasonService
@@ -65,7 +65,7 @@ def compose_application(
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,
-        memory_query=MemoryQueryService(
+        memory_service=MemoryService(
             memory.entries,
             memory.sources,
             memory.profile,

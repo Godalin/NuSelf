@@ -39,7 +39,7 @@ from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import read_log_events, runtime_event_log_sink
-from nuself.memory.query import MemoryQueryService
+from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
@@ -66,7 +66,7 @@ def _chat_tool(
     tmp_path: Path,
     name: str,
     *,
-    query_service: MemoryQueryService | None = None,
+    query_service: MemoryService | None = None,
     reflection_repository: object | None = None,
 ) -> BaseTool:
     from nuself.agent.tools import build_langchain_chat_tools
@@ -89,9 +89,8 @@ def _chat_tool(
     )
     resources = ToolResources(
         project_root=tmp_path,
-        memory_query=query_service
-        or MemoryQueryService(memory_repository),
-        memory=memory_repository,
+        memory=query_service
+        or MemoryService(memory_repository),
         reflections=ReflectionService(
             repo,
             application.reason_service,
@@ -186,7 +185,7 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
         )
     )
     llm = FakeResponseService()
-    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(repo))
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryService(repo))
 
     result = agent.respond("clarity assumptions")
 
@@ -207,7 +206,7 @@ def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
         )
     )
     llm = FakeResponseService()
-    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(repo))
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryService(repo))
 
     agent.respond("weather forecast")
 
@@ -255,7 +254,7 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
         )
     )
     llm = FakeResponseService()
-    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path), profile_repository=profile_repo))
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryService(memory_entry_repository(tmp_path), profile_repository=profile_repo))
 
     agent.respond("direct answers")
 
@@ -277,7 +276,7 @@ def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     agent = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(
+        memory_query_service=MemoryService(
             memory_entry_repository(tmp_path)
         ),
     )
@@ -432,7 +431,7 @@ def test_selves_consult_writes_host_discussion_decision_log(tmp_path: Path, caps
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=llm,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     runtime._consult_selves_tool("compare the tradeoffs and debate the options", mode="discussion")  # type: ignore[reportPrivateUsage]
@@ -487,7 +486,7 @@ def test_conversation_runtime_nodes_pass_typed_turn_state(tmp_path: Path) -> Non
                 confidence=0.8,
             )
         ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
     turn_state = ConversationTurnState.start(ConversationState.empty("default"), "node contracts", "default")
 
@@ -541,7 +540,7 @@ def test_conversation_runtime_skips_persona_work_for_trivial_turn(tmp_path: Path
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Trivial reply.", confidence=0.4)
         ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     _, result, node_trace = runtime.run_turn(ConversationState.empty("trivial"), "hello", "trivial")
@@ -626,7 +625,7 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Persona reply.", confidence=0.4)
         ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool("Should I split this project?")  # type: ignore[reportPrivateUsage]
@@ -665,7 +664,7 @@ def test_conversation_runtime_executes_direct_typed_stages(tmp_path: Path) -> No
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     state, chat_result, node_trace = runtime.run_turn(ConversationState.empty("graph"), "graph runtime", "graph")
@@ -716,7 +715,7 @@ def test_chat_agent_preserves_conversation_state_when_graph_driver_fails(tmp_pat
         tmp_path,
         response_service=FailingResponseService(),
         conversation_store=conversation_store,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     with pytest.raises(ConversationGraphRuntimeError, match="conversation graph node 'respond' failed") as exc_info:
@@ -1023,7 +1022,7 @@ def test_conversation_runtime_registers_langchain_tools(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
     tools = getattr(runtime, "_tools")
 
@@ -1106,7 +1105,7 @@ def test_memory_search_tool_invocation_with_limit(tmp_path: Path) -> None:
             )
         )
 
-    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryService(repo))
 
     result = _invoke_chat_tool(tool, {"query": "belief", "limit": 2})
 
@@ -1132,7 +1131,7 @@ def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None
             tags=["runtime"],
         )
     )
-    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryService(repo))
 
     result = _invoke_chat_tool(tool, {"query": "current goal", "types": ["goal"], "tags": ["runtime"]})
 
@@ -1142,7 +1141,7 @@ def test_memory_search_tool_accepts_type_and_tag_filters(tmp_path: Path) -> None
 
 def test_memory_search_tool_with_invalid_inputs(tmp_path: Path) -> None:
     repo = memory_entry_repository(tmp_path)
-    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryQueryService(repo))
+    tool = _chat_tool(tmp_path, "memory_search", query_service=MemoryService(repo))
 
     # Empty query
     result = _invoke_chat_tool(tool, {"query": "", "limit": 8})
@@ -1160,7 +1159,7 @@ def test_empty_memory_search_requests_one_broader_query(
     tool = _chat_tool(
         tmp_path,
         "memory_search",
-        query_service=MemoryQueryService(repo),
+        query_service=MemoryService(repo),
     )
 
     result = _invoke_chat_tool(
@@ -1428,7 +1427,7 @@ def test_load_reason_skills_have_separate_read_and_proposal_tools(tmp_path: Path
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=FakeResponseService(),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
     tools = cast(dict[str, BaseTool], getattr(runtime, "_tools"))
 

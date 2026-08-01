@@ -20,7 +20,7 @@ from nuself.domain.memory import (
     default_memory_type_registry,
 )
 from nuself.memory.intake import MemoryIntakeAgent
-from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.memory.query import MemoryQuery
 from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryRelationFilters,
@@ -302,7 +302,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
     eligible_ids = {
         entry.id for entry in repository.search("", filters)
     }
-    matches = MemoryQueryService(repository).search(
+    matches = compose_cli_application(args.project_root).memory_service.search(
         MemoryQuery(
             text=args.query,
             limit=max(len(eligible_ids), 1),

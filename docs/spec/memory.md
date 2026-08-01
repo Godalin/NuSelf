@@ -379,7 +379,14 @@ ProfileItem and delete targets have no MemoryEntry review-state transition.
 | `quarantined` | Unknown type, awaiting recovery |
 | `rejected` | Explicitly rejected |
 
-## Query / Retrieval (`MemoryQueryService`)
+## Memory Service (`MemoryService`)
+
+The application composes one service for user-facing retrieval and bounded
+entry mutation. It owns context packing, filtered counts, archive, and
+importance updates; mutations refresh the derived memory index before
+returning. Agent tools receive only this service and never the entry repository.
+Repository bundles remain internal application resources for workflows that
+coordinate candidates, sources, observations, curator plans, and profiles.
 
 ### Filtering Before Scoring
 
@@ -410,7 +417,7 @@ The chat memory skill may not conclude from its first empty tool result. It
 must issue exactly one distinct broader `memory_search` using fewer, shorter,
 or synonymous keywords before reporting that no matching stored memory was
 found. The second empty result ends retrieval; the agent must not loop. This
-conversation policy does not change deterministic `MemoryQueryService`
+conversation policy does not change deterministic `MemoryService`
 scoring or make a claim that the authority contains no memories.
 
 The one-shot `memory search` command uses the same ranked token query service

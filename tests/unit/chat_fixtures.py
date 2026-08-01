@@ -20,7 +20,7 @@ from nuself.application.composition import compose_application
 from nuself.application.persona import load_personas_from_memory
 from nuself.config import runtime_paths
 from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryQueryService
+from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.persona.tools import build_persona_tools
@@ -51,7 +51,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         *,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
-        memory_query_service: MemoryQueryService | None = None,
+        memory_query_service: MemoryService | None = None,
         conversation_store: ConversationStore | None = None,
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
@@ -92,9 +92,8 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         resources = ConversationResources(
             tools=ToolResources(
                 project_root=project_root,
-                memory_query=memory_query_service
-                or MemoryQueryService(entries, sources, profile),
-                memory=entries,
+                memory=memory_query_service
+                or MemoryService(entries, sources, profile),
                 reflections=reflections,
                 reasons=reason_service
                 or application.reason_service,

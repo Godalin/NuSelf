@@ -20,7 +20,7 @@ from nuself.agent.tools.trace import build_trace_tools
 from nuself.agent.tools.workspace import build_workspace_tools
 from nuself.application.composition import compose_application
 from nuself.config import runtime_paths
-from nuself.memory.query import MemoryQueryService
+from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from reason_fixtures import ReasonService
 from nuself.store import ScopedWorkspace, SqliteStore
@@ -40,11 +40,10 @@ def test_subsystem_tool_builders_own_their_registries(
     memory_repository = memory_entry_repository(tmp_path)
 
     assert _names(
-        build_memory_tools(
-            query_service=MemoryQueryService(memory_repository),
-            repository=memory_repository,
-            project_root=tmp_path,
-        )
+            build_memory_tools(
+                service=MemoryService(memory_repository),
+                project_root=tmp_path,
+            )
     ) == {
         "memory_search",
         "memory_count",

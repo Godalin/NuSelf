@@ -7,8 +7,7 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.memory.query import MemoryQueryService
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.query import MemoryService
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
@@ -22,8 +21,7 @@ class ToolResources:
     """Tool-facing resources from one authority; owns no lifecycle."""
 
     project_root: Path
-    memory_query: MemoryQueryService
-    memory: MemoryEntryRepository
+    memory: MemoryService
     reflections: ReflectionService
     reasons: ReasonService
     reason_workspace: PrivateWorkspaceStore

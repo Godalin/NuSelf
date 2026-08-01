@@ -9,12 +9,12 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.conversation import ConversationMessage
-from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.memory.query import MemoryQuery, MemoryService
 
 
 class ConversationContextPreparer:
     def __init__(
-        self, memory_query_service: MemoryQueryService
+        self, memory_query_service: MemoryService
     ) -> None:
         self._memory_query_service = memory_query_service
 

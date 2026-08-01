@@ -9,11 +9,8 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
-from nuself.memory.query import MemoryQuery, MemoryQueryService
-from nuself.memory.repository import (
-    MemoryEntryNotFound,
-    MemoryEntryRepository,
-)
+from nuself.memory.query import MemoryQuery, MemoryService
+from nuself.memory.repository import MemoryEntryNotFound
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature_execution import FeatureExecutor
 
@@ -38,15 +35,13 @@ class MemoryToolSet:
 
 def build_memory_tools(
     *,
-    query_service: MemoryQueryService,
-    repository: MemoryEntryRepository,
+    service: MemoryService,
     project_root: Path | None,
     executor: FeatureExecutor | None = None,
 ) -> tuple[BaseTool, ...]:
     """Build the memory service's chat tools."""
     tools = build_memory_tool_set(
-        query_service=query_service,
-        repository=repository,
+        service=service,
         project_root=project_root,
         executor=executor,
     )
@@ -55,8 +50,7 @@ def build_memory_tools(
 
 def build_memory_tool_set(
     *,
-    query_service: MemoryQueryService,
-    repository: MemoryEntryRepository,
+    service: MemoryService,
     project_root: Path | None,
     executor: FeatureExecutor | None = None,
 ) -> MemoryToolSet:
@@ -89,7 +83,7 @@ def build_memory_tool_set(
             return "Error: query must be a non-empty string"
         if limit_int < 1:
             return "Error: limit must be a positive integer"
-        packed = query_service.pack(
+        packed = service.pack(
             MemoryQuery(
                 text=query_str.strip(),
                 limit=limit_int,
@@ -122,21 +116,16 @@ def build_memory_tool_set(
         tags: list[str] | str | None = None,
     ) -> str:
         """Count durable memory entries, optionally filtered by type or tag."""
-        entries = repository.list()
-        if types:
-            type_set = set(_string_tuple_filter(types))
-            entries = [entry for entry in entries if entry.type in type_set]
-        if tags:
-            tag_set = set(_string_tuple_filter(tags))
-            entries = [
-                entry for entry in entries if tag_set.intersection(entry.tags)
-            ]
+        count = service.count(
+            memory_types=_string_tuple_filter(types),
+            tags=_string_tuple_filter(tags),
+        )
         suffix = (
             f" (filtered by type={types}, tags={tags})"
             if types or tags
             else ""
         )
-        return f"Memory entries: {len(entries)} total{suffix}"
+        return f"Memory entries: {count} total{suffix}"
 
     @tool(
         name="memory_archive",
@@ -154,15 +143,12 @@ def build_memory_tool_set(
         if project_root is None:
             return "Error: project root is not configured"
         try:
-            entry = repository.get(entry_id)
+            updated = service.archive(entry_id)
         except MemoryEntryNotFound as exc:
             return (
                 "Error: could not find memory entry: "
                 f"{diagnostic_exception_message(exc)}"
             )
-        updated = entry.with_updates(review_state="archived")
-        repository.save(updated)
-        repository.reindex()
         return f'Archived "{updated.title}".'
 
     @tool(
@@ -190,15 +176,15 @@ def build_memory_tool_set(
         if not 0.0 <= importance_float <= 1.0:
             return "Error: importance must be between 0.0 and 1.0"
         try:
-            entry = repository.get(entry_id)
+            updated = service.update_importance(
+                entry_id,
+                importance=importance_float,
+            )
         except MemoryEntryNotFound as exc:
             return (
                 "Error: could not find memory entry: "
                 f"{diagnostic_exception_message(exc)}"
             )
-        updated = entry.with_updates(importance=importance_float)
-        repository.save(updated)
-        repository.reindex()
         return (
             f'Updated importance of "{updated.title}" '
             f"to {importance_float:.2f}."

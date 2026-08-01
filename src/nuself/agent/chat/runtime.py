@@ -115,7 +115,7 @@ class ConversationGraphRuntime:
         self._conversation_store = resources.conversation_store
         self._language_preference = resources.language_preference
         self._trace_recorder = resources.trace_recorder
-        self._memory_query_service = resources.tools.memory_query
+        self._memory_query_service = resources.tools.memory
         self._context_preparer = ConversationContextPreparer(
             self._memory_query_service
         )

@@ -34,8 +34,7 @@ def build_langchain_chat_tools(
     """Compose subsystem-owned tools for the chat runtime."""
     executor = feature_executor or FeatureExecutor()
     memory_tools = build_memory_tool_set(
-        query_service=resources.memory_query,
-        repository=resources.memory,
+        service=resources.memory,
         project_root=resources.project_root,
         executor=executor,
     )

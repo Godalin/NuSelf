@@ -24,7 +24,7 @@ from nuself.agent.chat import (
     ConversationState,
 )
 from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryQueryService
+from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona import PersonaGraphAgents
 from nuself.persona.definition import (
@@ -153,7 +153,7 @@ def test_selves_consult_returns_internal_synthesis(
         tmp_path,
         response_service=llm,
         langchain_models=cast(Any, models),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
@@ -172,7 +172,7 @@ def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="Final answer.", confidence=0.5)
         ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     _, result, _ = runtime.run_turn(
@@ -203,7 +203,7 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="No synthesis reply.", confidence=0.5)
         ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
@@ -246,7 +246,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
         tmp_path,
         response_service=llm,
         langchain_models=cast(Any, models),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
@@ -278,7 +278,7 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=llm,
-        memory_query_service=MemoryQueryService(repo),
+        memory_query_service=MemoryService(repo),
     )
 
     turn_state = ConversationTurnState.start(
@@ -312,7 +312,7 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
@@ -347,7 +347,7 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(

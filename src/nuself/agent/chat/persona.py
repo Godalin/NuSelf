@@ -8,7 +8,7 @@ from pathlib import Path
 from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.domain.proactive import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.memory.query import MemoryQuery, MemoryService
 from nuself.persona import (
     AgentBackedActivationPolicy,
     AgentBackedPersonaNode,
@@ -37,7 +37,7 @@ class ConversationPersonaOrchestrator:
         project_root: Path | None,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         language_preference: str,
-        memory_query_service: MemoryQueryService,
+        memory_query_service: MemoryService,
         persona_definitions: tuple[PersonaDefinition, ...],
     ) -> None:
         self._project_root = project_root

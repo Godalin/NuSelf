@@ -40,8 +40,7 @@ def compose_conversation_runtime(
     resources = ConversationResources(
         tools=ToolResources(
             project_root=paths.project_root,
-            memory_query=application.memory_query,
-            memory=application.memory.entries,
+            memory=application.memory_service,
             reflections=application.reflection_service,
             reasons=application.reason_service,
             reason_workspace=PrivateWorkspaceStore(

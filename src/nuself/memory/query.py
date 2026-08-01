@@ -56,8 +56,8 @@ class ProfileMatch:
     reasons: tuple[str, ...]
 
 
-class MemoryQueryService:
-    """Query durable memory entries and pack relevant context for prompts."""
+class MemoryService:
+    """Complete user-facing memory query and entry-mutation service."""
 
     def __init__(
         self,
@@ -98,6 +98,49 @@ class MemoryQueryService:
             self._relation_registry,
             self._repository,
         )
+
+    def count(
+        self,
+        *,
+        memory_types: tuple[str, ...] = (),
+        tags: tuple[str, ...] = (),
+    ) -> int:
+        """Count entries matching optional type and tag filters."""
+
+        entries = self._repository.list()
+        if memory_types:
+            entries = [entry for entry in entries if entry.type in memory_types]
+        if tags:
+            tag_set = set(tags)
+            entries = [
+                entry for entry in entries if tag_set.intersection(entry.tags)
+            ]
+        return len(entries)
+
+    def archive(self, entry_id: str) -> MemoryEntry:
+        """Archive one entry and refresh derived indexes."""
+
+        entry = self._repository.get(entry_id)
+        updated = entry.with_updates(review_state="archived")
+        self._repository.save(updated)
+        self._repository.reindex()
+        return updated
+
+    def update_importance(
+        self,
+        entry_id: str,
+        *,
+        importance: float,
+    ) -> MemoryEntry:
+        """Update entry importance and refresh derived indexes."""
+
+        if not 0.0 <= importance <= 1.0:
+            raise ValueError("importance must be between 0.0 and 1.0")
+        entry = self._repository.get(entry_id)
+        updated = entry.with_updates(importance=importance)
+        self._repository.save(updated)
+        self._repository.reindex()
+        return updated
 
     def search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
         if self._source_repository is None:

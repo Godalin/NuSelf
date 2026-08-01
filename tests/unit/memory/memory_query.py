@@ -13,7 +13,7 @@ from pathlib import Path
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
-from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.memory.query import MemoryQuery, MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
@@ -39,7 +39,7 @@ def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> Non
             tags=["daily"],
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="clarity and assumptions"))
 
@@ -62,7 +62,7 @@ def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
             temporal_note="Observed during CLI output discussion.",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     packed = service.pack(MemoryQuery(text="direct style"))
 
@@ -95,7 +95,7 @@ def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> Non
     entry_repo = memory_entry_repository(tmp_path)
     source_repo = source_repository(tmp_path)
     source_repo.ingest_path(source_path)
-    service = MemoryQueryService(entry_repo, source_repo)
+    service = MemoryService(entry_repo, source_repo)
 
     packed = service.pack(MemoryQuery(text="durable evidence"))
 
@@ -122,7 +122,7 @@ def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> Non
             observed_at="2026-05-07",
         )
     )
-    service = MemoryQueryService(entry_repo, profile_repository=profile_repo)
+    service = MemoryService(entry_repo, profile_repository=profile_repo)
 
     packed = service.pack(MemoryQuery(text="concise command"))
 
@@ -144,7 +144,7 @@ def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path)
             tags=["style"],
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     packed = service.pack(MemoryQuery(text="weather forecast"))
 
@@ -163,7 +163,7 @@ def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: P
             source_refs=["source:profile:0"],
         )
     )
-    service = MemoryQueryService(memory_entry_repository(tmp_path), profile_repository=profile_repo)
+    service = MemoryService(memory_entry_repository(tmp_path), profile_repository=profile_repo)
 
     packed = service.pack(MemoryQuery(text="direct answers"))
 
@@ -192,7 +192,7 @@ def test_memory_query_uses_type_descriptor_affinity(tmp_path: Path) -> None:
             review_state="reviewed",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="how should you respond"))
 
@@ -220,7 +220,7 @@ def test_memory_query_filters_by_type_and_tag(tmp_path: Path) -> None:
             review_state="reviewed",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="current goal", memory_types=("goal",), tags=("runtime",)))
 
@@ -249,7 +249,7 @@ def test_memory_query_expands_related_entries(tmp_path: Path) -> None:
             review_state="reviewed",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="current goal", limit=4))
 
@@ -278,7 +278,7 @@ def test_memory_query_expands_superseded_by_entries(tmp_path: Path) -> None:
             review_state="reviewed",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="legacy fixed categories", limit=4))
 
@@ -313,7 +313,7 @@ def test_memory_query_respects_retrieval_rule_score_penalty(tmp_path: Path) -> N
             relations={"supersedes": [superseded.id], "related_to": [neighbor.id]},
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="descriptor", limit=4))
 
@@ -369,7 +369,7 @@ def test_memory_query_expands_transitive_relation_closure(tmp_path: Path) -> Non
             relations={"depends_on": [deep_dependency.id]},
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
 
     matches = service.search(MemoryQuery(text="graph retrieval", limit=6))
 
@@ -439,7 +439,7 @@ def test_memory_query_uses_registry_retrieve_to_filter_types(tmp_path: Path) -> 
         )
     )
     registry = MemoryTypeRegistry([HidingBeliefDescriptor()])
-    service = MemoryQueryService(repo, registry=registry)
+    service = MemoryService(repo, registry=registry)
 
     normal_matches = service.search(MemoryQuery(text="visible", limit=6))
     hidden_matches = service.search(MemoryQuery(text="hide belief", limit=6))
@@ -469,7 +469,7 @@ def test_query_uses_importance_in_scoring(tmp_path: Path) -> None:
             review_state="reviewed",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
     matches = service.search(MemoryQuery(text="note", limit=6))
     high_match = next(m for m in matches if m.entry.id == high.id)
     low_match = next(m for m in matches if m.entry.id == low.id)
@@ -498,7 +498,7 @@ def test_query_filters_by_min_importance(tmp_path: Path) -> None:
             review_state="reviewed",
         )
     )
-    service = MemoryQueryService(repo)
+    service = MemoryService(repo)
     all_matches = service.search(MemoryQuery(text="note", limit=6))
     assert len(all_matches) == 2
 

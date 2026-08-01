@@ -45,7 +45,7 @@ Development constraints for `src/nuself/`.
 - Future symbolic graph relations should be registered through relation descriptors rather than hard-coded relation enums.
 - Derived indexes belong under the selected authority's `derived/` directory
   and should be rebuildable from entries.
-- Chat prompts must use `MemoryQueryService` or a successor query layer instead of loading all entries indiscriminately.
+- Chat prompts must use `MemoryService` instead of loading all entries indiscriminately.
 - Memory query and context packing must remain independently testable without live LLM calls.
 - Memory curator logic must write structured memory entries through
   repositories, log updates under the selected authority, and remain testable
