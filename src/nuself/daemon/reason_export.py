@@ -257,11 +257,11 @@ class ReasonExportService:
         *,
         reason_service: ReasonService,
         workspace_store: PrivateWorkspaceStore,
+        task_sink: ExportTaskSink,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
     ) -> None:
         self._project_root = project_root
-        self._reason_service = reason_service
         self._workspace_store = workspace_store
         self._text_agent = (
             text_agent
@@ -276,34 +276,18 @@ class ReasonExportService:
             if job_definitions is not None
             else build_reason_job_definition_registry()
         )
-        self._task_sink: ExportTaskSink | None = None
-        self._store: PrivateWorkspaceStore | None = None
-        self._service: ReasonOutputService | None = None
+        self._task_sink = task_sink
+        self._service = ReasonOutputService(
+            project_root,
+            reason_service=reason_service,
+            workspace_store=workspace_store,
+        )
 
     def enqueue(self, message: JobMessage) -> None:
         """Validate and submit one export wake-up to the daemon scheduler."""
 
         self._job_definitions.validate(message)
-        self._submit(message, 0.0)
-
-    def bind_task_sink(self, sink: ExportTaskSink) -> None:
-        if self._task_sink is not None:
-            raise RuntimeError("reason export task sink is already bound")
-        self._task_sink = sink
-
-    def prepare(self) -> None:
-        """Construct dependencies before recovery or task execution."""
-
-        if self._store is not None or self._service is not None:
-            return
-        store = self._workspace_store
-        service = ReasonOutputService(
-            self._project_root,
-            reason_service=self._reason_service,
-            workspace_store=store,
-        )
-        self._store = store
-        self._service = service
+        self._task_sink(message, 0.0)
 
     def process(self, message: JobMessage) -> None:
         """Process one definition-validated scheduler task."""
@@ -317,9 +301,8 @@ class ReasonExportService:
             metadata={},
         )
 
-        store, service = self._dependencies()
         manifest_path = (
-            store.paths(thread_id).artifacts
+            self._workspace_store.paths(thread_id).artifacts
             / "jobs"
             / job_id
             / "manifest.json"
@@ -360,7 +343,7 @@ class ReasonExportService:
             },
         )
         try:
-            service.compose_with_runner(
+            self._service.compose_with_runner(
                 thread_id,
                 job_id,
                 self._llm_runner,
@@ -417,7 +400,7 @@ class ReasonExportService:
             "next_backoff": backoff,
         }
         try:
-            self._submit(retry_message, float(backoff))
+            self._task_sink(retry_message, float(backoff))
         except Exception as schedule_error:
             report_reason_failure(
                 schedule_error,
@@ -445,17 +428,16 @@ class ReasonExportService:
             resource_id=thread_id,
         )
         try:
-            self._submit(message, float(EXPORT_RETRY_BASE_SECONDS))
+            self._task_sink(message, float(EXPORT_RETRY_BASE_SECONDS))
         except Exception:
             return
 
     def recover(self) -> None:
         """Rediscover incomplete durable manifests into scheduler wake-ups."""
 
-        store, _ = self._dependencies()
         reconciled = 0
-        for owner_id in store.list_owners():
-            jobs_dir = store.paths(owner_id).artifacts / "jobs"
+        for owner_id in self._workspace_store.list_owners():
+            jobs_dir = self._workspace_store.paths(owner_id).artifacts / "jobs"
             if not jobs_dir.exists():
                 continue
             for job_dir in sorted(jobs_dir.iterdir()):
@@ -514,12 +496,6 @@ class ReasonExportService:
             metadata={"replayed_jobs": reconciled},
         )
 
-    def _submit(self, message: JobMessage, delay_seconds: float) -> None:
-        sink = self._task_sink
-        if sink is None:
-            raise RuntimeError("reason export task sink is not bound")
-        sink(message, delay_seconds)
-
     def _llm_runner(
         self,
         thread: ReasoningThread,
@@ -572,16 +548,6 @@ class ReasonExportService:
                 HumanMessage(content="\n".join(body_lines)),
             ]
         )
-
-    def _dependencies(
-        self,
-    ) -> tuple[PrivateWorkspaceStore, ReasonOutputService]:
-        if self._store is None or self._service is None:
-            raise RuntimeError(
-                "export worker dependencies were not initialized"
-            )
-        return self._store, self._service
-
 
 def read_export_manifest(path: Path) -> ReasonOutputManifest:
     return ReasonOutputManifest.from_wire(_read_json_object(path))

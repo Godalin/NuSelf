@@ -9,8 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit daemon protocol and payload codecs for redundant wrappers or duplicated
-validation while preserving exact wire contracts and classified failures.
+Audit daemon lifecycle state/result types for duplicated projections and
+adapter-only wrappers while preserving ownership and shutdown guarantees.
 
 ## Constraints
 
@@ -66,6 +66,15 @@ validation while preserving exact wire contracts and classified failures.
 - Replaced obsolete named-factory boundary checks with stronger application
   package boundaries after those factories were deleted.
 - Daemon/boundary focused suite: 221 passed. Post-periodic-composition
+  `uv run --locked pytest -q`: 2448 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Daemon protocol/payload codecs remain intentionally distinct: each represents
+  a different exact wire schema and classified decode context; no generic codec
+  layer was introduced.
+- Reason export now receives workspace, output service, and scheduler sink as
+  complete construction dependencies. Removed nullable dependency mirrors,
+  `prepare()`, late sink binding, and their runtime guards.
+- Reason-export focused suite: 91 passed. Post-export-composition
   `uv run --locked pytest -q`: 2448 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

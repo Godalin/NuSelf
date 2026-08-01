@@ -390,17 +390,19 @@ The first chat-facing export tool call must be approval-gated, but the agent sho
 behavior while `DaemonScheduler` owns execution lifecycle. The service exposes:
 
 - `enqueue(JobMessage)` accepts an already-typed job envelope;
-- `prepare()` constructs workspace and output-service dependencies before
-  readiness;
 - `recover()` admits incomplete durable manifests during startup;
 - `process(JobMessage)` performs one scheduler-owned task.
+
+Workspace, output-service, and scheduler task-sink dependencies are complete at
+construction. The service has no separate prepared/unprepared or bound/unbound
+state; daemon startup only performs durable recovery before admitting scheduled
+execution.
 
 The scheduler restores the task envelope context and replaces its thread, job,
 and source with the authoritative export identity. The service owns manifest
 inspection, failure persistence, reconciliation, and export audit events, but
 submits retry delays back to the same scheduler. `DaemonState` must not retain
 parallel export queues, timers, stores, services, or processor helpers.
-reconciliation; no in-memory work may appear after the drain.
 
 All export worker lifecycle and caught-failure audit writes use the shared
 observable best-effort boundary. Audit failure cannot change an already-made

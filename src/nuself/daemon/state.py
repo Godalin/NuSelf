@@ -88,6 +88,7 @@ class DaemonState:
                 paths,
                 scope="reason",
             ),
+            task_sink=self._schedule_reason_export,
         )
         self.conversation_runtime = compose_conversation_runtime(
             self.application,
@@ -157,9 +158,6 @@ class DaemonState:
             event_publisher=self.event_publisher,
             project_root=self.project_root,
         )
-        self.reason_export_service.bind_task_sink(
-            self._schedule_reason_export
-        )
 
     def require_scheduler_ready(self) -> None:
         """Require the dispatcher to remain alive before readiness."""
@@ -170,7 +168,6 @@ class DaemonState:
     def start_background_tasks(self) -> None:
         """Start one scheduler and admit all recurring responsibilities."""
 
-        self.reason_export_service.prepare()
         self.reason_export_service.recover()
         self.scheduler.start()
         for kind, interval in self._periodic_tasks:

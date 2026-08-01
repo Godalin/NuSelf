@@ -138,8 +138,6 @@ def test_export_recovery_admits_incomplete_manifest_once(
     state = DaemonState(tmp_path)
     path = _manifest_path(state)
     write_json_atomic(path, _manifest().to_wire())
-    state.reason_export_service.prepare()
-
     state.reason_export_service.recover()
     state.reason_export_service.recover()
 
@@ -156,8 +154,6 @@ def test_export_recovery_ignores_terminal_manifest(
         path,
         replace(_manifest(), status="complete").to_wire(),
     )
-    state.reason_export_service.prepare()
-
     state.reason_export_service.recover()
 
     assert state.scheduler.snapshot().pending == 0
