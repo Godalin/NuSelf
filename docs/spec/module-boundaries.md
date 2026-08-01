@@ -59,6 +59,8 @@ must not create it lazily during worker startup.
 `ApplicationRuntime` is the shared authority-lifetime owner. Its public
 factory resolves paths without opening storage; the first graph access selects
 one backend and constructs the complete authority-scoped `ApplicationGraph`.
+First access and close are serialized by one non-reentrant lifecycle lock;
+runtime composition must not recursively request its own graph.
 It is context-manageable, closes idempotently, and rejects graph access after
 close. It is only created by an outer process adapter; domain code receives
 the graph's narrow repositories and services rather than looking up the

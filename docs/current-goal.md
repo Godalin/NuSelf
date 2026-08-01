@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing service APIs for test-only or implementation-only public
-methods while preserving complete domain use cases such as Reason workspace
-access and generic Trace recording/linking.
+Audit process-local `RLock` uses in application, daemon, runtime, and service
+infrastructure. Replace only locks with no recursive acquisition path; retain
+reentrancy where callbacks or nested publication require it.
 
 ## Constraints
 
@@ -128,6 +128,14 @@ access and generic Trace recording/linking.
 - Memory/Chat/agent focused suite: 192 passed. Post-service-surface cleanup
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- Every `MemoryRepositories` and `TraceServices` field has a production
+  consumer; neither immutable resource bundle contains a historical field.
+- `ApplicationRuntime` graph access, close, and enter critical sections never
+  nest and expose no recursive callback. Its lifecycle mutex is now a plain
+  `Lock`; concurrent first access still composes and returns exactly one graph.
+- Application/CLI/REPL/daemon lifecycle focused suite: 56 passed; concurrent
+  runtime suite: 6 passed. Post-lock cleanup `uv run --locked pytest -q`:
+  2457 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

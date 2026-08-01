@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,25 @@ def test_application_runtime_reuses_one_graph_and_closes_idempotently(
 
     with pytest.raises(ApplicationRuntimeClosedError):
         _ = runtime.application
+
+
+def test_application_runtime_serializes_first_graph_access(
+    tmp_path: Path,
+) -> None:
+    runtime = open_application_runtime(tmp_path)
+
+    def load_graph(_: int):
+        return runtime.application
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            graphs = tuple(
+                executor.map(load_graph, range(16))
+            )
+
+        assert all(graph is graphs[0] for graph in graphs)
+    finally:
+        runtime.close()
 
 
 def test_cli_composition_borrows_the_scoped_runtime_graph(

@@ -6,7 +6,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from pathlib import Path
-import threading
+from threading import Lock
 from types import TracebackType
 
 from nuself.application.composition import (
@@ -27,7 +27,7 @@ class ApplicationRuntime:
         self._paths = paths
         self._application: ApplicationGraph | None = None
         self._closed = False
-        self._lock = threading.RLock()
+        self._lock = Lock()
 
     @property
     def paths(self) -> RuntimePaths:
