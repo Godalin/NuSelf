@@ -6,10 +6,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from nuself.clock import utc_now
-from nuself.reason.advancer import ReasonAdvancer
 from nuself.reason.audit import report_reason_failure, write_reason_audit
 from nuself.reason.domain import ReasoningThread
-from nuself.reason.service import ReasonService
+from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
 from nuself.runtime.context import runtime_context
 
 
@@ -19,7 +18,7 @@ class ReasonScheduler:
     def __init__(
         self,
         project_root: Path | None = None,
-        advancer: ReasonAdvancer | None = None,
+        advancer: ReasonAdvancerProtocol | None = None,
         interval_seconds: int = 600,
         *,
         service: ReasonService,

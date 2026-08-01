@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Background Reason scheduling now depends on the existing one-operation
+  advancer protocol instead of the concrete model-backed implementation.
 - Daemon durable follow-up admission no longer exposes an unused boolean
   result; deferral remains observable and recoverable through its existing
   typed boundary.
