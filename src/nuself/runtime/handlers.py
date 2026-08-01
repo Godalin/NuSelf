@@ -32,23 +32,19 @@ class HandlerMiddleware(
     ) -> MiddlewareResult: ...
 
 
-class HandlerRegistryError(RuntimeError):
-    """Base class for handler registry composition errors."""
-
-
-class DuplicateHandlerError(HandlerRegistryError):
+class DuplicateHandlerError(RuntimeError):
     """Raised when the same handler key is registered twice."""
 
 
-class HandlerRegistrySealedError(HandlerRegistryError):
+class HandlerRegistrySealedError(RuntimeError):
     """Raised when registration is attempted after composition."""
 
 
-class HandlerRegistryUnsealedError(HandlerRegistryError):
+class HandlerRegistryUnsealedError(RuntimeError):
     """Raised when runtime dispatch starts before composition is sealed."""
 
 
-class HandlerRegistryCoverageError(HandlerRegistryError):
+class HandlerRegistryCoverageError(RuntimeError):
     """Raised when a closed catalog and its registered handlers differ."""
 
     def __init__(
@@ -66,7 +62,7 @@ class HandlerRegistryCoverageError(HandlerRegistryError):
         )
 
 
-class UnknownHandlerError(HandlerRegistryError):
+class UnknownHandlerError(RuntimeError):
     """Raised when dispatch targets an unregistered key."""
 
 

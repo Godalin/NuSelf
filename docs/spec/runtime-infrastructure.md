@@ -104,6 +104,9 @@ request-dispatch primitive.
 - Registries are explicitly sealed after composition. Registration after
   sealing raises.
 - Dispatch through an unregistered key raises `UnknownHandlerError`.
+- Concrete handler registry failures inherit `RuntimeError` directly. A common
+  registry-error family is not part of the contract unless an independent
+  caller policy needs to handle every registration and dispatch failure alike.
 - A registry has no process-global singleton; the composition root owns it.
 - Registries accept typed synchronous middleware during composition. Like
   handlers, middleware cannot be added after sealing.

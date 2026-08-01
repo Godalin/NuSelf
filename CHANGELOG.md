@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Handler registry duplicate, sealed, unsealed, coverage, and unknown-key
+  failures now remain distinct direct runtime errors without an unused common
+  exception family.
 - Daemon requests now generate their default UUID-hex identity directly at the
   typed request field, removing an orphaned standalone generator API.
 - Scheduler capacity and stopped-admission failures now remain distinct direct
