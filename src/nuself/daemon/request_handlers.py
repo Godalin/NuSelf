@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, TypeVar
 
-from nuself.agent.chat import ChatResult
+from nuself.agent.chat.types import ChatResult
 from nuself.daemon.activity import (
     ActivityBroker,
     ActivitySubscriptionNotFound,

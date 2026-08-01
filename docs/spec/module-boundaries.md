@@ -151,6 +151,10 @@ not imply shared conversation state or a process-global model registry.
 Chat-only aggregation lives in `agent.tools.composition`; domain code imports
 its concrete tool module directly so importing decorators or one tool cannot
 initialize Reason, Reflection, Memory, and Persona transitively.
+`nuself.agent.chat` is likewise an import-light namespace. Application
+composition imports its runtime, settings, result DTOs, response service, and
+resource snapshots from their owning modules; the package root must not expose
+conversation storage or initialize the complete Chat graph on import.
 Domain package roots follow the same import-light rule when no cohesive public
 facade is consumed by production code. The Reason, Persona, Reflection, Trace,
 and Profile package roots are namespaces rather than aggregators: internal

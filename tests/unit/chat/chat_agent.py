@@ -18,20 +18,20 @@ import pytest
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import BaseTool
 
-from nuself.agent.chat import (
+from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
     ChatStructuredOutput,
     ConversationTurnState,
+    ConversationGraphRuntimeError,
+)
+from nuself.conversation import (
     ConversationMessage,
     ConversationState,
-)
-from conversation_fixtures import ConversationStore
-from nuself.agent.chat import (
-    ConversationGraphRuntimeError,
     ConversationTurnConflictError,
     ConversationTurnIncompleteError,
 )
+from conversation_fixtures import ConversationStore
 from nuself.agent.tool_utils import tool_service_component
 from nuself.application import compose_trace_services
 from nuself.config import runtime_paths

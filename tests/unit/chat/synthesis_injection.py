@@ -18,11 +18,11 @@ from typing import Any, cast
 import pytest
 from langchain_core.messages import BaseMessage
 
-from nuself.agent.chat import (
+from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
-    ConversationState,
 )
+from nuself.conversation import ConversationState
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository

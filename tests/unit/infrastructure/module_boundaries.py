@@ -261,6 +261,8 @@ def test_domain_package_roots_are_import_light() -> None:
         path = _SOURCE_ROOT / package / "__init__.py"
         assert _imports(path) == ()
 
+    assert _imports(_SOURCE_ROOT / "agent" / "chat" / "__init__.py") == ()
+
 
 def test_process_surfaces_use_application_chat_factory() -> None:
     paths = (

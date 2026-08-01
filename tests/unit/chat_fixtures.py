@@ -7,10 +7,10 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.chat import (
-    ChatAgentSettings,
+from nuself.agent.chat.runtime import (
     ConversationGraphRuntime as _ConversationGraphRuntime,
 )
+from nuself.agent.chat.types import ChatAgentSettings
 from conversation_fixtures import ConversationStore
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.resources import ConversationResources

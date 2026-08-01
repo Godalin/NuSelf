@@ -9,7 +9,7 @@ from typing import cast
 
 from langchain_core.messages import BaseMessage
 
-from nuself.agent.chat import (
+from nuself.agent.chat.types import (
     ChatResult,
     ChatStructuredOutput,
     ConversationTurnState,

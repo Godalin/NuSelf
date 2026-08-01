@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.agent.chat import ChatResult
+from nuself.agent.chat.types import ChatResult
 from nuself.application.runtime import open_application_runtime, use_application_runtime
 from nuself.cli import chat
 from nuself.conversation import CompletedTurn

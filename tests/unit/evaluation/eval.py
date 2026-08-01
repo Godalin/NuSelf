@@ -14,7 +14,7 @@ from nuself.eval import (
     run_fixture,
     score_result,
 )
-from nuself.agent.chat import ChatResult, ChatStructuredOutput
+from nuself.agent.chat.types import ChatResult, ChatStructuredOutput
 
 
 def test_fixture_numeric_zero_is_not_treated_as_missing() -> None:

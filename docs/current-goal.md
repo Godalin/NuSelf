@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Narrow the Chat package root to its justified runtime-facing contract, or make
-it import-light if direct owning-module imports are clearer. Remove leaked
-conversation storage and composition resources from that boundary.
+Finish the package-root audit: inspect the Application and Decorators exports,
+while treating CLI and Notification `__init__` files as implementation modules
+rather than facades. Retain only exports with a deliberate external contract.
 
 ## Constraints
 
@@ -240,6 +240,14 @@ conversation storage and composition resources from that boundary.
   Importing one codec no longer initializes cleanup, registries, handlers,
   events, jobs, diagnostics, and execution infrastructure transitively.
 - Runtime/infrastructure focused suite: 305 passed. Post-Runtime cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `nuself.agent.chat` is now an import-light namespace. Application composition
+  imports the runtime and DTOs from their owning modules; daemon and evaluation
+  depend only on result types. Conversation storage, resource snapshots,
+  response services, capabilities, and the full graph are no longer leaked or
+  eagerly initialized by the package root.
+- Chat/daemon/evaluation/boundary focused suite: 286 passed. Post-Chat cleanup
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
