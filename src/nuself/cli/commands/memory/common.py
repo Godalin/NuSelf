@@ -5,10 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from nuself.application import compose_trace_services
-from nuself.config import runtime_paths
+from nuself.cli.composition import compose_cli_application
 from nuself.memory.audit import run_memory_observed
-from nuself.storage import get_default_backend
 
 
 class TraceableMemory(Protocol):
@@ -34,10 +32,9 @@ def record_memory_trace(
     action: str,
 ) -> None:
     run_memory_observed(
-        lambda: compose_trace_services(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).recorder.record_memory_update(
+        lambda: compose_cli_application(
+            project_root
+        ).trace.recorder.record_memory_update(
             memory_id=entry.id,
             title=entry.title,
             summary=entry.body,

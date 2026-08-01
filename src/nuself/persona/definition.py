@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Protocol, TypeAlias
+from typing import Annotated, Protocol, TypeAlias
 
 from pydantic import (
     BaseModel,
@@ -13,9 +12,6 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
-
-if TYPE_CHECKING:
-    from nuself.memory.repository import MemoryEntryRepository
 
 NonBlankText: TypeAlias = Annotated[
     str,
@@ -205,42 +201,3 @@ BUILTIN_PERSONAS = (
     HISTORIAN_PERSONA,
     CARE_PERSONA,
 )
-
-
-def load_persona_definitions(
-    repository: "MemoryEntryRepository",
-    *,
-    project_root: Path | None = None,
-) -> tuple[PersonaDefinition, ...]:
-    """Load persona definitions from durable memory entries.
-
-    Falls back to built-in personas when no durable instructions exist.
-    """
-    from nuself.memory.repository import MemorySearchFilters
-
-    try:
-        entries = repository.search(
-            "",
-            filters=MemorySearchFilters(type="persona_instruction"),
-        )
-    except RuntimeError as exc:
-        from nuself.persona.audit import report_persona_failure
-
-        report_persona_failure(
-            exc,
-            event="persona_definition_load_failed",
-            project_root=project_root,
-        )
-        return BUILTIN_PERSONAS
-
-    definitions: list[PersonaDefinition] = []
-    for entry in entries:
-        memory = entry.to_memory_object()
-        persona_id = memory.payload.get("persona_id")
-        description = memory.payload.get("description")
-        if isinstance(persona_id, str) and isinstance(description, str):
-            definitions.append(PersonaDefinition(id=persona_id, description=description))
-
-    if not definitions:
-        return BUILTIN_PERSONAS
-    return tuple(definitions)

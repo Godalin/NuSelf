@@ -11,6 +11,7 @@ from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.service import ReflectionService
+from nuself.persona import SharedPersonaDiscussionService
 from nuself.application.reason import compose_reason_service
 from nuself.storage import StorageBackend
 
@@ -43,6 +44,7 @@ def compose_reflection_scheduler(
     application: "ApplicationGraph",
     *,
     config: ReflectionSettings,
+    language_preference: str,
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
 
@@ -59,6 +61,7 @@ def compose_reflection_scheduler(
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
         conversation_history=application.conversation_history,
+        language_preference=language_preference,
     )
     gate = LLMRelevanceGate(
         paths.project_root,
@@ -80,4 +83,8 @@ def compose_reflection_scheduler(
         candidate_generator=generator,
         relevance_gate=gate,
         organizer=organizer,
+        discussion=SharedPersonaDiscussionService(
+            project_root=paths.project_root,
+            config=config,
+        ),
     )

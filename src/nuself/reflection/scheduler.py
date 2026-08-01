@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
 from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate, RelevanceScore
-from nuself.notification import NotificationOutbox, OutboxEntry
+from nuself.notification import OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.audit import (
     report_reflection_failure,
@@ -15,16 +16,12 @@ from nuself.reflection.audit import (
 )
 from nuself.reflection.candidates import (
     CandidateListOutput as CandidateListOutput,
-    IdeaCandidateGenerator,
 )
-from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.relevance import (
-    LLMRelevanceGate,
     RelevanceScoreOutput as RelevanceScoreOutput,
 )
-from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
-from nuself.persona.audit import write_persona_audit
+from nuself.persona import PersonaCompetitionResult
 from nuself.reflection.schedule_state import (
     REFLECTION_SCHEDULE_STATE_VERSION,
     ReflectionScheduleState,
@@ -32,9 +29,44 @@ from nuself.reflection.schedule_state import (
     read_reflection_schedule_state,
 )
 from nuself.storage import StorageCollection
-from nuself.trace.service import TraceRecorder
 
 _read_schedule_collection = read_reflection_schedule_state
+
+
+class CandidateGenerator(Protocol):
+    def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]: ...
+
+
+class RelevanceGate(Protocol):
+    def score(self, candidate: IdeaCandidate) -> RelevanceScore: ...
+
+
+class PendingReflectionOrganizer(Protocol):
+    def organize_pending(self) -> object: ...
+
+
+class ReflectionPublisher(Protocol):
+    def add(self, entry: OutboxEntry) -> OutboxEntry: ...
+
+
+class ReflectionDiscussion(Protocol):
+    def discuss(self, candidate: IdeaCandidate) -> PersonaCompetitionResult: ...
+
+
+class ReflectionTraceRecorder(Protocol):
+    def record_reflection_created(
+        self,
+        *,
+        reflection_id: str,
+        title: str,
+        body: str,
+        candidate_type: str,
+        composite_score: float,
+        discussion_approved: bool | None,
+        conversation_id: str | None = None,
+        decision_points: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> object: ...
 
 
 class ReflectionScheduler:
@@ -47,11 +79,12 @@ class ReflectionScheduler:
         *,
         schedule_collection: StorageCollection,
         repository: ReflectionRepository,
-        outbox: NotificationOutbox,
-        trace_recorder: TraceRecorder,
-        candidate_generator: IdeaCandidateGenerator,
-        relevance_gate: LLMRelevanceGate,
-        organizer: ReflectionOrganizer,
+        outbox: ReflectionPublisher,
+        trace_recorder: ReflectionTraceRecorder,
+        candidate_generator: CandidateGenerator,
+        relevance_gate: RelevanceGate,
+        organizer: PendingReflectionOrganizer,
+        discussion: ReflectionDiscussion,
     ) -> None:
         self._project_root = project_root
         self._config = config
@@ -62,6 +95,7 @@ class ReflectionScheduler:
         self._candidate_generator = candidate_generator
         self._relevance_gate = relevance_gate
         self._organizer = organizer
+        self._discussion = discussion
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
         if now is None:
@@ -113,11 +147,7 @@ class ReflectionScheduler:
         discussion_approved: bool | None = None
         discussion_trace: tuple[str, ...] = ()
         if score.composite >= self._config.gate.persona_discussion_threshold:
-            result = SharedPersonaDiscussionService(
-                project_root=self._project_root,
-                config=self._config,
-            ).discuss(best)
-            self._write_discussion_log(best, score, result, now)
+            result = self._discussion.discuss(best)
             discussion_approved = result.approved
             discussion_trace = result.discussion_trace
             if not result.approved:
@@ -346,29 +376,4 @@ class ReflectionScheduler:
             status="pending",
             idempotency_key=f"notify-{entry.id}",
             deep_link=entry.deep_link,
-        )
-
-    def _write_discussion_log(
-        self,
-        candidate: IdeaCandidate,
-        score: RelevanceScore,
-        result: object,
-        now: datetime,
-    ) -> None:
-
-        if not isinstance(result, PersonaCompetitionResult):
-            return
-        del score, now
-        write_persona_audit(
-            "persona_discussion",
-            project_root=self._project_root,
-            metadata={
-                "candidate_id": candidate.id,
-                "approved": result.approved,
-                "winner_count": len(result.winner_persona_ids),
-                "emergent_count": len(result.emergent_persona_ids),
-                "blocking_veto_count": len(result.blocking_vetos),
-                "score_count": len(result.scores),
-                "discussion_steps": len(result.discussion_trace),
-            },
         )

@@ -8,6 +8,7 @@ from nuself.application.memory import (
     MemoryRepositories,
     compose_memory_repositories,
 )
+from nuself.application.data_admin import DataAdminService
 from nuself.application.notification import compose_notification_outbox
 from nuself.application.persona import compose_persona_prompt_repository
 from nuself.application.reason import compose_reason_repository
@@ -36,6 +37,7 @@ class ApplicationGraph:
     reason: ReasonRepository
     reflection: ReflectionRepository
     trace: TraceServices
+    data: DataAdminService
 
     def composition_storage(self) -> StorageBackend:
         """Return storage to application-owned factories."""
@@ -50,17 +52,23 @@ def compose_application(
     """Build the application graph from already-owned authority resources."""
 
     conversations = ConversationStore(paths, backend=backend)
+    memory = compose_memory_repositories(paths, backend)
     return ApplicationGraph(
         paths=paths,
         _backend=backend,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
-        memory=compose_memory_repositories(paths, backend),
+        memory=memory,
         notifications=compose_notification_outbox(paths, backend),
         persona_prompts=compose_persona_prompt_repository(paths, backend),
         reason=compose_reason_repository(paths, backend),
         reflection=compose_reflection_repository(paths, backend),
         trace=compose_trace_services(paths, backend),
+        data=DataAdminService(
+            backend,
+            conversations=conversations,
+            memories=memory.entries,
+        ),
     )
 
 

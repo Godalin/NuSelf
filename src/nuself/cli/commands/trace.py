@@ -8,10 +8,9 @@ from pathlib import Path
 import sys
 from typing import cast
 
-from nuself.application import TraceServices, compose_trace_services
+from nuself.application import TraceServices
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi
-from nuself.config import runtime_paths
-from nuself.storage import get_default_backend
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import (
     TraceNotFound,
@@ -40,10 +39,7 @@ def _trace_visibility_filter(
 
 
 def _trace_services(project_root: Path | None) -> TraceServices:
-    return compose_trace_services(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
+    return compose_cli_application(project_root).trace
 
 
 def handle_trace_list(args: argparse.Namespace) -> int:

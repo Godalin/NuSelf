@@ -6,24 +6,19 @@ import argparse
 import sys
 from pathlib import Path
 
-from nuself.application import compose_profile_repository
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi, resolve_handle
-from nuself.config import runtime_paths
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,
     ProfileItemRepository,
     ProfileSearchFilters,
 )
-from nuself.storage import get_default_backend
 from nuself.tui.memory import render_profile_detail, render_profile_row
 
 
 def _repository(project_root: Path | None) -> ProfileItemRepository:
-    return compose_profile_repository(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
+    return compose_cli_application(project_root).memory.profile
 
 
 def _items_for_list(

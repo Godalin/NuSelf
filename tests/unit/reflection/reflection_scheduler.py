@@ -14,7 +14,7 @@ from memory_fixtures import (
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Never
+from typing import Never, cast
 
 import pytest
 from langchain_core.messages import BaseMessage
@@ -28,6 +28,7 @@ from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, Refl
 from nuself.config import runtime_paths
 from nuself.domain.proactive import IdeaCandidate
 from nuself.logs import read_log_events
+from nuself.notification import NotificationOutbox
 from nuself.reflection import (
     IdeaCandidateGenerator,
     LLMRelevanceGate,
@@ -202,6 +203,7 @@ def _generator(
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
         conversation_history=application.conversation_history,
+        language_preference="en",
     )
 
 
@@ -279,6 +281,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     return compose_reflection_scheduler(
         application,
         config=config,
+        language_preference="en",
     )
 
 
@@ -397,11 +400,6 @@ def test_reflect_result_survives_unavailable_auxiliary_logs(
         "nuself.reflection.scheduler.write_reflection_audit",
         drop_log,
     )
-    monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_persona_audit",
-        drop_log,
-    )
-
     assert scheduler.reflect(datetime(2024, 1, 1, 12, tzinfo=UTC)) is True
     assert len(scheduler._reflection_repo.list()) == 1
 
@@ -462,10 +460,7 @@ def test_organizer_diagnostics_cannot_interrupt_best_effort_boundary(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        "nuself.reflection.scheduler.ReflectionOrganizer.organize_pending",
-        fail_organizer,
-    )
+    monkeypatch.setattr(scheduler._organizer, "organize_pending", fail_organizer)
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
@@ -525,7 +520,7 @@ def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler
     refl_entries = scheduler._reflection_repo.list()
     assert len(refl_entries) == 1
     # Outbox has a notify entry pointing to it
-    outbox_entries = scheduler._outbox.list()
+    outbox_entries = cast(NotificationOutbox, scheduler._outbox).list()
     assert len(outbox_entries) == 1
     assert outbox_entries[0].title.startswith("New reflection:")
     assert refl_entries[0].id in outbox_entries[0].body
@@ -867,16 +862,23 @@ def test_generator_parses_multiple_candidates(tmp_path: Path) -> None:
 
 def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     """Non-English language preference appends a language directive to the system prompt."""
-    private_dir = tmp_path
-    private_dir.mkdir(parents=True, exist_ok=True)
-    (private_dir / "config.yaml").write_text(
-        "chat:\n  language_preference: zh-CN\n",
-        encoding="utf-8",
-    )
     _seed_memory(tmp_path)
 
     agent = _CandidateAgent(candidates=[])
-    gen = _generator(tmp_path, agent=agent)
+    application = compose_application(
+        runtime_paths(tmp_path),
+        get_default_backend(tmp_path),
+    )
+    gen = IdeaCandidateGenerator(
+        tmp_path,
+        agent=agent,
+        config=_reflection_settings(),
+        memory_repository=application.memory.entries,
+        source_repository=application.memory.sources,
+        profile_repository=application.memory.profile,
+        conversation_history=application.conversation_history,
+        language_preference="zh-CN",
+    )
     gen.generate()
     assert len(agent.messages) == 1
     system_prompt = agent.messages[0][0].text

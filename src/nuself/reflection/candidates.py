@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
-from nuself.config import ConfigSystem, ReflectionSettings
+from nuself.config import ReflectionSettings
 from nuself.conversation import ConversationHistoryExcerpt
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository
@@ -61,6 +61,7 @@ class IdeaCandidateGenerator:
         source_repository: SourceRepository,
         profile_repository: ProfileItemRepository,
         conversation_history: ConversationHistoryReader,
+        language_preference: str,
         agent: StructuredAgent[CandidateListOutput] | None = None,
     ) -> None:
         self._project_root = project_root
@@ -73,9 +74,7 @@ class IdeaCandidateGenerator:
             project_root=project_root,
             component="reflection",
         )
-        self._language_preference = ConfigSystem.load(
-            project_root=project_root
-        ).chat.language_preference
+        self._language_preference = language_preference
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
         context = self._collect_context()

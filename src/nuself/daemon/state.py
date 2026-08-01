@@ -102,6 +102,7 @@ class DaemonState:
         self.reflection_scheduler = compose_reflection_scheduler(
             self.application,
             config=config.reflection,
+            language_preference=config.chat.language_preference,
         )
         self.reflection_check_interval_seconds: float = (
             config.daemon.reflection_scheduler.check_interval_seconds

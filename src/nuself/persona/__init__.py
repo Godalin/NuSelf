@@ -8,7 +8,6 @@ from nuself.persona.definition import (
     PersonaDefinition,
     PersonaInput,
     PersonaTurnState,
-    load_persona_definitions,
 )
 from nuself.persona.graph import (
     AgentBackedActivationPolicy,
@@ -53,6 +52,5 @@ __all__ = [
     "build_persona_tools",
     "default_persona_discussion_agents",
     "default_persona_graph_agents",
-    "load_persona_definitions",
     "persona_graph_agents",
 ]

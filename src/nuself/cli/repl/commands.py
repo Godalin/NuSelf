@@ -6,11 +6,6 @@ import argparse
 import sys
 from pathlib import Path
 
-from nuself.application import (
-    compose_profile_repository,
-    compose_trace_services,
-)
-from nuself.application.reflection import compose_reflection_repository
 from nuself.cli.composition import compose_cli_conversation_store
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
@@ -28,7 +23,6 @@ from nuself.cli.commands.persona import (
     handle_persona_enable,
     resolve_persona_id,
 )
-from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
@@ -49,7 +43,6 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
 )
-from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceNotFound
 from nuself.tui.memory import (
     render_candidate_detail,
@@ -70,10 +63,7 @@ theme = TerminalTheme()
 def _reflection_repository(
     project_root: Path | None,
 ) -> ReflectionRepository:
-    return compose_reflection_repository(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
+    return compose_cli_application(project_root).reflection
 
 
 def _reason_service(
@@ -135,10 +125,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         return render_candidate_detail(candidate)
     if command.startswith("profile "):
         query = command.removeprefix("profile ").strip()
-        items = compose_profile_repository(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).search(query)
+        items = compose_cli_application(project_root).memory.profile.search(query)
         if not items:
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
@@ -325,10 +312,7 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 
 
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
-    service = compose_trace_services(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    ).query
+    service = compose_cli_application(project_root).trace.query
     if command in {"", "list"}:
         traces = service.list_traces()
         if not traces:
@@ -521,10 +505,7 @@ def handle_interactive_history_command(project_root: Path | None, conversation_i
 
 
 def handle_interactive_whoami_command(project_root: Path | None) -> str:
-    repo = compose_profile_repository(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
+    repo = compose_cli_application(project_root).memory.profile
     items = repo.list()
     if not items:
         return "No profile items yet."

@@ -17,6 +17,7 @@ from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.text import TextAgent
 from nuself.application.composition import compose_application
+from nuself.application.persona import load_personas_from_memory
 from nuself.application.reason import compose_reason_service
 from nuself.config import runtime_paths
 from nuself.llm import LangChainLLMEndpoint
@@ -26,7 +27,6 @@ from nuself.memory.source_repository import SourceRepository
 from nuself.persona.tools import build_persona_tools
 from nuself.persona.definition import (
     PersonaDefinition,
-    load_persona_definitions,
 )
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output_contracts import SectionPlanner
@@ -104,7 +104,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             trace_recorder=trace_recorder
             or application.trace.recorder,
             personas=persona_definitions
-            or load_persona_definitions(
+            or load_personas_from_memory(
                 application.memory.entries,
                 project_root=project_root,
             ),

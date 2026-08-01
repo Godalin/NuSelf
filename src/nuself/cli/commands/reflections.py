@@ -6,20 +6,15 @@ import argparse
 import json
 import sys
 
-from nuself.application.reflection import (
-    compose_reflection_repository,
-    compose_reflection_service,
-)
+from nuself.application.reflection import compose_reflection_service
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.commands.output import print_ansi, resolve_handle
-from nuself.config import runtime_paths
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.repository import (
     ReflectionEntryNotFound,
     ReflectionRepository,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import get_default_backend
 from nuself.tui.reason import render_reason_detail
 from nuself.tui.render import (
     render_reflection_entry_detail,
@@ -33,10 +28,7 @@ def _print_json(*entities: object) -> None:
 
 
 def _repository(args: argparse.Namespace) -> ReflectionRepository:
-    return compose_reflection_repository(
-        runtime_paths(args.project_root),
-        get_default_backend(args.project_root),
-    )
+    return compose_cli_application(args.project_root).reflection
 
 
 def _resolve_entry_id(args: argparse.Namespace) -> str | None:

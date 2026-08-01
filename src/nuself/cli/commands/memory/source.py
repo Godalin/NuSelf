@@ -6,16 +6,13 @@ import argparse
 import sys
 
 from nuself.cli.composition import compose_cli_application
-from nuself.application import compose_profile_repository
 from nuself.cli.commands.output import print_ansi, resolve_handle
-from nuself.config import runtime_paths
 from nuself.domain.memory import PrivacyLevel
 from nuself.domain.source import SourceChunk
 from nuself.memory.source_repository import (
     SourceChunkMatch,
     SourceDocumentNotFound,
 )
-from nuself.storage import get_default_backend
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.memory import render_source_detail, render_source_row
 
@@ -129,10 +126,7 @@ def handle_memory_source_delete(
         )
         return 1
     repository.reindex()
-    compose_profile_repository(
-        runtime_paths(args.project_root),
-        get_default_backend(args.project_root),
-    ).reindex()
+    compose_cli_application(args.project_root).memory.profile.reindex()
     print(f"Deleted source document: {source_id}")
     return 0
 
