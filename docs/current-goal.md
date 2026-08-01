@@ -9,15 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove implicit component fallback from explicit skill-tool permissions.
+Preserve explicit advisory skills within strict capability filtering.
 
 ## Ordered Steps
 
-1. Confirm every tool-calling skill declares exact `allowed-tools` names.
-2. Make runtime skill projection use only the intersection with composed tools;
-   do not widen an invalid/absent declaration by component metadata.
-3. Add drift coverage, run focused agent/chat tests and full gates, then commit
-   without pushing.
+1. Distinguish an intentionally empty `allowed-tools` declaration from a
+   non-empty declaration whose tools are absent.
+2. Keep advisory skills while filtering stale tool-calling skills; retain the
+   no-component-fallback rule.
+3. Extend drift coverage, run focused agent/chat tests and full gates, then
+   commit without pushing.
 
 ## Exclusions
 
@@ -26,8 +27,8 @@ Remove implicit component fallback from explicit skill-tool permissions.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve advisory empty-tool skills only when deliberately supported in a
-  future explicit policy; do not infer tool authority from component names.
+- Do not give advisory skills tools or infer tool authority from component
+  names; preserve their prompt-only instructions.
 
 ## Constraints
 
@@ -39,6 +40,12 @@ Remove implicit component fallback from explicit skill-tool permissions.
 
 ## Phase Evidence
 
+- Skill availability now distinguishes intentionally tool-free advisory policy
+  from a stale non-empty tool declaration. Advisory instructions remain
+  loadable without receiving tools; drifted tool-calling skills remain hidden
+  even when matching component tools exist. Focused chat/skill tests: 78
+  passed; full suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Skill capability projection now uses only the ordered intersection of each
   file's explicit `allowed-tools` and the runtime registry. Removed the
   component-label fallback that could mask stale names and broaden authority;

@@ -209,9 +209,11 @@ Each skill file starts with YAML frontmatter containing `name`, `description`, a
 
 At runtime, a skill's callable tools are exactly the ordered intersection of
 its `allowed-tools` declaration and the tools composed for that runtime. An
-empty intersection makes the skill unavailable. The loader must not fall back
-to every tool sharing a component label, because that would hide declaration
-drift and silently widen the skill's authority.
+empty intersection makes a tool-calling skill unavailable. An intentionally
+empty `allowed-tools` declaration remains an available advisory skill with no
+callable tools. The loader must not fall back to every tool sharing a component
+label, because that would hide declaration drift and silently widen the
+skill's authority.
 
 Current chat runtime loads these Markdown files through the `load_skill` tool. Skill prose must stay file-backed rather than moving back into hard-coded prompt strings.
 

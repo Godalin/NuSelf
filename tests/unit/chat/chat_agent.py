@@ -1501,6 +1501,13 @@ def test_skill_tool_drift_does_not_fall_back_to_component_tools(
                 allowed_tools=("memory_removed",),
                 path=tmp_path / "memory.md",
             ),
+            AgentSkill(
+                name="advisory",
+                description="Prompt-only policy",
+                instructions="Use visible context carefully.",
+                allowed_tools=(),
+                path=tmp_path / "advisory.md",
+            ),
         ),
     )
     runtime = ConversationGraphRuntime(
@@ -1514,9 +1521,17 @@ def test_skill_tool_drift_does_not_fall_back_to_component_tools(
         tools["load_skill"],
         {"skill_name": "memory"},
     )
+    advisory = _invoke_chat_tool(
+        tools["load_skill"],
+        {"skill_name": "advisory"},
+    )
 
     assert "unknown skill 'memory'" in result
     assert "memory" not in tools["load_skill"].description
+    assert advisory == (
+        "Service skill: advisory\n\nUse visible context carefully."
+    )
+    assert "advisory: Prompt-only policy" in tools["load_skill"].description
 
 
 def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

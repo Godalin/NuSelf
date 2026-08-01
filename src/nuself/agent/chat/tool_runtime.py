@@ -55,7 +55,9 @@ class ConversationToolRuntime:
             for skill in loaded_skills
         }
         self._skills = tuple(
-            skill for skill in loaded_skills if tools_by_skill[skill.name]
+            skill
+            for skill in loaded_skills
+            if not skill.allowed_tools or tools_by_skill[skill.name]
         )
         self._tools_by_skill = {
             skill.name: tools_by_skill[skill.name] for skill in self._skills

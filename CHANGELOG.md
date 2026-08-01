@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Prompt-only advisory skills with an intentionally empty `allowed-tools`
+  declaration remain available, while stale non-empty tool declarations stay
+  filtered and receive no component-based fallback.
 - Agent skills now receive only explicitly declared tools present in the
   runtime; removed component-based fallback that could mask a stale declaration
   and silently broaden a skill's tool authority.
