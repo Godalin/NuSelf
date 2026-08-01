@@ -527,7 +527,7 @@ class ConversationGraphRuntime:
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
         parts.extend(self._tool_runtime.prompt_sections())
-        if self._tool_runtime.has_tool("reason_propose"):
+        if "reason_propose" in self._tool_runtime.tools:
             parts.extend([
                 "",
                 "Reason skill:",

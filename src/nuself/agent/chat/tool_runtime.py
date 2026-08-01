@@ -74,9 +74,6 @@ class ConversationToolRuntime:
     def prompt_sections(self) -> list[str]:
         return _tool_prompt_sections(self._tools.values())
 
-    def has_tool(self, name: str) -> bool:
-        return name in self._tools
-
     def log_outcome(self, outcome: ToolOutcome) -> None:
         """Project one immutable middleware tool outcome."""
 

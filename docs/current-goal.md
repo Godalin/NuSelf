@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline the single-use skill/tool projection helper.
+Remove the single-use chat tool-membership facade.
 
 ## Ordered Steps
 
-1. Confirm `_tools_for_skill()` owns no validation or fallback after the prior
-   strict-mapping change.
-2. Inline its ordered intersection into registry construction and remove the
-   now-unused domain type import.
+1. Confirm `ConversationToolRuntime.has_tool()` has one caller and owns no
+   policy beyond dictionary membership.
+2. Use the already-public runtime tool registry at the prompt composition site
+   and remove the facade.
 3. Run focused chat tests and full gates, then commit without pushing.
 
 ## Exclusions
@@ -26,8 +26,7 @@ Inline the single-use skill/tool projection helper.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve advisory visibility, declaration order, stale-skill filtering, and
-  exact tool names.
+- Preserve conditional Reason prompt guidance and the composed tool registry.
 
 ## Constraints
 
@@ -39,6 +38,11 @@ Inline the single-use skill/tool projection helper.
 
 ## Phase Evidence
 
+- Chat prompt composition now checks `reason_propose` membership in the
+  already-public composed tool registry. Removed the sole-use `has_tool()`
+  facade without changing conditional Reason guidance. Focused Chat tests: 182
+  passed; full suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Chat skill registration now computes its ordered explicit-tool intersection
   at the sole use site. Removed `_tools_for_skill()` and the resulting unused
   `AgentSkill` import without changing advisory visibility or drift filtering.

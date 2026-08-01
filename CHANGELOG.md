@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat prompt composition now checks its composed tool registry directly,
+  removing the single-use `has_tool()` membership facade.
 - Chat skill registration now computes its explicit tool intersection directly,
   removing a single-use policy-free projection helper and unused type import.
 - Prompt-only advisory skills with an intentionally empty `allowed-tools`
