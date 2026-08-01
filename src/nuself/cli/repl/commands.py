@@ -20,6 +20,7 @@ from nuself.cli.persona_management import (
     set_persona_enabled,
 )
 from nuself.daemon import lifecycle
+from nuself.handles import VisibleHandleError, resolve_visible_handle
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryEntryNotFound,
@@ -78,11 +79,15 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
     memory = compose_cli_application(project_root).memory
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
-        if entry_id.isdigit():
-            entries = memory.entries.list()
-            index = int(entry_id)
-            if 0 <= index < len(entries):
-                entry_id = entries[index].id
+        try:
+            entry_id = resolve_visible_handle(
+                entry_id,
+                memory.entries.list(),
+                label="memory",
+                get_id=lambda entry: entry.id,
+            )
+        except VisibleHandleError as exc:
+            return diagnostic_exception_message(exc)
         try:
             entry = memory.entries.get(entry_id)
         except MemoryEntryNotFound:
@@ -95,11 +100,15 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
     if command.startswith("review "):
         candidate_id = command.removeprefix("review ").strip()
-        if candidate_id.isdigit():
-            candidates = memory.candidates.list()
-            index = int(candidate_id)
-            if 0 <= index < len(candidates):
-                candidate_id = candidates[index].id
+        try:
+            candidate_id = resolve_visible_handle(
+                candidate_id,
+                memory.candidates.list(),
+                label="memory candidate",
+                get_id=lambda candidate: candidate.id,
+            )
+        except VisibleHandleError as exc:
+            return diagnostic_exception_message(exc)
         try:
             candidate = memory.candidates.get(candidate_id)
         except MemoryCandidateNotFound:
@@ -123,11 +132,15 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
     if command.startswith("source "):
         source_id = command.removeprefix("source ").strip()
         repo = memory.sources
-        if source_id.isdigit():
-            documents = repo.list_documents()
-            index = int(source_id)
-            if 0 <= index < len(documents):
-                source_id = documents[index].id
+        try:
+            source_id = resolve_visible_handle(
+                source_id,
+                repo.list_documents(),
+                label="source document",
+                get_id=lambda document: document.id,
+            )
+        except VisibleHandleError as exc:
+            return diagnostic_exception_message(exc)
         try:
             document = repo.get_document(source_id)
         except SourceDocumentNotFound:

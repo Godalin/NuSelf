@@ -9,22 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Narrow the read-only trace CLI composition helper from the complete trace
-service bundle to `TraceQueryService`.
+Replace three REPL-local numeric memory handle parsers with the shared visible
+handle resolver required by the CLI contract.
 
 ## Ordered Steps
 
-1. Confirm every trace command uses only the graph-owned query capability.
-2. Return `TraceQueryService` from the adapter composition helper and remove
-   the recorder-bearing bundle import and `.query` forwarding at call sites.
-3. Run trace/CLI tests, Pyright, full pytest, and package build; update evidence
-   and commit without pushing.
+1. Confirm entry show, candidate review, and source show duplicate numeric index
+   parsing and silently reinterpret out-of-range numbers as stable IDs.
+2. Route all three through `resolve_visible_handle()` while retaining their
+   domain repository lookups and rendered not-found results.
+3. Add focused REPL handle regression coverage, then run Pyright, full pytest,
+   and package build; update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not reconstruct a trace repository or query service in the CLI.
-- Do not change trace visibility, lookup, rendering, or JSON behavior.
-- Do not merge read and write trace capabilities.
+- Do not make repositories or services understand visible indexes.
+- Do not alter stable-ID lookup or list ordering.
+- Do not introduce a second CLI resolver wrapper.
 
 ## Constraints
 
@@ -36,6 +37,12 @@ service bundle to `TraceQueryService`.
 
 ## Phase Evidence
 
+- Interactive memory entry show, candidate review, and source show now call
+  `resolve_visible_handle()` instead of maintaining three local
+  digit/int/range branches. Stable IDs and list ordering remain domain-owned;
+  numeric bounds now use the shared CLI error contract. Added three focused
+  regressions. REPL tests: 66 passed; full suite: 2443 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Trace CLI composition now returns the graph-owned `TraceQueryService`
   directly. Removed the recorder-bearing `TraceServices` import and repeated
   `.query` forwarding while keeping the single authority composition entry;
