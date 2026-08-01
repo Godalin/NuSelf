@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceRelation, TraceVisibility
+from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 from nuself.trace.repository import TraceRepository, TraceVisibilityFilter
 
 if TYPE_CHECKING:
@@ -256,18 +256,15 @@ class TraceRecorder:
             visibility="private",
             metadata={"reflection_id": reflection_id, "thread_id": thread.id, **(metadata or {})},
         )
-        self._link(
-            f"reflection:{reflection_id}",
-            f"reason:{thread.id}",
-            "triggered",
-            "Reflection promotion created this reason thread.",
+        self._repository.save_link(
+            TraceLink(
+                source_id=f"reflection:{reflection_id}",
+                target_id=f"reason:{thread.id}",
+                relation="triggered",
+                summary="Reflection promotion created this reason thread.",
+            )
         )
         return trace
-
-    def _link(self, source_id: str, target_id: str, relation: TraceRelation, summary: str) -> TraceLink:
-        return self._repository.save_link(
-            TraceLink(source_id=source_id, target_id=target_id, relation=relation, summary=summary)
-        )
 
 
 class TraceQueryService:

@@ -9,22 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify the byte-for-byte identical JSONL printers in trace, reflection, and
-Reason CLI adapters under the existing shared terminal-output module.
+Remove the one-use TraceRecorder link pass-through while preserving typed
+reflection-promotion ownership of link creation.
 
 ## Ordered Steps
 
-1. Preserve the CLI JSON mode's per-record line, sorted-key, and ASCII-safe
-   contract in one `cli.output` operation.
-2. Delete the three local printers and their direct JSON imports.
-3. Run trace/reflection/Reason CLI tests, Pyright, full pytest, and package
-   build; update evidence and commit without pushing.
+1. Confirm `_link()` adds no validation, policy, observation, or capability
+   boundary beyond repository `save_link()`.
+2. Construct and persist the promotion link in
+   `record_reflection_promoted()`, then delete `_link()` and its unused type.
+3. Run trace/reflection tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change pretty-printed data administration or memory export output.
-- Do not convert JSONL lists into arrays.
-- Do not move domain wire conversion into the shared printer.
+- Do not expose generic cross-domain link mutation.
+- Do not change link identity, relation, summary, or persistence ordering.
+- Do not merge trace recording and trace querying capabilities.
 
 ## Constraints
 
@@ -36,6 +37,12 @@ Reason CLI adapters under the existing shared terminal-output module.
 
 ## Phase Evidence
 
+- `TraceRecorder.record_reflection_promoted()` now constructs and saves the
+  promotion link it owns. Removed the one-use `_link()` repository
+  pass-through and the otherwise-unused `TraceRelation` service import;
+  identity, relation, summary, and trace-before-link ordering are unchanged.
+  Focused trace/reflection tests: 113 passed; full suite: 2440 passed; Pyright:
+  0 errors, 0 warnings; sdist and wheel build succeeded.
 - Trace, reflection, and Reason command adapters now call one
   `print_json_lines()` terminal-output primitive. Removed three identical local
   printers and their JSON imports while preserving record-owned wire

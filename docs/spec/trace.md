@@ -266,8 +266,10 @@ record_reason_thread_created(...)
 record_reason_step(...)
 record_reflection_promoted(...)
 record_chat_turn(...)
-link(source_id, target_id, relation, summary)
 ```
+
+Link creation stays inside the typed recorder operation that owns the domain
+outcome; the recorder does not expose a generic link-construction service.
 
 Required first read/query methods:
 

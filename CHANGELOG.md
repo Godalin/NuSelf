@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection-promotion trace recording now persists its owned link directly,
+  removing a one-use generic link pass-through from `TraceRecorder`.
 - Trace, reflection, and Reason commands now use one shared JSONL output
   primitive instead of maintaining identical domain-local printers.
 - Daemon state now borrows the authority-scoped application graph only during
