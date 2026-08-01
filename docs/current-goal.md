@@ -5,30 +5,46 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — the repository-wide module API boundary audit is complete.
+Active — simplify all cross-module interaction behind explicit APIs.
 
 ## Objective
 
-No active implementation objective.
+Remove the confirmed module-boundary bypasses without introducing a service
+bus, compatibility forwarders, or interface-per-method abstraction. Keep one
+application composition path, move cross-domain policy out of repositories,
+and pass narrow typed capabilities or immutable DTOs at real domain edges.
 
 ## Ordered Steps
 
-1. Await approval to activate one remediation slice from the backlog.
+1. Tighten application and process composition so initialized commands borrow
+   one graph and do not reopen storage or repositories.
+2. Replace raw data mutation with domain-contributed admin capabilities.
+3. Replace graph-shaped conversation projection and reflection's concrete
+   foreign dependencies with narrow DTO/Protocol inputs.
+4. Move candidate/profile and memory/persona routing out of repositories and
+   inject resolved model/config collaborators.
+5. Type daemon task definitions without changing the single scheduler, remove
+   private evaluation construction, and strengthen executable boundaries.
+6. Update documentation, run complete local gates, commit in coherent slices,
+   push once, and verify final CI.
 
 ## Exclusions
 
-- No audit finding is implicitly authorized for implementation.
+- No general-purpose dependency injection container or message bus.
+- No duplicate legacy/facade construction path or compatibility shim.
+- No abstraction for calls that stay entirely inside one domain.
+- No redesign of storage schemas unless removal of a bypass requires it.
 
 ## Completion Evidence
 
-- [`api-boundary-audit.md`](api-boundary-audit.md) inventories every production
-  area and records nine confirmed boundary problems with evidence, risk, and
-  the smallest corrective API.
-- The audit distinguishes valid composition registries and shared
-  infrastructure from runtime hard-coding; the existing handler, event, log,
-  decorator, and single-scheduler foundations are retained.
-- The ordered remediation is recorded once in [`TODOs.md`](TODOs.md); no runtime
-  behavior changed during the audit.
+- Feature adapters cannot obtain raw storage or construct domain repositories.
+- Cross-domain production imports are DTOs or consumer-owned capabilities;
+  repository implementations remain domain/application-private.
+- Conversation projection uses a committed-turn DTO, reflection receives all
+  foreign capabilities, candidate persistence owns no profile policy, and
+  daemon tasks have one typed catalog.
+- The audit backlog item is removed; Pyright, full pytest, build,
+  clean-wheel smoke, and final six-platform CI pass.
 
 ## Previous Completed Evidence
 

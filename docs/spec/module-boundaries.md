@@ -198,6 +198,17 @@ import the concrete store, chat runtime, or agent package.
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.
+`ApplicationGraph` is a composition result, not a service locator. Process
+adapters may borrow domain-facing capabilities from it, but raw
+`StorageBackend`, `StorageCollection`, and repository construction remain
+inside application composition, storage administration, and migrations.
+Initialized CLI and REPL commands always run inside one `ApplicationRuntime`;
+helper functions must not create a fallback graph when that scope is absent.
+
+Cross-domain APIs stay coarse enough to represent a use case. Do not wrap
+every repository method in a one-method interface, introduce a generic service
+bus, or preserve parallel concrete and facade paths. A consumer-owned Protocol
+is required only where one domain invokes another domain's capability.
 
 `ConversationGraphRuntime` is an agent orchestration consumer, not a
 composition root. Memory query/repository, conversation storage, reflection, reason,
