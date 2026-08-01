@@ -173,6 +173,15 @@ class BlockingClientSocket(ClientSocket):
         self.closed.set()
 
 
+def test_daemon_request_generates_a_fresh_hex_identity() -> None:
+    first = DaemonRequest("ping")
+    second = DaemonRequest("ping")
+
+    assert len(first.request_id) == 32
+    assert int(first.request_id, 16) >= 0
+    assert second.request_id != first.request_id
+
+
 def test_socket_frame_reader_accepts_fragmented_frame() -> None:
     sock = ChunkSocket([b'{"ok":', b"true}\n"])
 

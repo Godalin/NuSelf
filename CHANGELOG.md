@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon requests now generate their default UUID-hex identity directly at the
+  typed request field, removing an orphaned standalone generator API.
 - Scheduler capacity and stopped-admission failures now remain distinct direct
   runtime errors without an unused common exception base.
 - Daemon lifecycle cleanup now shuts down its sole scheduler directly. The
