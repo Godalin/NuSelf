@@ -229,6 +229,9 @@ borrow it. Memory, reflection, reason, persona, notification, and trace code
 must not import or query conversation state or storage. A domain that needs
 chat evidence uses the read-only conversation history API and receives bounded,
 immutable DTOs; this explicit API dependency is allowed.
+Conversation load and archive operations own their direct decode and immutable
+state replacement; single-call forwarding helpers do not form additional API
+boundaries.
 
 A completed turn may cross into the knowledge system only through an
 application-owned projector. The projector converts the committed turn into a

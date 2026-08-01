@@ -236,7 +236,10 @@ class ConversationStore:
 
     def load(self, conversation_id: str) -> ConversationState:
         self._validate_id(conversation_id)
-        return self._load_unlocked(conversation_id)
+        raw = self._collection.get(conversation_id)
+        if raw is None:
+            return ConversationState.empty(conversation_id)
+        return ConversationState.from_wire(raw)
 
     def save(self, state: ConversationState) -> None:
         self._validate_id(state.conversation_id)
@@ -296,12 +299,6 @@ class ConversationStore:
                     int((time.monotonic() - commit_started_at) * 1000)
                 )
             return result
-
-    def _load_unlocked(self, conversation_id: str) -> ConversationState:
-        raw = self._collection.get(conversation_id)
-        if raw is None:
-            return ConversationState.empty(conversation_id)
-        return ConversationState.from_wire(raw)
 
     def _save_unlocked(self, state: ConversationState) -> None:
         self._collection.put(state.conversation_id, state.to_wire())
@@ -437,7 +434,7 @@ class ConversationStore:
                 raise ValueError(
                     f"archived conversation already exists: {conversation_id}"
                 )
-            self._save_unlocked(_with_archived(state, True))
+            self._save_unlocked(replace(state, archived=True))
 
     def unarchive(self, conversation_id: str) -> None:
         """Restore an archived conversation."""
@@ -451,7 +448,7 @@ class ConversationStore:
             state = ConversationState.from_wire(raw)
             if not state.archived:
                 raise ValueError(f"conversation already exists: {conversation_id}")
-            self._save_unlocked(_with_archived(state, False))
+            self._save_unlocked(replace(state, archived=False))
 
     def delete(self, conversation_id: str) -> None:
         """Permanently delete a conversation."""
@@ -516,10 +513,6 @@ class ConversationHistoryService:
                 )
             )
         return tuple(excerpts)
-
-
-def _with_archived(state: ConversationState, archived: bool) -> ConversationState:
-    return replace(state, archived=archived)
 
 
 def _begin_turn_attempt(

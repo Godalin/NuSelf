@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Move legacy authority-layout migration out of the installed runtime.
+Remove trivial Conversation persistence forwarding helpers.
 
 ## Ordered Steps
 
-1. Confirm `layout_migration.py` and the top-level `migrate-layout` parser still
-   package a one-time v0.3.0 authority move in every installation.
-2. Move the atomic migration implementation and tests into `scripts/`; remove
-   the runtime module, CLI handler, parser surface, and installed documentation.
-3. Verify the source-checkout script, wheel exclusion, focused migration/CLI
-   tests and full gates, then commit without pushing.
+1. Confirm `_load_unlocked()` only wraps collection get/decode for `load()` and
+   `_with_archived()` only wraps immutable dataclass replacement.
+2. Inline both operations while retaining public Conversation and history APIs,
+   lock/transaction boundaries, strict decoding, and archive semantics.
+3. Run focused Conversation/CLI/Reflection tests and full gates, then commit
+   without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve source validation, WAL-consistent backup, exclusive publication,
-  source retention, permission hardening, and target authority selection.
+- Preserve stored conversation decoding, stable IDs/indexes, turn idempotency,
+  archive transitions, cross-process locks, and history isolation.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,13 @@ Move legacy authority-layout migration out of the installed runtime.
 
 ## Phase Evidence
 
+- Conversation `load()` now directly owns collection lookup and strict decode;
+  archive/unarchive directly use immutable dataclass replacement. Removed the
+  single-call `_load_unlocked()` and two-call `_with_archived()` forwarding
+  helpers without changing public Conversation/history APIs, locks,
+  transactions, or stored-record handling. Focused Conversation/CLI/Reflection
+  tests: 460 passed; full suite: 2439 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Legacy authority-layout publication now lives only in
   `scripts/migrate_legacy_layout.py`; removed the installed module, top-level
   CLI command/handler/parser, and runtime test location. The moved eight-test
