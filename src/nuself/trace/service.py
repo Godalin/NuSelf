@@ -18,7 +18,7 @@ class TraceRecorder:
     def __init__(self, repository: TraceRepository) -> None:
         self._repository = repository
 
-    def record(
+    def _record(
         self,
         *,
         kind: TraceKind,
@@ -63,7 +63,7 @@ class TraceRecorder:
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="chat_turn",
             title=title,
             summary=summary,
@@ -83,7 +83,7 @@ class TraceRecorder:
         source_trace_ids: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="reason_thread",
             title=f"Reason thread created: {_short(thread.topic)}",
             summary=f"Created a durable reasoning thread for: {thread.topic}",
@@ -104,7 +104,7 @@ class TraceRecorder:
         step: ReasoningStep,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="reason_step",
             title=f"Reason step: {_short(thread.topic)}",
             summary=step.summary,
@@ -135,7 +135,7 @@ class TraceRecorder:
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="reflection",
             title=title,
             summary=body,
@@ -166,7 +166,7 @@ class TraceRecorder:
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
         evidence_refs = [f"trace:{source_trace_id}"] if source_trace_id else []
-        return self.record(
+        return self._record(
             kind="memory_update",
             title=title,
             summary=summary,
@@ -191,7 +191,7 @@ class TraceRecorder:
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="persona_prompt_created",
             title=f"Persona prompt: {name}",
             summary=f"Created or updated dynamic thinking persona: {name}",
@@ -209,7 +209,7 @@ class TraceRecorder:
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="persona_disabled",
             title=f"Persona disabled: {name}",
             summary=f"Disabled dynamic thinking persona: {name}",
@@ -227,7 +227,7 @@ class TraceRecorder:
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="persona_enabled",
             title=f"Persona enabled: {name}",
             summary=f"Enabled dynamic thinking persona: {name}",
@@ -245,7 +245,7 @@ class TraceRecorder:
         thread: ReasoningThread,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        trace = self.record(
+        trace = self._record(
             kind="promotion",
             title=f"Reflection promoted: {_short(reflection_title)}",
             summary=f"Promoted reflection into reason thread: {thread.topic}",
@@ -257,7 +257,7 @@ class TraceRecorder:
             visibility="private",
             metadata={"reflection_id": reflection_id, "thread_id": thread.id, **(metadata or {})},
         )
-        self.link(
+        self._link(
             f"reflection:{reflection_id}",
             f"reason:{thread.id}",
             "triggered",
@@ -265,7 +265,7 @@ class TraceRecorder:
         )
         return trace
 
-    def link(self, source_id: str, target_id: str, relation: TraceRelation, summary: str) -> TraceLink:
+    def _link(self, source_id: str, target_id: str, relation: TraceRelation, summary: str) -> TraceLink:
         return self._repository.save_link(
             TraceLink(source_id=source_id, target_id=target_id, relation=relation, summary=summary)
         )

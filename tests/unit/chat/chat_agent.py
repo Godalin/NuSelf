@@ -1856,13 +1856,13 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
 
 
 def test_trace_search_tool(tmp_path: Path) -> None:
-    from nuself.trace.service import TraceRecorder
+    from nuself.trace.domain import ThoughtTrace
 
-    trace = TraceRecorder(_trace_repository(tmp_path)).record(
+    trace = _trace_repository(tmp_path).save_trace(ThoughtTrace(
         kind="decision",
         title="Trace search target",
         summary="A searchable provenance item.",
-    )
+    ))
     tool = _chat_tool(tmp_path, "trace_search")
 
     result = _invoke_chat_tool(tool, {"query": "searchable"})
@@ -1872,13 +1872,13 @@ def test_trace_search_tool(tmp_path: Path) -> None:
 
 
 def test_trace_count_tool(tmp_path: Path) -> None:
-    from nuself.trace.service import TraceRecorder
+    from nuself.trace.domain import ThoughtTrace
 
-    TraceRecorder(_trace_repository(tmp_path)).record(
+    _trace_repository(tmp_path).save_trace(ThoughtTrace(
         kind="decision",
         title="Trace count target",
         summary="A countable provenance item.",
-    )
+    ))
     tool = _chat_tool(tmp_path, "trace_count")
 
     result = _invoke_chat_tool(tool, {"query": "countable"})
@@ -1887,13 +1887,13 @@ def test_trace_count_tool(tmp_path: Path) -> None:
 
 
 def test_trace_show_tool(tmp_path: Path) -> None:
-    from nuself.trace.service import TraceRecorder
+    from nuself.trace.domain import ThoughtTrace
 
-    trace = TraceRecorder(_trace_repository(tmp_path)).record(
+    trace = _trace_repository(tmp_path).save_trace(ThoughtTrace(
         kind="decision",
         title="Trace detail target",
         summary="A detailed provenance item.",
-    )
+    ))
     tool = _chat_tool(tmp_path, "trace_show")
 
     result = _invoke_chat_tool(tool, {"trace_id": trace.id})

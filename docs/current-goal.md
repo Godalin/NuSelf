@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing domain service methods against production consumers, next
-checking trace and reflection APIs. Keep use-case methods even when one adapter
-uses them; remove test-only infrastructure exposure.
+Continue the service audit with notification and conversation APIs. Preserve
+durable delivery/state use cases and remove only duplicated or test-only
+surface; do not replace domain methods with generic CRUD.
 
 ## Constraints
 
@@ -169,6 +169,13 @@ uses them; remove test-only infrastructure exposure.
   receive the application-owned `reason_workspace` capability directly.
 - Reason service/output/application-boundary focused suite: 117 passed.
 - Post-Reason-service cleanup `uv run --locked pytest -q`: 2455 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Every ReflectionService and TraceQueryService method has a production CLI,
+  REPL, agent, or scheduler consumer and remains public. TraceRecorder's generic
+  `record()` and `link()` were used only by its own typed methods and test data
+  setup, so they are now private construction/persistence helpers.
+- Trace/reflection/CLI/Chat/boundary focused suite: 509 passed.
+- Post-trace-service cleanup `uv run --locked pytest -q`: 2455 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

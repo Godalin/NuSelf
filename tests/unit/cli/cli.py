@@ -6289,20 +6289,22 @@ def test_trace_cli_lists_shows_and_searches_records(
 def test_trace_cli_lists_records_related_to_artifact(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.trace.service import TraceRecorder
+    from nuself.trace.domain import ThoughtTrace, TraceLink
 
-    recorder = TraceRecorder(_trace_repository(tmp_path))
-    trace = recorder.record(
+    repository = _trace_repository(tmp_path)
+    trace = repository.save_trace(ThoughtTrace(
         kind="memory_update",
         title="Related memory trace",
         summary="Created a memory entry.",
         outputs=["memory:mem_123"],
-    )
-    recorder.link(
-        "memory:mem_123",
-        "reason:conversation_1",
-        "supports",
-        "Memory supported a reason conversation.",
+    ))
+    repository.save_link(
+        TraceLink(
+            source_id="memory:mem_123",
+            target_id="reason:conversation_1",
+            relation="supports",
+            summary="Memory supported a reason conversation.",
+        )
     )
 
     result = main(

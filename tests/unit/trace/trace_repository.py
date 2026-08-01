@@ -7,7 +7,7 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.storage import get_default_backend
-from nuself.trace.domain import ThoughtTrace
+from nuself.trace.domain import ThoughtTrace, TraceLink
 from nuself.trace.repository import TraceNotFound, TraceRepository
 from nuself.trace.service import TraceRecorder
 
@@ -33,7 +33,14 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
         participants=["chat_agent", "memory"],
         decision_points=["Memory context included observed_at."],
     )
-    link = recorder.link(trace.id, "mem_123", "cites", "The answer cited a memory entry.")
+    link = repo.save_link(
+        TraceLink(
+            source_id=trace.id,
+            target_id="mem_123",
+            relation="cites",
+            summary="The answer cited a memory entry.",
+        )
+    )
 
     traces = repo.list_traces()
     matches = repo.search_traces("temporal")
@@ -58,8 +65,7 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
 
 def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
-    recorder = TraceRecorder(repo)
-    memory_trace = recorder.record(
+    memory_trace = repo.save_trace(ThoughtTrace(
         kind="memory_update",
         title="Remembered preference",
         summary="Captured a durable preference.",
@@ -68,16 +74,23 @@ def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> N
             "primary_artifact": "memory:mem_123",
             "nested": {"references": ["memory:mem_nested"]},
         },
-    )
-    reason_trace = recorder.record(
+    ))
+    reason_trace = repo.save_trace(ThoughtTrace(
         kind="reason_step",
         title="Reason step",
         summary="Advanced with memory evidence.",
         inputs=["reason:abc"],
         evidence_refs=["memory:mem_123"],
         outputs=["reason:abc", "reason_step:step_1"],
+    ))
+    link = repo.save_link(
+        TraceLink(
+            source_id="memory:mem_123",
+            target_id="reason:abc",
+            relation="supports",
+            summary="Memory supported the reason thread.",
+        )
     )
-    link = recorder.link("memory:mem_123", "reason:abc", "supports", "Memory supported the reason thread.")
 
     assert repo.traces_for_artifact("memory:mem_123") == [memory_trace, reason_trace]
     assert repo.traces_for_artifact("memory:mem_nested") == [memory_trace]

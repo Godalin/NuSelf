@@ -246,7 +246,9 @@ Layers:
 
 - `ThoughtTrace` / `TraceLink`: domain models and validation.
 - `TraceRepository`: SQLite persistence and derived index rebuild.
-- `TraceRecorder`: service interface used by other subsystems to create traces and links.
+- `TraceRecorder`: typed service interface used by other subsystems to record
+  domain outcomes. Generic model construction and link persistence remain
+  private implementation details.
 - `TraceQueryService`: service interface for list/show/search and rebuilding
   the derived query index.
 - Trace renderers: human-readable CLI/REPL output.
@@ -254,7 +256,9 @@ Layers:
 
 Rules:
 
-- Other subsystems must create traces through `TraceRecorder`, not by writing trace files directly.
+- Other subsystems must create traces through the relevant typed
+  `TraceRecorder.record_*` operation, not by writing trace files or invoking a
+  generic trace constructor directly.
 - Agents should call tool-facing trace interfaces, not `TraceRepository`.
 - `TraceRecorder` decides deterministic create/skip policy from structured runtime facts. LLMs may later help polish titles or summaries, but the first implementation should not rely on an LLM to decide whether infrastructure records are written.
 - Tool-facing trace results must be concise, privacy-aware, and safe to include in LLM prompts.
