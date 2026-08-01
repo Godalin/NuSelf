@@ -8,7 +8,6 @@ from typing import cast
 from langchain_core.tools import BaseTool
 
 from nuself.agent.skills import (
-    AgentSkill,
     load_agent_skills,
     render_tool_placeholders,
 )
@@ -51,7 +50,11 @@ class ConversationToolRuntime:
         self._tools = {tool.name: tool for tool in tools}
         loaded_skills = load_agent_skills()
         tools_by_skill = {
-            skill.name: _tools_for_skill(skill, self._tools)
+            skill.name: tuple(
+                name
+                for name in skill.allowed_tools
+                if name in self._tools
+            )
             for skill in loaded_skills
         }
         self._skills = tuple(
@@ -194,16 +197,6 @@ def _tool_prompt_sections(
             f"{tool.description}"
         )
     return lines
-
-
-def _tools_for_skill(
-    skill: AgentSkill,
-    tools: dict[str, BaseTool],
-) -> tuple[str, ...]:
-    return tuple(
-        name for name in skill.allowed_tools if name in tools
-    )
-
 
 def _tool_args_signature(tool: BaseTool) -> str:
     raw_schema = cast(object, getattr(tool, "args"))

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Chat skill registration now computes its explicit tool intersection directly,
+  removing a single-use policy-free projection helper and unused type import.
 - Prompt-only advisory skills with an intentionally empty `allowed-tools`
   declaration remain available, while stale non-empty tool declarations stay
   filtered and receive no component-based fallback.

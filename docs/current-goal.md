@@ -9,16 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Preserve explicit advisory skills within strict capability filtering.
+Inline the single-use skill/tool projection helper.
 
 ## Ordered Steps
 
-1. Distinguish an intentionally empty `allowed-tools` declaration from a
-   non-empty declaration whose tools are absent.
-2. Keep advisory skills while filtering stale tool-calling skills; retain the
-   no-component-fallback rule.
-3. Extend drift coverage, run focused agent/chat tests and full gates, then
-   commit without pushing.
+1. Confirm `_tools_for_skill()` owns no validation or fallback after the prior
+   strict-mapping change.
+2. Inline its ordered intersection into registry construction and remove the
+   now-unused domain type import.
+3. Run focused chat tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -27,8 +26,8 @@ Preserve explicit advisory skills within strict capability filtering.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Do not give advisory skills tools or infer tool authority from component
-  names; preserve their prompt-only instructions.
+- Preserve advisory visibility, declaration order, stale-skill filtering, and
+  exact tool names.
 
 ## Constraints
 
@@ -40,6 +39,11 @@ Preserve explicit advisory skills within strict capability filtering.
 
 ## Phase Evidence
 
+- Chat skill registration now computes its ordered explicit-tool intersection
+  at the sole use site. Removed `_tools_for_skill()` and the resulting unused
+  `AgentSkill` import without changing advisory visibility or drift filtering.
+  Focused chat/skill tests: 78 passed; full suite: 2441 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Skill availability now distinguishes intentionally tool-free advisory policy
   from a stale non-empty tool declaration. Advisory instructions remain
   loadable without receiving tools; drifted tool-calling skills remain hidden
