@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   The process-global default-backend cache, lock, override/reset API, and
   aggregate reset error were removed; manual scripts and tests now use explicit
   scoped ownership and close their selected backends deterministically.
+- Required Reason and memory-curation trace collaborators are now represented
+  as non-null service dependencies, while retaining best-effort trace failure
+  isolation. Daemon task construction now uses one path for captured and
+  explicitly supplied runtime contexts.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

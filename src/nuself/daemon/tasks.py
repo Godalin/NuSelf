@@ -3,7 +3,7 @@
 from typing import Literal, get_args
 
 from nuself.daemon.scheduler import DaemonTask
-from nuself.runtime.context import RuntimeContext
+from nuself.runtime.context import RuntimeContext, current_runtime_context
 
 DaemonTaskKind = Literal[
     "memory.scan",
@@ -38,19 +38,11 @@ def daemon_task(
 ) -> DaemonTask:
     """Construct a production task through the closed kind boundary."""
 
-    if context is None:
-        return DaemonTask(
-            kind,
-            identity,
-            resource,
-            payload=payload,
-            priority=priority,
-        )
     return DaemonTask(
         kind,
         identity,
         resource,
         payload=payload,
         priority=priority,
-        context=context,
+        context=context if context is not None else current_runtime_context(),
     )

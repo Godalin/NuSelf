@@ -141,7 +141,7 @@ class MemoryCurator:
         self._candidate_repository = candidate_repository
         self._registry = registry or default_memory_type_registry()
         self._plan_store = plan_store
-        self._trace_recorder: TraceRecorder | None = trace_recorder
+        self._trace_recorder = trace_recorder
 
     def run_once(
         self,
@@ -583,11 +583,8 @@ class MemoryCurator:
         action: str,
         source_trace_id: str | None,
     ) -> None:
-        if self._trace_recorder is None:
-            return
-        recorder = self._trace_recorder
         run_memory_observed(
-            lambda: recorder.record_memory_update(
+            lambda: self._trace_recorder.record_memory_update(
                 memory_id=entry.id,
                 title=entry.title,
                 summary=entry.body,

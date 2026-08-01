@@ -516,6 +516,10 @@ Every scheduler task exactly installs its submitted correlation context and a
 durable resource and job identities into that context. Success and failure both
 restore the executor thread's prior context; reused slots never inherit the
 previous task's correlation.
+Production task construction has one closed-kind factory and one constructor
+path: it captures the current context when no explicit durable context is
+supplied, or stores the supplied context unchanged. These are values selected
+before construction, not separate task shapes or compatibility paths.
 
 ## Client Chat Scope
 

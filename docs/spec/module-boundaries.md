@@ -326,6 +326,9 @@ Memory curation receives the complete authority resource set explicitly:
 runtime paths, backend, observation inbox, entry/candidate/profile repositories,
 recovery-plan store, and trace recorder. Defaults are limited to curation
 policy and model adapters, never persistence or authority selection.
+The required trace recorder remains non-null for the curator's complete
+lifetime; curation isolates recorder failures through the memory observability
+policy rather than retaining an unreachable no-recorder branch.
 Daemon request handling may only request curation for a durable observation.
 The unified daemon scheduler owns execution, retry isolation, and periodic
 recovery across pending observation IDs; request handlers must not invoke the curator
@@ -350,7 +353,9 @@ repository instance.
 as required dependencies for its own thread lifecycle, but it does not expose
 generic workspace paths or key-value handles as reason operations. Consumers
 that need workspace infrastructure receive the single application-owned store
-explicitly. Reason scheduling and output export must receive an existing reason
+explicitly. The service stores that required recorder as a non-null capability;
+trace failure isolation must not be modeled as optional composition. Reason
+scheduling and output export must receive an existing reason
 service and that workspace store.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.

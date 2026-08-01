@@ -78,7 +78,7 @@ class ReasonService:
         self._repository = repository
         self._project_root = project_root
         self._workspace_store = workspace_store
-        self._trace_recorder: TraceRecorder | None = trace_recorder
+        self._trace_recorder = trace_recorder
         self._advancer = advancer
         self._prompt_generator = prompt_generator or generate_reasoning_prompt
 
@@ -130,25 +130,23 @@ class ReasonService:
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.ensure(thread.id)
-        if self._trace_recorder is not None:
-            recorder = self._trace_recorder
-            run_reason_observed(
-                lambda: recorder.record_reason_thread_created(
-                    thread=saved,
-                    source_trace_ids=list(source_trace_ids),
-                    metadata={
-                        "workspace": str(workspace.root),
-                        "mandates": list(thread.mandates_data),
-                    },
-                ),
-                event="trace_recording_failed",
-                project_root=self._project_root,
+        run_reason_observed(
+            lambda: self._trace_recorder.record_reason_thread_created(
+                thread=saved,
+                source_trace_ids=list(source_trace_ids),
                 metadata={
-                    "operation": "start_thread",
-                    "thread_id": saved.id,
-                    "step_id": None,
+                    "workspace": str(workspace.root),
+                    "mandates": list(thread.mandates_data),
                 },
-            )
+            ),
+            event="trace_recording_failed",
+            project_root=self._project_root,
+            metadata={
+                "operation": "start_thread",
+                "thread_id": saved.id,
+                "step_id": None,
+            },
+        )
 
         write_reason_audit(
             "thread_started",
@@ -219,21 +217,19 @@ class ReasonService:
         with self._repository.batch_write():
             self._repository.save_step(step)
             self._repository.save_thread(updated)
-        if self._trace_recorder is not None:
-            recorder = self._trace_recorder
-            run_reason_observed(
-                lambda: recorder.record_reason_step(
-                    thread=updated,
-                    step=step,
-                ),
-                event="trace_recording_failed",
-                project_root=self._project_root,
-                metadata={
-                    "operation": "advance_thread",
-                    "thread_id": updated.id,
-                    "step_id": step.id,
-                },
-            )
+        run_reason_observed(
+            lambda: self._trace_recorder.record_reason_step(
+                thread=updated,
+                step=step,
+            ),
+            event="trace_recording_failed",
+            project_root=self._project_root,
+            metadata={
+                "operation": "advance_thread",
+                "thread_id": updated.id,
+                "step_id": step.id,
+            },
+        )
 
         write_reason_audit(
             "advance_completed",

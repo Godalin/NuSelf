@@ -9,26 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Delete the now production-unused default-backend cache, global lock, reset
-aggregate, and override API. Manual scripts and tests must use explicit scoped
-backend ownership rather than preserving the obsolete service-locator model.
+Remove false optionality from already-required service collaborators and
+collapse duplicate daemon-task construction. Preserve the trace and runtime
+context capabilities themselves; delete only unreachable compatibility
+branches around them.
 
 ## Ordered Steps
 
-1. Correct storage/error/API contracts to remove the default-cache lifecycle.
-2. Migrate the manual legacy-memory script to `auto_backend()` plus `finally`
-   close, then delete cache state, lock, get/set/reset functions, and reset error.
-3. Replace test reliance with a pytest-scoped backend owner that closes every
-   selected backend after each test; remove cache-behavior tests.
-4. Run storage/scripts/boundary, Pyright, full pytest, and package build gates;
+1. Record that required trace collaborators are non-null for their complete
+   service lifetime and that daemon tasks have one context-capture path.
+2. Remove nullable trace storage/guards from Reason and memory curation.
+3. Collapse the daemon task factory's duplicate constructor branches without
+   opening the closed production task-kind catalog.
+4. Run focused service/daemon tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not retain deprecated aliases or a process-global test cache in production.
-- Do not expose raw backend state on `ApplicationGraph` or to domain modules.
-- Do not add a replacement lock, wrapper, service locator, or compatibility
-  path.
+- Do not make trace recording optional or replace it with a null-object layer.
+- Do not remove the daemon task factory or weaken its closed kind typing.
+- Do not change trace failure isolation, task context correlation, scheduling,
+  persistence, or user-visible behavior.
 
 ## Constraints
 
@@ -40,6 +41,13 @@ backend ownership rather than preserving the obsolete service-locator model.
 
 ## Phase Evidence
 
+- Reason and memory curation now store their required trace recorder as a
+  non-null capability and always enter the existing best-effort trace boundary;
+  two unreachable no-recorder branches are gone. Production daemon tasks still
+  pass through the closed typed factory, but default context capture and
+  explicit durable-context selection now feed one constructor path. Focused
+  service/daemon tests: 108 passed; full suite: 2435 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 - Removed the production `_default_backends` registry, global backend lock,
   `get/set/reset_default_backend`, and `DefaultBackendResetError`. The manual
   migration script now owns `auto_backend()` with `finally` close; no source,
