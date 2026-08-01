@@ -18,7 +18,7 @@ class ReasonScheduler:
     def __init__(
         self,
         project_root: Path,
-        advancer: ReasonAdvancerProtocol | None = None,
+        advancer: ReasonAdvancerProtocol,
         interval_seconds: int = 600,
         *,
         service: ReasonService,
@@ -30,9 +30,6 @@ class ReasonScheduler:
 
     def run_once(self) -> None:
         """Advance exactly one thread if any active thread is not on cooldown."""
-        if self._advancer is None:
-            return
-
         threads = self._service.list_threads(status=None)
         active = [t for t in threads if t.status == "active"]
 

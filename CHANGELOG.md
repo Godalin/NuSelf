@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason scheduler composition now requires its advancer protocol capability,
+  removing an unused missing-dependency mode that silently disabled background
+  advancement at runtime.
 - Reason output now owns one validated job-path operation reused by daemon
   execution, and submits export jobs directly at the sink boundary, removing
   private path pass-throughs, duplicate manifest assembly, and a one-call

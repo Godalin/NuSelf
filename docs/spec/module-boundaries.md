@@ -394,8 +394,10 @@ runtime paths to construct it.
 `ReasonAdvancer` receives workspace, persona repository, trace recorder, and
 resolved paths from application composition. `ReasonScheduler` requires the
 selected authority's resolved project root for correctly scoped observation,
-receives the existing single-operation advancer protocol explicitly, and never
-depends on or constructs the concrete model-backed implementation.
+receives the existing single-operation advancer protocol as a required
+capability, and never depends on or constructs the concrete model-backed
+implementation. Missing advancement capability is an invalid composition, not
+a silently disabled scheduler mode.
 
 Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require

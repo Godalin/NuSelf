@@ -9,23 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make Reason output own one truthful path operation and remove mechanical
-forwarding around export submission.
+Require the Reason scheduler's sole execution capability at composition.
 
 ## Ordered Steps
 
-1. Confirm the private export-root/path helpers and enqueue closure carry no
-   policy, alternate implementation, or reusable capability.
-2. Keep `ReasonOutputService.job_paths()` as the sole path operation, reuse it
-   from daemon processing, and submit jobs directly with `try`/`else`.
-3. Run focused Reason output/daemon tests and the complete verification gates;
-   update evidence and commit without pushing.
+1. Confirm every production and test scheduler composition already supplies a
+   `ReasonAdvancerProtocol` and no supported disabled-scheduler mode exists.
+2. Make the advancer required and delete the silent no-op runtime branch.
+3. Run focused Reason scheduler/daemon tests and the complete verification
+   gates; update evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve path-segment validation, enqueue failure isolation, and audits.
-- Do not merge daemon recovery into the output service or add a path facade.
+- Preserve thread selection, cooldown, failure isolation, and audit behavior.
+- Do not move advancement policy into the daemon or require a concrete agent.
 
 ## Constraints
 
@@ -37,6 +35,13 @@ forwarding around export submission.
 
 ## Phase Evidence
 
+- `ReasonScheduler` now requires its `ReasonAdvancerProtocol` capability at
+  construction. Every production and test composition already supplied it;
+  removed the unused optional type/default and the runtime branch that could
+  silently disable background advancement. The scheduler remains decoupled
+  from the concrete model-backed advancer. Focused Reason scheduler/daemon
+  tests: 177 passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - `ReasonOutputService.job_paths()` now directly owns validation and path
   construction, and all service methods plus daemon processing reuse it.
   Removed its private pass-through, a one-use export-root helper, duplicate
