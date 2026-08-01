@@ -9,8 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue reconciling specifications with live presentation paths and removing
-parallel test-only renderers.
+Continue removing artifacts from superseded eager composition paths. Preserve
+only the live lazy capability and its directly tested policy helpers.
 
 ## Constraints
 
@@ -364,6 +364,12 @@ parallel test-only renderers.
   The LLM specification now describes that actual shared renderer.
 - TUI/persona/Chat focused suite: 335 passed. Post-host-renderer cleanup
   `uv run --locked pytest -q`: 2445 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `render_agent_skill_sections()` belonged to the retired eager skill-prompt
+  path and was called only by two tests. It is gone; production keeps the lazy
+  `load_skill` tool, placeholder expansion, and exact skill-to-tool mapping.
+- Agent/Chat/boundary focused suite: 335 passed. Post-eager-skill cleanup
+  `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

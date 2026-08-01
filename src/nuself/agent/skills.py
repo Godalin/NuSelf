@@ -35,37 +35,6 @@ def load_agent_skills(root: Path | None = None) -> tuple[AgentSkill, ...]:
     return tuple(skills)
 
 
-def render_agent_skill_sections(
-    skills: tuple[AgentSkill, ...],
-    *,
-    allowed_tools_by_skill: dict[str, tuple[str, ...]] | None = None,
-) -> list[str]:
-    """Render loaded Agent Skills for the current prompt builder.
-
-    When *allowed_tools_by_skill* is provided, allowed-tool lines are
-    generated from the actual tool registry rather than from skill YAML
-    frontmatter.
-    """
-
-    if not skills:
-        return []
-    lines = [
-        "",
-        "Service skills:",
-        "The following service skills are loaded from Agent Skills Markdown files.",
-    ]
-    for skill in skills:
-        lines.append(f"- {skill.name}: {skill.description}")
-        tools = (allowed_tools_by_skill or {}).get(skill.name, skill.allowed_tools)
-        if tools:
-            lines.append(f"  Allowed tools: {', '.join(tools)}")
-        instructions = render_tool_placeholders(skill.instructions, skill_name=skill.name, tools=tools)
-        for line in instructions.splitlines():
-            if line.strip():
-                lines.append(f"  {line}")
-    return lines
-
-
 def render_tool_placeholders(instructions: str, *, skill_name: str, tools: tuple[str, ...]) -> str:
     def replace(match: re.Match[str]) -> str:
         action = match.group(1)
