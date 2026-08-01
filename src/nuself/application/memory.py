@@ -32,23 +32,6 @@ class MemoryRepositories:
     curator_plans: MemoryCuratorPlanStore
 
 
-def compose_memory_entry_repository(
-    paths: RuntimePaths,
-    backend: StorageBackend,
-    *,
-    registry: MemoryTypeRegistry | None = None,
-    relation_registry: RelationDescriptorRegistry | None = None,
-) -> MemoryEntryRepository:
-    """Compose memory entry persistence from already-owned resources."""
-
-    return MemoryEntryRepository(
-        paths,
-        backend=backend,
-        registry=registry,
-        relation_registry=relation_registry,
-    )
-
-
 def compose_memory_repositories(
     paths: RuntimePaths,
     backend: StorageBackend,
@@ -58,9 +41,9 @@ def compose_memory_repositories(
 ) -> MemoryRepositories:
     """Compose the complete memory persistence graph."""
 
-    entries = compose_memory_entry_repository(
+    entries = MemoryEntryRepository(
         paths,
-        backend,
+        backend=backend,
         registry=registry,
         relation_registry=relation_registry,
     )

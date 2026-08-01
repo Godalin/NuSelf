@@ -233,6 +233,14 @@ threads, wake-up events, pending sets, admission queues, start locks, periodic
 loops, and worker-health bookkeeping. Adding a daemon responsibility registers
 one typed task handler; it must not add another long-lived worker abstraction.
 
+The daemon composition object exposes the scheduler itself to transport
+adapters instead of adding pass-through health methods. Its paired background
+start/stop operations remain the lifecycle boundary because startup also
+prepares recovery and recurring work. Domain-specific admission methods remain
+private unless another production boundary actually uses them. The closed
+task-kind type is the single source for the runtime task catalog; a second
+handwritten catalog is prohibited.
+
 Each in-memory task has a registered kind, stable identity, one primary
 resource key, fixed priority, optional monotonic `run_at`, immutable runtime
 context and payload, and one completion handle. Identity coalesces pending and

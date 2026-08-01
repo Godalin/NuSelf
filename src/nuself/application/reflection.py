@@ -4,28 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from nuself.config import ReflectionSettings
-from nuself.config import RuntimePaths
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
-from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.service import ReflectionService
 from nuself.persona import SharedPersonaDiscussionService
 from nuself.application.reason import compose_reason_service
-from nuself.storage import StorageBackend
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph
-
-
-def compose_reflection_repository(
-    paths: RuntimePaths,
-    backend: StorageBackend,
-) -> ReflectionRepository:
-    """Compose reflection persistence from already-owned resources."""
-
-    return ReflectionRepository(paths, backend=backend)
 
 
 def compose_reflection_service(
@@ -49,11 +37,7 @@ def compose_reflection_scheduler(
     """Compose reflection orchestration from one authority-owned graph."""
 
     paths = application.paths
-    from nuself.application.composition import application_backend
-
-    schedule_collection = application_backend(application).collection(
-        "scheduler_state"
-    )
+    schedule_collection = application.reflection_schedule
     generator = IdeaCandidateGenerator(
         paths.project_root,
         config=config,

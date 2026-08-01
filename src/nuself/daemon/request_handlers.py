@@ -40,7 +40,7 @@ from nuself.daemon.request_audit import (
     report_daemon_request_failure,
     write_daemon_request_audit,
 )
-from nuself.daemon.scheduler import DaemonSchedulerSnapshot
+from nuself.daemon.scheduler import DaemonScheduler
 from nuself.logs import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
@@ -59,8 +59,8 @@ class DaemonRequestState(Protocol):
     conversation_runtime: ConversationGraphRuntime
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
+    scheduler: "DaemonScheduler"
 
-    def scheduler_health(self) -> DaemonSchedulerSnapshot: ...
     def run_chat(
         self,
         message: str,
@@ -158,7 +158,7 @@ def _handle_health(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
-    snapshot = state.scheduler_health()
+    snapshot = state.scheduler.snapshot()
     payload = HealthResponsePayload(
         SchedulerHealthPayload(
             running=snapshot.running,

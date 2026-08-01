@@ -9,10 +9,6 @@ from nuself.application.memory import (
     compose_memory_repositories,
 )
 from nuself.application.data_admin import DataAdminService
-from nuself.application.notification import compose_notification_outbox
-from nuself.application.persona import compose_persona_prompt_repository
-from nuself.application.reason import compose_reason_repository
-from nuself.application.reflection import compose_reflection_repository
 from nuself.application.trace import TraceServices, compose_trace_services
 from nuself.config import RuntimePaths
 from nuself.conversation import ConversationHistoryService, ConversationStore
@@ -20,7 +16,7 @@ from nuself.notification import NotificationOutbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
-from nuself.storage import StorageBackend
+from nuself.storage import StorageBackend, StorageCollection
 
 
 @dataclass(frozen=True)
@@ -28,7 +24,6 @@ class ApplicationGraph:
     """Concrete services sharing one selected authority."""
 
     paths: RuntimePaths
-    _backend: StorageBackend
     conversations: ConversationStore
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
@@ -36,13 +31,9 @@ class ApplicationGraph:
     persona_prompts: PersonaPromptRepository
     reason: ReasonRepository
     reflection: ReflectionRepository
+    reflection_schedule: StorageCollection
     trace: TraceServices
     data: DataAdminService
-
-    def composition_storage(self) -> StorageBackend:
-        """Return storage to application-owned factories."""
-
-        return self._backend
 
 
 def compose_application(
@@ -55,14 +46,17 @@ def compose_application(
     memory = compose_memory_repositories(paths, backend)
     return ApplicationGraph(
         paths=paths,
-        _backend=backend,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,
-        notifications=compose_notification_outbox(paths, backend),
-        persona_prompts=compose_persona_prompt_repository(paths, backend),
-        reason=compose_reason_repository(paths, backend),
-        reflection=compose_reflection_repository(paths, backend),
+        notifications=NotificationOutbox(paths, backend),
+        persona_prompts=PersonaPromptRepository(
+            backend.collection("persona_prompts"),
+            paths,
+        ),
+        reason=ReasonRepository(paths, backend=backend),
+        reflection=ReflectionRepository(paths, backend=backend),
+        reflection_schedule=backend.collection("scheduler_state"),
         trace=compose_trace_services(paths, backend),
         data=DataAdminService(
             backend,
@@ -70,9 +64,3 @@ def compose_application(
             memories=memory.entries,
         ),
     )
-
-
-def application_backend(application: ApplicationGraph) -> StorageBackend:
-    """Borrow storage inside application composition only."""
-
-    return application.composition_storage()

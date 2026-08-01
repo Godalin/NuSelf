@@ -7,26 +7,14 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
 
-from nuself.config import RuntimePaths
 from nuself.llm import LangChainLLMEndpoint
 import nuself.reason.service as reason_service_module
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
-from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
-from nuself.storage import StorageBackend
 from nuself.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph
-
-
-def compose_reason_repository(
-    paths: RuntimePaths,
-    backend: StorageBackend,
-) -> ReasonRepository:
-    """Compose reason persistence from already-owned resources."""
-
-    return ReasonRepository(paths, backend=backend)
 
 
 def compose_reason_service(

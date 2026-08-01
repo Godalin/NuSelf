@@ -336,7 +336,7 @@ def test_daemon_chat_requests_curation_without_running_it_inline(
 ) -> None:
     state = DaemonState(tmp_path)
     requested: list[str] = []
-    state.request_memory_curation = requested.append  # type: ignore[method-assign]
+    state._request_memory_curation = requested.append  # type: ignore[method-assign]
     request = DaemonRequest(type="chat", payload={"message": "remember this"}, request_id="chat1")
 
     response = handle_request(request, state)
@@ -352,7 +352,7 @@ def test_daemon_chat_requests_curation_for_non_default_thread(
 ) -> None:
     state = DaemonState(tmp_path)
     requested: list[str] = []
-    state.request_memory_curation = requested.append  # type: ignore[method-assign]
+    state._request_memory_curation = requested.append  # type: ignore[method-assign]
     request = DaemonRequest(
         type="chat",
         payload={
@@ -383,8 +383,8 @@ def test_memory_curator_worker_coalesces_requested_observation_ids(
             state.shutdown_requested.set()
 
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
-    state.request_memory_curation("obs_project")
-    state.request_memory_curation("obs_project")
+    state._request_memory_curation("obs_project")  # pyright: ignore[reportPrivateUsage]
+    state._request_memory_curation("obs_project")  # pyright: ignore[reportPrivateUsage]
     state.scheduler.start()
     assert state.shutdown_requested.wait(timeout=1)
     state.stop_background_tasks()

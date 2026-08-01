@@ -4,24 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.config import RuntimePaths
 from nuself.memory.repository import MemoryEntryRepository, MemorySearchFilters
 from nuself.persona.audit import report_persona_failure
 from nuself.persona.definition import BUILTIN_PERSONAS, PersonaDefinition
-from nuself.persona.prompt_repo import PersonaPromptRepository
-from nuself.storage import StorageBackend
-
-
-def compose_persona_prompt_repository(
-    paths: RuntimePaths,
-    backend: StorageBackend,
-) -> PersonaPromptRepository:
-    """Build persona prompt persistence from explicit authority resources."""
-
-    return PersonaPromptRepository(
-        backend.collection("persona_prompts"),
-        paths,
-    )
 
 
 def load_personas_from_memory(

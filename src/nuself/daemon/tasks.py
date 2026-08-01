@@ -1,6 +1,6 @@
 """Closed task names for the single daemon scheduler."""
 
-from typing import Literal
+from typing import Literal, get_args
 
 from nuself.daemon.scheduler import DaemonTask
 from nuself.runtime.context import RuntimeContext
@@ -24,17 +24,7 @@ PeriodicTaskKind = Literal[
     "notification.deliver",
 ]
 
-DAEMON_TASK_KINDS: tuple[DaemonTaskKind, ...] = (
-    "memory.scan",
-    "memory.curate",
-    "conversation.scan",
-    "chat.turn",
-    "conversation.compress",
-    "reflection.check",
-    "reason.check",
-    "notification.deliver",
-    "reason.export",
-)
+DAEMON_TASK_KINDS: tuple[str, ...] = get_args(DaemonTaskKind)
 
 
 def daemon_task(

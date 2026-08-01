@@ -73,6 +73,12 @@ an interactive operation crosses into an owned worker thread, the same
 application authority is bound into that call and remains owned by the outer
 CLI lifecycle.
 
+Application composition is deliberately concrete. A composition helper exists
+only when it assembles policy or multiple dependencies for a real consumer;
+one-line repository constructors and pass-through accessors are not service
+APIs. The root constructs those repositories directly, while application
+services continue to express complete domain use cases.
+
 Reflection orchestration receives candidate generation, relevance,
 organization, discussion, publication, and trace capabilities from
 application composition. Persona's memory projection is likewise

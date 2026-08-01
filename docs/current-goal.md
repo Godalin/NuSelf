@@ -9,23 +9,18 @@ Idle — no active implementation goal.
 
 ## Last Completed Goal
 
-Closed the scheduler and feature-policy correctness gaps identified by the
-external daemon architecture review without adding a service bus, scheduler,
-or lock hierarchy.
+Simplified daemon and application-service composition without changing
+storage, configuration, wire protocol, or user-visible behavior.
 
 ## Completion Evidence
 
-- Capacity saturation and busy resource lanes now put the dispatcher to sleep
-  until a relevant notification instead of using zero-timeout waits.
-- Chat fails closed when scheduling is unavailable. After durable turn and
-  observation commit, curation/compression admission is recoverable wake-up;
-  periodic scans rediscover both forms of maintenance.
-- `@observed` centrally emits payload-safe feature started/completed/failed
-  events through the normal log/activity projection.
-- Scheduler health exposes only current task kind/error type degradation and
-  clears it after a successful task; production task construction uses the
-  closed typed kind boundary.
+- Removed repository-only forwarding factories and two empty composition
+  modules; the application root now constructs simple repositories directly.
+- `ApplicationGraph` no longer stores or exposes the raw backend. Reflection
+  receives only its scheduler-state collection.
+- Daemon health reads the scheduler directly, memory admission is private, and
+  the typed task kind is the only runtime catalog source.
+- Focused daemon/API boundary suite: 91 passed.
 - `uv run --locked pytest -q`: 2450 passed.
 - `uv run --locked pyright`: 0 errors, 0 warnings.
-- `uv build`: sdist and wheel built successfully.
-- Python 3.12 clean-wheel install, imports, and `nuself --version` succeeded.
+- `uv build`: `nuself-0.3.1` sdist and wheel built successfully.

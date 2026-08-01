@@ -175,11 +175,6 @@ class DaemonState:
             self._schedule_reason_export
         )
 
-    def scheduler_health(self):
-        """Return the unified scheduler snapshot."""
-
-        return self.scheduler.snapshot()
-
     def require_scheduler_ready(self) -> None:
         """Require the dispatcher to remain alive before readiness."""
 
@@ -214,9 +209,11 @@ class DaemonState:
         )
 
     def stop_background_tasks(self) -> None:
+        """Stop the single scheduler owned by this daemon lifecycle."""
+
         self.scheduler.shutdown()
 
-    def request_memory_curation(self, observation_id: str) -> bool:
+    def _request_memory_curation(self, observation_id: str) -> bool:
         """Admit one coalesced curator task for a durable observation."""
 
         return self._submit_followup(
@@ -273,7 +270,7 @@ class DaemonState:
     def _scan_memory_observations(self, task: DaemonTask) -> None:
         del task
         for observation in self.application.memory.observations.pending():
-            self.request_memory_curation(observation.id)
+            self._request_memory_curation(observation.id)
 
     def _scan_conversations(self, task: DaemonTask) -> None:
         del task
@@ -302,7 +299,7 @@ class DaemonState:
             turn=_require_completed_turn(result),
             source_trace_id=result.trace_id,
         )
-        self.request_memory_curation(observation.id)
+        self._request_memory_curation(observation.id)
         self._request_conversation_compression(result.conversation_id)
         return result
 

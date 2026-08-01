@@ -57,7 +57,6 @@ def _mock_status(project_root: Path) -> DaemonStatus:
     )
 
 
-from nuself.application import compose_profile_repository
 from nuself.domain.profile import ProfileItem
 from nuself.logs import (
     InteractiveLogCursor,
@@ -105,9 +104,9 @@ def _trace_repository(workspace: Path) -> TraceRepository:
 
 def _profile_repository(workspace: Path) -> ProfileItemRepository:
     root = _authority(workspace)
-    return compose_profile_repository(
+    return ProfileItemRepository(
         runtime_paths(root),
-        get_default_backend(root),
+        backend=get_default_backend(root),
     )
 
 
