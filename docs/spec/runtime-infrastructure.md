@@ -237,9 +237,16 @@ The daemon composition object exposes the scheduler itself to transport
 adapters instead of adding pass-through health methods. Its paired background
 start/stop operations remain the lifecycle boundary because startup also
 prepares recovery and recurring work. Domain-specific admission methods remain
-private unless another production boundary actually uses them. The closed
-task-kind type is the single source for the runtime task catalog; a second
-handwritten catalog is prohibited.
+private unless another production boundary actually uses them. The request
+handler state protocol contains only capabilities used by registered handlers;
+domain runtimes remain private to daemon composition. The closed task-kind type
+is the single source for the runtime task catalog; a second handwritten catalog
+is prohibited.
+
+Recurring responsibilities are declared once as an immutable sequence of task
+kind and interval pairs. Startup iterates that sequence; it must not mirror
+individual intervals as mutable daemon-state attributes or repeat one submit
+branch per task.
 
 Each in-memory task has a registered kind, stable identity, one primary
 resource key, fixed priority, optional monotonic `run_at`, immutable runtime

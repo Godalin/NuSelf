@@ -11,9 +11,7 @@ from nuself.application.curator import compose_memory_curator
 from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.application.reflection import compose_reflection_scheduler
-from nuself.application.reason import (
-    compose_reason_advancer,
-)
+from nuself.application.reason import compose_reason_advancer
 from nuself.config import ConfigSystem
 from nuself.conversation import CompletedTurn
 from nuself.daemon.activity import ActivityBroker
@@ -102,18 +100,11 @@ class DaemonState:
 
         config = ConfigSystem.load(project_root=self.project_root)
         self.memory_curator = compose_memory_curator(self.application)
-        self.memory_curator_interval_seconds: float = (
-            config.daemon.memory_curator.interval_seconds
-        )
         self.reflection_scheduler = compose_reflection_scheduler(
             self.application,
             config=config.reflection,
             language_preference=config.chat.language_preference,
         )
-        self.reflection_check_interval_seconds: float = (
-            config.daemon.reflection_scheduler.check_interval_seconds
-        )
-
         self.notification_delivery_loop = NotificationDeliveryLoop(
             self.application.notifications,
             build_notification_adapters(
@@ -121,13 +112,7 @@ class DaemonState:
                 config=config,
             ),
         )
-        self.notification_delivery_interval_seconds: float = (
-            config.daemon.notification_delivery.interval_seconds
-        )
-
-        self.reason_scheduler_interval_seconds = (
-            config.daemon.reason_scheduler.interval_seconds
-        )
+        reason_interval = config.daemon.reason_scheduler.interval_seconds
         capabilities = self.conversation_runtime.capability_snapshot()
         self.reason_scheduler = ReasonScheduler(
             self.project_root,
@@ -136,9 +121,23 @@ class DaemonState:
                 readonly_tools=capabilities.readonly_tools,
                 langchain_models=capabilities.endpoints,
             ),
-            interval_seconds=self.reason_scheduler_interval_seconds,
+            interval_seconds=reason_interval,
             repository=self.application.reason,
             service=self.application.reason_service,
+        )
+        memory_interval = config.daemon.memory_curator.interval_seconds
+        self._periodic_tasks: tuple[tuple[PeriodicTaskKind, float], ...] = (
+            ("memory.scan", memory_interval),
+            ("conversation.scan", memory_interval),
+            (
+                "reflection.check",
+                config.daemon.reflection_scheduler.check_interval_seconds,
+            ),
+            ("reason.check", reason_interval),
+            (
+                "notification.deliver",
+                config.daemon.notification_delivery.interval_seconds,
+            ),
         )
         handlers = {
             "memory.scan": self._scan_memory_observations,
@@ -174,26 +173,8 @@ class DaemonState:
         self.reason_export_service.prepare()
         self.reason_export_service.recover()
         self.scheduler.start()
-        self._schedule_periodic(
-            "memory.scan",
-            self.memory_curator_interval_seconds,
-        )
-        self._schedule_periodic(
-            "conversation.scan",
-            self.memory_curator_interval_seconds,
-        )
-        self._schedule_periodic(
-            "reflection.check",
-            self.reflection_check_interval_seconds,
-        )
-        self._schedule_periodic(
-            "reason.check",
-            self.reason_scheduler_interval_seconds,
-        )
-        self._schedule_periodic(
-            "notification.deliver",
-            self.notification_delivery_interval_seconds,
-        )
+        for kind, interval in self._periodic_tasks:
+            self._schedule_periodic(kind, interval)
 
     def stop_background_tasks(self) -> None:
         """Stop the single scheduler owned by this daemon lifecycle."""

@@ -397,7 +397,6 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    state.memory_curator_interval_seconds = 0.01
     for source_ref in ("test:active", "test:archived"):
         state.application.memory.observations.observe(
             MemoryObservation.create(
@@ -419,7 +418,7 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
     state.memory_curator = RecordingCurator()  # type: ignore[assignment]
     state.scheduler.start()
     state._schedule_periodic(  # pyright: ignore[reportPrivateUsage]
-        "memory.scan", state.memory_curator_interval_seconds
+        "memory.scan", 0.01
     )
     assert state.shutdown_requested.wait(timeout=1)
     state.stop_background_tasks()
@@ -661,7 +660,6 @@ def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: p
 def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: Path) -> None:
     """End-to-end: daemon starts reflection scheduler thread, which reflects and creates an outbox entry."""
     state = DaemonState(tmp_path)
-    state.reflection_check_interval_seconds = 0.05
     reflected = threading.Event()
 
     class MockScheduler:
@@ -685,7 +683,7 @@ def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: P
     state.reflection_scheduler = MockScheduler()  # type: ignore[assignment]
     state.scheduler.start()
     state._schedule_periodic(  # pyright: ignore[reportPrivateUsage]
-        "reflection.check", state.reflection_check_interval_seconds
+        "reflection.check", 0.05
     )
     try:
         assert reflected.wait(timeout=1)

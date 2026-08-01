@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the remaining daemon and service adapters for redundant composition or
-pass-through APIs; remove only seams whose callers and lifecycle ownership are
-already explicit.
+Audit daemon protocol and payload codecs for redundant wrappers or duplicated
+validation while preserving exact wire contracts and classified failures.
 
 ## Constraints
 
@@ -59,6 +58,16 @@ already explicit.
 - Post-service-composition `uv run --locked pytest -q`: 2448 passed;
   `uv run --locked pyright`: 0 errors, 0 warnings; `uv build`: sdist and wheel
   succeeded.
+- Daemon request-handler state no longer exposes the conversation runtime that
+  no registered request handler uses; domain runtime ownership remains inside
+  daemon composition.
+- Five recurring submissions now derive from one immutable task/interval list;
+  four mutable interval mirror fields and repeated startup branches are gone.
+- Replaced obsolete named-factory boundary checks with stronger application
+  package boundaries after those factories were deleted.
+- Daemon/boundary focused suite: 221 passed. Post-periodic-composition
+  `uv run --locked pytest -q`: 2448 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

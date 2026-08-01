@@ -154,14 +154,12 @@ def test_chat_tool_runtime_does_not_compose_persistence() -> None:
     forbidden = {
         ("nuself.storage", "get_default_backend"),
         ("nuself.config", "runtime_paths"),
-        (
-            "nuself.application.reflection",
-            "compose_reflection_repository",
-        ),
     }
 
     assert {
-        imported for imported in _from_imports(path) if imported in forbidden
+        imported
+        for imported in _from_imports(path)
+        if imported in forbidden or imported[0].startswith("nuself.application")
     } == set()
 
 
@@ -550,13 +548,12 @@ def test_reason_advancement_does_not_resolve_or_compose_authority() -> None:
     forbidden = {
         ("nuself.config", "runtime_paths"),
         ("nuself.storage", "get_default_backend"),
-        ("nuself.application", "compose_reason_service"),
     }
     assert {
         (path.relative_to(_SOURCE_ROOT), imported)
         for path in paths
         for imported in _from_imports(path)
-        if imported in forbidden
+        if imported in forbidden or imported[0].startswith("nuself.application")
     } == set()
 
 

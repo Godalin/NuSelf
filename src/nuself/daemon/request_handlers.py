@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol, TypeVar
 
-from nuself.agent.chat import ChatResult, ConversationGraphRuntime
+from nuself.agent.chat import ChatResult
 from nuself.daemon.activity import (
     ActivityBroker,
     ActivitySubscriptionNotFound,
@@ -56,7 +56,6 @@ class DaemonRequestPayloadError(ProtocolError):
 class DaemonRequestState(Protocol):
     project_root: Path
     authority_id: str
-    conversation_runtime: ConversationGraphRuntime
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
     scheduler: "DaemonScheduler"
