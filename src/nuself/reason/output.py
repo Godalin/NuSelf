@@ -69,7 +69,7 @@ class ReasonOutputService:
         self._section_planner = section_planner
 
     def list_jobs(self, thread_id: str) -> list[ReasonOutputManifest]:
-        root = self._export_root(thread_id)
+        root = self._workspace_store.paths(thread_id).root
         if not root.exists():
             return []
         jobs_dir = root / "jobs"
@@ -102,7 +102,7 @@ class ReasonOutputService:
         # The job directory is named by job_id, so read its manifest directly
         # instead of scanning and parsing every job manifest under the thread.
         try:
-            manifest_path = self._job_paths(thread_id, job_id).manifest
+            manifest_path = self.job_paths(thread_id, job_id).manifest
         except ValueError as exc:
             raise ReasonNotFound(job_id) from exc
         try:
@@ -146,7 +146,7 @@ class ReasonOutputService:
             segment_size=segment_size,
             source_step_ids=tuple(step.id for step in selected),
         )
-        paths = self._job_paths(thread.id, job_id)
+        paths = self.job_paths(thread.id, job_id)
         _clear_job_artifacts(paths)
         ensure_private_directory(paths.root)
         manifest = ReasonOutputManifest(
@@ -199,12 +199,8 @@ class ReasonOutputService:
                 payload={"mode": mode, "output_format": output_format},
             )
 
-            def enqueue() -> bool:
-                job_sink(job_message)
-                return True
-
             try:
-                enqueued = enqueue()
+                job_sink(job_message)
             except Exception as exc:
                 report_reason_failure(
                     exc,
@@ -212,8 +208,7 @@ class ReasonOutputService:
                     project_root=self._project_root,
                     metadata={"thread_id": thread.id, "job_id": job_id},
                 )
-                enqueued = False
-            if enqueued:
+            else:
                 write_reason_audit(
                     "export_job_enqueued",
                     project_root=self._project_root,
@@ -270,7 +265,7 @@ class ReasonOutputService:
         if len(selected) != len(manifest.source_step_ids):
             raise RuntimeError("Cannot compose export job: one or more source steps are missing")
 
-        paths = self._job_paths(thread.id, job_id)
+        paths = self.job_paths(thread.id, job_id)
         ensure_private_directory(paths.root)
         chunks: list[ReasonOutputChunk] = []
         section_plan = self._resolve_section_plan(thread, manifest, selected)
@@ -344,9 +339,6 @@ class ReasonOutputService:
         return self._finalize_job(thread, manifest, paths, chunks, section_plan)
 
     def job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
-        return self._job_paths(thread_id, job_id)
-
-    def _job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
         _validate_segment(thread_id, "thread id")
         _validate_segment(job_id, "job id")
         workspace = self._workspace_store.paths(thread_id)
@@ -359,10 +351,6 @@ class ReasonOutputService:
             pdf=root / "combined.pdf",
             chunks_dir=root,
         )
-
-    def _export_root(self, thread_id: str) -> Path:
-        workspace = self._workspace_store.paths(thread_id)
-        return workspace.root
 
     def _finalize_job(
         self,

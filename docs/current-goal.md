@@ -9,22 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove duplicate workspace path aliases while preserving its two independent
-authority identities.
+Make Reason output own one truthful path operation and remove mechanical
+forwarding around export submission.
 
 ## Ordered Steps
 
-1. Confirm `artifacts` always aliases `root` and `notes` has no consumer.
-2. Specify and implement a workspace path value containing only its distinct
-   export root and authority database; derive writer-owned child paths locally.
-3. Run focused workspace/reason/daemon tests and the complete verification
-   gates; update evidence and commit without pushing.
+1. Confirm the private export-root/path helpers and enqueue closure carry no
+   policy, alternate implementation, or reusable capability.
+2. Keep `ReasonOutputService.job_paths()` as the sole path operation, reuse it
+   from daemon processing, and submit jobs directly with `try`/`else`.
+3. Run focused Reason output/daemon tests and the complete verification gates;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve owner-ID validation and every consumed resolved path.
-- Do not rename the workspace store or introduce a lifecycle object.
+- Preserve path-segment validation, enqueue failure isolation, and audits.
+- Do not merge daemon recovery into the output service or add a path facade.
 
 ## Constraints
 
@@ -36,6 +37,13 @@ authority identities.
 
 ## Phase Evidence
 
+- `ReasonOutputService.job_paths()` now directly owns validation and path
+  construction, and all service methods plus daemon processing reuse it.
+  Removed its private pass-through, a one-use export-root helper, duplicate
+  daemon manifest assembly, and the one-call enqueue closure/boolean while
+  preserving sink failure isolation and audit ordering. Focused Reason
+  output/daemon tests: 24 passed; full suite: 2444 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 - `PrivateWorkspacePaths` now contains only its distinct owner export root and
   shared authority database. Removed the unused `notes` path and the
   `artifacts` alias that was always identical to `root`; Reason output and

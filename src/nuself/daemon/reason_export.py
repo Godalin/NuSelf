@@ -290,12 +290,7 @@ class ReasonExportService:
             metadata={},
         )
 
-        manifest_path = (
-            self._workspace_store.paths(thread_id).root
-            / "jobs"
-            / job_id
-            / "manifest.json"
-        )
+        manifest_path = self._service.job_paths(thread_id, job_id).manifest
         try:
             inspection = _inspect_pending_export_job(
                 manifest_path,

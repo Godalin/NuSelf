@@ -380,6 +380,11 @@ not part of the API. Its returned value exposes only distinct path identities:
 the owner's export root and the shared authority database. Writers derive
 their own child paths from the export root; the workspace API does not carry
 unused or root-aliasing convenience fields.
+Reason output exposes one validated `job_paths(thread_id, job_id)` operation
+for its owned artifact layout. Its own methods and daemon execution reuse that
+operation instead of adding private pass-throughs or reconstructing manifest
+paths. Job submission is a direct sink call with failure isolation at that
+boundary; a one-call closure is not an application capability.
 Cooldown mutation is a reason
 service use case; scheduling must not receive or expose the repository merely
 to persist it. Daemon workers may own queues and workspace adapters, but must
