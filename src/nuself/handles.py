@@ -19,14 +19,8 @@ def looks_like_visible_index(value: str) -> bool:
     return value.isdigit()
 
 
-def uses_visible_selection_syntax(value: str) -> bool:
-    return "," in value or looks_like_visible_index_range(value)
-
-
-def looks_like_visible_index_range(value: str) -> bool:
-    """Return true when a value is trying to use the visible range syntax."""
-
-    return value[:1].isdigit() and "-" in value
+def _uses_visible_selection_syntax(value: str) -> bool:
+    return "," in value or (value[:1].isdigit() and "-" in value)
 
 
 def parse_visible_index(value: str, *, count: int, label: str) -> int:
@@ -101,7 +95,10 @@ def resolve_visible_handle_selection(
 ) -> list[str]:
     """Resolve one id/index or a compact index selection into stable ids."""
 
-    if not looks_like_visible_index(value) and not uses_visible_selection_syntax(value):
+    if (
+        not looks_like_visible_index(value)
+        and not _uses_visible_selection_syntax(value)
+    ):
         return [value]
     if looks_like_visible_index(value):
         return [get_id(items[parse_visible_index(value, count=len(items), label=label)])]

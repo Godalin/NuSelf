@@ -9,27 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unused SQLite transaction exception family while preserving the two
-actionable rollback-only and rollback-cleanup failures. Keep the separately
-consumed storage-lifecycle family and all transaction behavior unchanged.
+Collapse the two zero-consumer public visible-selection classifiers into one
+private parser detail. Keep the shared public parse/resolve APIs and all stable
+ID versus visible-index behavior unchanged.
 
 ## Ordered Steps
 
-1. Confirm no production, test, or specification policy consumes
-   `SqliteTransactionError` as a family.
-2. Make rollback-only and cleanup failures inherit `RuntimeError` directly and
-   delete the unused family root.
-3. Preserve primary/rollback causes, nested transaction state, rollback, and
-   commit semantics; leave storage lifecycle errors untouched.
-4. Run SQLite tests, Pyright, full pytest, and package build; update evidence
-   and commit without pushing.
+1. Confirm `uses_visible_selection_syntax()` and
+   `looks_like_visible_index_range()` have no external consumers.
+2. Replace both with one private classifier used by
+   `resolve_visible_handle_selection()`.
+3. Preserve compact ranges, comma selections, numeric indexes, hyphenated
+   stable IDs, validation, ordering, and deduplication.
+4. Run handle/CLI tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not merge the two transaction failure types.
-- Do not alter transaction nesting, rollback-only propagation, cleanup, or
-  exception chaining.
-- Do not change schema, WAL, checkpoint, authority, path, or permission logic.
+- Do not move handle parsing into individual command handlers.
+- Do not make a hyphenated stable ID look like a numeric range.
+- Do not change public parse/resolve signatures or visible-index semantics.
 
 ## Constraints
 
@@ -41,6 +40,12 @@ consumed storage-lifecycle family and all transaction behavior unchanged.
 
 ## Phase Evidence
 
+- Collapsed the zero-external-consumer visible selection and range classifiers
+  into one private `_uses_visible_selection_syntax()` detail. Public shared
+  parse/resolve operations remain unchanged, as do numeric indexes, compact
+  ranges, deduplication, and hyphenated stable IDs. Focused handle/CLI/REPL
+  tests: 327 passed; full suite: 2437 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Removed the zero-consumer `SqliteTransactionError` family root. Rollback-only
   and rollback-cleanup errors remain independently typed direct runtime errors;
   primary/rollback causes and transaction behavior are unchanged. The consumed

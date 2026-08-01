@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Visible-handle parsing now keeps selection-shape classification private and
+  exposes only the shared parse/resolve operations used by command adapters.
 - SQLite rollback-only and rollback-cleanup failures now remain distinct direct
   runtime errors without an unused transaction exception family.
 - Handler registry duplicate, sealed, unsealed, coverage, and unknown-key

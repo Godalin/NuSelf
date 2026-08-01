@@ -65,7 +65,7 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 - Key/value fields may colorize values for scanability when color is enabled. Stable IDs, paths, and tags should be muted; status and object type values may use subsystem-specific colors. No-color output must remain plain `key=value` text.
 - Commands that accept an object handle resolve a compact numeric argument as the visible 0-based index from the corresponding default list view; nonnumeric arguments are stable IDs. JSON output keeps stable IDs and does not need visible indexes.
 - Commands that explicitly support batch index selections accept a compact expression with comma-separated indexes and inclusive ranges, e.g. `1,3-5,9`. Whitespace inside the expression is invalid. The compact expression itself implies index lookup. Stable IDs that carry subsystem prefixes such as `mem_` do not conflict with this grammar.
-- CLI-visible handle parsing is shared infrastructure. Command handlers, repositories, and services that accept visible indexes must use `nuself.handles` rather than duplicating index/range parsing locally.
+- CLI-visible handle parsing is shared infrastructure. Command handlers, repositories, and services that accept visible indexes must use the public parse/resolve operations in `nuself.handles` rather than duplicating index/range parsing locally; syntax classifiers remain private implementation details.
 
 ## Detail View Contract
 
