@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- REPL exit curation now receives only the selected authority and scans pending
+  memory observations, removing an ignored conversation-ID dependency.
 - Authority ID generation now accepts only its canonical-root identity input,
   removing a discarded scope-kind parameter while preserving v1 IDs.
 - Chat-persona lifecycle points now write their closed persona audits directly,

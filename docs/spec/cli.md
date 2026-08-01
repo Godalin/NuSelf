@@ -277,6 +277,9 @@ interactive input state.
   inconsistent value is corruption and is never repaired during decoding.
 - Every exit path runs transcript auto-save and exit memory curation exactly
   once, in that order. EOF does not perform an additional inline save.
+- Exit curation receives only the selected authority root and processes pending
+  memory observations; it does not receive or depend on session conversation
+  IDs.
 - Both cleanup steps are attempted even if the first fails. Cleanup failures
   are never converted into a successful exit code.
 - Ctrl-C while editing an idle prompt discards only that input and keeps the

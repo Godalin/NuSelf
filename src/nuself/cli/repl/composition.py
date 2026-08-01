@@ -46,13 +46,9 @@ def run_repl(
     """Compose and run one interactive session."""
     command_dispatcher = ReplCommandDispatcher()
 
-    def curate_session(
-        root: Path | None,
-        conversation_ids: tuple[str, ...],
-    ) -> None:
+    def curate_session(root: Path | None) -> None:
         if daemon_activity:
             return
-        del conversation_ids
         application = compose_cli_application(root)
         for observation in application.memory.observations.pending():
             run_memory_curator(root, observation.id)

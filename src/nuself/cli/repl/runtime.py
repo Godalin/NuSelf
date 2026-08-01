@@ -30,7 +30,7 @@ class ReplCallbacks:
     handle_command: HandleCommand
     send_turn: SendTurn
     auto_save: Callable[[Path | None, InteractiveSession], None]
-    run_curator: Callable[[Path | None, tuple[str, ...]], None]
+    run_curator: Callable[[Path | None], None]
     show_session_header: Callable[[Path | None, str], None]
     show_startup_notices: Callable[[Path | None], None]
     brand_banner: Callable[[], str]
@@ -64,10 +64,7 @@ def _run_interactive_cleanup(
         ),
         (
             "memory.curator.run",
-            lambda: callbacks.run_curator(
-                project_root,
-                tuple(session.conversation_start_indexes),
-            ),
+            lambda: callbacks.run_curator(project_root),
         ),
     )
     return run_cleanup_steps(steps)

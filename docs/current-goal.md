@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the discarded scope-kind parameter from authority ID generation so the
-API matches the root-only identity contract.
+Remove conversation IDs from the REPL exit-curator callback so memory cleanup
+depends only on pending observations in the selected authority.
 
 ## Ordered Steps
 
-1. Confirm specification and regression tests require identical IDs for the
-   same canonical root selected as user or workspace scope.
-2. Let `_authority_id()` accept only the actual root input and simplify all
-   three composition call sites.
-3. Run scope/config tests, Pyright, full pytest, and package build; update
+1. Confirm production exit curation discards the supplied conversation tuple
+   and scans the authority's pending observation repository.
+2. Narrow `ReplCallbacks.run_curator` and cleanup composition to the authority
+   root, then simplify callback tests.
+3. Run REPL lifecycle tests, Pyright, full pytest, and package build; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change the v1 digest input or resulting IDs.
-- Do not merge the user and workspace scope records or configuration layers.
-- Do not broaden authority discovery.
+- Do not change transcript-before-curation ordering or cleanup aggregation.
+- Do not skip pending observations created outside the active conversation.
+- Do not couple the memory repository back to conversation storage.
 
 ## Constraints
 
@@ -37,6 +37,12 @@ API matches the root-only identity contract.
 
 ## Phase Evidence
 
+- REPL exit curation now accepts only the selected authority root and scans its
+  pending memory observations. Removed the unused session conversation-ID tuple
+  from `ReplCallbacks`, cleanup composition, production callback, and tests;
+  transcript-before-curation ordering and aggregate cleanup failures remain
+  unchanged. Focused REPL tests: 63 passed; full suite: 2440 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Authority ID generation now accepts only the canonical root that actually
   enters the versioned digest. Removed the immediately discarded `ScopeKind`
   argument from the helper and all user/workspace/internal-root call sites;

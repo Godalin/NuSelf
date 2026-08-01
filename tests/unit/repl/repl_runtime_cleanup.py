@@ -54,7 +54,7 @@ def _callbacks(
         [Path | None, InteractiveSession],
         None,
     ],
-    run_curator: Callable[[Path | None, tuple[str, ...]], None],
+    run_curator: Callable[[Path | None], None],
     show_startup_notices: Callable[[Path | None], None] | None = None,
 ) -> ReplCallbacks:
     def default_command(
@@ -116,7 +116,7 @@ def test_eof_runs_each_cleanup_once_in_order(
         tmp_path,
         _callbacks(
             auto_save=lambda project_root, session: calls.append("save"),
-            run_curator=lambda project_root, conversation_ids: calls.append("curator"),
+            run_curator=lambda project_root: calls.append("curator"),
         ),
     )
 
@@ -136,7 +136,7 @@ def test_startup_notices_are_presented_once(
         tmp_path,
         _callbacks(
             auto_save=lambda project_root, session: None,
-            run_curator=lambda project_root, conversation_ids: None,
+            run_curator=lambda project_root: None,
             show_startup_notices=calls.append,
         ),
     )
@@ -165,11 +165,8 @@ def test_cleanup_attempts_both_steps_and_retains_failures(
         calls.append("save")
         raise save_error
 
-    def fail_curator(
-        project_root: Path | None,
-        conversation_ids: tuple[str, ...],
-    ) -> None:
-        del project_root, conversation_ids
+    def fail_curator(project_root: Path | None) -> None:
+        del project_root
         calls.append("curator")
         raise curator_error
 
@@ -229,11 +226,8 @@ def test_cleanup_failure_retains_main_loop_control_as_cause(
         calls.append("save")
         raise cleanup_error
 
-    def run_curator(
-        project_root: Path | None,
-        conversation_ids: tuple[str, ...],
-    ) -> None:
-        del project_root, conversation_ids
+    def run_curator(project_root: Path | None) -> None:
+        del project_root
         calls.append("curator")
 
     class CommandInput:
@@ -295,7 +289,7 @@ def test_primary_control_is_reraised_unchanged_when_cleanup_succeeds(
                 auto_save=lambda project_root, session: calls.append(
                     "save"
                 ),
-                run_curator=lambda project_root, conversation_ids: calls.append(
+                run_curator=lambda project_root: calls.append(
                     "curator"
                 ),
             ),
@@ -349,7 +343,7 @@ def test_cleanup_diagnostic_failure_cannot_replace_lifecycle_error(
                 tmp_path,
                 _callbacks(
                     auto_save=fail_save,
-                    run_curator=lambda project_root, conversation_ids: None,
+                    run_curator=lambda project_root: None,
                 ),
             )
 
