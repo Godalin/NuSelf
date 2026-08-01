@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason output persistence now writes manifests/progress directly in their
+  owning flows and resolves one-call section/PDF branches in place, removing
+  four policy-free internal forwarding helpers.
 - Reason export composition now has one injected-runner path; removed the
   production-unused deterministic `compose_job()` renderer that could bypass
   the daemon's model-backed body composition policy.

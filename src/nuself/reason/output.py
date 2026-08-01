@@ -129,8 +129,8 @@ class ReasonOutputService:
             segment_size=segment_size,
             sections=tuple(sections),
         )
-        self._write_manifest(paths.manifest, manifest)
-        self._write_progress(
+        write_json_atomic(paths.manifest, manifest.to_wire())
+        write_json_atomic(
             paths.progress,
             ReasonOutputProgress(
                 job_id=job_id,
@@ -141,7 +141,7 @@ class ReasonOutputService:
                 pdf_status="pending",
                 pdf_path=None,
                 updated_at=manifest.updated_at,
-            ),
+            ).to_wire(),
         )
         write_reason_audit(
             "reason_output_planned",
@@ -208,7 +208,11 @@ class ReasonOutputService:
         paths = self.job_paths(thread.id, job_id)
         ensure_private_directory(paths.root)
         chunks: list[ReasonOutputChunk] = []
-        section_plan = self._resolve_section_plan(thread, manifest, selected)
+        section_plan = (
+            manifest.sections
+            if manifest.sections
+            else plan_sections(thread, list(selected), mode=manifest.mode)
+        )
         total = _chunk_count(len(selected), manifest.segment_size)
         batch_start = 0
         for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
@@ -303,8 +307,8 @@ class ReasonOutputService:
         combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
         write_text_atomic(paths.combined, combined_text)
         updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=tuple(section_plan))
-        self._write_manifest(paths.manifest, updated)
-        self._write_progress(
+        write_json_atomic(paths.manifest, updated.to_wire())
+        write_json_atomic(
             paths.progress,
             ReasonOutputProgress(
                 job_id=manifest.job_id,
@@ -315,7 +319,7 @@ class ReasonOutputService:
                 pdf_status="pending",
                 pdf_path=None,
                 updated_at=updated.updated_at,
-            ),
+            ).to_wire(),
         )
         write_reason_audit(
             "reason_output_composed",
@@ -341,8 +345,13 @@ class ReasonOutputService:
             thread_id=thread.id,
             job_id=manifest.job_id,
         )
-        pdf_status, pdf_path_str = self._pdf_result(pdf_path, paths)
-        self._write_progress(
+        if pdf_path is not None:
+            pdf_status, pdf_path_str = "generated", str(pdf_path)
+        elif paths.pdf.exists():
+            pdf_status, pdf_path_str = "generated", str(paths.pdf)
+        else:
+            pdf_status, pdf_path_str = "failed", None
+        write_json_atomic(
             paths.progress,
             ReasonOutputProgress(
                 job_id=manifest.job_id,
@@ -353,7 +362,7 @@ class ReasonOutputService:
                 pdf_status=pdf_status,
                 pdf_path=pdf_path_str,
                 updated_at=utc_now_iso(),
-            ),
+            ).to_wire(),
         )
         return updated
 
@@ -362,22 +371,6 @@ class ReasonOutputService:
         if not isinstance(raw, dict):
             raise ValueError("reason output manifest must be a JSON object")
         return ReasonOutputManifest.from_wire(cast(dict[str, object], raw))
-
-    def _write_manifest(self, path: Path, manifest: ReasonOutputManifest) -> None:
-        write_json_atomic(path, manifest.to_wire())
-
-    def _write_progress(self, path: Path, progress: ReasonOutputProgress) -> None:
-        write_json_atomic(path, progress.to_wire())
-
-    def _resolve_section_plan(
-        self,
-        thread: ReasoningThread,
-        manifest: ReasonOutputManifest,
-        selected: Sequence[ReasoningStep],
-    ) -> tuple[ReasonOutputSection, ...]:
-        if manifest.sections:
-            return manifest.sections
-        return plan_sections(thread, list(selected), mode=manifest.mode)
 
     def _generate_pdf(
         self,
@@ -434,15 +427,6 @@ class ReasonOutputService:
             )
             return paths.pdf
         return None
-
-    @staticmethod
-    def _pdf_result(pdf_path: Path | None, paths: ReasonOutputPaths) -> tuple[str, str | None]:
-        if pdf_path is not None:
-            return ("generated", str(pdf_path))
-        if paths.pdf.exists():
-            return ("generated", str(paths.pdf))
-        return ("failed", None)
-
 
 def _combine_chunks(
     thread: ReasoningThread,

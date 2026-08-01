@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the production-zero deterministic Reason export composition path.
+Inline policy-free Reason output forwarding helpers into their owning flow.
 
 ## Ordered Steps
 
-1. Confirm production export composition always supplies the daemon-owned text
-   runner and that `compose_job()` is test-only.
-2. Remove `compose_job()` and its argument-discarding local renderer; migrate
-   the persistence test to the real injected-runner boundary.
+1. Separate one-line JSON forwarding and one-call selection helpers from
+   helpers that own validation, rendering, or external process behavior.
+2. Inline the policy-free helpers without changing manifest/progress ordering
+   or PDF result semantics.
 3. Run focused Reason output/daemon tests and full gates, then commit without
    pushing.
 
@@ -27,8 +27,8 @@ Remove the production-zero deterministic Reason export composition path.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve section planning, chunk resume, manifests, progress, PDF handling,
-  retry/backoff, and the daemon's model-backed text runner.
+- Preserve section planning, chunk resume, manifest/progress write order, PDF
+  handling, retry/backoff, and the daemon's model-backed text runner.
 
 ## Constraints
 
@@ -40,6 +40,12 @@ Remove the production-zero deterministic Reason export composition path.
 
 ## Phase Evidence
 
+- Reason output planning/composition now writes manifest and progress records
+  directly in the owning flows, resolves the sole section-plan fallback at its
+  use site, and keeps PDF result classification beside PDF generation. Removed
+  four policy-free internal helpers while preserving write order and recovery
+  artifacts. Focused Reason output/daemon tests: 22 passed; full suite: 2440
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reason export body composition now has one truthful service path:
   `compose_with_runner()`. Removed production-zero `compose_job()` plus its
   local renderer, which ignored most runner inputs and could bypass the
