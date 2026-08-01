@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline Source document persistence into the complete ingest operation.
+Remove unused registry overrides from memory application composition.
 
 ## Ordered Steps
 
-1. Confirm the now-private document persistence method is a one-line,
-   single-caller forwarding method rather than a reusable operation.
-2. Inline that write into ingestion and remove the forwarding method without
-   changing the public Source API.
-3. Run focused Source/CLI tests and the complete verification gates; update
+1. Confirm no production or test caller supplies the optional memory type or
+   relation registry overrides to `compose_memory_repositories()`.
+2. Document concrete application composition and remove those unused override
+   parameters while retaining direct repository injection for focused tests.
+3. Run focused composition/memory tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve source IDs, parsing, document/chunk persistence, re-ingestion,
-  listing, display, deletion, and CLI behavior.
+- Preserve domain-owned registry validation and direct repository injection;
+  remove only unused application-composition variability.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Inline Source document persistence into the complete ingest operation.
 
 ## Phase Evidence
 
+- `compose_memory_repositories()` now exposes only its two required authority
+  inputs. Removed unused memory type and relation registry override parameters
+  and imports; direct `MemoryEntryRepository` construction still supports
+  focused registry injection. Focused composition/boundary/memory tests: 94
+  passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Source ingestion now writes its document record directly and retains only
   the non-trivial chunk replacement operation as a private method. Removed the
   one-line, single-caller `_save_document()` forwarding method without changing

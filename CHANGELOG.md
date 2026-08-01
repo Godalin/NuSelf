@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory application composition no longer exposes unused type/relation
+  registry overrides; custom registries remain available to focused repository
+  construction.
 - Raw Source document writes are now direct internal steps of complete source
   ingestion; CLI tests use real temporary files instead of a partial-write API.
 - Source chunk replacement is now an internal part of the complete ingest

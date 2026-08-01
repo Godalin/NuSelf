@@ -140,6 +140,11 @@ Writing the document record is likewise internal to ingestion; callers provide
 a source path rather than assembling a partial stored document without its
 chunks.
 
+Application memory composition builds the concrete production registry graph.
+Custom memory type and relation registries remain repository-construction
+concerns for focused domain tests, not unused variability in the application
+composition API.
+
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records
 and per-conversation locks cannot drift across authorities. Persona prompt

@@ -5,10 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nuself.config import RuntimePaths
-from nuself.domain.memory import (
-    MemoryTypeRegistry,
-    RelationDescriptorRegistry,
-)
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -35,17 +31,12 @@ class MemoryRepositories:
 def compose_memory_repositories(
     paths: RuntimePaths,
     backend: StorageBackend,
-    *,
-    registry: MemoryTypeRegistry | None = None,
-    relation_registry: RelationDescriptorRegistry | None = None,
 ) -> MemoryRepositories:
     """Compose the complete memory persistence graph."""
 
     entries = MemoryEntryRepository(
         paths,
         backend=backend,
-        registry=registry,
-        relation_registry=relation_registry,
     )
     profile = ProfileItemRepository(paths, backend=backend)
     candidates = MemoryCandidateRepository(
