@@ -57,17 +57,6 @@ same change.
   checkpointer; framework checkpoints do not make an already-started external
   side effect exactly-once by themselves.
 
-## Module API Boundaries
-
-- [ ] Execute the ordered remediation in
-  [`api-boundary-audit.md`](api-boundary-audit.md): make application resources
-  private behind domain facades; replace raw data mutation, reflection's
-  concrete cross-domain orchestration, graph-shaped turn projection, hard-coded
-  candidate/profile and memory/persona routing, adapter recomposition, weakly
-  typed daemon task conventions, and private evaluation construction. Preserve
-  the existing single handler/event/log/scheduler infrastructure and avoid a
-  general-purpose service bus.
-
 ## Test Runtime Hygiene
 
 - [ ] Isolate daemon socket-path adversarial tests under a test-owned temporary

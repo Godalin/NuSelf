@@ -6,6 +6,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Application composition is now the single authority path for initialized
+  CLI, REPL, daemon, chat, reflection, persona, and evaluation work. Generic
+  data commands use a validated administration API instead of raw
+  collections; committed turns cross into memory as immutable DTOs;
+  reflection receives foreign capabilities explicitly; worker threads carry
+  the active application authority; and the daemon's one scheduler now has a
+  closed task-name catalog. No service bus or parallel compatibility path was
+  added.
 - Conversation and memory now meet through explicit domain APIs instead of
   shared storage. A committed chat turn is projected through memory's generic,
   durable `observe()` inbox; the curator scans only pending observations and

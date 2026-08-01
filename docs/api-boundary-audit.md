@@ -3,6 +3,24 @@
 Date: 2026-08-01
 Scope: `src/nuself/**/*.py` on `dev/v0.3.x` after `f1e194a`
 
+## Resolution
+
+Closed on 2026-08-01. The remediation deliberately treats public domain
+services and repositories as APIs inside their owning domain instead of
+creating one-method facade interfaces. The application graph's backend is
+private; process adapters reuse one runtime graph; generic data mutation is
+validated by `DataAdminService`; completed turns cross through an immutable
+DTO; reflection receives consumer-owned capabilities; the memory/persona
+projection lives in application composition; production config values are
+injected; daemon task names use one closed catalog; and notification
+evaluation constructs the real application scheduler.
+
+Candidate application remains a memory-owned workflow using the existing
+`ProfileRepositoryPort`. It is not a cross-package concrete dependency and
+splitting persistence from application would add a parallel service layer
+without narrowing authority, so finding A5 required no extra abstraction.
+Executable architecture tests now protect the corrected boundaries.
+
 ## Standard
 
 An interaction is API-based when the caller receives a typed capability with

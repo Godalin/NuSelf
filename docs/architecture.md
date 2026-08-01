@@ -67,6 +67,19 @@ snapshots: `ConversationResources` for a turn and its nested `ToolResources`
 for tools. They are plain typed data, not managers: neither performs dispatch
 or owns lifecycle. This keeps constructors small without hiding dependency
 authority.
+The graph also owns the validated data-administration surface used by CLI
+inspection and repair. Process adapters cannot borrow raw collections. When
+an interactive operation crosses into an owned worker thread, the same
+application authority is bound into that call and remains owned by the outer
+CLI lifecycle.
+
+Reflection orchestration receives candidate generation, relevance,
+organization, discussion, publication, and trace capabilities from
+application composition. Persona's memory projection is likewise
+application-owned, so neither domain imports the other's persistence model.
+The daemon keeps one scheduler and one resource-serialization mechanism; a
+small closed task catalog prevents producer/handler name drift without adding
+per-domain schedulers or locks.
 
 ## Shared Infrastructure
 
