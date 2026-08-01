@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Notification outbox state transitions now expose their collection writes
+  directly, removing a policy-free `_write_entry()` forwarding method.
 - `ActivityBroker.close()` now matches the idempotent empty daemon response and
   returns no test-only removal boolean.
 - Chat tool prompt rendering now lives directly in `ConversationToolRuntime`,

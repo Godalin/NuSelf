@@ -98,9 +98,6 @@ class NotificationOutbox:
             )
         )
 
-    def _write_entry(self, entry: OutboxEntry) -> None:
-        self._col.put(entry.id, entry.to_wire())
-
     def prepare_delivery(
         self,
         entry_id: str,
@@ -119,7 +116,7 @@ class NotificationOutbox:
                     for adapter_id in adapter_ids
                 },
             )
-            self._write_entry(updated)
+            self._col.put(updated.id, updated.to_wire())
             return updated
 
     def record_adapter_result(
@@ -147,7 +144,7 @@ class NotificationOutbox:
                 sent_at=utc_now_iso() if success else None,
             )
             updated = replace(entry, deliveries=deliveries)
-            self._write_entry(updated)
+            self._col.put(updated.id, updated.to_wire())
             return updated
 
     def begin_adapter_delivery(
@@ -170,7 +167,7 @@ class NotificationOutbox:
                 attempts=state.attempts + 1,
             )
             updated = replace(entry, deliveries=deliveries)
-            self._write_entry(updated)
+            self._col.put(updated.id, updated.to_wire())
             return updated
 
     def recover_interrupted_deliveries(
@@ -194,7 +191,7 @@ class NotificationOutbox:
                     attempts=state.attempts,
                 )
             updated = replace(entry, deliveries=deliveries)
-            self._write_entry(updated)
+            self._col.put(updated.id, updated.to_wire())
             return updated
 
     def finalize_delivery(self, entry_id: str) -> OutboxEntry:
@@ -218,7 +215,7 @@ class NotificationOutbox:
                 sent_at=utc_now_iso() if status == "sent" else entry.sent_at,
                 attempts=entry.attempts + 1,
             )
-            self._write_entry(updated)
+            self._col.put(updated.id, updated.to_wire())
             return updated
 
     def dismiss(self, entry_id: str) -> OutboxEntry:
@@ -226,7 +223,7 @@ class NotificationOutbox:
             with self._backend.transaction():
                 entry = self.get(entry_id)
                 updated = replace(entry, status="dismissed")
-                self._write_entry(updated)
+                self._col.put(updated.id, updated.to_wire())
                 return updated
 
     def clear(self, selection: NotificationClearStatus) -> int:

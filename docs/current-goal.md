@@ -9,14 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Align ActivityBroker close API with idempotent protocol semantics.
+Inline notification outbox's policy-free write forwarding method.
 
 ## Ordered Steps
 
-1. Confirm production ignores `ActivityBroker.close()`'s boolean and the wire
-   protocol always returns an empty idempotent success response.
-2. Make close a `None`-returning command and remove test-only result semantics.
-3. Run focused daemon tests and full gates, then commit without pushing.
+1. Confirm `_write_entry()` only forwards validated entries to the owned
+   collection and owns no transaction or audit behavior.
+2. Make each state transition show its persistence point directly and remove
+   the forwarding method.
+3. Run focused notification/daemon/CLI tests and full gates, then commit
+   without pushing.
 
 ## Exclusions
 
@@ -25,7 +27,8 @@ Align ActivityBroker close API with idempotent protocol semantics.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve close idempotence, expiry, blocking reads, and wire responses.
+- Preserve transactions, entry locking, idempotency, recovery states, and
+  delivery finalization semantics.
 
 ## Constraints
 
@@ -37,6 +40,12 @@ Align ActivityBroker close API with idempotent protocol semantics.
 
 ## Phase Evidence
 
+- Notification outbox state transitions now write their validated immutable
+  entries directly to the owned collection. Removed `_write_entry()`, which
+  added no transaction, locking, validation, or audit policy, while retaining
+  every existing transaction boundary. Focused notification/daemon tests: 105
+  passed; full suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - `ActivityBroker.close()` now mirrors the daemon protocol as an idempotent
   command with no return value. Removed the production-ignored boolean and its
   test-only semantics; absence is still proved by the existing rejected-read
