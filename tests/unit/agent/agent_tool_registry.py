@@ -17,7 +17,7 @@ from nuself.agent.tools.reason import build_reason_tools
 from nuself.agent.tools.reflection import build_reflection_tools
 from nuself.agent.tools.selves import build_selves_tools
 from nuself.agent.tools.trace import build_trace_tools
-from nuself.agent.tools.workspace import build_workspace_tools
+from nuself.agent.tools.workspace import build_workspace_tools_from_provider
 from nuself.application.composition import compose_application
 from nuself.config import runtime_paths
 from nuself.memory.query import MemoryService
@@ -115,7 +115,7 @@ def test_workspace_tool_builder_owns_workspace_registry(
         ("thread",),
     )
 
-    assert _names(build_workspace_tools(workspace)) == {
+    assert _names(build_workspace_tools_from_provider(lambda: workspace)) == {
         "workspace_put",
         "workspace_get",
         "workspace_search",

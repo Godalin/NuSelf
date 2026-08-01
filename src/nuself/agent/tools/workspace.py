@@ -14,13 +14,6 @@ from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.store import ScopedWorkspace
 
 
-def build_workspace_tools(
-    workspace: ScopedWorkspace,
-) -> tuple[BaseTool, ...]:
-    """Build tools for a concrete thread-scoped workspace."""
-    return build_workspace_tools_from_provider(lambda: workspace)
-
-
 def build_workspace_tools_from_provider(
     workspace_provider: Callable[[], ScopedWorkspace],
 ) -> tuple[BaseTool, ...]:

@@ -9,8 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing artifacts from superseded eager composition paths. Preserve
-only the live lazy capability and its directly tested policy helpers.
+Continue removing convenience composition wrappers that obscure the live
+thread-aware capability provider.
 
 ## Constraints
 
@@ -371,6 +371,13 @@ only the live lazy capability and its directly tested policy helpers.
 - Agent/Chat/boundary focused suite: 335 passed. Post-eager-skill cleanup
   `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `build_workspace_tools()` only wrapped one concrete workspace in a lambda and
+  was called exclusively by tests. It is gone; production and tests now use
+  `build_workspace_tools_from_provider()` as the sole lazy, thread-aware
+  composition path.
+- Agent/Reason/workspace/boundary focused suite: 100 passed. Post-workspace-
+  builder cleanup `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
