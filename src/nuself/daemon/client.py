@@ -12,7 +12,6 @@ from typing import Literal, TypeAlias, TypeVar
 from nuself.config import runtime_paths
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
-    ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
     ActivityOpenResponsePayload,
     ChatRequestPayload,
@@ -352,7 +351,7 @@ def close_activity(
     subscription_id: str,
     *,
     project_root: Path | None = None,
-) -> bool:
+) -> None:
     """Close a daemon activity subscription."""
 
     response = request(
@@ -360,9 +359,8 @@ def close_activity(
         {"subscription_id": subscription_id},
         project_root=project_root,
     )
-    payload = decode_response(
+    decode_response(
         response,
-        ActivityCloseResponsePayload.from_wire,
+        EmptyPayload.from_wire,
         operation="activity close",
     )
-    return payload.closed

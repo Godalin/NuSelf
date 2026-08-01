@@ -110,7 +110,7 @@ def test_daemon_activity_request_lifecycle(tmp_path: Path) -> None:
         ),
         state,
     )
-    assert closed.payload == {"closed": True}
+    assert closed.payload == {}
 
 
 def test_request_scoped_log_projection_reaches_activity_broker(

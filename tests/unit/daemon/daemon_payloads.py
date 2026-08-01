@@ -7,7 +7,6 @@ import pytest
 
 from nuself.daemon.payloads import (
     ActivityCloseRequestPayload,
-    ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
@@ -194,7 +193,6 @@ def test_activity_response_payloads_round_trip_and_fail_atomically() -> None:
     )
     opened = ActivityOpenResponsePayload("sub-1")
     events = ActivityEventsResponsePayload((event,))
-    closed = ActivityCloseResponsePayload(True)
 
     assert ActivityOpenResponsePayload.from_wire(
         opened.to_wire()
@@ -202,10 +200,6 @@ def test_activity_response_payloads_round_trip_and_fail_atomically() -> None:
     assert ActivityEventsResponsePayload.from_wire(
         events.to_wire()
     ) == events
-    assert ActivityCloseResponsePayload.from_wire(
-        closed.to_wire()
-    ) == closed
-
     malformed = events.to_wire()
     raw_events = malformed["events"]
     assert isinstance(raw_events, list)

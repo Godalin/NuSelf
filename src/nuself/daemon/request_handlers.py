@@ -16,7 +16,6 @@ from nuself.daemon.activity import (
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
     ActivityCloseRequestPayload,
-    ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
@@ -283,12 +282,8 @@ def _handle_activity_close(
         ActivityCloseRequestPayload.from_wire,
         request.payload,
     )
-    return DaemonResponse.ok(
-        request,
-        ActivityCloseResponsePayload(
-            state.activity_broker.close(payload.subscription_id)
-        ).to_wire(),
-    )
+    state.activity_broker.close(payload.subscription_id)
+    return DaemonResponse.ok(request, EmptyPayload().to_wire())
 
 
 def _decode_request_payload(

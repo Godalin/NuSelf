@@ -218,9 +218,9 @@ Success response payload field sets are also exact:
   `evidence_references`, nullable string `epistemic_status`, and optional numeric
   `confidence`; terminal adapters may name that answer `reply` in their local
   presentation result, but the wire does not duplicate it;
-- activity open/next/close return, respectively, non-blank
-  `subscription_id`, a list of complete log-event records, and boolean
-  `closed`.
+- activity open/next return, respectively, non-blank `subscription_id` and a
+  list of complete log-event records; idempotent activity close returns the
+  shared exact empty payload.
 
 Typed client operations own success-payload decoding. An explicit daemon
 `error` response raises `DaemonApplicationError` and is not retryable as a

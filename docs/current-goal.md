@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing daemon protocol and service results for values that duplicate
-their typed envelope. Preserve user-facing diagnostics, exact validation, and
-domain-owned state.
+Continue auditing daemon response models and service projections for fields with
+no production consumer. Preserve idempotent cleanup, diagnostics, and explicit
+domain outcomes where callers make decisions from them.
 
 ## Constraints
 
@@ -717,6 +717,13 @@ domain-owned state.
 - Daemon payload/transport/server/lifecycle focused suite: 144 passed.
   Post-shutdown-payload cleanup `uv run --locked pytest -q`: 2444 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Idempotent activity close now uses the shared exact empty response. The
+  production-unread `ActivityCloseResponsePayload` and client boolean return
+  are gone; `ActivityBroker.close()` still owns and tests actual deletion while
+  REPL cleanup remains best effort on every exit path.
+- Activity/payload/transport/REPL focused suite: 89 passed. Post-close-response
+  cleanup `uv run --locked pytest -q`: 2444 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

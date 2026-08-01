@@ -444,31 +444,6 @@ class ActivityEventsResponsePayload:
         return cls(tuple(decoded), dropped_count=dropped_count)
 
 
-@dataclass(frozen=True)
-class ActivityCloseResponsePayload:
-    closed: bool
-
-    def to_wire(self) -> dict[str, JsonValue]:
-        return {"closed": self.closed}
-
-    @classmethod
-    def from_wire(
-        cls,
-        payload: dict[str, JsonValue],
-    ) -> ActivityCloseResponsePayload:
-        _expect_fields(
-            payload,
-            required=frozenset({"closed"}),
-        )
-        return cls(
-            _required_bool(
-                payload,
-                "closed",
-                context="activity close response",
-            )
-        )
-
-
 def _required_string(
     payload: dict[str, JsonValue],
     field_name: str,
