@@ -18,8 +18,6 @@ from nuself.runtime.warning_definitions import TerminalWarningSchemaError
 from nuself.logs import (
     InteractiveLogCursor,
     LogAppendLifecycleError,
-    LogComponent,
-    LogEvent,
     LogRetentionPolicy,
     create_audit_envelope,
     log_path,
@@ -28,6 +26,8 @@ from nuself.logs import (
     write_audit_envelope,
     write_log_event,
 )
+from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
@@ -36,6 +36,10 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistrySealedError,
 )
 from nuself.runtime.definitions import DefinitionRegistrySealedError
+
+
+def test_log_sink_does_not_reexport_log_event_model() -> None:
+    assert not hasattr(logs, "LogEvent")
 
 
 def test_log_infrastructure_audit_registry_is_complete_and_sealed() -> None:

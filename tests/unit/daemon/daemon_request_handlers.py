@@ -18,7 +18,8 @@ from nuself.daemon.request_handlers import (
     build_daemon_request_registry,
     handle_request,
 )
-from nuself.logs import LogEvent, write_log_event
+from nuself.logs import write_log_event
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 from nuself.runtime.handlers import (
     HandlerRegistry,

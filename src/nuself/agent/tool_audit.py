@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import cast
 
 from nuself.agent.middleware import ToolOutcome
-from nuself.logs import LogComponent, LogEvent, write_log_event
+from nuself.logs import write_log_event
+from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.messages import thaw_json_value
 from nuself.runtime.observability import write_observed_log_event
 

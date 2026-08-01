@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from threading import Condition
 from uuid import uuid4
 
-from nuself.logs import LogEvent
+from nuself.runtime.log_event import LogEvent
 
 
 class ActivitySubscriptionNotFound(LookupError):

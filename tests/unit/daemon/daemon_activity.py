@@ -12,7 +12,8 @@ from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
-from nuself.logs import LogEvent, project_log_events, write_log_event
+from nuself.logs import project_log_events, write_log_event
+from nuself.runtime.log_event import LogEvent
 
 _STATE_OWNER = DaemonStateOwner()
 

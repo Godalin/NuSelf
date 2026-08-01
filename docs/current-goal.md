@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit whether `LogEvent` model consumers unnecessarily load filesystem
-persistence, or whether separating that model would merely move code. Require
-a measurable import-boundary or call-graph reduction before adding a module.
+Audit shared observability helpers for wrappers that duplicate envelope
+construction, failure interpretation, or sink invocation. Preserve the
+validated pre-persistence boundary and domain-owned event selection.
 
 ## Constraints
 
@@ -46,6 +46,14 @@ a measurable import-boundary or call-graph reduction before adding a module.
   selection now stays inside the sole reconciliation algorithm that uses it.
 - Log read/cursor focused suite: 104 passed. Post-identity cleanup
   `uv run --locked pytest -q`: 2452 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `LogEvent` and its record codec now live in neutral `runtime.log_event`.
+  Twenty production consumers use that model without importing filesystem
+  paths, private-file hardening, `flock`, rotation, or append recovery.
+- `logs.py` consumes the model through a private alias and no longer re-exports
+  `LogEvent`; executable boundary tests enforce both dependency directions.
+- Log-model/runtime/daemon/UI focused suite: 270 passed. Post-model split
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

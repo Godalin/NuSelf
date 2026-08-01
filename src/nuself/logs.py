@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import os
 from collections import OrderedDict
-from collections.abc import Callable, Generator, Iterable, Mapping
+from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from dataclasses import InitVar, dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
 from threading import Lock, RLock
@@ -40,18 +40,13 @@ from nuself.runtime.diagnostics import (
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.identities import (
     require_audit_event_name,
-    require_persisted_event_name,
     require_runtime_event_name,
 )
+from nuself.runtime.log_event import LogEvent as _LogEvent
 from nuself.runtime.log_warning_contracts import (
     LOG_TERMINAL_WARNING_REGISTRY,
 )
-from nuself.runtime.messages import (
-    RUNTIME_SCHEMA_VERSION,
-    RuntimeEnvelope,
-    freeze_json_value,
-    thaw_json_value,
-)
+from nuself.runtime.messages import RuntimeEnvelope
 from nuself.runtime.warning_definitions import (
     emit_registered_terminal_warning,
 )
@@ -66,7 +61,6 @@ _LOG_WRITE_LOCKS: WeakValueDictionary[Path, RLock] = WeakValueDictionary()
 _LOG_DIRECTORY_SYNC_GUARD = Lock()
 _LOG_DIRECTORY_SYNC_CACHE_LIMIT = 256
 _SYNCED_LOG_IDENTITIES: OrderedDict[Path, tuple[int, int]] = OrderedDict()
-_LEGACY_LOG_INSTANT = datetime.min.replace(tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -84,13 +78,13 @@ class LogRetentionPolicy:
 
 
 DEFAULT_LOG_RETENTION = LogRetentionPolicy()
-LogEventProjection = Callable[["LogEvent"], None]
+_LogEventProjection = Callable[["_LogEvent"], None]
 
 
 @dataclass(frozen=True)
 class _LogProjectionBinding:
     binding_id: UUID
-    projection: LogEventProjection
+    projection: _LogEventProjection
 
 
 _CURRENT_LOG_EVENT_PROJECTIONS: ContextVar[
@@ -154,187 +148,6 @@ def _log_write_lock(path: Path) -> RLock:
         return _LOG_WRITE_LOCKS.setdefault(normalized, RLock())
 
 
-@dataclass(frozen=True)
-class LogEvent:
-    """One local NuSelf log event."""
-
-    time: str
-    level: LogLevel
-    component: LogComponent
-    event: str
-    message: str
-    event_id: str | None = field(default_factory=lambda: uuid4().hex)
-    schema_version: int | None = RUNTIME_SCHEMA_VERSION
-    conversation_id: str | None = None
-    reason_id: str | None = None
-    request_id: str | None = None
-    turn_id: str | None = None
-    job_id: str | None = None
-    trace_id: str | None = None
-    source: str | None = None
-    node: str | None = None
-    duration_ms: int | None = None
-    status: str | None = None
-    error: str | None = None
-    metadata: Mapping[str, object] | None = None
-    _allow_empty_time: InitVar[bool] = False
-    _instant: datetime | None = field(
-        init=False,
-        repr=False,
-        compare=False,
-    )
-
-    def __post_init__(self, _allow_empty_time: bool) -> None:
-        if not isinstance(self.time, str):  # pyright: ignore[reportUnnecessaryIsInstance]
-            raise TypeError("log time must be a string")
-        if self.level not in {"debug", "info", "warning", "error"}:
-            raise ValueError("log level is invalid")
-        if self.component not in LOG_COMPONENTS:
-            raise ValueError("log component is invalid")
-        for field_name in ("event", "message"):
-            if not isinstance(getattr(self, field_name), str):
-                raise TypeError(f"log {field_name} must be a string")
-        if (self.event_id is None) != (self.schema_version is None):
-            raise ValueError(
-                "log event_id and schema_version must both be present or absent"
-            )
-        if self.event_id is not None and (
-            not isinstance(self.event_id, str)  # pyright: ignore[reportUnnecessaryIsInstance]
-            or not self.event_id.strip()
-        ):
-            raise ValueError("log event_id must not be blank")
-        if self.schema_version is not None and (
-            type(self.schema_version) is not int
-            or self.schema_version != RUNTIME_SCHEMA_VERSION
-        ):
-            raise ValueError("log schema_version is unsupported")
-        object.__setattr__(
-            self,
-            "_instant",
-            _parse_log_timestamp(
-                self.time,
-                allow_empty=(
-                    _allow_empty_time
-                    and self.event == "legacy"
-                    and self.event_id is None
-                    and self.schema_version is None
-                ),
-            ),
-        )
-        for field_name in (
-            "conversation_id",
-            "reason_id",
-            "request_id",
-            "turn_id",
-            "job_id",
-            "trace_id",
-            "source",
-            "node",
-            "status",
-            "error",
-        ):
-            value = getattr(self, field_name)
-            if value is not None and not isinstance(value, str):
-                raise TypeError(f"log {field_name} must be a string")
-        if self.duration_ms is not None and (
-            type(self.duration_ms) is not int or self.duration_ms < 0
-        ):
-            raise TypeError(
-                "log duration_ms must be a non-negative integer"
-            )
-        if self.schema_version is not None:
-            _require_log_identity(self.component, self.event)
-        if self.metadata is None:
-            return
-        if not isinstance(self.metadata, Mapping):  # pyright: ignore[reportUnnecessaryIsInstance]
-            raise TypeError("log event metadata must be a mapping")
-        object.__setattr__(
-            self,
-            "metadata",
-            cast(
-                Mapping[str, object],
-                freeze_json_value(self.metadata),
-            ),
-        )
-
-    def to_record(self) -> dict[str, object]:
-        record: dict[str, object] = {
-            "time": self.time,
-            "level": self.level,
-            "component": self.component,
-            "event": self.event,
-            "message": self.message,
-        }
-        for key, value in (
-            ("event_id", self.event_id),
-            ("schema_version", self.schema_version),
-            ("conversation_id", self.conversation_id),
-            ("reason_id", self.reason_id),
-            ("request_id", self.request_id),
-            ("turn_id", self.turn_id),
-            ("job_id", self.job_id),
-            ("trace_id", self.trace_id),
-            ("source", self.source),
-            ("node", self.node),
-            ("duration_ms", self.duration_ms),
-            ("status", self.status),
-            ("error", self.error),
-            ("metadata", self.metadata),
-        ):
-            if value is not None:
-                record[key] = thaw_json_value(value)
-        return record
-
-    def chronological_key(self) -> tuple[int, datetime]:
-        """Return an instant-aware stable sorting key."""
-
-        if self._instant is None:
-            return (0, _LEGACY_LOG_INSTANT)
-        return (1, self._instant)
-
-    @classmethod
-    def from_record(cls, record: dict[str, object]) -> LogEvent:
-        component = record.get("component")
-        level = record.get("level")
-        event = record.get("event")
-        message = record.get("message")
-        timestamp = record.get("time")
-        if component not in LOG_COMPONENTS:
-            raise ValueError("log component is invalid")
-        if level not in {"debug", "info", "warning", "error"}:
-            raise ValueError("log level is invalid")
-        if (
-            not isinstance(event, str)
-            or not isinstance(message, str)
-            or not isinstance(timestamp, str)
-        ):
-            raise ValueError("log event fields are invalid")
-        return cls(
-            time=timestamp,
-            level=cast(LogLevel, level),
-            component=component,
-            event=event,
-            message=message,
-            event_id=_record_optional_str(record, "event_id"),
-            schema_version=_record_optional_int(
-                record,
-                "schema_version",
-            ),
-            conversation_id=_record_optional_str(record, "conversation_id"),
-            reason_id=_record_optional_str(record, "reason_id"),
-            request_id=_record_optional_str(record, "request_id"),
-            turn_id=_record_optional_str(record, "turn_id"),
-            job_id=_record_optional_str(record, "job_id"),
-            trace_id=_record_optional_str(record, "trace_id"),
-            source=_record_optional_str(record, "source"),
-            node=_record_optional_str(record, "node"),
-            duration_ms=_record_optional_int(record, "duration_ms"),
-            status=_record_optional_str(record, "status"),
-            error=_record_optional_str(record, "error"),
-            metadata=_record_optional_mapping(record, "metadata"),
-        )
-
-
 def write_log_event(
     component: LogComponent,
     event: str,
@@ -355,7 +168,7 @@ def write_log_event(
     error: str | None = None,
     metadata: dict[str, object] | None = None,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
-) -> LogEvent:
+) -> _LogEvent:
     """Append a structured log event and return it."""
 
     envelope = create_audit_envelope(
@@ -438,7 +251,7 @@ def write_audit_envelope(
     *,
     project_root: Path | None = None,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
-) -> LogEvent:
+) -> _LogEvent:
     """Persist one self-contained direct-audit envelope."""
 
     return _write_envelope_log_projection(
@@ -454,7 +267,7 @@ def write_runtime_event(
     *,
     project_root: Path | None = None,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
-) -> LogEvent:
+) -> _LogEvent:
     """Persist an event envelope as an audit projection with the same identity."""
 
     return _write_envelope_log_projection(
@@ -471,7 +284,7 @@ def _write_envelope_log_projection(
     required_kind: Literal["audit", "event"],
     project_root: Path | None,
     retention_policy: LogRetentionPolicy,
-) -> LogEvent:
+) -> _LogEvent:
     if envelope.kind != required_kind:
         raise ValueError(
             f"log projection requires an {required_kind} envelope"
@@ -490,7 +303,7 @@ def _write_envelope_log_projection(
         if payload.message is not None
         else envelope.name
     )
-    event_record = LogEvent(
+    event_record = _LogEvent(
         time=envelope.created_at,
         level=payload.level,
         component=envelope.producer,
@@ -526,7 +339,7 @@ def runtime_event_log_sink(
     project_root: Path | None = None,
     *,
     retention_policy: LogRetentionPolicy = DEFAULT_LOG_RETENTION,
-    projection: Callable[[LogEvent], None] | None = None,
+    projection: Callable[[_LogEvent], None] | None = None,
 ) -> Callable[[RuntimeEnvelope], None]:
     """Build a bounded synchronous event-to-audit projection."""
 
@@ -543,11 +356,11 @@ def runtime_event_log_sink(
 
 
 def _append_log_event(
-    event_record: LogEvent,
+    event_record: _LogEvent,
     *,
     project_root: Path | None,
     retention_policy: LogRetentionPolicy,
-) -> LogEvent:
+) -> _LogEvent:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
     path = log_path(event_record.component, project_root=paths.project_root)
@@ -863,7 +676,7 @@ def _rotated_log_path(path: Path, index: int) -> Path:
 
 @contextmanager
 def project_log_events(
-    projection: LogEventProjection,
+    projection: _LogEventProjection,
 ) -> Generator[None, None, None]:
     """Attach one bounded best-effort projection in this execution context."""
 
@@ -891,17 +704,6 @@ def log_path(component: LogComponent, *, project_root: Path | None = None) -> Pa
     return paths.logs_dir / f"{component}.log"
 
 
-def _require_log_identity(
-    component: object,
-    event: object,
-) -> None:
-    _require_log_component(component)
-    try:
-        require_persisted_event_name(event)
-    except ValueError as exc:
-        raise ValueError("log event name is invalid") from exc
-
-
 def _require_log_component(component: object) -> None:
     if component not in LOG_COMPONENTS:
         raise ValueError("log component is invalid")
@@ -912,10 +714,10 @@ def read_log_events(
     project_root: Path | None = None,
     component: LogComponent | None = None,
     tail: int | None = None,
-) -> list[LogEvent]:
+) -> list[_LogEvent]:
     """Read structured events from local logs, tolerating legacy plain lines."""
 
-    events: list[LogEvent] = []
+    events: list[_LogEvent] = []
     components: Iterable[LogComponent] = (
         (component,) if component is not None else LOG_COMPONENTS
     )
@@ -967,14 +769,14 @@ def _parse_log_line(
     component: LogComponent,
     *,
     on_corrupt: Callable[[Exception], None] | None = None,
-) -> LogEvent | None:
+) -> _LogEvent | None:
     stripped = line.strip()
     if stripped == "":
         return None
     try:
         parsed: object = json.loads(stripped)
     except json.JSONDecodeError:
-        return LogEvent(
+        return _LogEvent(
             time="",
             level="info",
             component=component,
@@ -991,7 +793,7 @@ def _parse_log_line(
             )
         return None
     try:
-        return LogEvent.from_record(cast(dict[str, object], parsed))
+        return _LogEvent.from_record(cast(dict[str, object], parsed))
     except (TypeError, ValueError) as exc:
         if on_corrupt is not None:
             on_corrupt(exc)
@@ -1020,66 +822,10 @@ def _report_log_read_corruptions(
     )
 
 
-def _parse_log_timestamp(
-    value: str,
-    *,
-    allow_empty: bool,
-) -> datetime | None:
-    if value == "":
-        if allow_empty:
-            return None
-        raise ValueError("structured log time must not be empty")
-    try:
-        instant = datetime.fromisoformat(value)
-    except ValueError as exc:
-        raise ValueError(
-            "log time must be an ISO-8601 timestamp"
-        ) from exc
-    if instant.tzinfo is None or instant.utcoffset() is None:
-        raise ValueError("log time must include a timezone")
-    return instant
-
-
 def _log_event_chronological_key(
-    event: LogEvent,
+    event: _LogEvent,
 ) -> tuple[int, datetime]:
     return event.chronological_key()
-
-
-def _record_optional_str(
-    record: Mapping[str, object],
-    field_name: str,
-) -> str | None:
-    value = record.get(field_name)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError(f"log {field_name} must be a string")
-    return value
-
-
-def _record_optional_int(
-    record: Mapping[str, object],
-    field_name: str,
-) -> int | None:
-    value = record.get(field_name)
-    if value is None:
-        return None
-    if type(value) is not int:
-        raise TypeError(f"log {field_name} must be an integer")
-    return value
-
-
-def _record_optional_mapping(
-    record: Mapping[str, object],
-    field_name: str,
-) -> Mapping[str, object] | None:
-    value = record.get(field_name)
-    if value is None:
-        return None
-    if not isinstance(value, Mapping):
-        raise TypeError(f"log {field_name} must be a mapping")
-    return cast(Mapping[str, object], value)
 
 
 # ============================================================================
@@ -1087,7 +833,7 @@ def _record_optional_mapping(
 # ============================================================================
 
 
-def _log_event_fingerprint(event: LogEvent) -> str:
+def _log_event_fingerprint(event: _LogEvent) -> str:
     return json.dumps(
         event.to_record(),
         sort_keys=True,
@@ -1097,13 +843,13 @@ def _log_event_fingerprint(event: LogEvent) -> str:
 
 
 def _reconcile_log_event_identities(
-    events: Iterable[LogEvent],
+    events: Iterable[_LogEvent],
     *,
     seen_event_keys: set[str],
     seen_event_fingerprints: dict[str, str],
-) -> tuple[list[LogEvent], list[LogEvent]]:
-    canonical: list[LogEvent] = []
-    conflicts: list[LogEvent] = []
+) -> tuple[list[_LogEvent], list[_LogEvent]]:
+    canonical: list[_LogEvent] = []
+    conflicts: list[_LogEvent] = []
     for event in events:
         if event.event_id is not None:
             key = f"id:{event.event_id}"
@@ -1131,7 +877,7 @@ def _reconcile_log_event_identities(
 
 
 def _report_log_identity_conflicts(
-    conflicts: list[LogEvent],
+    conflicts: list[_LogEvent],
 ) -> None:
     if not conflicts:
         return
@@ -1184,7 +930,7 @@ class InteractiveLogCursor:
                 identities[component] = None
         return cls(offsets=offsets, identities=identities)
 
-    def mark_seen(self, events: Iterable[LogEvent]) -> None:
+    def mark_seen(self, events: Iterable[_LogEvent]) -> None:
         """Register events delivered through a non-file transport."""
 
         _, conflicts = _reconcile_log_event_identities(
@@ -1194,8 +940,8 @@ class InteractiveLogCursor:
         )
         _report_log_identity_conflicts(conflicts)
 
-    def read_new_events(self, project_root: Path | None) -> list[LogEvent]:
-        events: list[LogEvent] = []
+    def read_new_events(self, project_root: Path | None) -> list[_LogEvent]:
+        events: list[_LogEvent] = []
         for component in LOG_COMPONENTS:
             events.extend(self._read_component(component, project_root))
         events.sort(key=_log_event_chronological_key)
@@ -1211,7 +957,7 @@ class InteractiveLogCursor:
         self,
         component: LogComponent,
         project_root: Path | None,
-    ) -> list[LogEvent]:
+    ) -> list[_LogEvent]:
         path = log_path(component, project_root=project_root)
         offset = self.offsets.get(component, 0)
         previous_identity = self.identities.get(component)
@@ -1222,7 +968,7 @@ class InteractiveLogCursor:
             self.identities[component] = None
             return []
         current_identity = (stat.st_dev, stat.st_ino)
-        parsed_events: list[LogEvent] = []
+        parsed_events: list[_LogEvent] = []
         if previous_identity is not None and previous_identity != current_identity:
             rotated_path = _find_log_with_identity(
                 path,
@@ -1270,12 +1016,12 @@ def _read_log_path(
     *,
     component: LogComponent,
     offset: int,
-) -> tuple[list[LogEvent], int]:
+) -> tuple[list[_LogEvent], int]:
     with path.open("rb") as log_file:
         log_file.seek(offset)
         appended = log_file.read()
     complete_length = _complete_line_length(appended)
-    parsed_events: list[LogEvent] = []
+    parsed_events: list[_LogEvent] = []
     corruptions: list[Exception] = []
     for raw_line in appended[:complete_length].splitlines():
         line = raw_line.decode("utf-8", errors="replace")

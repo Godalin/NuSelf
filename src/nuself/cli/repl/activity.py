@@ -14,7 +14,8 @@ from nuself.application.runtime import bind_application_runtime
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.cli.exit_codes import CliExitCode
 from nuself.daemon import client
-from nuself.logs import InteractiveLogCursor, LogEvent
+from nuself.logs import InteractiveLogCursor
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.context import bind_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall

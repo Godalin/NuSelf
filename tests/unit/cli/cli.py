@@ -66,11 +66,11 @@ def _mock_status(project_root: Path) -> DaemonStatus:
 from nuself.domain.profile import ProfileItem
 from nuself.logs import (
     InteractiveLogCursor,
-    LogEvent,
     read_log_events,
     runtime_event_log_sink,
     write_log_event,
 )
+from nuself.runtime.log_event import LogEvent
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService

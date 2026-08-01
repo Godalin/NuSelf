@@ -11,10 +11,9 @@ from nuself.cli.composition import compose_cli_application
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.config import ConfigSystem, runtime_paths
 from nuself.logs import (
-    LOG_COMPONENTS,
-    LogComponent,
     read_log_events,
 )
+from nuself.runtime.audit_types import LOG_COMPONENTS, LogComponent
 from nuself.tui.render import render_log_event, render_log_event_json
 
 

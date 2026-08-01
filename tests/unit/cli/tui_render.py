@@ -4,7 +4,7 @@ import re
 
 from _pytest.monkeypatch import MonkeyPatch
 
-from nuself.logs import LogEvent
+from nuself.runtime.log_event import LogEvent
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
 from nuself.domain.source import SourceDocument

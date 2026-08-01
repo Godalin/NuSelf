@@ -2,6 +2,15 @@
 
 ## LogEvent Structure
 
+`nuself.runtime.log_event` owns the immutable `LogEvent` projection model and
+its record codec. It depends only on neutral runtime identity, JSON, and audit
+types; protocol, domain-audit, and presentation code that handles an already
+constructed event must not import filesystem log persistence.
+
+`nuself.logs` owns JSONL paths, append/rotation/recovery, readers, cursors, and
+runtime-envelope projection. It consumes `LogEvent` but does not re-export the
+model as a compatibility facade.
+
 | Field         | Type                                        | Required |
 | ------------- | ------------------------------------------- | -------- |
 | `time`        | `str` (ISO)                                 | yes      |

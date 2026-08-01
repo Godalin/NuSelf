@@ -9,7 +9,8 @@ from nuself.cli.repl.notices import (
     startup_interactive_notices,
     turn_interactive_notices,
 )
-from nuself.logs import LogEvent, write_log_event
+from nuself.logs import write_log_event
+from nuself.runtime.log_event import LogEvent
 
 
 def _event(component: str, event: str) -> LogEvent:

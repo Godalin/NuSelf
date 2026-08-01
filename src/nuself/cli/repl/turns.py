@@ -21,7 +21,8 @@ from nuself.cli.repl.notices import (
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.agent.chat.audit import write_chat_audit
-from nuself.logs import InteractiveLogCursor, LogEvent
+from nuself.logs import InteractiveLogCursor
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.context import RuntimeContext, use_runtime_context
 from nuself.tui.render import TerminalTheme
 

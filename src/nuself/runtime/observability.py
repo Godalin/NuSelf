@@ -8,13 +8,13 @@ from typing import TypeVar
 
 from nuself.logs import (
     DEFAULT_LOG_RETENTION,
-    LogEvent,
     LogRetentionPolicy,
     create_audit_envelope,
     write_audit_envelope,
     write_log_event,
 )
 from nuself.runtime.audit_types import LogComponent, LogLevel
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,

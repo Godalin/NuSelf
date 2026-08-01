@@ -13,7 +13,6 @@ from nuself.cli.repl.turns import send_interactive_chat_turn
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.logs import (
     InteractiveLogCursor,
-    LogEvent,
     read_log_events,
 )
 from nuself.runtime.context import (
@@ -21,6 +20,7 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
+from nuself.runtime.log_event import LogEvent
 
 
 def _read_no_activity(

@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import cast
 
-from nuself.logs import LogComponent, LogEvent
+from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.log_event import LogEvent
 from nuself.reason.domain import ReasoningStep, ReasoningThread, TrackedItem
 from nuself.tui.render import (
     TerminalTheme,

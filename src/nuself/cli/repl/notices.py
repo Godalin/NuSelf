@@ -8,7 +8,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from nuself.config import ConfigSystem
-from nuself.logs import LogEvent, read_log_events
+from nuself.logs import read_log_events
+from nuself.runtime.log_event import LogEvent
 
 _REPAIRABLE_COLLECTION_ALIASES = {
     "conversations": "conversations",

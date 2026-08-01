@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Literal, TypeVar
 
-from nuself.logs import LogEvent
+from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,

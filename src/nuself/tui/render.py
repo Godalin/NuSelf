@@ -9,7 +9,7 @@ import os
 import sys
 from typing import cast
 
-from nuself.logs import LogEvent
+from nuself.runtime.log_event import LogEvent
 from nuself.notification.model import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 import re

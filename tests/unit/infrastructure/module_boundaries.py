@@ -760,6 +760,27 @@ def test_log_warning_contracts_are_separate_from_log_engine() -> None:
     assert "runtime.log_warning_contracts" in source
 
 
+def test_log_event_model_does_not_depend_on_persistence() -> None:
+    path = _SOURCE_ROOT / "runtime" / "log_event.py"
+
+    assert not {
+        "nuself.config",
+        "nuself.logs",
+        "nuself.private_fs",
+    }.intersection(_imports(path))
+
+
+def test_production_consumers_do_not_import_log_event_from_sink() -> None:
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in _SOURCE_ROOT.rglob("*.py")
+        if path.name != "logs.py"
+        and ("nuself.logs", "LogEvent") in _from_imports(path)
+    ]
+
+    assert violations == []
+
+
 def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:
     paths = (
         _SOURCE_ROOT / "memory" / "repository.py",
