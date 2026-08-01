@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Removed a one-helper Reason list alias and made Persona discussion reuse the
+  existing identical non-blank text constraint from its domain dependency.
 - Runtime context decoding now accepts only canonical `conversation_id` and
   rejects the pre-v0.3.1 chat `thread_id` alias.
 - Configuration caching now relies solely on automatic path/mtime/size

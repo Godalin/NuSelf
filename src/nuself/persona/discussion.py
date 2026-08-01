@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal, TypeAlias
+from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
@@ -18,6 +18,7 @@ from nuself.domain.proactive import IdeaCandidate
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     MODERATOR_PERSONA,
+    NonBlankText,
     PersonaContribution,
     PersonaDefinition,
     PersonaInput,
@@ -31,10 +32,6 @@ from nuself.persona.graph import (
 from nuself.persona.audit import report_persona_failure
 
 DiscussionTraceSink = Callable[[str], None]
-NonBlankText: TypeAlias = Annotated[
-    str,
-    StringConstraints(strip_whitespace=True, min_length=1),
-]
 
 
 class PersonaScoreOutput(BaseModel):

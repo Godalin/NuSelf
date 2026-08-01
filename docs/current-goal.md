@@ -9,23 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the pre-v0.3.1 RuntimeContext thread alias.
+Remove redundant internal type aliases in Reason and Persona.
 
 ## Ordered Steps
 
-1. Confirm `thread_id` in `RuntimeContext` is only the former chat conversation
-   name, not Reason's still-current domain thread identity.
-2. Make context decoding accept only canonical `conversation_id` and remove the
-   pre-v0.3.1 alias/ambiguity branch.
-3. Replace compatibility tests with strict rejection evidence, then run focused
-   Runtime tests and complete verification gates; update evidence and commit
-   without pushing.
+1. Confirm `ReasonStepList` only renames `list[ReasoningStep]` within one helper
+   and Persona discussion duplicates definition's exact `NonBlankText` type.
+2. Use the concrete Reason list type and import the existing Persona constraint
+   through the dependency already shared by discussion.
+3. Run focused Reason/Persona tests and complete verification gates; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve canonical runtime correlation fields, Reason thread IDs in Reason
-  payloads/audits, immutable envelopes, and strict unknown-field rejection.
+- Preserve partition typing/runtime behavior and every Pydantic non-blank,
+  whitespace-stripping Persona validation rule.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -39,6 +38,11 @@ Remove the pre-v0.3.1 RuntimeContext thread alias.
 
 ## Phase Evidence
 
+- Reason partitioning now uses `list[ReasoningStep]` directly instead of the
+  one-helper `ReasonStepList` alias, and Persona discussion imports the exact
+  `NonBlankText` constraint already owned by Persona definition rather than
+  redeclaring it. Focused Reason/Persona tests: 205 passed; full suite: 2439
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `RuntimeContext.from_record()` now accepts only canonical correlation field
   names. Removed the pre-v0.3.1 chat `thread_id` → `conversation_id` alias and
   its ambiguity branch; strict tests now reject the old spelling while Reason's

@@ -416,6 +416,9 @@ storage versions exist only where a persisted decoder or schema enforces them.
 Tool middleware produces the validated `ToolOutcome` value directly. Test-only
 success/failure factory spellings are not part of the runtime API; result/error
 exclusivity remains enforced by the dataclass invariant.
+Domain-local validation types are reused through existing domain dependencies;
+modules do not redeclare identical Pydantic constraints or alias a concrete
+container used only inside one helper.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 `PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has
