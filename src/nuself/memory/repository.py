@@ -260,17 +260,22 @@ class MemoryEntryRepository:
             raise MemoryEntryNotFound(entry_id)
         self._col.delete(entry_id)
 
-    def _compute_relations(self) -> list[MemoryRelationIndexRecord]:
+    def list_relations(
+        self,
+        filters: MemoryRelationFilters | None = None,
+    ) -> list[MemoryRelationIndexRecord]:
         entries = self.list()
         by_id = {e.id: e for e in entries}
-        return [
+        relations = [
             _relation_record_from_wire(r)
             for e in entries
             for r in _relation_index_records(e, by_id, self._relation_registry)
         ]
-
-    def list_relations(self, filters: MemoryRelationFilters | None = None) -> list[MemoryRelationIndexRecord]:
-        return [r for r in self._compute_relations() if _matches_relation_filters(r, filters)]
+        return [
+            relation
+            for relation in relations
+            if _matches_relation_filters(relation, filters)
+        ]
 
     def compute_graph(
         self,

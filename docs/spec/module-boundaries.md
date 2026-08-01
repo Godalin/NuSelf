@@ -127,6 +127,9 @@ must reuse its instances for one authority.
 `MemoryEntryRepository.compute_graph()` is the single one-shot symbolic graph
 projection used by both repository operations and external memory-query
 expansion. A private mirror with identical behavior is not a second capability.
+The public `list_relations()` operation likewise owns its one-shot relation
+projection and filtering; a single-use private projection is not a separate
+repository capability.
 Memory entry persistence accepts the canonical `MemoryEntry` domain object;
 an unused validate-convert-save adapter for `MemoryObject` is not repository
 API. Legacy object-shaped records remain a decoding concern.

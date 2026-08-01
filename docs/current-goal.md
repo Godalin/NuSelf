@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unused Memory-object persistence adapter.
+Let the Memory relation list operation own its one-shot projection.
 
 ## Ordered Steps
 
-1. Confirm `MemoryEntryRepository.save_object()` has no source or test consumer
-   and only validates, converts, and forwards to `save()`.
-2. Delete the dead adapter without an alias; retain `MemoryObject` decoding and
-   the canonical `save(MemoryEntry)` validation boundary.
-3. Run focused Memory tests and the complete verification gates; update
+1. Confirm `_compute_relations()` is called only by `list_relations()` and no
+   consumer needs an unfiltered precomputed relation collection.
+2. Move projection into the public list operation and delete the single-use
+   private method while retaining projection order and filtering.
+3. Run focused Memory/CLI tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve MemoryEntry validation, quarantine behavior, wire compatibility,
-  candidate promotion, and object decoding.
+- Preserve relation descriptors, endpoint validation, ordering, filtering, and
+  CLI rendering.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,11 @@ Remove the unused Memory-object persistence adapter.
 
 ## Phase Evidence
 
+- `MemoryEntryRepository.list_relations()` now directly owns its one-shot
+  relation projection and filter. Removed the sole-use `_compute_relations()`
+  method; descriptors, record order, endpoint handling, and CLI output remain
+  unchanged. Focused Memory/CLI/REPL tests: 357 passed; full suite: 2444
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Removed the zero-consumer `MemoryEntryRepository.save_object()` adapter,
   which redundantly validated a `MemoryObject`, converted it, and forwarded to
   `save()`. Canonical writes remain `save(MemoryEntry)` while legacy

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory relation listing now owns its one-shot projection and filtering,
+  removing a single-use private projection method.
 - Removed the unused Memory-object persistence adapter; memory entry writes now
   expose only the canonical validated `save(MemoryEntry)` repository boundary.
 - Memory symbolic graph projection now has one `compute_graph()` implementation
