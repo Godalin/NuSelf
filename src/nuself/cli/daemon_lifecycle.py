@@ -73,21 +73,8 @@ def _write_stop_failure_audit(
     )
 
 
-def _start_result_metadata(
-    result: lifecycle.DaemonStartResult,
-) -> dict[str, object]:
-    return {
-        "outcome": result.outcome,
-        "changed": result.changed,
-        "from_phase": result.before.phase,
-        "to_phase": result.status.phase,
-        "pid": result.status.pid,
-        "socket": str(result.status.socket_path),
-    }
-
-
-def _stop_result_metadata(
-    result: lifecycle.DaemonStopResult,
+def _transition_result_metadata(
+    result: lifecycle.DaemonStartResult | lifecycle.DaemonStopResult,
 ) -> dict[str, object]:
     return {
         "outcome": result.outcome,
@@ -128,7 +115,7 @@ def start_daemon_observed(
     write_lifecycle_audit(
         "start_completed",
         project_root=project_root,
-        metadata=_start_result_metadata(result),
+        metadata=_transition_result_metadata(result),
     )
     return result
 
@@ -154,7 +141,7 @@ def stop_daemon_observed(
     write_lifecycle_audit(
         "stop_completed",
         project_root=project_root,
-        metadata=_stop_result_metadata(result),
+        metadata=_transition_result_metadata(result),
     )
     return result
 

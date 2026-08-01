@@ -11,6 +11,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata as _exact,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
@@ -41,16 +42,6 @@ ChatAuditEvent = Literal[
 ]
 
 T = TypeVar("T")
-
-
-def _exact(metadata: Mapping[str, object], expected: frozenset[str]) -> None:
-    fields = set(metadata)
-    if fields != set(expected):
-        raise AuditSchemaError(
-            "audit metadata fields differ "
-            f"(missing={sorted(expected - fields)!r}, "
-            f"extra={sorted(fields - expected)!r})"
-        )
 
 
 def _string(metadata: Mapping[str, object], field: str) -> str:

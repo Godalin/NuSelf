@@ -11,6 +11,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import report_observed_failure
@@ -46,13 +47,11 @@ _MESSAGES: dict[AgentEndpointAuditEvent, str] = {
 
 def _validate_endpoint_metadata(metadata: Mapping[str, object]) -> None:
     expected = frozenset({"endpoint_index", "model"})
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "agent endpoint audit metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
+    require_exact_metadata(
+        metadata,
+        expected,
+        context="agent endpoint audit metadata",
+    )
     endpoint_index = metadata["endpoint_index"]
     if type(endpoint_index) is not int or endpoint_index < 0:
         raise AuditSchemaError(

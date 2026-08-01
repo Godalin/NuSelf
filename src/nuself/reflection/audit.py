@@ -11,6 +11,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata as _require_exact_fields,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
@@ -37,19 +38,6 @@ ReflectionAuditEvent = Literal[
 _IDEA_TYPES = frozenset(
     {"connection", "contradiction", "question", "action", "profile_update"}
 )
-
-
-def _require_exact_fields(
-    metadata: Mapping[str, object],
-    expected: frozenset[str],
-) -> None:
-    fields = set(metadata)
-    if fields != set(expected):
-        raise AuditSchemaError(
-            "audit metadata fields differ "
-            f"(missing={sorted(expected - fields)!r}, "
-            f"extra={sorted(fields - expected)!r})"
-        )
 
 
 def _require_non_empty_string(

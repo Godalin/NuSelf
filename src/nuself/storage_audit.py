@@ -10,6 +10,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
 from nuself.runtime.cleanup import (
     CleanupFailure,
@@ -19,21 +20,12 @@ from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import report_observed_failure
 
 
-def _require_exact(
-    metadata: Mapping[str, object],
-    expected: frozenset[str],
-) -> None:
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "storage operations audit metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
-
-
 def _backend_close(metadata: Mapping[str, object]) -> None:
-    _require_exact(metadata, frozenset({"backend_type"}))
+    require_exact_metadata(
+        metadata,
+        frozenset({"backend_type"}),
+        context="storage operations audit metadata",
+    )
     backend_type = metadata["backend_type"]
     if not isinstance(backend_type, str) or not backend_type.strip():
         raise AuditSchemaError(
@@ -42,7 +34,11 @@ def _backend_close(metadata: Mapping[str, object]) -> None:
 
 
 def _cleanup_failure_records(metadata: Mapping[str, object]) -> None:
-    _require_exact(metadata, frozenset({"failures", "primary_failed"}))
+    require_exact_metadata(
+        metadata,
+        frozenset({"failures", "primary_failed"}),
+        context="storage operations audit metadata",
+    )
     if type(metadata["primary_failed"]) is not bool:
         raise AuditSchemaError(
             "storage operations primary_failed must be a boolean"
@@ -58,7 +54,11 @@ def _cleanup_failure_records(metadata: Mapping[str, object]) -> None:
                 "storage operations failure must be a mapping"
             )
         failure = cast(Mapping[str, object], raw_failure)
-        _require_exact(failure, frozenset({"step", "error"}))
+        require_exact_metadata(
+            failure,
+            frozenset({"step", "error"}),
+            context="storage operations failure",
+        )
         for field in ("step", "error"):
             value = failure[field]
             if not isinstance(value, str) or not value.strip():

@@ -20,6 +20,7 @@ from nuself.runtime.audit_definitions import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
 from nuself.runtime.audit_types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
@@ -52,13 +53,11 @@ def _require_exact_metadata(
     metadata: Mapping[str, object],
     expected: frozenset[str],
 ) -> None:
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "observability metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
+    require_exact_metadata(
+        metadata,
+        expected,
+        context="observability metadata",
+    )
     for field in expected:
         value = metadata[field]
         if not isinstance(value, str) or not value.strip():
