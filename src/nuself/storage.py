@@ -145,11 +145,11 @@ def write_text_atomic(path: Path, text: str) -> None:
         create_private_file(tmp_path)
         temporary_created = True
         tmp_path.write_text(text, encoding="utf-8")
-        _sync_file(tmp_path)
+        _sync_path(tmp_path)
         tmp_path.replace(path)
         temporary_created = False
         try:
-            _sync_directory(path.parent)
+            _sync_path(path.parent)
         except BaseException as sync_error:
             raise AtomicWriteDurabilityError(
                 path,
@@ -170,15 +170,7 @@ def write_text_atomic(path: Path, text: str) -> None:
         raise
 
 
-def _sync_file(path: Path) -> None:
-    descriptor = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
-
-
-def _sync_directory(path: Path) -> None:
+def _sync_path(path: Path) -> None:
     descriptor = os.open(path, os.O_RDONLY)
     try:
         os.fsync(descriptor)
@@ -288,10 +280,10 @@ def _initialize_sqlite_authority(project_root: Path) -> Path:
         backend.close()
         backend = None
         _remove_sqlite_migration_sidecars(temporary)
-        _sync_file(temporary)
+        _sync_path(temporary)
         os.replace(temporary, destination)
         published = True
-        _sync_directory(destination.parent)
+        _sync_path(destination.parent)
         return destination
     except BaseException as primary_error:
         if backend is not None:

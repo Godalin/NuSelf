@@ -9,27 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the chat runtime's two exact response-service pass-through methods. The
-single respond stage should call its injected `ConversationResponseService`
-directly; completion and finalization remain separate service operations.
+Unify the duplicate atomic-storage fsync helpers. File and directory durability
+use the same open/fsync/close primitive; their distinct failure semantics remain
+at the two call sites that know replacement state.
 
 ## Ordered Steps
 
-1. Confirm `_complete_response()` and `_finalize_draft_response()` each have one
-   caller and add no policy, state, observation, or pipeline node.
-2. Call `complete()` and `finalize()` directly from `respond_node()` and delete
-   both wrappers.
-3. Preserve injected response-service substitution, final-response audit,
-   structured output, saved messages, and node tracing.
-4. Run chat runtime/response tests, Pyright, full pytest, and package build;
+1. Confirm `_sync_file()` and `_sync_directory()` execute identical descriptor
+   ownership and fsync logic.
+2. Replace both with one `_sync_path()` primitive and update atomic text and
+   binary publish call sites.
+3. Preserve pre-replace cleanup versus post-replace durability error handling,
+   descriptor closure, permissions, and atomicity.
+4. Run storage/atomic-write tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not merge `complete()` and `finalize()` or move their service policy.
-- Do not bypass the injected `ConversationResponseService`.
-- Do not change pipeline stages, response persistence, audit, or failure
-  translation.
+- Do not move fsync error interpretation into the shared primitive.
+- Do not change replace ordering, temporary cleanup, or directory durability.
+- Do not change private path validation, permissions, or SQLite behavior.
 
 ## Constraints
 
@@ -41,6 +40,12 @@ directly; completion and finalization remain separate service operations.
 
 ## Phase Evidence
 
+- Atomic text and binary writers now use one `_sync_path()` descriptor
+  open/fsync/close primitive for temporary files and parent directories.
+  Removed duplicate file/directory implementations while retaining call-site
+  interpretation of pre-replace cleanup versus post-replace durability errors.
+  Focused atomic-write consumer tests: 75 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `respond_node()` now invokes its injected response service's `complete()` and
   `finalize()` operations directly. Removed `_complete_response()` and
   `_finalize_draft_response()`, which had one caller each and added no node,

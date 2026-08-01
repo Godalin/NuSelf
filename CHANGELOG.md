@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Atomic text and binary publication now share one internal path-fsync
+  primitive instead of duplicate file and directory implementations; callers
+  retain their distinct pre/post-replace failure contracts.
 - The chat respond stage now calls its injected response service directly,
   removing two exact runtime pass-through methods while retaining separate
   completion and finalization operations.

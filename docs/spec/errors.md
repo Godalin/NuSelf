@@ -626,6 +626,9 @@ contains the new complete value in the running system, while survival across a
 crash remains uncertain. It exposes `destination_path` and `sync_error`, uses
 the sync failure as its explicit cause, and never attempts to unlink the
 already-consumed temporary pathname.
+File-content and parent-directory durability use one internal fsync primitive;
+the atomic writer's position before or after replacement, not a duplicate
+helper, determines which typed failure contract applies.
 
 SQLite transaction rollback dual failure uses the existing
 `SqliteTransactionCleanupError`. It exposes both `primary_error` and
