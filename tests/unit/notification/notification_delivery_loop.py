@@ -16,7 +16,7 @@ import pytest
 
 import nuself.notification.outbox as notification_module
 from nuself.logs import read_log_events
-from nuself.config import EmailConfig, runtime_paths
+from nuself.config import EmailConfig
 from nuself.notification.adapters import LogOnlyNotificationAdapter
 from nuself.notification.model import OutboxEntry
 from nuself.notification.delivery import (
@@ -297,7 +297,7 @@ def test_delivery_log_projects_origin_correlation(
 
     NotificationDeliveryLoop(
         notification_outbox(tmp_path),
-        adapters=[LogOnlyNotificationAdapter(runtime_paths(tmp_path))],
+        adapters=[LogOnlyNotificationAdapter(tmp_path)],
     ).run_once()
 
     event = read_log_events(

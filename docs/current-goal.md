@@ -9,15 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Narrow notification adapter composition to notification-owned configuration.
+Give every notification adapter the same narrow authority input.
 
 ## Ordered Steps
 
-1. Confirm the canonical adapter builder reads only email and macOS settings.
-2. Pass those two validated config models explicitly from application
-   composition; add no aggregate or facade type.
-3. Run focused notification/composition tests and full gates, then commit
-   without pushing.
+1. Confirm the log-only adapter consumes only `RuntimePaths.project_root`.
+2. Pass the already-resolved project `Path` directly, matching email and macOS
+   adapters; add no adapter base class or authority wrapper.
+3. Run focused notification tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -38,6 +37,11 @@ Narrow notification adapter composition to notification-owned configuration.
 
 ## Phase Evidence
 
+- `LogOnlyNotificationAdapter` now receives the resolved project `Path`, like
+  the email and macOS adapters, instead of retaining `RuntimePaths` solely to
+  extract one field. No adapter hierarchy or authority wrapper was added.
+  Focused Notification tests: 76 passed; full suite: 2440 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - Notification adapter composition now receives only `EmailConfig` and
   `MacosNotificationConfig` from application composition instead of the full
   `SystemConfig`. No wrapper type or new layer was added; adapter ordering and

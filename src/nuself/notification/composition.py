@@ -30,5 +30,5 @@ def build_notification_adapters(
     if macos_config.enabled:
         adapters.append(MacOSNotificationAdapter(paths.project_root))
     if not adapters:
-        adapters.append(LogOnlyNotificationAdapter(paths))
+        adapters.append(LogOnlyNotificationAdapter(paths.project_root))
     return tuple(adapters)

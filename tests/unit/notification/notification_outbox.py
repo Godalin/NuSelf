@@ -250,7 +250,7 @@ def test_log_only_adapter_sends(tmp_path: Path) -> None:
     entry = outbox.add(
         OutboxEntry(id="e1", title="T", body="B", status="pending", idempotency_key="k")
     )
-    adapter = LogOnlyNotificationAdapter(runtime_paths(tmp_path))
+    adapter = LogOnlyNotificationAdapter(tmp_path)
     assert adapter.send(entry)
     log_path = tmp_path / "logs" / "outbox.log"
     assert log_path.exists()

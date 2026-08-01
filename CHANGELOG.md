@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The log-only notification adapter now receives the resolved project path
+  directly instead of retaining the wider runtime-path aggregate.
 - Notification adapter composition now receives only validated email and macOS
   settings instead of the aggregate system configuration.
 - macOS AppleScript escaping is now a private adapter implementation detail;

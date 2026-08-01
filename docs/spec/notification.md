@@ -173,6 +173,10 @@ Notification composition passes `MacOSNotificationAdapter` one already-resolved
 project `Path`. The adapter does not accept an omitted authority or call
 `runtime_paths()` internally.
 
+All built-in adapters receive the same already-resolved project `Path` for
+audit output. The log-only adapter does not retain the wider `RuntimePaths`
+aggregate merely to extract that path.
+
 The adapter snapshots `osascript` availability privately at construction.
 Availability is not a mutable public control surface; tests control executable
 discovery at the `shutil.which()` boundary before constructing the adapter.

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol
 
-from nuself.config import RuntimePaths
 from nuself.notification.audit import write_notification_audit
 from nuself.notification.model import OutboxEntry
 
@@ -24,8 +24,8 @@ class LogOnlyNotificationAdapter:
 
     delivery_id = "log"
 
-    def __init__(self, paths: RuntimePaths) -> None:
-        self._project_root = paths.project_root
+    def __init__(self, project_root: Path) -> None:
+        self._project_root = project_root
 
     def send(self, entry: OutboxEntry) -> bool:
         write_notification_audit(
