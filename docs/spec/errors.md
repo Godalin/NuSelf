@@ -632,6 +632,8 @@ SQLite transaction rollback dual failure uses the existing
 `rollback_error` as `BaseException` values and uses `primary_error` as its
 explicit cause. This applies uniformly to transaction-body, interruption,
 commit, and rollback-only failures; message text is diagnostic, not a schema.
+Rollback-only and rollback-cleanup failures are separate direct runtime errors;
+there is no transaction-error family without an independent catch policy.
 Workspace SQLite batches follow the same provenance rule across operation,
 commit, rollback, and connection-close failures. Their lifecycle error retains
 the primary failure plus any rollback and close failures, and uses the primary

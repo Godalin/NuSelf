@@ -101,15 +101,11 @@ class _TransactionState:
         self.local.rollback_only = value
 
 
-class SqliteTransactionError(RuntimeError):
-    """Base class for SQLite transaction-state failures."""
-
-
-class SqliteTransactionRollbackOnlyError(SqliteTransactionError):
+class SqliteTransactionRollbackOnlyError(RuntimeError):
     """Raised when a caught inner failure prevents the outer commit."""
 
 
-class SqliteTransactionCleanupError(SqliteTransactionError):
+class SqliteTransactionCleanupError(RuntimeError):
     """Raised when rollback fails while preserving the primary cause."""
 
     def __init__(

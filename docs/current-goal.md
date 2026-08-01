@@ -9,26 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unused shared handler-registry exception family while preserving all
-five actionable composition and dispatch errors. No caller consumes their
-common base; adjacent typed definition registries already expose direct errors.
+Remove the unused SQLite transaction exception family while preserving the two
+actionable rollback-only and rollback-cleanup failures. Keep the separately
+consumed storage-lifecycle family and all transaction behavior unchanged.
 
 ## Ordered Steps
 
-1. Confirm no production or test policy catches `HandlerRegistryError`.
-2. Make duplicate, sealed, unsealed, coverage, and unknown errors inherit
-   `RuntimeError` directly; delete the unused family root.
-3. Preserve exact concrete error types, coverage metadata, middleware behavior,
-   sealing, and dispatch semantics.
-4. Run handler/boundary tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Confirm no production, test, or specification policy consumes
+   `SqliteTransactionError` as a family.
+2. Make rollback-only and cleanup failures inherit `RuntimeError` directly and
+   delete the unused family root.
+3. Preserve primary/rollback causes, nested transaction state, rollback, and
+   commit semantics; leave storage lifecycle errors untouched.
+4. Run SQLite tests, Pyright, full pytest, and package build; update evidence
+   and commit without pushing.
 
 ## Exclusions
 
-- Do not merge distinct handler registry failure types.
-- Do not replace concrete failures with message inspection.
-- Do not change registration, sealing, catalog coverage, middleware, or
-  dispatch behavior.
+- Do not merge the two transaction failure types.
+- Do not alter transaction nesting, rollback-only propagation, cleanup, or
+  exception chaining.
+- Do not change schema, WAL, checkpoint, authority, path, or permission logic.
 
 ## Constraints
 
@@ -40,6 +41,12 @@ common base; adjacent typed definition registries already expose direct errors.
 
 ## Phase Evidence
 
+- Removed the zero-consumer `SqliteTransactionError` family root. Rollback-only
+  and rollback-cleanup errors remain independently typed direct runtime errors;
+  primary/rollback causes and transaction behavior are unchanged. The consumed
+  storage-lifecycle error family remains intact. Focused SQLite tests: 111
+  passed; full suite: 2437 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Removed the zero-consumer `HandlerRegistryError` family root. Duplicate,
   sealed, unsealed, coverage, and unknown-key errors remain independently typed
   direct runtime errors; all callers and tests already consume those concrete

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- SQLite rollback-only and rollback-cleanup failures now remain distinct direct
+  runtime errors without an unused transaction exception family.
 - Handler registry duplicate, sealed, unsealed, coverage, and unknown-key
   failures now remain distinct direct runtime errors without an unused common
   exception family.
