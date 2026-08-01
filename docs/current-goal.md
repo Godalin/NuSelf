@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit daemon activity streaming and client adapters for duplicated state or
-transport wrappers while preserving bounded delivery and cancellation.
+Audit the unified scheduler task/submission model for mirrored state and
+adapter-only methods while preserving coalescing, resource serialization, and
+shutdown completion.
 
 ## Constraints
 
@@ -83,6 +84,15 @@ transport wrappers while preserving bounded delivery and cancellation.
   authoritative status snapshot.
 - Lifecycle/CLI focused suite: 444 passed. Post-lifecycle-state
   `uv run --locked pytest -q`: 2448 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Activity broker, wire codecs, and REPL fallback remain separate because they
+  own bounded fan-out, protocol validation, and durable recovery respectively.
+  Removed four historical underscore lifecycle aliases from live visibility;
+  only registered dotted runtime identities and current audits remain.
+- Activity-only close and event-classification helpers are now private module
+  details instead of implied cross-module APIs.
+- Activity/client focused suite: 120 passed. Post-activity cleanup
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 ## Last Completed Goal

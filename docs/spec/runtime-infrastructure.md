@@ -773,6 +773,11 @@ Healthy daemon-attached activity never polls files. Close failure is diagnostic
 only. Failure of the degradation diagnostic cannot fail, retry, or replace the
 chat result.
 
+Live lifecycle visibility follows the registered dotted runtime event names
+(`turn.started`, `turn.completed`, `turn.reused`, and `turn.failed`) plus current
+audit definitions. The presenter does not carry aliases for removed historical
+event spellings.
+
 The request-scoped audit projection is attached through
 `project_log_events(...)`. It is an additive, bounded process-local effect
 rather than part of `RuntimeContext`. Nested projections compose, active

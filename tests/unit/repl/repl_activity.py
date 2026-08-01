@@ -97,6 +97,20 @@ def test_registered_chat_lifecycle_events_are_visible() -> None:
     assert visible_interactive_activity_events(events) == events
 
 
+def test_removed_chat_lifecycle_aliases_are_not_visible() -> None:
+    events = [
+        _event("chat", name, status="completed")
+        for name in (
+            "turn_started",
+            "turn_completed",
+            "turn_reused",
+            "turn_failed",
+        )
+    ]
+
+    assert visible_interactive_activity_events(events) == []
+
+
 def test_live_send_drains_and_closes_daemon_subscription(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,

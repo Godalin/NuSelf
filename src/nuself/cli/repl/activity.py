@@ -135,7 +135,7 @@ def run_live_activity_send(
                             project_root=project_root,
                             subscription_id=subscription_id,
                         )
-                        close_activity_subscription(
+                        _close_activity_subscription(
                             subscription_id,
                             project_root,
                         )
@@ -197,7 +197,7 @@ def run_live_activity_send(
         log_cursor.mark_seen(new_events)
     finally:
         if subscription_id is not None:
-            close_activity_subscription(
+            _close_activity_subscription(
                 subscription_id,
                 project_root,
             )
@@ -315,7 +315,7 @@ def _drain_final_activity(
         )
 
 
-def close_activity_subscription(
+def _close_activity_subscription(
     subscription_id: str,
     project_root: Path | None,
 ) -> None:
@@ -364,7 +364,7 @@ def visible_interactive_activity_events(
 ) -> list[LogEvent]:
     """Return events that belong in the live user-facing activity stream."""
 
-    return [event for event in events if is_interactive_activity_log(event)]
+    return [event for event in events if _is_interactive_activity_log(event)]
 
 
 def captured_interactive_activity_events(
@@ -379,7 +379,7 @@ def captured_interactive_activity_events(
     ]
 
 
-def is_interactive_activity_log(event: LogEvent) -> bool:
+def _is_interactive_activity_log(event: LogEvent) -> bool:
     """Return whether one event is visible while an interactive turn runs."""
 
     if event.component == "persona":
@@ -407,21 +407,18 @@ def is_interactive_activity_log(event: LogEvent) -> bool:
             "turn.started",
             "turn.completed",
             "turn.reused",
-            "turn_started",
-            "turn_completed",
-            "turn_reused",
             "turn_retry",
             "final_response_retry",
             "final_response_completed",
         }:
             return True
-        return is_failure_activity_log(event)
+        return _is_failure_activity_log(event)
     if event.component == "daemon":
-        return is_failure_activity_log(event)
+        return _is_failure_activity_log(event)
     return False
 
 
-def is_failure_activity_log(event: LogEvent) -> bool:
+def _is_failure_activity_log(event: LogEvent) -> bool:
     """Return whether an event represents a user-relevant turn failure."""
 
     if event.status in {"error", "failed", "failed_over", "exhausted"}:
@@ -433,5 +430,4 @@ def is_failure_activity_log(event: LogEvent) -> bool:
         "llm_endpoint_failed_over",
         "llm_endpoint_unavailable",
         "turn.failed",
-        "turn_failed",
     }
