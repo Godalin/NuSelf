@@ -149,11 +149,11 @@ Chat-only aggregation lives in `agent.tools.composition`; domain code imports
 its concrete tool module directly so importing decorators or one tool cannot
 initialize Reason, Reflection, Memory, and Persona transitively.
 Domain package roots follow the same import-light rule when no cohesive public
-facade is consumed by production code. `nuself.reason` and `nuself.persona`
-are namespaces rather than aggregators: internal consumers import the owning
-domain module directly. Importing either package root must not initialize model
-adapters, persistence, workspace storage, graph orchestration, discussion, or
-daemon scheduling as a side effect.
+facade is consumed by production code. `nuself.reason`, `nuself.persona`, and
+`nuself.reflection` are namespaces rather than aggregators: internal consumers
+import the owning domain module directly. Importing these package roots must not
+initialize model adapters, persistence, workspace storage, graph orchestration,
+discussion, scheduling, or organization as a side effect.
 
 Daemon chat receives its memory, profile, reflection, trace, and conversation
 collaborators from that graph. `application.chat` resolves them once into an

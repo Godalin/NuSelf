@@ -29,11 +29,9 @@ from nuself.config import runtime_paths
 from nuself.domain.proactive import IdeaCandidate
 from nuself.logs import read_log_events
 from nuself.notification import NotificationOutbox
-from nuself.reflection import (
-    IdeaCandidateGenerator,
-    LLMRelevanceGate,
-    ReflectionScheduler,
-)
+from nuself.reflection.candidates import IdeaCandidateGenerator
+from nuself.reflection.relevance import LLMRelevanceGate
+from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reflection.candidates import CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
@@ -914,7 +912,6 @@ def _make_candidate(
 
 
 def test_relevance_gate_allows_passing_candidate(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
     score = gate.score(_make_candidate("New insight about X"))
@@ -923,7 +920,6 @@ def test_relevance_gate_allows_passing_candidate(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_rejects_failing_candidate(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -939,7 +935,6 @@ def test_relevance_gate_rejects_failing_candidate(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     # LLM says passes=True even if scores look low — judgment overrides formula
     gate = _gate(
@@ -958,7 +953,6 @@ def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
 def test_relevance_gate_rejects_out_of_range_scores(
     tmp_path: Path,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -975,7 +969,6 @@ def test_relevance_gate_rejects_out_of_range_scores(
 
 
 def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_BrokenAgent())
     candidate = _make_candidate("Will fail")
@@ -989,7 +982,6 @@ def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
 def test_relevance_gate_fallback_on_invalid_structured_output(
     tmp_path: Path,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     class _InvalidRelevanceAgent:
         def invoke(
@@ -1012,7 +1004,6 @@ def test_relevance_gate_propagates_untyped_agent_errors(
     tmp_path: Path,
     error_type: type[Exception],
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     expected = error_type("raw agent implementation failure")
 
@@ -1031,7 +1022,6 @@ def test_relevance_gate_propagates_untyped_agent_errors(
 
 
 def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -1043,7 +1033,6 @@ def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_rejects_passes_from_string(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -1064,7 +1053,6 @@ def test_relevance_gate_rejects_passes_from_string(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     config = _reflection_settings(cooldown_seconds=600)
     gate = _gate(tmp_path, config=config)
@@ -1081,7 +1069,6 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
 def test_relevance_gate_corrupt_state_keeps_cooldown_active(
     tmp_path: Path,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
     gate._schedule_collection.put(
@@ -1099,7 +1086,6 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
@@ -1128,7 +1114,6 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
 
 
 def test_relevance_gate_no_cooldown_when_no_last_reflection(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
     assert gate._cooldown_ok() is True

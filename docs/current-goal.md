@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the Reflection package facade and remaining package-root imports. Remove
-only eager aggregation that has no cohesive production consumer; keep explicit
-consumer-owned protocols at cross-domain boundaries.
+Audit the smaller Trace and Profile package facades before deciding whether the
+larger Runtime and Chat roots are cohesive public APIs or accidental eager
+aggregators. Prefer direct owning-module imports over replacement facades.
 
 ## Constraints
 
@@ -222,6 +222,12 @@ consumer-owned protocols at cross-domain boundaries.
 - Persona/Chat/Reflection/boundary focused suite: 488 passed. Post-Persona
   cleanup `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- `nuself.reflection` is now an import-light namespace; its previous candidate,
+  relevance, scheduler, repository, organizer, and service aggregation had no
+  production consumer. Tests now name the modules whose behavior they verify.
+- Reflection/boundary focused suite: 159 passed. Post-Reflection cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 ## Last Completed Goal
 
