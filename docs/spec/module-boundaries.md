@@ -127,6 +127,9 @@ must reuse its instances for one authority.
 `MemoryEntryRepository.compute_graph()` is the single one-shot symbolic graph
 projection used by both repository operations and external memory-query
 expansion. A private mirror with identical behavior is not a second capability.
+Memory entry persistence accepts the canonical `MemoryEntry` domain object;
+an unused validate-convert-save adapter for `MemoryObject` is not repository
+API. Legacy object-shaped records remain a decoding concern.
 
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records

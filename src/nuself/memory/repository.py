@@ -254,11 +254,6 @@ class MemoryEntryRepository:
         self._col.put(updated.id, updated.to_wire())
         return updated
 
-    def save_object(self, memory: MemoryObject) -> MemoryObject:
-        self._registry.validate(memory)
-        self.save(MemoryEntry.from_memory_object(memory))
-        return memory
-
     def delete(self, entry_id: str) -> None:
         wire = self._col.get(entry_id)
         if wire is None:

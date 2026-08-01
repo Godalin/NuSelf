@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make one Memory graph operation serve internal and external consumers.
+Remove the unused Memory-object persistence adapter.
 
 ## Ordered Steps
 
-1. Confirm public `compute_graph()` only forwards to `_compute_graph()` while
-   repository operations bypass it and external query expansion requires it.
-2. Move the implementation to the public operation and reuse it internally;
-   delete the private mirror without changing graph projection behavior.
+1. Confirm `MemoryEntryRepository.save_object()` has no source or test consumer
+   and only validates, converts, and forwards to `save()`.
+2. Delete the dead adapter without an alias; retain `MemoryObject` decoding and
+   the canonical `save(MemoryEntry)` validation boundary.
 3. Run focused Memory tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve symbolic nodes, edges, filtering, traversal order, transitive
-  closure, and retrieval expansion behavior.
+- Preserve MemoryEntry validation, quarantine behavior, wire compatibility,
+  candidate promotion, and object decoding.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Make one Memory graph operation serve internal and external consumers.
 
 ## Phase Evidence
 
+- Removed the zero-consumer `MemoryEntryRepository.save_object()` adapter,
+  which redundantly validated a `MemoryObject`, converted it, and forwarded to
+  `save()`. Canonical writes remain `save(MemoryEntry)` while legacy
+  object-shaped record decoding remains intact. Focused Memory/storage/data
+  tests: 211 passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - `MemoryEntryRepository.compute_graph()` now directly owns symbolic graph
   construction, and node/edge search, path finding, closure, and external
   retrieval expansion all reuse it. Removed the private implementation mirror
