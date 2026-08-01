@@ -14,6 +14,7 @@ from nuself.daemon.payloads import (
     ActivityOpenResponsePayload,
     ChatRequestPayload,
     ChatResponsePayload,
+    DaemonIdentityPayload,
     EmptyRequestPayload,
     HealthResponsePayload,
     MessagePayload,
@@ -69,6 +70,17 @@ def test_empty_request_payload_rejects_fields() -> None:
         EmptyRequestPayload.from_wire({"unexpected": True})
 
 
+def test_daemon_identity_payload_contains_only_authority() -> None:
+    payload = DaemonIdentityPayload("authority-1")
+
+    assert payload.to_wire() == {"authority_id": "authority-1"}
+    assert DaemonIdentityPayload.from_wire(payload.to_wire()) == payload
+    with pytest.raises(ProtocolError, match="message"):
+        DaemonIdentityPayload.from_wire(
+            {"authority_id": "authority-1", "message": "pong"}
+        )
+
+
 def test_chat_response_payload_omits_absent_optional_fields() -> None:
     payload = ChatResponsePayload(
         answer="answer",
@@ -106,13 +118,15 @@ def test_health_response_payload_projects_scheduler_model() -> None:
             "last_error": None,
         }
     }
-    assert MessagePayload("pong").to_wire() == {"message": "pong"}
+    assert MessagePayload("shutdown requested").to_wire() == {
+        "message": "shutdown requested"
+    }
     assert HealthResponsePayload.from_wire(
         HealthResponsePayload(scheduler).to_wire()
     ) == HealthResponsePayload(scheduler)
     assert MessagePayload.from_wire(
-        MessagePayload("pong").to_wire()
-    ) == MessagePayload("pong")
+        MessagePayload("shutdown requested").to_wire()
+    ) == MessagePayload("shutdown requested")
 
 
 @pytest.mark.parametrize(

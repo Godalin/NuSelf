@@ -55,14 +55,10 @@ class MessagePayload:
 class DaemonIdentityPayload:
     """Readiness response bound to one state authority."""
 
-    message: str
     authority_id: str
 
     def to_wire(self) -> dict[str, JsonValue]:
-        return {
-            "message": self.message,
-            "authority_id": self.authority_id,
-        }
+        return {"authority_id": self.authority_id}
 
     @classmethod
     def from_wire(
@@ -71,15 +67,9 @@ class DaemonIdentityPayload:
     ) -> DaemonIdentityPayload:
         _expect_fields(
             payload,
-            required=frozenset({"message", "authority_id"}),
+            required=frozenset({"authority_id"}),
         )
         return cls(
-            message=_required_string(
-                payload,
-                "message",
-                context="daemon identity response",
-                allow_blank=False,
-            ),
             authority_id=_required_string(
                 payload,
                 "authority_id",

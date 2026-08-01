@@ -232,10 +232,7 @@ def ping(
     except (DaemonConnectionError, DaemonApplicationError):
         return False
     expected_id = runtime_paths(project_root).scope.authority_id
-    return (
-        payload.message == "pong"
-        and payload.authority_id == expected_id
-    )
+    return payload.authority_id == expected_id
 
 
 def health(

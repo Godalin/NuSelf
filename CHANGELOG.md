@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon ping success now carries only the runtime `authority_id`; the fixed
+  `pong` string duplicated request type and success status and has been removed
+  from the internal JSONL payload.
 - The unified daemon scheduler now sleeps while executor capacity or resource
   lanes are blocked, fails chat closed when unavailable, and reports only
   payload-safe current degradation. A committed chat reply is no longer

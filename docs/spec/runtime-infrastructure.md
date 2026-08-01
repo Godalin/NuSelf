@@ -207,7 +207,10 @@ invocation are distinct exception sources:
 
 Success response payload field sets are also exact:
 
-- `ping` and `shutdown` return one string `message`;
+- `ping` returns one non-blank `authority_id`; request type plus successful
+  response status already express readiness and must not be duplicated as a
+  fixed `pong` message;
+- `shutdown` returns one string `message`;
 - `health` returns one complete typed `scheduler` snapshot;
 - `chat` returns string `answer`, non-blank `conversation_id`, a string list
   `evidence_references`, nullable string `epistemic_status`, and optional numeric

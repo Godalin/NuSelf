@@ -541,16 +541,14 @@ def test_periodic_scan_recovers_lost_compression_wakeup(
     assert requested == [conversation_id]
 
 
-def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
+def test_daemon_ping_returns_authority_identity(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     request = DaemonRequest(type="ping", payload={}, request_id="ping1")
 
     response = handle_request(request, state)
 
     assert response.status == "ok"
-    assert response.payload["message"] == "pong"
-    assert response.payload["authority_id"] == state.authority_id
-
+    assert response.payload == {"authority_id": state.authority_id}
 
 
 def test_daemon_health_returns_scheduler_snapshot(tmp_path: Path) -> None:

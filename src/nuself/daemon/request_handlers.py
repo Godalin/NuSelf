@@ -140,7 +140,6 @@ def _handle_ping(
     return DaemonResponse.ok(
         request,
         DaemonIdentityPayload(
-            message="pong",
             authority_id=state.authority_id,
         ).to_wire(),
     )

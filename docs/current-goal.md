@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing daemon and service composition for internal helpers that leak
-more state than their consumers require; preserve explicit domain APIs, durable
-authorities, and the single scheduler.
+Continue removing duplicated daemon protocol state when request type, response
+status, or authority already carries the same meaning; preserve exact codecs
+and lifecycle identity checks.
 
 ## Constraints
 
@@ -704,6 +704,12 @@ authorities, and the single scheduler.
 - Reason-export focused suite: 24 passed. Post-export-result narrowing
   `uv run --locked pytest -q`: 2443 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- Ping success now carries only its non-blank `authority_id`; request type and
+  successful response status already express `pong`. The client still rejects
+  another authority and exact decoding rejects the removed field.
+- Daemon payload/transport/server/lifecycle focused suite: 144 passed.
+  Post-ping-payload cleanup `uv run --locked pytest -q`: 2444 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 ## Last Completed Goal
 

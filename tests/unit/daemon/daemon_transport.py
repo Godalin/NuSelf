@@ -905,7 +905,6 @@ def test_ping_forwards_readiness_timeout(
             request_id="ping-request",
             status="ok",
             payload={
-                "message": "pong",
                 "authority_id": runtime_paths(tmp_path).scope.authority_id,
             },
         )
@@ -932,7 +931,6 @@ def test_ping_rejects_daemon_for_another_authority(
             request_id="ping-request",
             status="ok",
             payload={
-                "message": "pong",
                 "authority_id": "v1-wrong-authority",
             },
         )
