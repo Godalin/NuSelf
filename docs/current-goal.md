@@ -5,42 +5,27 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — close scheduler and feature-policy correctness gaps found by external
-review.
+Idle — no active implementation goal.
 
-## Objective
+## Last Completed Goal
 
-Preserve the single daemon scheduler and simple application composition while
-eliminating dispatcher spinning, post-commit chat ambiguity, dead-scheduler
-fallback behavior, inert observation declarations, and unsafe/stale scheduler
-health errors.
-
-## Ordered Steps
-
-1. Make dispatcher waiting resource- and capacity-aware, with regression tests
-   proving blocked work sleeps until notification.
-2. Treat durable chat commit/projection as primary and follow-up admission as
-   recoverable wake-up; add durable compression discovery.
-3. Execute `@observed` lifecycle policy centrally in `FeatureExecutor`.
-4. Fail closed when daemon scheduling is unavailable and sanitize scheduler
-   failure health.
-5. Minimally type production task construction, reconcile the audit document,
-   run all gates, commit, push, and verify CI.
-
-## Exclusions
-
-- No service bus, per-domain scheduler, persistent generic queue, or new lock
-  hierarchy.
-- No ApplicationResources/ApplicationServices duplication in this goal.
-- No one-method facade or compatibility fallback.
+Closed the scheduler and feature-policy correctness gaps identified by the
+external daemon architecture review without adding a service bus, scheduler,
+or lock hierarchy.
 
 ## Completion Evidence
 
-- Scheduler blocked-state tests cannot observe zero-timeout spinning.
-- A committed chat reply remains successful when follow-up admission closes;
-  durable recovery later discovers both curation and compression work.
-- Observed functions publish started/completed/failed, while undecorated
-  functions publish none.
-- Dead scheduler chat fails before model execution; health exposes only
-  payload-safe current degradation state.
-- Pyright, full pytest, build, clean-wheel smoke, and final CI pass.
+- Capacity saturation and busy resource lanes now put the dispatcher to sleep
+  until a relevant notification instead of using zero-timeout waits.
+- Chat fails closed when scheduling is unavailable. After durable turn and
+  observation commit, curation/compression admission is recoverable wake-up;
+  periodic scans rediscover both forms of maintenance.
+- `@observed` centrally emits payload-safe feature started/completed/failed
+  events through the normal log/activity projection.
+- Scheduler health exposes only current task kind/error type degradation and
+  clears it after a successful task; production task construction uses the
+  closed typed kind boundary.
+- `uv run --locked pytest -q`: 2450 passed.
+- `uv run --locked pyright`: 0 errors, 0 warnings.
+- `uv build`: sdist and wheel built successfully.
+- Python 3.12 clean-wheel install, imports, and `nuself --version` succeeded.
