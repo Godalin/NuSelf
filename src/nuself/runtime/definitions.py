@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable
-from threading import RLock
+from threading import Lock
 from typing import Generic, TypeVar
 
 DefinitionKey = TypeVar("DefinitionKey", bound=Hashable)
@@ -63,7 +63,7 @@ class DefinitionRegistry(Generic[DefinitionKey, Definition]):
         self._namespace = namespace
         self._definitions: dict[DefinitionKey, Definition] = {}
         self._sealed = False
-        self._lock = RLock()
+        self._lock = Lock()
 
     def register(
         self,

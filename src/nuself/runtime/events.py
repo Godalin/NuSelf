@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from threading import RLock
+from threading import Lock
 from uuid import UUID, uuid4
 
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -66,7 +66,7 @@ class EventPublisher:
         self,
         definitions: EventDefinitionRegistry | None = None,
     ) -> None:
-        self._lock = RLock()
+        self._lock = Lock()
         self._definitions = (
             definitions
             if definitions is not None

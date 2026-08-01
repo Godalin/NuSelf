@@ -77,7 +77,7 @@ class PersonaPromptRepository:
     ) -> None:
         self._project_root = paths.project_root
         self._collection = collection
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
 
     # Public API ---------------------------------------------------------------
 

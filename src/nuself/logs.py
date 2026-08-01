@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from fcntl import LOCK_EX, LOCK_UN, flock
 from pathlib import Path
-from threading import Lock, RLock
+from threading import Lock
 from typing import IO, BinaryIO, Literal, cast
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
@@ -57,7 +57,7 @@ LogPersistenceOutcome = Literal[
     "uncertain",
 ]
 _LOG_LOCKS_GUARD = Lock()
-_LOG_WRITE_LOCKS: WeakValueDictionary[Path, RLock] = WeakValueDictionary()
+_LOG_WRITE_LOCKS: WeakValueDictionary[Path, Lock] = WeakValueDictionary()
 _LOG_DIRECTORY_SYNC_GUARD = Lock()
 _LOG_DIRECTORY_SYNC_CACHE_LIMIT = 256
 _SYNCED_LOG_IDENTITIES: OrderedDict[Path, tuple[int, int]] = OrderedDict()
@@ -142,10 +142,10 @@ class LogAppendLifecycleError(RuntimeError):
         self.persistence_outcome = persistence_outcome
 
 
-def _log_write_lock(path: Path) -> RLock:
+def _log_write_lock(path: Path) -> Lock:
     normalized = path.absolute()
     with _LOG_LOCKS_GUARD:
-        return _LOG_WRITE_LOCKS.setdefault(normalized, RLock())
+        return _LOG_WRITE_LOCKS.setdefault(normalized, Lock())
 
 
 def write_log_event(

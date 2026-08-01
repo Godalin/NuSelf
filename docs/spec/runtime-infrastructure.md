@@ -627,6 +627,9 @@ publication start, and a newly attached projection starts with the next
 publication.
 Mutations are visible to a nested publication started after the mutation.
 Callbacks may therefore publish recursively without deadlocking the publisher.
+The publisher, sealed definition registries, and handler registries use
+non-reentrant state locks; callback and handler invocation must remain outside
+those locks rather than relying on recursive acquisition.
 
 Projections and optional event-definition payload validators must be callable
 at composition time. Invalid projections fail in `attach_projection(...)`; invalid
@@ -839,6 +842,9 @@ Structured logs are an append-only sink and read model.
   `LogEvent.to_record()` result directly and leaves final wire validation to
   the daemon protocol codec.
 - File writes are serialized per project/component.
+- A component file's process-local write mutex is non-reentrant. Observer
+  projections and fallback diagnostics run only after the append critical
+  section, so recursive log writes never require reacquiring that mutex.
 - Readers use stable event ids and incremental cursors; complete-record hashing
   is a legacy compatibility fallback only.
 - Existing JSONL records without ids/schema versions remain readable.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable
-from threading import RLock
+from threading import Lock
 from types import MappingProxyType
 from typing import Generic, ParamSpec, Protocol, TypeVar
 
@@ -93,7 +93,7 @@ class HandlerRegistry(
             HandlerKey,
             Callable[HandlerParams, HandlerResult],
         ] | None = None
-        self._lock = RLock()
+        self._lock = Lock()
 
     @property
     def sealed(self) -> bool:

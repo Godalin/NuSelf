@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit process-local `RLock` uses in application, daemon, runtime, and service
-infrastructure. Replace only locks with no recursive acquisition path; retain
-reentrancy where callbacks or nested publication require it.
+Audit remaining process-local mutexes and conditions for duplicated lifecycle
+state or overlapping ownership, starting with daemon scheduler/activity. Keep
+the two proven reentrant transaction locks in SQLite and Reason.
 
 ## Constraints
 
@@ -136,6 +136,16 @@ reentrancy where callbacks or nested publication require it.
 - Application/CLI/REPL/daemon lifecycle focused suite: 56 passed; concurrent
   runtime suite: 6 passed. Post-lock cleanup `uv run --locked pytest -q`:
   2457 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- EventPublisher, HandlerRegistry, DefinitionRegistry, component-log append,
+  PersonaPromptRepository, and TraceRepository now use ordinary locks. Their
+  callbacks/handlers run outside critical sections and their repository writes
+  never nest.
+- SQLite transaction/collection calls and Reason batch-write/save calls retain
+  the only two `RLock` instances because both intentionally reacquire the same
+  mutex within one atomic operation.
+- Registry/event/log/repository focused suite: 208 passed. Post-lock audit
+  `uv run --locked pytest -q`: 2457 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

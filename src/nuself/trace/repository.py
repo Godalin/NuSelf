@@ -35,7 +35,7 @@ class TraceRepository:
     ) -> None:
         self._traces = backend.collection("trace_nodes")
         self._links = backend.collection("trace_edges")
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
         self._paths = paths
 
     def save_trace(self, trace: ThoughtTrace) -> ThoughtTrace:
