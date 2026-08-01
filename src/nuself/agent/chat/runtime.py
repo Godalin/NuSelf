@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-import logging
 import time
 
 from langchain_core.messages import (
@@ -56,8 +55,6 @@ from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
 )
-
-LOGGER = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Response types, parsing, and user-facing boundary checks

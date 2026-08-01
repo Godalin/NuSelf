@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Removed an unused chat logger and a stale Reason storage-version declaration
+  that did not participate in logging, decoding, or schema validation.
 - The Reason repository no longer exposes a no-op `ensure()` or an unused raw
   step lookup; thread-scoped ordered step access remains the service boundary.
 - Memory application composition no longer exposes unused type/relation

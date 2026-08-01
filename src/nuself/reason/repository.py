@@ -13,8 +13,6 @@ from nuself.reason.errors import ReasonNotFound
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 
-REASON_STORAGE_VERSION = "NuSelfReasonStore/v1"
-
 _write_lock = threading.RLock()
 
 

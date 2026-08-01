@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove unused raw operations from the Reason repository.
+Remove dead chat logging and Reason storage-version declarations.
 
 ## Ordered Steps
 
-1. Confirm `ReasonRepository.ensure()` is a no-op with no callers and
-   `get_step()` has no production consumer beyond its repository-only test.
-2. Remove both operations while preserving transactional writes and the
-   thread-scoped `list_steps()` API used by `ReasonService`.
-3. Run focused Reason tests and the complete verification gates; update
+1. Confirm the chat module logger and Reason repository storage-version
+   constant have no references beyond their definitions.
+2. Remove both declarations and the unused logging import without adding
+   replacement infrastructure.
+3. Run focused chat/Reason tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve thread lifecycle, transactional step/thread persistence, ordered
-  step listing, daemon advancement, and output export.
+- Preserve observed chat events, audit reporting, Reason wire formats,
+  persistence, schema ownership, and runtime behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,11 @@ Remove unused raw operations from the Reason repository.
 
 ## Phase Evidence
 
+- Removed the chat runtime's unused `logging` import/module logger and the
+  Reason repository's unreferenced storage-version constant. Neither was part
+  of observed logging, audit, decoding, or schema validation. Focused
+  Chat/Reason tests: 441 passed; full suite: 2443 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - `ReasonRepository` no longer contains the zero-caller no-op `ensure()` or
   the raw `get_step()` operation used only by its own test. The application
   continues to expose ordered thread-scoped steps through `ReasonService`, and

@@ -410,6 +410,9 @@ adapter logic.
 Reason persistence exposes thread-scoped ordered step listing to the service;
 it does not expose an otherwise unused raw step lookup. Backend collections
 already exist when composed, so the repository has no no-op `ensure()` method.
+Modules do not declare unused loggers or storage-version markers. Logging uses
+the observed event/audit boundaries actually invoked by the runtime, and
+storage versions exist only where a persisted decoder or schema enforces them.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 `PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has
