@@ -331,9 +331,11 @@ alias string sets.
 - The session header is printed once at startup, once after every completed
   non-command turn (including a failed turn returning to the prompt), and once
   after commands whose dispatcher result is `redraw_header`. Other commands do
-  not print it. All three paths use the same presenter and status provider:
+  not print it. All three paths use the same injected REPL callback. The
+  composition root queries the current daemon status for each invocation and
+  delegates the terminal effect to shared CLI presentation:
   ```
-  [daemon] session status=<running|one-shot> thread=<id>
+  [daemon] session status=<running|one-shot> conversation=<id>
   ```
 - NuSelf assistant replies printed to an interactive terminal are rendered as Markdown.
 - Terminal assistant replies are streamed with a small typewriter effect so the reply appears progressively. The plain stored transcript remains unchanged.

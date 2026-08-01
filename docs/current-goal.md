@@ -9,29 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove exact pass-through aliases that add no policy or test seam, plus the
-single-child configuration migration error base that no caller catches.
-Preserve compatibility paths still required to decode durable user data or
-perform the supported v0.2.5 configuration upgrade.
+Remove the one-use, one-method `SessionHeaderPresenter` wrapper and its source
+module. Keep presentation rendering in the existing CLI presentation module
+and keep the REPL callback boundary as the actual composable interface.
 
 ## Ordered Steps
 
-1. Verify the `RuntimeContext.thread_id` decoder and v0.2.5 email migration
-   still protect persisted/upgrade inputs; retain them.
-2. Inline the memory raw-transcript classifier and endpoint-availability
-   classifier at their sole pass-through call sites.
-3. Make the one legacy-email migration error inherit `ValueError` directly and
-   delete its unused abstract family layer.
-4. Run memory/agent/config tests, Pyright, full pytest, and package build;
-   update evidence and commit without pushing.
+1. Record that `ReplCallbacks.show_session_header` is the composition boundary;
+   presentation does not require an object wrapper.
+2. Move the pure status/conversation rendering effect into
+   `cli.presentation` and bind live daemon-status lookup with a local callback
+   at REPL composition.
+3. Delete `cli/repl/presentation.py`, the dataclass, provider alias, and class-
+   specific test shape without adding a replacement class.
+4. Run presentation/REPL tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not remove compatibility merely because it is old when current durable
-  SQLite records may still contain that wire shape.
-- Do not change availability classification, transcript rejection, config
-  validation, warning, or migration messages.
-- Do not introduce new aliases, error bases, adapters, or facades.
+- Do not move rendering logic into the REPL loop or duplicate it in
+  composition.
+- Do not change header text, refresh timing, status lookup, output styling, or
+  callback signatures.
+- Do not replace the removed class with another presenter protocol or wrapper.
 
 ## Constraints
 
@@ -43,6 +43,13 @@ perform the supported v0.2.5 configuration upgrade.
 
 ## Phase Evidence
 
+- Removed the one-use `SessionHeaderPresenter`, its provider alias, and the
+  dedicated `cli/repl/presentation.py` module. Session-header output now lives
+  with existing CLI presentation functions; REPL composition binds current
+  daemon-status lookup directly into the existing typed callback, so the loop
+  remains independently composable. Source/tests remove 20 net lines. Focused
+  REPL/CLI tests: 379 passed; full suite: 2434 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - Memory optimization and endpoint failover now call their shared classifiers
   directly; the exact pass-through aliases are gone. The sole legacy-email
   migration error now inherits `ValueError` directly because no caller catches

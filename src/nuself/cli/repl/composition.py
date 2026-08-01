@@ -7,7 +7,11 @@ from pathlib import Path
 
 from nuself.cli.composition import compose_cli_application
 from nuself.cli.daemon_status import observe_daemon_status
-from nuself.cli.presentation import brand_banner, print_assistant_reply
+from nuself.cli.presentation import (
+    brand_banner,
+    print_assistant_reply,
+    print_session_header,
+)
 from nuself.cli.repl.activity import (
     print_interactive_activity_events,
     read_interactive_activity_events,
@@ -17,7 +21,6 @@ from nuself.cli.repl.notices import (
     print_interactive_notices,
     startup_interactive_notices,
 )
-from nuself.cli.repl.presentation import SessionHeaderPresenter
 from nuself.cli.repl.runtime import ReplCallbacks, run_interactive_loop
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.transcript import auto_save_interactive_transcripts
@@ -41,7 +44,6 @@ def run_repl(
     daemon_activity: bool = False,
 ) -> int:
     """Compose and run one interactive session."""
-    header_presenter = SessionHeaderPresenter(interactive_daemon_status)
     command_dispatcher = ReplCommandDispatcher()
 
     def curate_session(
@@ -82,7 +84,12 @@ def run_repl(
             send_turn=send_turn,
             auto_save=auto_save_interactive_transcripts,
             run_curator=curate_session,
-            show_session_header=header_presenter.show,
+            show_session_header=lambda root, conversation_id: (
+                print_session_header(
+                    interactive_daemon_status(root),
+                    conversation_id,
+                )
+            ),
             show_startup_notices=lambda root: print_interactive_notices(
                 startup_interactive_notices(root)
             ),

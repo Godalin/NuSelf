@@ -34,6 +34,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Memory optimization and endpoint failover now call their shared classifiers
   directly, and the single legacy-email migration error no longer has an
   unused one-child exception hierarchy.
+- Interactive session-header output now uses the existing CLI presentation
+  module and the REPL's typed callback directly. The dedicated one-method
+  presenter class and source module were removed without changing status
+  refresh or rendered output.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records
