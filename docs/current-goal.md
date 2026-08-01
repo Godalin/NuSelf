@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove zero-consumer chat and workspace convenience APIs.
+Remove redundant daemon handler and admission state operations.
 
 ## Ordered Steps
 
-1. Confirm the chat supervisor's generic tool-outcome flag and
-   `SqliteStore.for_project()` have no runtime, test, or specification consumer.
-2. Remove both convenience APIs so chat retains only its retry-safety query and
-   workspace storage receives an already-resolved authority database path.
-3. Run focused Chat/workspace tests and complete verification gates; update
+1. Confirm scheduler `running` already implies admission is open and identify
+   handlers that receive but do not consume the uniform task argument.
+2. Remove the duplicate Chat admission predicate and statement-level argument
+   disposal while preserving the single typed handler contract.
+3. Run focused daemon tests and complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve mutating-tool retry suppression and the LangGraph `BaseStore`
-  contract.
+- Preserve scheduler lifecycle, work-plane fail-closed behavior, task identity,
+  resource serialization, and the uniform typed handler contract.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove zero-consumer chat and workspace convenience APIs.
 
 ## Phase Evidence
 
+- Chat work admission now checks the scheduler's authoritative `running`
+  projection once; that phase already implies `accepting`, which remains in the
+  health snapshot for lifecycle visibility. Five periodic handlers retain the
+  uniform `DaemonTask` signature through an ignored parameter name instead of
+  statement-level deletion. Focused daemon tests: 47 passed; full suite: 2439
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Removed the chat supervisor's unused generic `has_tool_outcomes` property;
   retry safety continues to use the narrower mutating-outcome predicate. Removed
   `SqliteStore.for_project()` and its config dependency so the low-level

@@ -195,7 +195,7 @@ class DaemonState:
         """Run chat through its conversation resource lane in a live daemon."""
 
         snapshot = self.scheduler.snapshot()
-        if not snapshot.running or not snapshot.accepting:
+        if not snapshot.running:
             raise DaemonUnavailableError("daemon scheduler is unavailable")
         identity = (
             f"chat.turn:{conversation_id}:{turn_id}"
@@ -216,13 +216,11 @@ class DaemonState:
             raise TypeError("chat task returned an invalid result")
         return result
 
-    def _scan_memory_observations(self, task: DaemonTask) -> None:
-        del task
+    def _scan_memory_observations(self, _task: DaemonTask) -> None:
         for observation in self._memory_observations.pending():
             self._request_memory_curation(observation.id)
 
-    def _scan_conversations(self, task: DaemonTask) -> None:
-        del task
+    def _scan_conversations(self, _task: DaemonTask) -> None:
         for conversation_id in (
             self.conversation_runtime.conversations_requiring_compression()
         ):
@@ -297,16 +295,13 @@ class DaemonState:
             raise TypeError("compression task requires a conversation ID")
         self.conversation_runtime.compress_conversation(conversation_id)
 
-    def _check_reflection(self, task: DaemonTask) -> None:
-        del task
+    def _check_reflection(self, _task: DaemonTask) -> None:
         self.reflection_scheduler.reflect()
 
-    def _check_reasons(self, task: DaemonTask) -> None:
-        del task
+    def _check_reasons(self, _task: DaemonTask) -> None:
         self.reason_scheduler.run_once()
 
-    def _deliver_notifications(self, task: DaemonTask) -> None:
-        del task
+    def _deliver_notifications(self, _task: DaemonTask) -> None:
         self.notification_delivery_loop.run_once()
 
     def _schedule_reason_export(

@@ -312,7 +312,8 @@ Shutdown closes admission, wakes the dispatcher, cancels pending volatile
 wake-ups, and waits within one daemon-wide graceful deadline for dispatched
 work. Completion always releases task identity and resource in a `finally`
 boundary. Durable unprocessed work is recovered at the next startup.
-Work-plane requests fail closed if the scheduler is not both running and
+Work-plane requests fail closed unless the scheduler is running. Running is
+derived from the `running` phase and therefore already implies admission is
 accepting; daemon request threads never execute synchronous domain fallbacks.
 After a chat turn and its durable memory observation commit, admission of
 curation and compression is only a wake-up. Capacity or shutdown rejection is
