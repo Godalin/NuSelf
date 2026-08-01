@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing test-only infrastructure-state views. Preserve state-machine
-contracts through permitted/rejected operations and catalog validation rather
-than read-only flags.
+Continue removing duplicated validation after strict codecs and sealed exact
+catalogs. Keep one authority for each closed identity set.
 
 ## Constraints
 
@@ -339,6 +338,13 @@ than read-only flags.
 - Handler/daemon-request/REPL focused suite: 31 passed. Post-sealed-view cleanup
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `HandlerRegistry.registered_keys` existed for tests plus one daemon guard.
+  The guard repeated guarantees already enforced by the strict RequestType
+  codec and exact sealed request catalog. Both the projection and unreachable
+  guard are gone; registry dispatch retains its own unknown-key error.
+- Handler/daemon-request/transport focused suite: 94 passed. Post-key-view
+  cleanup `uv run --locked pytest -q`: 2447 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

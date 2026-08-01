@@ -42,12 +42,6 @@ class MiddlewareState:
         self.activity_broker = RecordingActivityBroker()
 
 
-def test_daemon_request_registry_is_complete() -> None:
-    assert set(DAEMON_REQUEST_HANDLERS.registered_keys) == set(
-        REQUEST_TYPES
-    )
-
-
 def test_daemon_request_registry_uses_shared_catalog_coverage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

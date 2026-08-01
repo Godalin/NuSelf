@@ -95,11 +95,6 @@ class HandlerRegistry(
         ] | None = None
         self._lock = Lock()
 
-    @property
-    def registered_keys(self) -> tuple[HandlerKey, ...]:
-        with self._lock:
-            return tuple(self._handlers)
-
     def register(
         self,
         key: HandlerKey,

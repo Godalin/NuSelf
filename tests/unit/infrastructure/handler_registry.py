@@ -22,7 +22,6 @@ def test_handler_registry_dispatches_registered_handler() -> None:
     registry.seal()
 
     assert registry.dispatch("add", 2, 3) == 5
-    assert registry.registered_keys == ("add",)
 
 
 def test_handler_registry_decorator_returns_original_handler() -> None:
@@ -129,8 +128,6 @@ def test_handler_registry_rejects_non_callable_handler() -> None:
 
     with pytest.raises(TypeError, match="handler must be callable"):
         registry.register("echo", None)  # type: ignore[arg-type]
-
-    assert registry.registered_keys == ()
 
 
 def test_handler_registry_rejects_non_callable_middleware() -> None:

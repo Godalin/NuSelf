@@ -111,11 +111,6 @@ def handle_request(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     """Dispatch a validated daemon request through the sealed registry."""
-    if request.type not in DAEMON_REQUEST_HANDLERS.registered_keys:
-        return DaemonResponse.fail(
-            request.request_id,
-            f"unsupported request type: {request.type}",
-        )
     try:
         return DAEMON_REQUEST_HANDLERS.dispatch(
             request.type,

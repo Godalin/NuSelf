@@ -613,17 +613,6 @@ def test_shutdown_audit_failure_cannot_block_accepted_request(
     assert state.shutdown_requested.is_set()
 
 
-def test_daemon_unsupported_type_returns_error(tmp_path: Path) -> None:
-    state = DaemonState(tmp_path)
-    request = DaemonRequest(type="unknown", payload={}, request_id="unknown1")  # type: ignore[arg-type]
-
-    response = handle_request(request, state)
-
-    assert response.status == "error"
-    assert response.error is not None
-    assert "unsupported request type" in response.error
-
-
 def test_daemon_chat_rejects_non_string_message(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     request = DaemonRequest(type="chat", payload={"message": 123}, request_id="chat_bad")
