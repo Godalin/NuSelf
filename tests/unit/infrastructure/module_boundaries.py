@@ -754,6 +754,14 @@ def test_conversation_runtime_does_not_resolve_authority() -> None:
     } == set()
 
 
+def test_conversation_runtime_does_not_compose_observability() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+    imports = set(_from_imports(path))
+    assert ("nuself.logs", "runtime_event_log_sink") not in imports
+    source = path.read_text(encoding="utf-8")
+    assert "EventPublisher()" not in source
+
+
 def test_log_warning_contracts_are_separate_from_log_engine() -> None:
     source = (_SOURCE_ROOT / "logs.py").read_text(encoding="utf-8")
     assert "def _build_log_terminal_warning_registry" not in source

@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import replace
 import logging
 import time
-from pathlib import Path
 
 from langchain_core.tools import BaseTool
 from langchain_core.messages import (
@@ -45,7 +44,6 @@ from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.llm import (
     LangChainLLMEndpoint,
 )
-from nuself.logs import runtime_event_log_sink
 from nuself.memory.audit import run_memory_observed
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
@@ -93,7 +91,7 @@ class ConversationGraphRuntime:
         *,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         settings: ChatAgentSettings,
-        event_publisher: EventPublisher | None = None,
+        event_publisher: EventPublisher,
         response_service: ConversationResponseService | None = None,
         compression_agent: TextAgent | None = None,
         approval_port: ApprovalPort | None = None,
@@ -102,11 +100,7 @@ class ConversationGraphRuntime:
         self._langchain_models = langchain_models
         self._settings = settings
         self._project_root = project_root
-        self._event_publisher = (
-            event_publisher
-            if event_publisher is not None
-            else self._build_event_publisher(project_root)
-        )
+        self._event_publisher = event_publisher
         self._conversation_store = resources.conversation_store
         self._language_preference = resources.language_preference
         self._trace_recorder = resources.trace_recorder
@@ -173,14 +167,6 @@ class ConversationGraphRuntime:
                 if "readonly" in (tool.tags or [])
             ),
         )
-
-    @staticmethod
-    def _build_event_publisher(
-        project_root: Path | None,
-    ) -> EventPublisher:
-        publisher = EventPublisher()
-        publisher.attach_projection(runtime_event_log_sink(project_root))
-        return publisher
 
     def respond(
         self,

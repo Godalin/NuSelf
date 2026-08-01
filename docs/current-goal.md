@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit application and daemon composition for duplicated observability wiring
-after the shared helper surface is reduced. Preserve domain-owned definitions,
-the validated pre-persistence boundary, and the single scheduler.
+Audit `DaemonState` for public composition mirrors used only by tests or by its
+own methods. Remove only surfaces with no production consumer; retain request
+protocol capabilities and the single publisher/scheduler ownership.
 
 ## Constraints
 
@@ -60,6 +60,13 @@ the validated pre-persistence boundary, and the single scheduler.
   to `publish_observed_event`; no standalone production caller existed.
 - Observability/chat focused suite: 112 passed. Post-helper cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `ConversationGraphRuntime` now requires a complete `EventPublisher` and no
+  longer imports log persistence or constructs standalone observability.
+  Application composition owns the standalone publisher/log projection;
+  daemon composition continues to inject its one publisher with live activity.
+- Chat/daemon/boundary focused suite: 259 passed. Post-publisher-ownership
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,

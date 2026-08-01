@@ -20,6 +20,7 @@ from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.jobs import JobSink
 from nuself.llm import configured_langchain_chat_models
 from nuself.llm import LangChainLLMEndpoint
+from nuself.logs import runtime_event_log_sink
 
 __all__ = ["ChatResult", "compose_conversation_runtime"]
 
@@ -77,6 +78,12 @@ def compose_conversation_runtime(
         conversation_store=application.conversations,
         language_preference=config.chat.language_preference,
     )
+    publisher = event_publisher
+    if publisher is None:
+        publisher = EventPublisher()
+        publisher.attach_projection(
+            runtime_event_log_sink(paths.project_root)
+        )
     return ConversationGraphRuntime(
         resources,
         langchain_models=models,
@@ -87,7 +94,7 @@ def compose_conversation_runtime(
             ),
             summary_target_chars=config.chat.context.summary_target_chars,
         ),
-        event_publisher=event_publisher,
+        event_publisher=publisher,
         response_service=response_service,
         approval_port=approval_port,
     )

@@ -23,6 +23,7 @@ from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )
+from nuself.logs import runtime_event_log_sink
 from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -139,6 +140,10 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             conversation_store=conversation_store or application.conversations,
             language_preference=application.config.chat.language_preference,
         )
+        publisher = event_publisher
+        if publisher is None:
+            publisher = EventPublisher()
+            publisher.attach_projection(runtime_event_log_sink(project_root))
         super().__init__(
             resources,
             langchain_models=effective_models,
@@ -153,7 +158,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                     application.config.chat.context.summary_target_chars
                 ),
             ),
-            event_publisher=event_publisher,
+            event_publisher=publisher,
             response_service=response_service,
             compression_agent=compression_agent,
             approval_port=approval_port,

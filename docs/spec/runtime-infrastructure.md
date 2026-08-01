@@ -697,9 +697,10 @@ ownership is released.
 
 Chat-turn lifecycle is the second production event boundary.
 `ConversationGraphRuntime`
-accepts an instance-scoped publisher; `DaemonState` injects its existing
-publisher, while a standalone agent composes a private publisher with an audit
-subscriber.
+requires an instance-scoped publisher and never constructs observability
+infrastructure. Application composition creates a private publisher with an
+audit subscriber for a standalone surface; `DaemonState` injects its existing
+publisher for daemon execution.
 
 - A new logical turn publishes `chat/turn.started` immediately before pipeline
   execution.
