@@ -319,6 +319,12 @@ the optimizer never selects storage.
 Reason operations used by CLI, REPL, chat, reflection, and daemon tasks are
 composed once in `ApplicationGraph`. Process adapters reuse its reason service
 instead of instantiating a root-based service independently.
+Initialized CLI and REPL adapters have one authority-validating composition
+entry: `compose_cli_application()`. They select conversation persistence and
+domain services from that graph; no domain-specific composition aliases mirror
+individual graph fields. `compose_cli_backend()` remains the narrow exception
+for explicit storage infrastructure commands and must not be used by domain
+handlers.
 Memory optimization likewise receives paths, entry/candidate repositories, and
 the profile port explicitly; CLI and daemon composition must reuse the active
 application graph rather than create a second authority graph.

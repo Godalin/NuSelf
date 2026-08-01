@@ -10,6 +10,7 @@ from prompt_toolkit.document import Document
 
 from nuself.conversation import ConversationState
 from conversation_fixtures import ConversationStore
+from nuself.cli.composition import compose_cli_application
 from nuself.cli.repl.input import InteractiveCompleter
 from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository
@@ -78,17 +79,8 @@ def test_conversation_completion_failure_is_observed(
     def fail(*args: object, **kwargs: object) -> None:
         raise OSError("conversation index unavailable")
 
-    store = ConversationStore(tmp_path)
+    store = compose_cli_application(tmp_path).conversations
     monkeypatch.setattr(store, method_name, fail)
-
-    def selected_store(project_root: Path | None) -> ConversationStore:
-        del project_root
-        return store
-
-    monkeypatch.setattr(
-        "nuself.cli.repl.input.compose_cli_conversation_store",
-        selected_store,
-    )
     completer = InteractiveCompleter(tmp_path)
 
     completions = list(

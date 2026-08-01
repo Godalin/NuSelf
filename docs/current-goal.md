@@ -9,27 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove false optionality from already-required service collaborators and
-collapse duplicate daemon-task construction. Preserve the trace and runtime
-context capabilities themselves; delete only unreachable compatibility
-branches around them.
+Remove the CLI-only conversation-store composition shortcut. Every initialized
+CLI/REPL adapter must enter through the single authority-validating application
+accessor and select `conversations` from that graph; raw backend access remains
+an explicit infrastructure-only exception.
 
 ## Ordered Steps
 
-1. Record that required trace collaborators are non-null for their complete
-   service lifetime and that daemon tasks have one context-capture path.
-2. Remove nullable trace storage/guards from Reason and memory curation.
-3. Collapse the daemon task factory's duplicate constructor branches without
-   opening the closed production task-kind catalog.
-4. Run focused service/daemon tests, Pyright, full pytest, and package build;
-   update evidence and commit without pushing.
+1. Record one CLI application composition entry and the narrow backend
+   infrastructure exception in the module-boundary contract.
+2. Migrate conversation commands, REPL state/input/transcript/dispatch, and
+   chat entrypoints to `compose_cli_application(...).conversations`.
+3. Delete `compose_cli_conversation_store` and its independent mock surface;
+   retain no alias or compatibility path.
+4. Run CLI/REPL/boundary tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not make trace recording optional or replace it with a null-object layer.
-- Do not remove the daemon task factory or weaken its closed kind typing.
-- Do not change trace failure isolation, task context correlation, scheduling,
-  persistence, or user-visible behavior.
+- Do not pass `ApplicationGraph` through command arguments or add another
+  conversation facade/service merely to replace the shortcut.
+- Do not expose backend access to conversation/domain handlers.
+- Do not change authority validation, persistence, command behavior, or the
+  invocation-owned runtime lifecycle.
 
 ## Constraints
 
@@ -41,6 +43,13 @@ branches around them.
 
 ## Phase Evidence
 
+- Removed `compose_cli_conversation_store`; conversation commands, REPL
+  completion/session/transcript/dispatch, and chat entrypoints now select the
+  graph-owned store through the one authority-validating
+  `compose_cli_application()` entry. The separate mock surface is gone, while
+  `compose_cli_backend()` remains limited to explicit infrastructure commands.
+  Focused CLI/REPL/runtime/boundary tests: 629 passed; full suite: 2435 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reason and memory curation now store their required trace recorder as a
   non-null capability and always enter the existing best-effort trace boundary;
   two unreachable no-recorder branches are gone. Production daemon tasks still

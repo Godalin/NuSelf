@@ -14,6 +14,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   as non-null service dependencies, while retaining best-effort trace failure
   isolation. Daemon task construction now uses one path for captured and
   explicitly supplied runtime contexts.
+- Initialized CLI and REPL domain handlers now enter through one
+  authority-validating application composition API. The redundant
+  conversation-store composition shortcut and its separate mock surface were
+  removed; explicit backend borrowing remains restricted to infrastructure
+  commands.
 - Removed the continuously rewritten JSON indexes for memory, profile, source,
   reason, and trace data, along with their `reindex` commands. Graph,
   relation, search, and trace views now read authoritative SQLite records

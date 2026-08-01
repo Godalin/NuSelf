@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.conversation import ConversationStore
 from nuself.application.composition import ApplicationGraph
 from nuself.application.runtime import (
     ApplicationRuntime,
@@ -43,11 +42,3 @@ def compose_cli_backend(
     """Borrow storage for an explicit CLI infrastructure operation."""
 
     return _runtime_for_authority(project_root).backend
-
-
-def compose_cli_conversation_store(
-    project_root: Path | None,
-) -> ConversationStore:
-    """Borrow conversation persistence from the invocation application."""
-
-    return compose_cli_application(project_root).conversations

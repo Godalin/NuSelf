@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.cli.composition import compose_cli_conversation_store
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.cli.daemon_lifecycle import (
     format_lifecycle_failure,
@@ -407,7 +406,9 @@ def interactive_memory_help(command: str | None = None) -> str:
 
 def handle_interactive_history_command(project_root: Path | None, conversation_id: str) -> str:
     try:
-        state = compose_cli_conversation_store(project_root).load(conversation_id)
+        state = compose_cli_application(project_root).conversations.load(
+            conversation_id
+        )
     except Exception as exc:
         report_chat_failure(
             exc,
@@ -599,7 +600,7 @@ def handle_interactive_watch_command(project_root: Path | None) -> None:
 
 
 def handle_interactive_conversations_command(project_root: Path | None) -> str:
-    store = compose_cli_conversation_store(project_root)
+    store = compose_cli_application(project_root).conversations
     ids = store.list()
     if not ids:
         return "No active conversations."
