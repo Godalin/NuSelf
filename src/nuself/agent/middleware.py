@@ -90,25 +90,6 @@ class ToolOutcome:
             cast(Mapping[str, object], frozen),
         )
 
-    @classmethod
-    def succeeded(
-        cls,
-        name: str,
-        args: Mapping[str, object],
-        result: str,
-    ) -> ToolOutcome:
-        return cls(name=name, args=args, result=result)
-
-    @classmethod
-    def failed(
-        cls,
-        name: str,
-        args: Mapping[str, object],
-        error: str,
-    ) -> ToolOutcome:
-        return cls(name=name, args=args, error=error)
-
-
 ToolOutcomeLogger = Callable[[ToolOutcome], None]
 
 

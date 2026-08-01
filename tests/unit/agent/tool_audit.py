@@ -16,10 +16,10 @@ def test_success_projection_owns_live_and_snapshot_shape(
     projection = ToolOutcomeProjection(
         component="chat",
         service_component="memory",
-        outcome=ToolOutcome.succeeded(
+        outcome=ToolOutcome(
             "memory_archive",
             {"entry_id": "m1"},
-            "archived",
+            result="archived",
         ),
     )
 
@@ -50,10 +50,10 @@ def test_failure_projection_repeats_canonical_error(
     projection = ToolOutcomeProjection(
         component="reasoning",
         service_component="workspace",
-        outcome=ToolOutcome.failed(
+        outcome=ToolOutcome(
             "workspace_put",
             {"key": "draft"},
-            "storage unavailable",
+            error="storage unavailable",
         ),
     )
 
@@ -92,5 +92,5 @@ def test_projection_rejects_blank_service_component() -> None:
         ToolOutcomeProjection(
             component="chat",
             service_component=" ",
-            outcome=ToolOutcome.succeeded("tool", {}, "ok"),
+            outcome=ToolOutcome("tool", {}, result="ok"),
         )

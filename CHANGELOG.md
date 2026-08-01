@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Tool outcomes now use their validated dataclass constructor directly;
+  removed success/failure convenience factories used only by tests.
 - Reason output now exposes only its active plan/get/compose/path operations;
   removed test-only start/resume/list wrappers and obsolete cleanup for an
   export lock that the single-scheduler flow never creates.

@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove test-only Reason output APIs and obsolete export locks.
+Remove test-only ToolOutcome convenience factories.
 
 ## Ordered Steps
 
-1. Confirm `start_job()`, `resume_job()`, and `list_jobs()` have no production
-   callers and the documented synchronous compose path no longer exists.
-2. Retain plan/get/compose/job-path operations, remove the test-only wrappers
-   and listing path, and remove stale `.lock` cleanup for a lock never created.
-3. Update tests and the Reason output specification, then run focused and
-   complete verification gates; update evidence and commit without pushing.
+1. Confirm LangChain calls `wrap_tool_call()` by middleware contract, while
+   `ToolOutcome.succeeded()` and `failed()` are referenced only by tests.
+2. Remove the convenience factories and migrate fixtures to the canonical
+   validated dataclass constructor without a compatibility alias.
+3. Run focused Agent/Reason tests and complete verification gates; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve queued planning, daemon recovery, resource-lane serialization,
-  strict manifest reads, resumable chunk composition, and output artifacts.
+- Preserve middleware capture, cache, failure propagation, audit projection,
+  immutable arguments, and outcome validation.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,12 @@ Remove test-only Reason output APIs and obsolete export locks.
 
 ## Phase Evidence
 
+- `ToolOutcome` now has one validated construction path. Removed test-only
+  `succeeded()`/`failed()` factories and migrated audit/advancer fixtures to
+  explicit result/error construction; the LangChain `wrap_tool_call()` hook
+  remains unchanged. Focused middleware/audit/advancer tests: 44 passed; full
+  suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `ReasonOutputService` now exposes only the active plan/get/compose/path flow.
   Removed production-zero `start_job()`, `resume_job()`, and `list_jobs()`, their
   private corruption-list helper, and daemon cleanup for an export `.lock` no

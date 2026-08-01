@@ -186,10 +186,10 @@ class _ConcurrentCaptureAgent:
                 cast(Any, advancer)._captured,
             )
             captured.append(
-                ToolOutcome.succeeded(
+                ToolOutcome(
                     f"tool-{thread_id}",
                     {"thread_id": thread_id},
-                    thread_id,
+                    result=thread_id,
                 )
             )
             time.sleep(0.03)
@@ -449,10 +449,10 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
                 cast(Any, self.advancer)._captured,
             )
             captured.append(
-                ToolOutcome.failed(
+                ToolOutcome(
                     "workspace_put",
                     {"key": "decision"},
-                    "storage unavailable",
+                    error="storage unavailable",
                 )
             )
             raise RuntimeError("agent failed after tool")
