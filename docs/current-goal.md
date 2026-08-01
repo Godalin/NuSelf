@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue the service audit with notification and conversation APIs. Preserve
-durable delivery/state use cases and remove only duplicated or test-only
-surface; do not replace domain methods with generic CRUD.
+Continue auditing small public helpers and service composition after removing
+the conversation model's single-use empty-list factory. Notification delivery
+state methods remain separate because they encode durable recovery stages.
 
 ## Constraints
 
@@ -177,6 +177,13 @@ surface; do not replace domain methods with generic CRUD.
 - Trace/reflection/CLI/Chat/boundary focused suite: 509 passed.
 - Post-trace-service cleanup `uv run --locked pytest -q`: 2455 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- Notification outbox/delivery and ConversationStore methods all have
+  production state-machine or user-operation consumers. The standalone
+  `empty_conversation_messages()` helper had one default-factory reference and
+  is replaced by the built-in `list` factory.
+- Conversation/notification focused suite: 77 passed. Post-helper cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

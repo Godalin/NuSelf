@@ -101,17 +101,15 @@ class ConversationMessage:
         )
 
 
-def empty_conversation_messages() -> list[ConversationMessage]:
-    return []
-
-
 @dataclass(frozen=True)
 class ConversationState:
     """Persisted state for one conversation."""
 
     conversation_id: str
     summary: str = ""
-    messages: list[ConversationMessage] = field(default_factory=empty_conversation_messages)
+    messages: list[ConversationMessage] = field(
+        default_factory=list[ConversationMessage]
+    )
     message_start_index: int = 0
     next_message_index: int = 0
     archived: bool = False
