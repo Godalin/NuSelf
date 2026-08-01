@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,6 +16,7 @@ from nuself.application.runtime import (
 )
 from nuself.cli.composition import (
     compose_cli_application,
+    compose_cli_backend,
 )
 
 
@@ -31,7 +33,7 @@ def test_application_runtime_factory_does_not_open_storage(
 
     monkeypatch.setattr(
         runtime_module,
-        "get_default_backend",
+        "auto_backend",
         unexpected_backend,
     )
 
@@ -76,6 +78,32 @@ def test_application_runtime_serializes_first_graph_access(
         runtime.close()
 
 
+def test_application_runtime_closes_backend_after_composition_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = MagicMock()
+
+    def fail_composition(*args: object) -> None:
+        raise RuntimeError("failed")
+
+    def open_backend(root: Path) -> MagicMock:
+        return backend
+
+    monkeypatch.setattr(runtime_module, "auto_backend", open_backend)
+    monkeypatch.setattr(
+        runtime_module,
+        "compose_application",
+        fail_composition,
+    )
+
+    with pytest.raises(RuntimeError, match="failed"):
+        with open_application_runtime(tmp_path) as runtime:
+            _ = runtime.application
+
+    backend.close.assert_called_once_with()
+
+
 def test_cli_composition_borrows_the_scoped_runtime_graph(
     tmp_path: Path,
 ) -> None:
@@ -84,9 +112,11 @@ def test_cli_composition_borrows_the_scoped_runtime_graph(
         with use_application_runtime(runtime):
             first = compose_cli_application(tmp_path)
             second = compose_cli_application(tmp_path)
+            backend = compose_cli_backend(tmp_path)
 
         assert first is second
         assert first is runtime.application
+        assert backend is runtime.backend
     finally:
         runtime.close()
 

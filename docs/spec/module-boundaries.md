@@ -65,14 +65,17 @@ It is context-manageable, closes idempotently, and rejects graph access after
 close. It is only created by an outer process adapter; domain code receives
 the graph's narrow repositories and services rather than looking up the
 runtime.
-The runtime stores only the lazily composed graph and closed lifecycle state;
-it does not mirror the default backend cache or publish opened/closed
-inspection flags that no process adapter uses.
+The runtime stores the lazily selected closable backend, its composed graph,
+and closed lifecycle state. The backend is selected once under the existing
+lifecycle lock and closed exactly once by the runtime; it is not borrowed from
+or mirrored into the process-global default-backend cache. Process adapters may
+borrow it only for explicit storage administration, never through the graph or
+from domain code.
 
-`get_default_backend()` and `runtime_paths()` are compatibility-free
-composition helpers, not domain service locators. Domain repositories must not
-call them. Direct CLI mode and daemon mode must construct the same service
-graph; transport and lifecycle ownership are their only differences.
+`auto_backend()` and `runtime_paths()` are composition helpers, not domain
+service locators. Domain repositories must not call them. Direct CLI mode and
+daemon mode construct the same service graph; transport and lifecycle ownership
+are their only differences.
 
 The trace package is the first migrated domain boundary. `TraceRepository`
 requires an explicit `StorageBackend` and `RuntimePaths`, and `TraceRecorder`

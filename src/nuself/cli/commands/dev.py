@@ -5,14 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.storage import (
-    get_default_backend,
-)
+from nuself.cli.composition import compose_cli_backend
 from nuself.storage_sqlite import SqliteStorageBackend
 
 
 def handle_dev_db_schema(args: argparse.Namespace) -> int:
-    backend = get_default_backend(args.project_root)
+    backend = compose_cli_backend(args.project_root)
     if not isinstance(backend, SqliteStorageBackend):
         print(
             "No active SQLite database. Run 'nuself init' first.",
@@ -47,7 +45,7 @@ def handle_dev_db_schema(args: argparse.Namespace) -> int:
 
 
 def handle_dev_storage(args: argparse.Namespace) -> int:
-    backend = get_default_backend(args.project_root)
+    backend = compose_cli_backend(args.project_root)
     if isinstance(backend, SqliteStorageBackend):
         print("Active backend: SqliteStorageBackend")
         print(f"  database: {backend.db_path}")

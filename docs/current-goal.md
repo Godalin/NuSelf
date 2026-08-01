@@ -9,30 +9,29 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify daemon lifecycle audit definitions with the shared runtime audit
-infrastructure already used by daemon request and transport events. Preserve
-the lifecycle taxonomy and exact semantic validators while deleting its
-parallel registry, definition, schema-error, and field-set implementation.
+Make `ApplicationRuntime` the actual owner of its one storage backend rather
+than an indirect borrower of the process-global default-backend cache. CLI
+storage administration must borrow that same runtime-owned backend before the
+remaining legacy cache API can be removed.
 
 ## Ordered Steps
 
-1. Update runtime/development contracts so all direct persisted daemon audits
-   use `runtime.audit_definitions` and retain domain-owned validators/messages.
-2. Replace the lifecycle-only definition and registry types with the shared
-   `AuditEventDefinition` and `AuditDefinitionRegistry`.
-3. Remove lifecycle-only schema and exact-field helpers; update tests to assert
-   the shared contract and sealed-registry errors.
-4. Run daemon audit/lifecycle, infrastructure, Pyright, full pytest, and package
-   build gates; commit the complete reduction without pushing.
+1. Correct module/storage contracts to state direct lazy backend ownership and
+   one close boundary in `ApplicationRuntime`.
+2. Store the selected closable backend in the runtime; close it exactly once on
+   normal, interrupted, exceptional, and composition-failure paths.
+3. Add one CLI-only backend accessor with authority validation; migrate init,
+   dev storage/schema, and pack export away from the global cache.
+4. Move evaluation composition onto `ApplicationRuntime`, run focused and full
+   gates, update evidence, and commit without pushing.
 
 ## Exclusions
 
-- Do not weaken event-specific transition, failure-stage, PID, phase, or outcome
-  validation.
-- Do not merge audit events with runtime event publication or change stored
-  event identities/presentation.
-- Do not add an adapter or compatibility alias for the deleted lifecycle-only
-  infrastructure.
+- Do not expose raw backend state on `ApplicationGraph` or to domain modules.
+- Do not add a second lifecycle owner, fallback runtime, backend wrapper, or
+  lock.
+- Do not remove the legacy cache until all remaining migration/test consumers
+  have explicit ownership in a subsequent complete change.
 
 ## Constraints
 
@@ -44,6 +43,16 @@ parallel registry, definition, schema-error, and field-set implementation.
 
 ## Phase Evidence
 
+- `ApplicationRuntime` now lazily stores and closes its one
+  `ClosableStorageBackend`; graph composition, CLI init/dev/pack operations,
+  evaluation, and daemon cleanup all use that same owner. `ApplicationGraph`
+  still exposes no raw backend, and legacy layout migration no longer resets a
+  process-global cache it never populated.
+- Runtime construction remains storage-lazy, first backend/graph access remains
+  serialized by the existing lifecycle lock, close remains idempotent, and a
+  composition failure inside the runtime context closes the selected backend.
+  Focused runtime/CLI/eval tests: 360 passed; full suite: 2438 passed; Pyright:
+  0 errors, 0 warnings; sdist and wheel build succeeded.
 - Daemon lifecycle audits now compose the same sealed
   `AuditDefinitionRegistry`/`AuditEventDefinition` contract as daemon request
   and transport audits. The lifecycle-only definition class, registry adapter,

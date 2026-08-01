@@ -20,7 +20,6 @@ from nuself.scope import NuSelfScope
 from nuself.storage import (
     COLLECTION_NAMES,
     open_sqlite_backend,
-    reset_default_backend,
 )
 
 _SQLITE_TRANSIENT_SUFFIXES = ("-wal", "-shm", "-journal")
@@ -69,7 +68,6 @@ def migrate_legacy_layout(
             _sync_directory(target_root.parent)
             return target_root
         finally:
-            reset_default_backend(stage)
             if not published and stage.exists() and not stage.is_symlink():
                 shutil.rmtree(stage)
 
@@ -157,7 +155,6 @@ def _validate_staged_authority(stage: Path) -> None:
             backend.collection(name).list()
     finally:
         backend.close()
-        reset_default_backend(stage)
 
 
 def _sync_directory(path: Path) -> None:

@@ -8,9 +8,9 @@ import sys
 from pathlib import Path
 
 from nuself.config import runtime_paths
+from nuself.cli.composition import compose_cli_backend
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import get_default_backend
 from nuself.storage_sqlite import (
     SqliteStorageBackend,
     ThoughtPackValidationError,
@@ -45,7 +45,7 @@ def handle_pack_export(args: argparse.Namespace) -> int:
         )
         return 1
     destination = exports / f"{name}.sqlite"
-    backend = get_default_backend(args.project_root)
+    backend = compose_cli_backend(args.project_root)
     if not isinstance(backend, SqliteStorageBackend):
         raise RuntimeError(
             "nuself.sqlite exists but the active backend is not SQLite"

@@ -6,14 +6,17 @@ from pathlib import Path
 
 from nuself.conversation import ConversationStore
 from nuself.application.composition import ApplicationGraph
-from nuself.application.runtime import current_application_runtime
+from nuself.application.runtime import (
+    ApplicationRuntime,
+    current_application_runtime,
+)
 from nuself.config import runtime_paths
+from nuself.storage import ClosableStorageBackend
 
-def compose_cli_application(
+
+def _runtime_for_authority(
     project_root: Path | None,
-) -> ApplicationGraph:
-    """Compose one graph for a CLI command's selected authority."""
-
+) -> ApplicationRuntime:
     current = current_application_runtime()
     if current is None:
         raise RuntimeError("CLI application runtime is not active")
@@ -23,7 +26,23 @@ def compose_cli_application(
             "CLI handler requested a different authority than its "
             "application runtime"
         )
-    return current.application
+    return current
+
+
+def compose_cli_application(
+    project_root: Path | None,
+) -> ApplicationGraph:
+    """Compose one graph for a CLI command's selected authority."""
+
+    return _runtime_for_authority(project_root).application
+
+
+def compose_cli_backend(
+    project_root: Path | None,
+) -> ClosableStorageBackend:
+    """Borrow storage for an explicit CLI infrastructure operation."""
+
+    return _runtime_for_authority(project_root).backend
 
 
 def compose_cli_conversation_store(

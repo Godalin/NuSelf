@@ -148,26 +148,22 @@ class FixtureResponseService:
 def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     """Run one golden fixture and return the eval result."""
     from nuself.application.chat import compose_conversation_runtime
-    from nuself.application.composition import compose_application
-    from nuself.config import runtime_paths
-    from nuself.storage import get_default_backend
+    from nuself.application.runtime import open_application_runtime
 
-    application = compose_application(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
-    repo = application.memory.entries
-    for entry in fixture.memory_entries:
-        repo.save(entry.to_domain())
+    with open_application_runtime(project_root) as runtime:
+        application = runtime.application
+        repo = application.memory.entries
+        for entry in fixture.memory_entries:
+            repo.save(entry.to_domain())
 
-    agent = compose_conversation_runtime(
-        application,
-        response_service=FixtureResponseService(fixture.response),
-    )
-    result = agent.respond(
-        fixture.user_message,
-        fixture.conversation_id,
-    )
+        agent = compose_conversation_runtime(
+            application,
+            response_service=FixtureResponseService(fixture.response),
+        )
+        result = agent.respond(
+            fixture.user_message,
+            fixture.conversation_id,
+        )
     return score_result(fixture, result)
 
 

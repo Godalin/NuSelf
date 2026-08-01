@@ -77,9 +77,12 @@ All related multi-record changes use `backend.transaction()`. SQLite provides
 the commit/rollback boundary; repositories must not retain file-era
 compensation logic for operations inside that boundary.
 
-The default backend cache is scoped by canonical authority path and is closed at
-CLI/daemon lifecycle boundaries. A closed backend and its collections reject
-further access.
+Each `ApplicationRuntime` lazily owns one backend for its canonical authority
+and closes it at the CLI/daemon lifecycle boundary. A closed backend and its
+collections reject further access. Legacy direct-construction test helpers may
+retain a separate path-scoped default cache only until their callers adopt
+explicit ownership; application composition and migrations never use that
+cache.
 
 ## Collections
 

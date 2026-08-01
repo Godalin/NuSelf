@@ -5,10 +5,10 @@ from __future__ import annotations
 import argparse
 
 from nuself.config import ConfigSystem
+from nuself.cli.composition import compose_cli_backend
 from nuself.layout_migration import migrate_legacy_layout
 from nuself.private_fs import ensure_managed_directory
 from nuself.scope import NuSelfScope, resolve_runtime_paths, resolve_scope
-from nuself.storage import get_default_backend
 
 
 def handle_init(args: argparse.Namespace) -> int:
@@ -23,7 +23,7 @@ def handle_init(args: argparse.Namespace) -> int:
         paths.runtime_dir,
     ):
         ensure_managed_directory(paths.authority_root, directory)
-    get_default_backend(paths.authority_root)
+    compose_cli_backend(paths.authority_root)
     print(
         f"Initialized NuSelf {scope.kind} authority: "
         f"{paths.authority_root}"

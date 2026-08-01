@@ -838,13 +838,27 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import signal
+    import nuself.application.runtime as runtime_module
     import nuself.daemon.server as server_module
     import nuself.storage as storage_module
 
     paths = runtime_paths(tmp_path)
     paths.runtime_dir.mkdir(parents=True)
     states: list[_UnstartedDaemonState] = []
-    reset_roots: list[Path | None] = []
+    close_roots: list[Path] = []
+    backend = storage_module.auto_backend(paths.project_root)
+
+    class FailingCloseBackend:
+        def collection(self, name: str):
+            return backend.collection(name)
+
+        def transaction(self):
+            return backend.transaction()
+
+        def close(self) -> None:
+            close_roots.append(paths.project_root)
+            backend.close()
+            raise RuntimeError("storage close failed")
 
     class FailingCleanupState(_UnstartedDaemonState):
         def stop_background_tasks(self) -> None:
@@ -863,9 +877,9 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     ) -> object:
         raise OSError("bind failed")
 
-    def fail_reset(project_root: Path | None = None) -> None:
-        reset_roots.append(project_root)
-        raise RuntimeError("storage reset failed")
+    def open_backend(project_root: Path) -> FailingCloseBackend:
+        assert project_root == paths.project_root
+        return FailingCloseBackend()
 
     def ignore_signal(
         signal_number: int,
@@ -875,7 +889,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
 
     monkeypatch.setattr(server_module, "DaemonState", make_state)
     monkeypatch.setattr(server_module, "NuSelfUnixServer", fail_bind)
-    monkeypatch.setattr(storage_module, "reset_default_backend", fail_reset)
+    monkeypatch.setattr(runtime_module, "auto_backend", open_backend)
     monkeypatch.setattr(
         signal,
         "signal",
@@ -893,7 +907,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
         "application_runtime.close",
     ]
     assert states[0].stop_calls == ["scheduler"]
-    assert reset_roots == [paths.project_root]
+    assert close_roots == [paths.project_root]
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
     event = read_log_events(
@@ -909,7 +923,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
             },
             {
                 "step": "application_runtime.close",
-                "error": "storage reset failed",
+                "error": "storage close failed",
             },
         ),
         "primary_failed": True,
@@ -922,7 +936,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
             },
             {
                 "step": "application_runtime.close",
-                "error": "storage reset failed",
+                "error": "storage close failed",
             },
         ],
         "primary_failed": True,
