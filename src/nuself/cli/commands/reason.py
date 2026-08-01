@@ -106,11 +106,12 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
-    service = _service(args)
+    application = compose_cli_application(args.project_root)
+    service = application.reason_service
     advancer = None
     if args.action == "advance":
         advancer = compose_reason_advancer(
-            compose_cli_application(args.project_root)
+            application
         )
     method = getattr(service, method_name)
     try:

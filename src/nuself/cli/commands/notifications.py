@@ -21,10 +21,13 @@ from nuself.notification.delivery import deliver_entry_once
 from nuself.tui.render import render_outbox_detail, render_outbox_summary
 
 
-def _resolve_entry_id(args: argparse.Namespace) -> str | None:
+def _resolve_entry_id(
+    args: argparse.Namespace,
+    outbox: NotificationOutbox,
+) -> str | None:
     return resolve_handle(
         args.entry_id,
-        _outbox(args).list(),
+        outbox.list(),
         label="notification",
         get_id=lambda entry: entry.id,
     )
@@ -43,11 +46,12 @@ def handle_notify_list(args: argparse.Namespace) -> int:
 
 
 def handle_notify_show(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
+    outbox = _outbox(args)
+    entry_id = _resolve_entry_id(args, outbox)
     if entry_id is None:
         return 1
     try:
-        entry = _outbox(args).get(entry_id)
+        entry = outbox.get(entry_id)
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1
@@ -110,10 +114,11 @@ def _watch_stop_requested(interval: float) -> bool:
 
 
 def handle_notify_send(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
+    application = compose_cli_application(args.project_root)
+    outbox = application.notifications
+    entry_id = _resolve_entry_id(args, outbox)
     if entry_id is None:
         return 1
-    outbox = _outbox(args)
     try:
         entry = outbox.get(entry_id)
     except OutboxEntryNotFound:
@@ -123,7 +128,7 @@ def handle_notify_send(args: argparse.Namespace) -> int:
         outbox,
         entry_id,
         build_notification_adapters(
-            compose_cli_application(args.project_root).paths
+            application.paths
         ),
     )
     if updated.status == "sent":
@@ -134,11 +139,12 @@ def handle_notify_send(args: argparse.Namespace) -> int:
 
 
 def handle_notify_dismiss(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
+    outbox = _outbox(args)
+    entry_id = _resolve_entry_id(args, outbox)
     if entry_id is None:
         return 1
     try:
-        _outbox(args).dismiss(entry_id)
+        outbox.dismiss(entry_id)
     except OutboxEntryNotFound:
         print(f"Outbox entry not found: {entry_id}", file=sys.stderr)
         return 1

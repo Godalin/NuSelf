@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit notification, reason, reflection, and trace CLI helpers for authority
-lookup hidden behind local accessors or handle resolution. Preserve shared
-workflows used by both one-shot and REPL adapters.
+Return to daemon and application service APIs: audit concrete public methods
+and fields for production consumers, duplicated lifecycle state, or repository
+escape hatches. Do not replace useful domain services with generic facades.
 
 ## Constraints
 
@@ -107,6 +107,14 @@ workflows used by both one-shot and REPL adapters.
   repository pass-through helper is gone. Symbolic graph handlers already
   performed exactly one lookup each and remain unchanged.
 - Memory source/profile focused suite: 320 passed. Post-repository-reuse
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Notification show/send/dismiss now share one outbox between handle resolution
+  and execution; send also reuses the same graph's runtime paths. Reason
+  advance reuses one graph for its service and model-backed advancer.
+- Reflection and trace helpers already perform one service lookup per handler;
+  their shared accessors remain justified and unchanged.
+- Notification/Reason focused suite: 660 passed. Post-lookup cleanup
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
