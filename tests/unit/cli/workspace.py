@@ -20,7 +20,7 @@ def test_private_workspace_store_resolves_main_authority_without_side_tree(
     _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     store = PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
 
-    workspace = store.ensure("reason-abc")
+    workspace = store.paths("reason-abc")
 
     db_path = tmp_path / "nuself.sqlite"
     assert workspace.root == tmp_path / "exports" / "reason" / "reason-abc"
@@ -46,4 +46,4 @@ def test_private_workspace_store_rejects_path_segments(tmp_path: Path) -> None:
 
     store = PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
     with pytest.raises(ValueError):
-        store.ensure("../bad")
+        store.paths("../bad")

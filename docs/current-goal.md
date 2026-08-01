@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Replace duplicate repository counting loops with the standard-library counter.
+Remove the no-op workspace `ensure()` alias and use the truthful path resolver.
 
 ## Ordered Steps
 
-1. Confirm memory and profile statistics use behavior-identical private
-   `_counts()` loops over strings.
-2. Use `Counter` at each domain-owned stats call and delete both helpers without
-   creating shared infrastructure.
-3. Run focused memory/profile tests and the complete verification gates; update
-   evidence and commit without pushing.
+1. Confirm `PrivateWorkspaceStore.ensure()` only returns `paths()` and never
+   creates a directory, database, or other resource.
+2. Replace every caller and validation test with `paths()` and delete the
+   misleading alias.
+3. Run focused workspace/reason tests and the complete verification gates;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not merge memory and profile statistics models or repositories.
-- Preserve ordinary dict output and all current count dimensions.
-- Do not create a new common/helper module for a standard-library operation.
+- Do not eagerly create export directories or workspace storage.
+- Preserve owner-ID validation and all returned paths.
+- Do not rename the workspace store or introduce a lifecycle object.
 
 ## Constraints
 
@@ -36,6 +36,12 @@ Replace duplicate repository counting loops with the standard-library counter.
 
 ## Phase Evidence
 
+- Reason service, advancer, and output composition now call
+  `PrivateWorkspaceStore.paths()` directly. Removed `ensure()`, a no-op alias
+  that created no directory or resource, and aligned workspace validation
+  tests with the truthful resolver API. Focused workspace/reason tests: 74
+  passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Memory and profile stats now convert standard-library `Counter` results to
   ordinary dicts at their domain-owned call sites. Removed both identical
   private counting loops without adding shared infrastructure; implementation

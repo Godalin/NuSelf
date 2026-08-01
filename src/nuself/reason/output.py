@@ -349,7 +349,7 @@ class ReasonOutputService:
     def _job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
         _validate_segment(thread_id, "thread id")
         _validate_segment(job_id, "job id")
-        workspace = self._workspace_store.ensure(thread_id)
+        workspace = self._workspace_store.paths(thread_id)
         root = workspace.artifacts / "jobs" / job_id
         return ReasonOutputPaths(
             root=root,
@@ -361,7 +361,7 @@ class ReasonOutputService:
         )
 
     def _export_root(self, thread_id: str) -> Path:
-        workspace = self._workspace_store.ensure(thread_id)
+        workspace = self._workspace_store.paths(thread_id)
         return workspace.artifacts
 
     def _finalize_job(

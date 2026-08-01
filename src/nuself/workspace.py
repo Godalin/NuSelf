@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.config import RuntimePaths
+
+
 @dataclass(frozen=True)
 class PrivateWorkspacePaths:
     root: Path
@@ -39,10 +41,6 @@ class PrivateWorkspaceStore:
             child.name for child in self._root.iterdir()
             if child.is_dir() and not child.name.startswith(".")
         )
-
-    def ensure(self, owner_id: str) -> PrivateWorkspacePaths:
-        return self.paths(owner_id)
-
 
 def _validate_segment(value: str, label: str) -> None:
     if value == "" or "/" in value or value in {".", ".."}:

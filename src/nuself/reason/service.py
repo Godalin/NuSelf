@@ -129,7 +129,7 @@ class ReasonService:
             reasoning_prompt=reasoning_prompt,
         )
         saved = self._repository.save_thread(thread)
-        workspace = self._workspace_store.ensure(thread.id)
+        workspace = self._workspace_store.paths(thread.id)
         run_reason_observed(
             lambda: self._trace_recorder.record_reason_thread_created(
                 thread=saved,

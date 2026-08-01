@@ -373,6 +373,10 @@ scheduling and output export must receive an existing reason
 service and that workspace store.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
+`PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has
+no filesystem-creation side effect; resource writers create required
+directories at their actual persistence boundary. A no-op `ensure()` alias is
+not part of the API.
 Cooldown mutation is a reason
 service use case; scheduling must not receive or expose the repository merely
 to persist it. Daemon workers may own queues and workspace adapters, but must

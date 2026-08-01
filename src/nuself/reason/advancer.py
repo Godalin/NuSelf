@@ -390,7 +390,7 @@ class ReasonAdvancer:
         from nuself.store import ScopedWorkspace, SqliteStore
 
         thread_id = _current_reason_thread_id()
-        workspace = self._workspace_store.ensure(thread_id)
+        workspace = self._workspace_store.paths(thread_id)
         return ScopedWorkspace(
             SqliteStore(workspace.database),
             ("workspace", "reason", thread_id),
