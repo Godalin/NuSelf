@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Return the canonical notification adapter plan as an immutable tuple.
+Replace duplicate repository counting loops with the standard-library counter.
 
 ## Ordered Steps
 
-1. Confirm every builder consumer only iterates or passes the plan and none
-   mutates the returned list.
-2. Return the same ordered adapters as a tuple while keeping simple local list
-   assembly inside the builder.
-3. Run focused notification tests and the complete verification gates; update
+1. Confirm memory and profile statistics use behavior-identical private
+   `_counts()` loops over strings.
+2. Use `Counter` at each domain-owned stats call and delete both helpers without
+   creating shared infrastructure.
+3. Run focused memory/profile tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not change adapter selection, order, or fallback behavior.
-- Do not add a collection wrapper or registry.
-- Do not change standalone delivery or loop validation semantics.
+- Do not merge memory and profile statistics models or repositories.
+- Preserve ordinary dict output and all current count dimensions.
+- Do not create a new common/helper module for a standard-library operation.
 
 ## Constraints
 
@@ -36,6 +36,12 @@ Return the canonical notification adapter plan as an immutable tuple.
 
 ## Phase Evidence
 
+- Memory and profile stats now convert standard-library `Counter` results to
+  ordinary dicts at their domain-owned call sites. Removed both identical
+  private counting loops without adding shared infrastructure; implementation
+  removes 19 lines and adds 11. Focused memory/profile tests: 58 passed; full
+  suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `build_notification_adapters()` now returns its canonical ordered plan as an
   immutable tuple. All consumers already only iterate or pass it to delivery;
   no collection wrapper or compatibility path was added. Added a direct tuple

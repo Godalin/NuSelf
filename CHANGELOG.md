@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory and profile statistics now use standard-library counting directly,
+  removing two duplicate repository-local counting implementations.
 - Notification delivery loops now validate and freeze their adapter index once
   at composition instead of rebuilding it for every poll and pending entry;
   the canonical adapter builder now returns its ordered plan as an immutable

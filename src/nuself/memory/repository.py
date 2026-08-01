@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal, cast
@@ -647,9 +648,13 @@ def memory_stats(
     return MemoryStats(
         entries_total=len(entries),
         candidates_total=len(candidates),
-        entries_by_type=_counts(entry.type for entry in entries),
-        entries_by_review_state=_counts(entry.review_state for entry in entries),
-        candidates_by_review_state=_counts(candidate.review_state for candidate in candidates),
+        entries_by_type=dict(Counter(entry.type for entry in entries)),
+        entries_by_review_state=dict(
+            Counter(entry.review_state for entry in entries)
+        ),
+        candidates_by_review_state=dict(
+            Counter(candidate.review_state for candidate in candidates)
+        ),
         entries_with_observed_at=sum(1 for entry in entries if entry.observed_at is not None),
         entries_with_evidence=sum(1 for entry in entries if entry.evidence),
         pending_candidates=sum(1 for candidate in candidates if candidate.review_state == "pending"),
@@ -945,10 +950,3 @@ def _expect_float(data: dict[str, object], field_name: str) -> float:
     if isinstance(value, int | float):
         return float(value)
     raise ValueError(f"field '{field_name}' must be a number")
-
-
-def _counts(values: Iterable[str]) -> dict[str, int]:
-    result: dict[str, int] = {}
-    for value in values:
-        result[value] = result.get(value, 0) + 1
-    return result

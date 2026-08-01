@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from nuself.clock import utc_now_iso
 from nuself.config import RuntimePaths
@@ -123,16 +124,9 @@ def profile_stats(repository: ProfileItemRepository) -> ProfileStats:
     items = repository.list()
     return ProfileStats(
         items_total=len(items),
-        items_by_type=_counts(item.type for item in items),
+        items_by_type=dict(Counter(item.type for item in items)),
         items_with_evidence=sum(1 for item in items if item.evidence),
     )
-
-
-def _counts(values: Iterable[str]) -> dict[str, int]:
-    result: dict[str, int] = {}
-    for value in values:
-        result[value] = result.get(value, 0) + 1
-    return result
 
 
 def _matches_text(item: ProfileItem, normalized_query: str) -> bool:
