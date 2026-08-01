@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove dead chat logging and Reason storage-version declarations.
+Remove test-only Reason output APIs and obsolete export locks.
 
 ## Ordered Steps
 
-1. Confirm the chat module logger and Reason repository storage-version
-   constant have no references beyond their definitions.
-2. Remove both declarations and the unused logging import without adding
-   replacement infrastructure.
-3. Run focused chat/Reason tests and the complete verification gates; update
-   evidence and commit without pushing.
+1. Confirm `start_job()`, `resume_job()`, and `list_jobs()` have no production
+   callers and the documented synchronous compose path no longer exists.
+2. Retain plan/get/compose/job-path operations, remove the test-only wrappers
+   and listing path, and remove stale `.lock` cleanup for a lock never created.
+3. Update tests and the Reason output specification, then run focused and
+   complete verification gates; update evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve observed chat events, audit reporting, Reason wire formats,
-  persistence, schema ownership, and runtime behavior.
+- Preserve queued planning, daemon recovery, resource-lane serialization,
+  strict manifest reads, resumable chunk composition, and output artifacts.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +38,14 @@ Remove dead chat logging and Reason storage-version declarations.
 
 ## Phase Evidence
 
+- `ReasonOutputService` now exposes only the active plan/get/compose/path flow.
+  Removed production-zero `start_job()`, `resume_job()`, and `list_jobs()`, their
+  private corruption-list helper, and daemon cleanup for an export `.lock` no
+  current path creates. Updated the governing specification from synchronous
+  locking to scheduler resource-lane serialization; the compose test now uses
+  the real plan + compose operations. Focused Reason output/daemon tests: 22
+  passed; full suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Removed the chat runtime's unused `logging` import/module logger and the
   Reason repository's unreferenced storage-version constant. Neither was part
   of observed logging, audit, decoding, or schema validation. Focused

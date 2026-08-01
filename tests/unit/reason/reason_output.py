@@ -8,7 +8,6 @@ import json
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.logs import read_log_events
 from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
@@ -18,7 +17,6 @@ from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
 from tests.backend import owned_backend
-from nuself.storage import write_json_atomic
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:
@@ -62,7 +60,13 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
         return paths.pdf
 
     monkeypatch.setattr(ReasonOutputService, "_generate_pdf", _fake_generate_pdf)
-    manifest = output_service.start_job(thread.id, mode="narrative", output_format="markdown", segment_size=1)
+    planned = output_service.plan_job(
+        thread.id,
+        mode="narrative",
+        output_format="markdown",
+        segment_size=1,
+    )
+    manifest = output_service.compose_job(thread.id, planned.job_id)
 
     paths = output_service.job_paths(thread.id, manifest.job_id)
     assert paths.manifest.is_file()
@@ -136,95 +140,6 @@ def test_reason_output_section_plan_is_independent_of_chunk_size(tmp_path: Path,
     assert narrow_sections == wide_sections
 
 
-def test_reason_output_list_jobs_and_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    service = _reason_service(tmp_path)
-    thread = service.start_thread("Resume me")
-    service.advance_thread(thread.id, step=_step(thread.id, "Only", "Only output", "Only delta"))
-
-    output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
-
-    def _fake_generate_pdf(
-        self: ReasonOutputService,
-        paths: ReasonOutputPaths,
-        *,
-        thread_id: str,
-        job_id: str,
-    ) -> Path:
-        del thread_id, job_id
-        paths.pdf.write_text("pdf", encoding="utf-8")
-        return paths.pdf
-
-    monkeypatch.setattr(ReasonOutputService, "_generate_pdf", _fake_generate_pdf)
-    manifest = output_service.plan_job(thread.id, start_index=0, end_index=0)
-    # Each plan_job call creates a unique job (non-deterministic job_id).
-    second = output_service.plan_job(thread.id, start_index=0, end_index=0)
-
-    jobs = output_service.list_jobs(thread.id)
-    assert [job.job_id for job in jobs] == [manifest.job_id, second.job_id]
-    assert manifest.job_id != second.job_id
-
-    resumed = output_service.resume_job(thread.id, manifest.job_id)
-    assert resumed.status == "complete"
-    assert (output_service.job_paths(thread.id, manifest.job_id).combined).is_file()
-
-
-def test_reason_output_list_isolates_corrupt_manifest_neighbors(
-    tmp_path: Path,
-) -> None:
-    service = _reason_service(tmp_path)
-    thread = service.start_thread("List healthy export jobs")
-    service.advance_thread(
-        thread.id,
-        step=_step(thread.id, "Only", "Only output", "Only delta"),
-    )
-    output_service = ReasonOutputService(
-        project_root=tmp_path,
-        reason_service=service,
-    )
-    healthy = output_service.plan_job(thread.id)
-    export_root = output_service.job_paths(
-        thread.id,
-        healthy.job_id,
-    ).root.parent
-
-    malformed_dir = export_root / "malformed-job"
-    malformed_dir.mkdir()
-    (malformed_dir / "manifest.json").write_text(
-        '{"private":"secret body"',
-        encoding="utf-8",
-    )
-    mismatched_dir = export_root / "mismatched-job"
-    mismatched_dir.mkdir()
-    write_json_atomic(
-        mismatched_dir / "manifest.json",
-        healthy.to_wire(),
-    )
-    missing_dir = export_root / "missing-job"
-    missing_dir.mkdir()
-
-    assert output_service.list_jobs(thread.id) == [healthy]
-
-    events = [
-        event
-        for event in read_log_events(
-            project_root=tmp_path,
-            component="reasoning",
-        )
-        if event.event == "record_decode_failed"
-        and event.metadata is not None
-        and event.metadata.get("collection")
-        == "reason_output_manifests"
-    ]
-    assert {
-        event.metadata["record_id"]
-        for event in events
-        if event.metadata is not None
-    } == {"malformed-job", "mismatched-job", "missing-job"}
-    assert "secret body" not in "\n".join(
-        str(event.to_record()) for event in events
-    )
-
-
 def test_reason_output_get_job_is_strict_for_corrupt_manifest(
     tmp_path: Path,
 ) -> None:
@@ -287,8 +202,6 @@ def test_reason_output_manifest_io_failures_propagate(
 
     monkeypatch.setattr(Path, "read_text", fail_manifest_read)
 
-    with pytest.raises(PermissionError, match="manifest permission denied"):
-        output_service.list_jobs(thread.id)
     with pytest.raises(PermissionError, match="manifest permission denied"):
         output_service.get_job(thread.id, manifest.job_id)
 

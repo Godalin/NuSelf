@@ -40,7 +40,6 @@ from nuself.runtime.diagnostics import (
 )
 from nuself.runtime.jobs import JobSink
 from nuself.runtime.job_definitions import JobDefinitionRegistry
-from nuself.runtime.observability import report_corrupt_record
 from nuself.storage import write_json_atomic, write_text_atomic
 from nuself.private_fs import ensure_private_directory
 from nuself.workspace import PrivateWorkspaceStore
@@ -67,36 +66,6 @@ class ReasonOutputService:
             else build_reason_job_definition_registry()
         )
         self._section_planner = section_planner
-
-    def list_jobs(self, thread_id: str) -> list[ReasonOutputManifest]:
-        root = self._workspace_store.paths(thread_id).root
-        if not root.exists():
-            return []
-        jobs_dir = root / "jobs"
-        if not jobs_dir.exists():
-            return []
-        jobs: list[ReasonOutputManifest] = []
-        for job_dir in jobs_dir.iterdir():
-            if not job_dir.is_dir():
-                continue
-            manifest_path = job_dir / "manifest.json"
-            try:
-                manifest = self._read_manifest(manifest_path)
-                if (
-                    manifest.job_id != job_dir.name
-                    or manifest.thread_id != thread_id
-                ):
-                    raise ValueError(
-                        "reason output manifest identity does not match its path"
-                    )
-            except FileNotFoundError as exc:
-                self._report_corrupt_manifest(exc, job_dir.name)
-                continue
-            except (json.JSONDecodeError, ValueError) as exc:
-                self._report_corrupt_manifest(exc, job_dir.name)
-                continue
-            jobs.append(manifest)
-        return sorted(jobs, key=lambda m: (m.created_at, m.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
         # The job directory is named by job_id, so read its manifest directly
@@ -221,32 +190,6 @@ class ReasonOutputService:
 
     def compose_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
         return self.compose_with_runner(thread_id, job_id, _compose_runner)
-
-    def start_job(
-        self,
-        thread_id: str,
-        *,
-        mode: str = "narrative",
-        output_format: str = "markdown",
-        start_index: int = 0,
-        end_index: int | None = None,
-        segment_size: int = 5,
-        compose: bool = True,
-    ) -> ReasonOutputManifest:
-        manifest = self.plan_job(
-            thread_id,
-            mode=mode,
-            output_format=output_format,
-            start_index=start_index,
-            end_index=end_index,
-            segment_size=segment_size,
-        )
-        if compose:
-            return self.compose_job(thread_id, manifest.job_id)
-        return manifest
-
-    def resume_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        return self.compose_job(thread_id, job_id)
 
     def compose_with_runner(self, thread_id: str, job_id: str, runner: Callable[..., str]) -> ReasonOutputManifest:
         """Compose the job using an injected runner callable for each segment.
@@ -422,19 +365,6 @@ class ReasonOutputService:
         if not isinstance(raw, dict):
             raise ValueError("reason output manifest must be a JSON object")
         return ReasonOutputManifest.from_wire(cast(dict[str, object], raw))
-
-    def _report_corrupt_manifest(
-        self,
-        exc: Exception,
-        job_id: str,
-    ) -> None:
-        report_corrupt_record(
-            exc,
-            component="reasoning",
-            collection="reason_output_manifests",
-            record_id=job_id,
-            project_root=self._project_root,
-        )
 
     def _write_manifest(self, path: Path, manifest: ReasonOutputManifest) -> None:
         write_json_atomic(path, manifest.to_wire())

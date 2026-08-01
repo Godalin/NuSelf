@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason output now exposes only its active plan/get/compose/path operations;
+  removed test-only start/resume/list wrappers and obsolete cleanup for an
+  export lock that the single-scheduler flow never creates.
 - Removed an unused chat logger and a stale Reason storage-version declaration
   that did not participate in logging, decoding, or schema validation.
 - The Reason repository no longer exposes a no-op `ensure()` or an unused raw

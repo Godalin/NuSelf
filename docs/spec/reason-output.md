@@ -200,10 +200,6 @@ Progress is a read-friendly summary of the manifest state. The manifest is alway
   `NuSelfReasonOutput/v1` schema marker. Missing, unknown, wrongly typed, or
   unsupported-version fields are corrupt state; the decoder never fills
   persisted control fields from current defaults.
-- `ReasonOutputService.list_jobs()` treats each job directory as an independent
-  record. A missing, malformed, non-object, schema-invalid, or identity-mismatched
-  manifest emits one payload-safe `reasoning/record_decode_failed` diagnostic
-  and is omitted while healthy neighboring jobs remain visible.
 - `ReasonOutputService.get_job()` is a direct authoritative lookup. A missing
   manifest raises `ReasonNotFound`; corrupt content or identity mismatch raises
   a decode error. Non-missing filesystem failures such as permission errors
@@ -304,28 +300,15 @@ than a persistent `next_attempt` field:
 This is a purely in-memory retry schedule. On daemon crash, all delayed tasks
 are lost; the reconciliation step (see below) restores them.
 
-#### File-level locking
-
-Because the scheduler handler and the synchronous CLI (`resume_job`) can
-attempt to compose the same job concurrently, each job subdirectory carries an
-optional `.lock` file.
-
-Lock protocol:
-
-- Before composing a job, the caller attempts to create `jobs/{job_id}/.lock` atomically (`O_CREAT | O_EXCL`).
-- If creation succeeds, the caller owns the lock and may proceed with composition.
-- If creation fails (`.lock` already exists), the caller must assume another thread or process is already composing the job and must either skip or back off.
-- After composition completes (success or failure), the lock owner must remove `.lock`.
-- A stale lock (e.g., process crash while holding the lock) is cleaned up by the startup reconciliation step (see below).
-- The lock is purely advisory and cooperative. It does not protect against malicious or incorrect callers.
-
 #### Startup reconciliation
 
 During daemon startup, the export service runs one reconciliation scan before
 the unified scheduler begins dispatch:
 
-1. **Recover incomplete jobs**: Scan `<authority-root>/exports/reason/*/jobs/*/manifest.json`. For each manifest with status other than `complete` or `failed`, construct a typed `JobMessage` and submit it to the scheduler. This recovers jobs that were active when the daemon last exited.
-2. **Clear stale locks**: Scan `<authority-root>/exports/reason/*/jobs/*/.lock`. Remove any `.lock` file found — these were held by crashed processes and are now stale.
+Scan `<authority-root>/exports/reason/*/jobs/*/manifest.json`. For each manifest
+with status other than `complete` or `failed`, construct a typed `JobMessage`
+and submit it to the scheduler. This recovers jobs that were active when the
+daemon last exited.
 
 Invalid-manifest diagnostics are best effort. Failure to persist one
 `export_reconciliation_skip` record cannot abort the scan or prevent later
@@ -343,7 +326,6 @@ while in-memory admission uses the scheduler's shared bound.
 | Job data (manifest, chunks, artifacts) | Per-thread workspace (`jobs/{job_id}/`) | Yes |
 | Task signal | bounded `DaemonScheduler` in daemon process | No (rebuilt from manifests on startup) |
 | Retry delay | delayed scheduler task in daemon process | No (rebuilt from manifest attempts on startup) |
-| Compose lock | `.lock` file in job subdirectory | Yes (but cleared on startup) |
 
 ## Output Modes
 
@@ -369,7 +351,7 @@ The service must be able to:
 - combine completed chunks into a final artifact
 - generate a PDF artifact from the final Markdown output when the export completes
 - resume a partially completed job from the manifest
-- guard concurrent composition via the `.lock` file protocol (see Storage Contract)
+- serialize composition through the daemon scheduler's reason resource lane
 
 The service must not submit an already-pending or already-complete job. It only
 submits the initial scheduler wake-up when planning a new job.
@@ -540,14 +522,10 @@ The export job must be resumable.
 
 If the job is interrupted, a later run must:
 
-- acquire the `.lock` file before starting
 - load the manifest
 - skip completed chunks
 - recompute only incomplete work
 - finalize the artifact once all chunks are present
-- release the `.lock` file after completion
-
-If the caller cannot acquire the lock (another thread or process is already composing this job), it must skip or back off rather than attempt concurrent writes.
 
 If the source thread changes after the job has begun, the export job must remain consistent with the source range recorded in the manifest.
 

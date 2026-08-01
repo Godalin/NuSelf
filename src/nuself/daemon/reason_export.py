@@ -426,9 +426,6 @@ class ReasonExportService:
             for job_dir in sorted(jobs_dir.iterdir()):
                 if not job_dir.is_dir():
                     continue
-                lock_path = job_dir / ".lock"
-                if lock_path.exists():
-                    lock_path.unlink(missing_ok=True)
                 manifest_path = job_dir / "manifest.json"
                 if not manifest_path.exists():
                     continue
