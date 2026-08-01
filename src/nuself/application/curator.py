@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from nuself.application.composition import ApplicationGraph
 from nuself.memory.curator import MemoryCurator
+from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
@@ -12,6 +13,8 @@ from nuself.memory.optimizer import (
 
 def compose_memory_curator(
     application: ApplicationGraph,
+    *,
+    langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> MemoryCurator:
     """Build curation from one existing authority graph."""
 
@@ -24,6 +27,7 @@ def compose_memory_curator(
         profile_repository=application.memory.profile,
         trace_recorder=application.trace.recorder,
         plan_store=application.memory.curator_plans,
+        langchain_models=langchain_models,
     )
 
 

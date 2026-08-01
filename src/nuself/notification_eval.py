@@ -18,6 +18,7 @@ from nuself.config import (
 from nuself.application.composition import compose_application
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.eval import EvalResult
+from nuself.llm import configured_langchain_chat_models
 from nuself.notification import NotificationOutbox, OutboxEntry
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.schedule_state import (
@@ -167,6 +168,10 @@ def _evaluate_scheduler(
         application,
         config=settings,
         language_preference="en",
+        langchain_models=configured_langchain_chat_models(
+            project_root,
+            config=application.config,
+        ),
     )
     if last is not None:
         state = ReflectionScheduleState(

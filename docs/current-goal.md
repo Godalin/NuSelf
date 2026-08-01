@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit model/agent factory composition for repeated endpoint construction inside
-one daemon or Chat graph; reuse resolved endpoint capabilities where ownership
-is shared without creating a global model registry.
+Audit default agent-construction fallbacks and public builder exports; remove
+production-unused shortcuts while keeping test injection and standalone domain
+composition explicit and small.
 
 ## Constraints
 
@@ -174,6 +174,16 @@ is shared without creating a global model registry.
   set. Reason export planner/runner receive language preference explicitly.
 - Config/Chat/daemon focused suite: 524 passed. Post-config-snapshot
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- One daemon startup now resolves and state-orders configured endpoints exactly
+  once, then supplies the tuple to Chat, memory curation, reflection candidate
+  and relevance agents, persona discussion, Reason advancement, and export.
+  Component-specific wrappers and audit identities remain independent.
+- Added a daemon composition regression proving one endpoint resolution instead
+  of the previous six. Removed the production-unused default Persona graph
+  factory and the pass-through combined Memory tool builder.
+- Endpoint/agent focused suite: 679 passed. Post-endpoint-reuse
+  `uv run --locked pytest -q`: 2450 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
 ## Last Completed Goal

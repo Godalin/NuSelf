@@ -13,7 +13,6 @@ from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.agent.structured import (
     LangChainStructuredAgent,
     StructuredAgent,
-    default_structured_agent,
 )
 from nuself.llm import (
     LangChainLLMEndpoint,
@@ -129,29 +128,6 @@ def persona_graph_agents(
         synthesis=LangChainStructuredAgent(
             PersonaSynthesisOutput,
             endpoints=endpoints,
-            project_root=project_root,
-            component="persona",
-        ),
-    )
-
-
-def default_persona_graph_agents(
-    project_root: Path | None = None,
-) -> PersonaGraphAgents:
-    """Compose persona graph agents from configured endpoints."""
-    return PersonaGraphAgents(
-        activation=default_structured_agent(
-            PersonaActivationOutput,
-            project_root=project_root,
-            component="persona",
-        ),
-        contribution=default_structured_agent(
-            PersonaContributionOutput,
-            project_root=project_root,
-            component="persona",
-        ),
-        synthesis=default_structured_agent(
-            PersonaSynthesisOutput,
             project_root=project_root,
             component="persona",
         ),

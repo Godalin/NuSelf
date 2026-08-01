@@ -12,7 +12,7 @@ from memory_fixtures import (
 
 from pathlib import Path
 
-from nuself.agent.tools.memory import build_memory_tools
+from nuself.agent.tools.memory import build_memory_tool_set
 from nuself.agent.tools.reason import build_reason_tools
 from nuself.agent.tools.reflection import build_reflection_tools
 from nuself.agent.tools.selves import build_selves_tools
@@ -39,12 +39,11 @@ def test_subsystem_tool_builders_own_their_registries(
 ) -> None:
     memory_repository = memory_entry_repository(tmp_path)
 
-    assert _names(
-            build_memory_tools(
-                service=MemoryService(memory_repository),
-                project_root=tmp_path,
-            )
-    ) == {
+    memory_tools = build_memory_tool_set(
+        service=MemoryService(memory_repository),
+        project_root=tmp_path,
+    )
+    assert _names((*memory_tools.readonly, *memory_tools.write)) == {
         "memory_search",
         "memory_count",
         "memory_archive",

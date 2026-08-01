@@ -88,6 +88,7 @@ class ConversationPersonaOrchestrator:
                 else None
             ),
             language_preference=language_preference,
+            langchain_models=langchain_models,
         )
 
     def consult(

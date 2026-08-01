@@ -558,7 +558,7 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    from nuself.persona import PersonaGraphAgents
+    from nuself.persona import PersonaDiscussionAgents, PersonaGraphAgents
     from nuself.persona.definition import (
         PersonaActivationOutput,
         PersonaContributionOutput,
@@ -618,6 +618,23 @@ def test_conversation_runtime_runs_agent_backed_personas_through_selves_subagent
     monkeypatch.setattr(
         "nuself.agent.chat.persona.persona_graph_agents",
         fake_persona_graph_agents,
+    )
+
+    def fake_discussion_agents(
+        project_root: Path | None = None,
+        *,
+        endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
+    ) -> PersonaDiscussionAgents:
+        del project_root, endpoints
+        return PersonaDiscussionAgents(
+            scoring=cast(Any, graph_agents.synthesis),
+            selection=cast(Any, graph_agents.synthesis),
+            moderator=cast(Any, graph_agents.synthesis),
+        )
+
+    monkeypatch.setattr(
+        "nuself.persona.discussion.default_persona_discussion_agents",
+        fake_discussion_agents,
     )
     runtime = ConversationGraphRuntime(
         tmp_path,

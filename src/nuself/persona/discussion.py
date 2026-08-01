@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ConfigSystem, ReflectionSettings
+from nuself.llm import LangChainLLMEndpoint
 from nuself.domain.proactive import IdeaCandidate
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
@@ -89,6 +90,8 @@ class PersonaDiscussionAgents:
 
 def default_persona_discussion_agents(
     project_root: Path | None = None,
+    *,
+    endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> PersonaDiscussionAgents:
     """Build all typed discussion decision agents."""
     return PersonaDiscussionAgents(
@@ -96,16 +99,19 @@ def default_persona_discussion_agents(
             PersonaScoreOutput,
             project_root=project_root,
             component="persona",
+            endpoints=endpoints,
         ),
         selection=default_structured_agent(
             PersonaSelectionOutput,
             project_root=project_root,
             component="persona",
+            endpoints=endpoints,
         ),
         moderator=default_structured_agent(
             ModeratorJudgmentOutput,
             project_root=project_root,
             component="persona",
+            endpoints=endpoints,
         ),
     )
 
@@ -546,6 +552,7 @@ class SharedPersonaDiscussionService:
         agents: PersonaDiscussionAgents | None = None,
         synthesis_agent: StructuredAgent[PersonaSynthesisOutput] | None = None,
         language_preference: str | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         if discussion is not None:
             self._discussion = discussion
@@ -557,12 +564,16 @@ class SharedPersonaDiscussionService:
             if language_preference is None:
                 language_preference = system_config.chat.language_preference
         if agents is None:
-            agents = default_persona_discussion_agents(project_root)
+            agents = default_persona_discussion_agents(
+                project_root,
+                endpoints=langchain_models,
+            )
         if synthesis_agent is None:
             synthesis_agent = default_structured_agent(
                 PersonaSynthesisOutput,
                 project_root=project_root,
                 component="persona",
+                endpoints=langchain_models,
             )
         self._discussion = ProactivePersonaDiscussion(
             config=config,

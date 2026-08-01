@@ -15,7 +15,6 @@ from nuself.persona.graph import (
     AgentBackedSynthesizerNode,
     PersonaGraphAgents,
     PersonaGraphDriver,
-    default_persona_graph_agents,
     persona_graph_agents,
 )
 from nuself.persona.discussion import (
@@ -51,6 +50,5 @@ __all__ = [
     "SharedPersonaDiscussionService",
     "build_persona_tools",
     "default_persona_discussion_agents",
-    "default_persona_graph_agents",
     "persona_graph_agents",
 ]

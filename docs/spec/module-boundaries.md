@@ -140,6 +140,10 @@ Application-owned Chat, daemon, notification, and model composition reuse that
 snapshot. Explicit configuration inspection and adapters documented to reload
 per operation may still call the loader; nested composition must not reload the
 same snapshot merely to obtain one subsection.
+One daemon startup resolves and orders its configured LLM endpoints once.
+Chat, reflection, reasoning, persona discussion, and export receive that tuple
+while retaining separate component-tagged agent wrappers; endpoint reuse does
+not imply shared conversation state or a process-global model registry.
 
 Daemon chat receives its memory, profile, reflection, trace, and conversation
 collaborators from that graph. `application.chat` resolves them once into an

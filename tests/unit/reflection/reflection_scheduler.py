@@ -163,7 +163,9 @@ def _fake_structured_agent(
     *,
     project_root: Path | None = None,
     component: str,
+    endpoints: object | None = None,
 ) -> object:
+    del project_root, component, endpoints
     if schema is CandidateListOutput:
         return _CandidateAgent()
     if schema is RelevanceScoreOutput:
@@ -282,6 +284,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         application,
         config=config,
         language_preference="en",
+        langchain_models=(),
     )
 
 

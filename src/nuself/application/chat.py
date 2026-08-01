@@ -19,6 +19,7 @@ from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.jobs import JobSink
 from nuself.llm import configured_langchain_chat_models
+from nuself.llm import LangChainLLMEndpoint
 
 __all__ = ["ChatResult", "compose_conversation_runtime"]
 
@@ -31,14 +32,19 @@ def compose_conversation_runtime(
     event_publisher: EventPublisher | None = None,
     response_service: ConversationResponseService | None = None,
     approval_port: ApprovalPort | None = None,
+    langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> ConversationGraphRuntime:
     """Build chat from one authority graph plus surface-owned adapters."""
 
     paths = application.paths
     config = application.config
-    models = configured_langchain_chat_models(
-        paths.project_root,
-        config=config,
+    models = (
+        langchain_models
+        if langchain_models is not None
+        else configured_langchain_chat_models(
+            paths.project_root,
+            config=config,
+        )
     )
     resources = ConversationResources(
         tools=ToolResources(

@@ -48,6 +48,32 @@ def _close_states():  # pyright: ignore[reportUnusedFunction]
     yield
     _STATE_OWNER.close()
 
+
+def test_daemon_resolves_configured_endpoints_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def empty_endpoints(
+        project_root: Path | None = None,
+        *,
+        config: object | None = None,
+    ) -> tuple[()]:
+        nonlocal calls
+        del project_root, config
+        calls += 1
+        return ()
+
+    monkeypatch.setattr(
+        "nuself.llm._configured_llm_endpoints",
+        empty_endpoints,
+    )
+
+    _new_daemon_state(tmp_path)
+
+    assert calls == 1
+
 class StaticResponseService:
     def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
         return ChatStructuredOutput(

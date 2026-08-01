@@ -109,11 +109,16 @@ def default_structured_agent(
     *,
     project_root: Path | None = None,
     component: AgentEndpointComponent,
+    endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> StructuredAgent[StructuredOutputT]:
     """Build the configured framework-native runner for one schema."""
     return LangChainStructuredAgent(
         schema,
-        endpoints=configured_langchain_chat_models(project_root),
+        endpoints=(
+            endpoints
+            if endpoints is not None
+            else configured_langchain_chat_models(project_root)
+        ),
         project_root=project_root,
         component=component,
     )

@@ -33,21 +33,6 @@ class MemoryToolSet:
     write: tuple[BaseTool, ...]
 
 
-def build_memory_tools(
-    *,
-    service: MemoryService,
-    project_root: Path | None,
-    executor: FeatureExecutor | None = None,
-) -> tuple[BaseTool, ...]:
-    """Build the memory service's chat tools."""
-    tools = build_memory_tool_set(
-        service=service,
-        project_root=project_root,
-        executor=executor,
-    )
-    return tools.readonly + tools.write
-
-
 def build_memory_tool_set(
     *,
     service: MemoryService,

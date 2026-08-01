@@ -30,6 +30,7 @@ from nuself.daemon.tasks import (
     daemon_task,
 )
 from nuself.logs import runtime_event_log_sink
+from nuself.llm import configured_langchain_chat_models
 from nuself.notification import (
     NotificationDeliveryLoop,
 )
@@ -80,12 +81,17 @@ class DaemonState:
             )
         )
         config = application.config
+        langchain_models = configured_langchain_chat_models(
+            self.project_root,
+            config=config,
+        )
         self.reason_export_service = ReasonExportService(
             self.project_root,
             reason_service=self.application.reason_service,
             workspace_store=self.application.reason_workspace,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
+            langchain_models=langchain_models,
         )
         self.conversation_runtime = compose_conversation_runtime(
             self.application,
@@ -93,15 +99,21 @@ class DaemonState:
             section_planner=build_reason_export_section_planner(
                 self.project_root,
                 language_preference=config.chat.language_preference,
+                langchain_models=langchain_models,
             ),
             event_publisher=self.event_publisher,
+            langchain_models=langchain_models,
         )
 
-        self.memory_curator = compose_memory_curator(self.application)
+        self.memory_curator = compose_memory_curator(
+            self.application,
+            langchain_models=langchain_models,
+        )
         self.reflection_scheduler = compose_reflection_scheduler(
             self.application,
             config=config.reflection,
             language_preference=config.chat.language_preference,
+            langchain_models=langchain_models,
         )
         self.notification_delivery_loop = NotificationDeliveryLoop(
             self.application.notifications,

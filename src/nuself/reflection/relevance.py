@@ -12,6 +12,7 @@ from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ReflectionSettings
 from nuself.domain.proactive import IdeaCandidate, RelevanceScore
+from nuself.llm import LangChainLLMEndpoint
 from nuself.reflection.audit import report_reflection_failure, write_reflection_audit
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.schedule_state import (
@@ -45,6 +46,7 @@ class LLMRelevanceGate:
         *,
         schedule_collection: StorageCollection,
         repository: ReflectionRepository,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
         self._config = config
@@ -54,6 +56,7 @@ class LLMRelevanceGate:
             RelevanceScoreOutput,
             project_root=project_root,
             component="reflection",
+            endpoints=langchain_models,
         )
 
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:

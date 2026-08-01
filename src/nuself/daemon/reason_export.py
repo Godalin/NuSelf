@@ -20,6 +20,7 @@ from pydantic import (
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.clock import utc_now_iso
+from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
@@ -159,6 +160,7 @@ def build_reason_export_section_planner(
     project_root: Path,
     *,
     language_preference: str,
+    langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     agent: StructuredAgent[ReasonSectionPlanOutput] | None = None,
 ) -> SectionPlanner:
     """Return an instance-scoped typed-agent section planner."""
@@ -171,6 +173,7 @@ def build_reason_export_section_planner(
             ReasonSectionPlanOutput,
             project_root=project_root,
             component="reasoning",
+            endpoints=langchain_models,
         )
     )
 
@@ -257,6 +260,7 @@ class ReasonExportService:
         workspace_store: PrivateWorkspaceStore,
         task_sink: ExportTaskSink,
         language_preference: str,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
     ) -> None:
@@ -269,6 +273,7 @@ class ReasonExportService:
             else default_text_agent(
                 project_root=project_root,
                 component="reasoning",
+                endpoints=langchain_models,
             )
         )
         self._job_definitions = (

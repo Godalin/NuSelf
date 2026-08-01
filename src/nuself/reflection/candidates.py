@@ -14,6 +14,7 @@ from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.config import ReflectionSettings
+from nuself.llm import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
 from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository
@@ -63,6 +64,7 @@ class IdeaCandidateGenerator:
         conversation_history: ConversationHistoryReader,
         language_preference: str,
         agent: StructuredAgent[CandidateListOutput] | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
         self._memory_repository = memory_repository
@@ -73,6 +75,7 @@ class IdeaCandidateGenerator:
             CandidateListOutput,
             project_root=project_root,
             component="reflection",
+            endpoints=langchain_models,
         )
         self._language_preference = language_preference
 

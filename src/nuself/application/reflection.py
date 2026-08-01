@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from nuself.config import ReflectionSettings
+from nuself.llm import LangChainLLMEndpoint
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
@@ -18,6 +19,7 @@ def compose_reflection_scheduler(
     *,
     config: ReflectionSettings,
     language_preference: str,
+    langchain_models: tuple[LangChainLLMEndpoint, ...],
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
 
@@ -31,12 +33,14 @@ def compose_reflection_scheduler(
         profile_repository=application.memory.profile,
         conversation_history=application.conversation_history,
         language_preference=language_preference,
+        langchain_models=langchain_models,
     )
     gate = LLMRelevanceGate(
         paths.project_root,
         config,
         schedule_collection=schedule_collection,
         repository=application.reflection,
+        langchain_models=langchain_models,
     )
     return ReflectionScheduler(
         paths.project_root,
@@ -52,5 +56,6 @@ def compose_reflection_scheduler(
             project_root=paths.project_root,
             config=config,
             language_preference=language_preference,
+            langchain_models=langchain_models,
         ),
     )
