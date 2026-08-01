@@ -21,11 +21,8 @@ class MacOSNotificationAdapter:
 
     delivery_id = "macos"
 
-    def __init__(self, project_root: Path | None = None, *, dry_run: bool = False) -> None:
-        from nuself.config import runtime_paths
-
-        paths = runtime_paths(project_root)
-        self._project_root = paths.project_root
+    def __init__(self, project_root: Path, *, dry_run: bool = False) -> None:
+        self._project_root = project_root
         self._dry_run = dry_run
         self.has_osascript = shutil.which("osascript") is not None
 

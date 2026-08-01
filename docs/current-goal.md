@@ -9,15 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline notification outbox's single-use idempotency lookup.
+Remove hidden authority resolution from the macOS notification adapter.
 
 ## Ordered Steps
 
-1. Confirm `_find_by_idempotency_key()` is only the linear lookup inside
-   transactional `add()` and is otherwise a test seam.
-2. Inline the lookup; move concurrency-test pausing to the real `list()` query
-   boundary instead of retaining a production helper for instrumentation.
-3. Run focused notification tests and full gates, then commit without pushing.
+1. Confirm every macOS adapter construction already has a resolved project
+   path and composition owns production construction.
+2. Require that Path directly; remove optional root and internal
+   `runtime_paths()` import/call.
+3. Run focused notification/composition tests and full gates, then commit
+   without pushing.
 
 ## Exclusions
 
@@ -26,7 +27,8 @@ Inline notification outbox's single-use idempotency lookup.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve atomic cross-process admission and first-entry-wins behavior.
+- Preserve dry-run behavior, osascript discovery, escaping, timeout, audit, and
+  delivery results.
 
 ## Constraints
 
@@ -38,6 +40,12 @@ Inline notification outbox's single-use idempotency lookup.
 
 ## Phase Evidence
 
+- `MacOSNotificationAdapter` now requires one composition-resolved project
+  `Path`. Removed its optional authority input and internal `runtime_paths()`
+  import/call; dry-run, executable discovery, timeout, audit, and delivery
+  behavior are unchanged. Focused Notification/composition tests: 79 passed;
+  full suite: 2441 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Transactional notification admission now performs its one idempotency-key
   scan directly in `add()`. Removed `_find_by_idempotency_key()` and moved the
   cross-process test pause to the real `list()` query boundary; first-entry-wins

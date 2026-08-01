@@ -167,6 +167,10 @@ delivery and finalization cannot do so.
 | `EmailNotificationAdapter` | enabled unified `email` configuration | `dry_run=True` logs intent | Disabled config → `False` + `email_no_config`; SMTP error → `False` + `email_failed` |
 | `MacOSNotificationAdapter` | `osascript` on `$PATH` | `dry_run=True` logs intent | Missing `osascript` → returns `True` (graceful degradation); subprocess non-zero → `False` + `macos_failed` |
 
+Notification composition passes `MacOSNotificationAdapter` one already-resolved
+project `Path`. The adapter does not accept an omitted authority or call
+`runtime_paths()` internally.
+
 Built-in stable delivery IDs are `log`, `email`, and `macos`. Third-party
 adapters must supply their own non-empty stable ID; class names and error text
 must never be used as persisted identities.

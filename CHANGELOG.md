@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The macOS notification adapter now requires a composition-resolved project
+  path and no longer resolves authority through an optional constructor input.
 - Notification idempotency lookup now lives directly inside transactional
   `add()`; removed its single-use private helper and moved concurrency-test
   instrumentation to the real list boundary.
