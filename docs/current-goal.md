@@ -9,23 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Replace three REPL-local numeric memory handle parsers with the shared visible
-handle resolver required by the CLI contract.
+Remove conversation terminology from REPL Reason handle variables so the
+adapter reflects the independent ReasoningThread domain.
 
 ## Ordered Steps
 
-1. Confirm entry show, candidate review, and source show duplicate numeric index
-   parsing and silently reinterpret out-of-range numbers as stable IDs.
-2. Route all three through `resolve_visible_handle()` while retaining their
-   domain repository lookups and rendered not-found results.
-3. Add focused REPL handle regression coverage, then run Pyright, full pytest,
-   and package build; update evidence and commit without pushing.
+1. Inventory every `conversation_id` local in the Reason REPL command and
+   confirm each carries a Reason thread ID/index rather than chat state.
+2. Rename those locals consistently to `thread_ref` without changing service
+   calls, errors, or rendering.
+3. Run Reason/REPL tests, Pyright, full pytest, and package build; update
+   evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not make repositories or services understand visible indexes.
-- Do not alter stable-ID lookup or list ordering.
-- Do not introduce a second CLI resolver wrapper.
+- Do not rename the `ReasoningThread` domain concept.
+- Do not change user-visible command syntax or messages.
+- Do not touch conversation IDs in actual chat/history handlers.
 
 ## Constraints
 
@@ -37,6 +37,11 @@ handle resolver required by the CLI contract.
 
 ## Phase Evidence
 
+- Interactive Reason show/advance/pause/resume/resolve/archive/delete now name
+  their ID-or-index input `thread_ref`; removed seven misleading
+  `conversation_id` locals while leaving actual chat-history conversation IDs
+  untouched. Focused REPL/Reason tests: 328 passed; full suite: 2443 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Interactive memory entry show, candidate review, and source show now call
   `resolve_visible_handle()` instead of maintaining three local
   digit/int/range branches. Stable IDs and list ordering remain domain-owned;

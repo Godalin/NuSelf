@@ -159,11 +159,11 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
             return "No reason threads."
         return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads))
     if command.startswith("show "):
-        conversation_id = command.removeprefix("show ").strip()
+        thread_ref = command.removeprefix("show ").strip()
         try:
-            thread = service.show_thread(conversation_id)
+            thread = service.show_thread(thread_ref)
         except ReasonNotFound:
-            return f"Reason thread not found: {conversation_id}"
+            return f"Reason thread not found: {thread_ref}"
         steps = service.list_steps(thread.id)
         return render_reason_detail(thread, steps)
     if command.startswith("start "):
@@ -174,7 +174,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
-        conversation_id = command.removeprefix("advance ").strip()
+        thread_ref = command.removeprefix("advance ").strip()
         from nuself.application.reason import compose_reason_advancer
 
         advancer = compose_reason_advancer(
@@ -182,44 +182,44 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         )
         try:
             thread = service.advance_thread(
-                conversation_id,
+                thread_ref,
                 advancer=advancer,
             )
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
     if command.startswith("pause "):
-        conversation_id = command.removeprefix("pause ").strip()
+        thread_ref = command.removeprefix("pause ").strip()
         try:
-            thread = service.pause_thread(conversation_id)
+            thread = service.pause_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Paused reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resume "):
-        conversation_id = command.removeprefix("resume ").strip()
+        thread_ref = command.removeprefix("resume ").strip()
         try:
-            thread = service.resume_thread(conversation_id)
+            thread = service.resume_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resumed reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resolve "):
-        conversation_id = command.removeprefix("resolve ").strip()
+        thread_ref = command.removeprefix("resolve ").strip()
         try:
-            thread = service.resolve_thread(conversation_id)
+            thread = service.resolve_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resolved reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("archive "):
-        conversation_id = command.removeprefix("archive ").strip()
+        thread_ref = command.removeprefix("archive ").strip()
         try:
-            thread = service.archive_thread(conversation_id)
+            thread = service.archive_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("delete "):
-        conversation_id = command.removeprefix("delete ").strip()
+        thread_ref = command.removeprefix("delete ").strip()
         try:
-            tid = service.delete_thread(conversation_id)
+            tid = service.delete_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Deleted reason thread: {tid}"

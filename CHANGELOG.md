@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Interactive Reason commands now name their ID/index inputs as Reason thread
+  references instead of carrying misleading conversation terminology.
 - Interactive memory entry, review-candidate, and source commands now use the
   shared visible-handle resolver instead of duplicating numeric index parsing.
 - Trace CLI composition now borrows only the read-only query service instead of
