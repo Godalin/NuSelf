@@ -9,26 +9,26 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the curator's one-use corruption-error rewrapper. Let the plan store's
-already-safe, typed `MemoryCuratorPlanCorruptError` cross the curator boundary
-directly instead of erasing it into a generic `ValueError` with the same text.
+Remove two exact one-use curator helpers that only join observation fragments or
+strip the storage ID before immediate consumption. Keep signal classification,
+context assembly, codecs, and trace policy as named boundaries.
 
 ## Ordered Steps
 
-1. Confirm `_load_plan()` only catches a `ValueError` subtype and emits the
-   same safe top-level message without adding policy.
-2. Call the typed plan store directly and delete `_load_plan()` plus its now
-   unused diagnostic and error imports.
-3. Add direct coverage for typed corrupt-plan failure and its structured
-   `record_decode_failed` observation.
+1. Confirm `_render_observation()` and `_without_storage_id()` each have one
+   call and no independent policy consumer.
+2. Inline observation joining into prompt composition and storage-ID filtering
+   into the plan codec call.
+3. Retain named signal, context, corruption, locking, and trace boundaries.
 4. Run curator-plan/memory tests, Pyright, full pytest, and package build;
    update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not expose corrupt record contents in the exception message or log event.
-- Do not change corruption detection, reporting, or abort behavior.
-- Do not change plan recovery, candidate application, or observation state.
+- Do not change prompt text, fragment order, or newline layout.
+- Do not pass the backend storage `id` field into the strict plan codec.
+- Do not flatten policy-bearing curator methods merely because they have one
+  current caller.
 
 ## Constraints
 
@@ -40,6 +40,12 @@ directly instead of erasing it into a generic `ValueError` with the same text.
 
 ## Phase Evidence
 
+- Inlined observation-fragment joining into the sole curator prompt and
+  backend-ID filtering into the sole strict plan codec call. Removed
+  `_render_observation()` and `_without_storage_id()` while retaining named
+  signal, context, corruption, lock, and trace policy boundaries. Focused
+  curator tests: 40 passed; full suite: 2440 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - Curator plan loading now calls the typed store directly. Removed `_load_plan`,
   which caught a `ValueError` subtype only to emit a generic `ValueError` with
   the same safe message, plus its two sole imports. Corrupt plans still report

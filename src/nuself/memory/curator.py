@@ -301,7 +301,7 @@ class MemoryCurator:
                     f"Evidence source: {observation.source_ref}\n"
                     f"Existing memories:\n{self._existing_memory_context() or '(none)'}\n\n"
                     f"Existing profile items:\n{self._existing_profile_context() or '(none)'}\n\n"
-                    f"New observations:\n{_render_observation(observation.fragments)}\n\n"
+                    f"New observations:\n{'\n'.join(observation.fragments)}\n\n"
                     "Return the required structured action batch. For "
                     "low-value chat, choose one ignore action and explain why."
                 ),
@@ -601,10 +601,6 @@ class MemoryCurator:
 
     def _memory_log_path(self) -> Path:
         return self._paths.logs_dir / "memory.log"
-
-
-def _render_observation(fragments: tuple[str, ...]) -> str:
-    return "\n".join(fragments)
 
 
 def _has_memory_worthy_signal(fragments: tuple[str, ...], min_quality_chars: int) -> bool:

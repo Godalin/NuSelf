@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory curation now joins observation fragments and removes backend record
+  identity directly at their sole consumption sites, eliminating two exact
+  one-use helpers.
 - Memory curator plan corruption now preserves its typed store error across the
   curator boundary instead of passing through a one-use generic rewrapper.
 - Memory curator recovery and operator inspection now share the plan store's

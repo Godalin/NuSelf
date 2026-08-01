@@ -231,7 +231,11 @@ class MemoryCuratorPlanStore:
             if raw is None:
                 return None
             return MemoryCuratorPlan.from_wire(
-                _without_storage_id(raw),
+                {
+                    key: value
+                    for key, value in raw.items()
+                    if key != "id"
+                },
                 expected_observation_id=observation_id,
                 allowed_types=self._registry.names(),
             )
@@ -284,9 +288,3 @@ class MemoryCuratorPlanStore:
             "inspect with 'nuself memory plan show OBSERVATION' or explicitly "
             "discard with 'nuself memory plan discard OBSERVATION --force'"
         ) from exc
-
-
-def _without_storage_id(
-    record: dict[str, object],
-) -> dict[str, object]:
-    return {key: value for key, value in record.items() if key != "id"}
