@@ -55,8 +55,11 @@ def _service(args: argparse.Namespace) -> DataAdminService:
     return compose_cli_application(args.project_root).data
 
 
-def _resource(args: argparse.Namespace) -> DataResource:
-    return _service(args).resolve(args.collection, internal=args.internal)
+def _resource(
+    service: DataAdminService,
+    args: argparse.Namespace,
+) -> DataResource:
+    return service.resolve(args.collection, internal=args.internal)
 
 
 def _record_id(record: dict[str, object]) -> str:
@@ -83,12 +86,13 @@ def handle_data_collections(args: argparse.Namespace) -> int:
 
 
 def handle_data_list(args: argparse.Namespace) -> int:
+    service = _service(args)
     try:
-        resource = _resource(args)
+        resource = _resource(service, args)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    records = _service(args).list(resource)
+    records = service.list(resource)
     if args.json:
         for record in records:
             print(_json_text(record))
@@ -106,12 +110,13 @@ def handle_data_list(args: argparse.Namespace) -> int:
 
 
 def handle_data_show(args: argparse.Namespace) -> int:
+    service = _service(args)
     try:
-        resource = _resource(args)
+        resource = _resource(service, args)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    record = _service(args).get(resource, args.record_id)
+    record = service.get(resource, args.record_id)
     if record is None:
         print(
             f"Record not found: {args.collection}/{args.record_id}",
@@ -125,9 +130,9 @@ def handle_data_show(args: argparse.Namespace) -> int:
 def handle_data_check(args: argparse.Namespace) -> int:
     """Validate raw records and point to explicit repair operations."""
 
+    service = _service(args)
     try:
-        resource = _resource(args)
-        service = _service(args)
+        resource = _resource(service, args)
         if not resource.editable:
             raise ValueError(
                 "data resource has no generic validation contract: "
@@ -197,9 +202,9 @@ def _load_edited_record(args: argparse.Namespace, current: str) -> str:
 
 
 def handle_data_edit(args: argparse.Namespace) -> int:
+    service = _service(args)
     try:
-        resource = _resource(args)
-        service = _service(args)
+        resource = _resource(service, args)
         if not resource.editable:
             raise ValueError(
                 f"data resource is read-only through generic editing: "
@@ -265,9 +270,9 @@ def handle_data_edit(args: argparse.Namespace) -> int:
 
 
 def handle_data_delete(args: argparse.Namespace) -> int:
+    service = _service(args)
     try:
-        resource = _resource(args)
-        service = _service(args)
+        resource = _resource(service, args)
         if not resource.editable:
             raise ValueError(
                 f"data resource is read-only through generic deletion: "
@@ -303,12 +308,13 @@ def handle_data_delete(args: argparse.Namespace) -> int:
 
 
 def handle_data_export(args: argparse.Namespace) -> int:
+    service = _service(args)
     try:
-        resource = _resource(args)
+        resource = _resource(service, args)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    records = _service(args).list(resource)
+    records = service.list(resource)
     if args.format == "json":
         content = _json_text(list(records), pretty=True)
     else:

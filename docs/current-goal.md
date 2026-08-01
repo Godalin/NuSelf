@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit `DaemonState` for public composition mirrors used only by tests or by its
-own methods. Remove only surfaces with no production consumer; retain request
-protocol capabilities and the single publisher/scheduler ownership.
+Audit CLI command adapters for repeated application/service lookup within one
+operation. Reuse the invocation-owned graph without introducing command
+contexts, service bundles, or new facades.
 
 ## Constraints
 
@@ -66,6 +66,17 @@ protocol capabilities and the single publisher/scheduler ownership.
   Application composition owns the standalone publisher/log projection;
   daemon composition continues to inject its one publisher with live activity.
 - Chat/daemon/boundary focused suite: 259 passed. Post-publisher-ownership
+  `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Every `ApplicationGraph` field has a current production use case.
+  `DaemonState.application` remains the authority graph used by recurring
+  scans and observation writes, while its publisher is shared by Chat,
+  scheduler, live activity, and follow-up diagnostics; private renaming would
+  not remove an object or dependency.
+- Data CLI handlers now obtain `DataAdminService` once per operation and pass
+  it through resource resolution, validation, and mutation. Repeated
+  application-runtime lookup and authority validation are gone.
+- Data CLI/boundary focused suite: 63 passed. Post-service-reuse
   `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
