@@ -34,10 +34,6 @@ class ReasonRepository:
         self._steps = backend.collection("reason_steps")
         self._paths = paths
 
-    @property
-    def project_root(self) -> Path | None:
-        return self._paths.project_root
-
     @contextmanager
     def batch_write(self) -> Generator[None]:
         """Commit a step + thread update as one backend transaction."""

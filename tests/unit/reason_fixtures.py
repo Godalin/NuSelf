@@ -32,12 +32,12 @@ class ReasonService(_ReasonService):
         advancer: ReasonAdvancerProtocol | None = None,
         prompt_generator: Callable[..., str] | None = None,
     ) -> None:
-        root = (
-            repository.project_root
-            if repository is not None
-            and repository.project_root is not None
-            else runtime_paths(project_root).project_root
-        )
+        if repository is not None and project_root is None:
+            raise ValueError(
+                "tests must compose an injected reason repository with an "
+                "explicit project_root"
+            )
+        root = runtime_paths(project_root).project_root
         backend = get_default_backend(root)
         selected_repository = repository or ReasonRepository(
             runtime_paths(root),

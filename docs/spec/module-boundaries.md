@@ -340,6 +340,9 @@ Reason operations are composed once in `ApplicationGraph`. Process surfaces
 reuse `reason_service` so repository, workspace, and trace dependencies
 originate at one application boundary; an optional model-backed advancer is a
 single-operation dependency rather than a second service graph.
+`ReasonRepository` owns persistence and decode diagnostics; it does not expose
+runtime paths so callers can reconstruct application composition from a
+repository instance.
 `ReasonService` itself receives repository, workspace store, and trace recorder
 as required dependencies for its own thread lifecycle, but it does not expose
 generic workspace paths or key-value handles as reason operations. Consumers

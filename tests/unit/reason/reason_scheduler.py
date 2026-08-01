@@ -30,14 +30,14 @@ def test_run_once_no_active_threads_does_nothing(tmp_path: Path) -> None:
     scheduler = ReasonScheduler(
         project_root=tmp_path,
         advancer=_null_advancer(),
-        service=_reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))),
+        service=_reason_service(project_root=tmp_path),
         interval_seconds=600,
     )
     scheduler.run_once()
 
 
 def test_run_once_skips_thread_on_cooldown(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Test")
     cooldown_end = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     cooled = ReasoningThread(
@@ -128,7 +128,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
         "nuself.reason.scheduler.write_reason_audit",
         drop_audit,
     )
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Test advance")
 
     called = False
@@ -159,7 +159,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
 
 
 def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Test cooldown")
 
     class Advancer:
@@ -186,7 +186,7 @@ def test_run_once_respects_cooldown_after_advance(tmp_path: Path) -> None:
 
 
 def test_run_once_logs_and_cools_down_failed_advance(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Test failure")
 
     class FailingAdvancer:
@@ -219,7 +219,7 @@ def test_scheduler_failure_log_cannot_raise_or_undo_cooldown(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Test failure")
 
     class FailingAdvancer:

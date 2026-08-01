@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit remaining duplicate domain aliases and wire fields, starting with
-request/response identifiers and status names. Preserve vocabulary differences
-that represent real lifecycle, presentation, or transport semantics.
+Continue auditing properties and constructors for test-only infrastructure
+exposure. Require tests to use the same explicit composition inputs as
+production instead of widening runtime APIs for fixture convenience.
 
 ## Constraints
 
@@ -229,6 +229,13 @@ that represent real lifecycle, presentation, or transport semantics.
 - Chat/daemon/CLI focused suite: 465 passed. Post-DTO cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- `ReasonRepository.project_root` had no production consumer; only the test
+  convenience service used it to reverse-engineer composition from an injected
+  repository. The property is removed and test composition now requires its
+  authority root explicitly.
+- Reason/Reflection/Chat/CLI focused suite: 658 passed. Post-repository-surface
+  cleanup `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
