@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.application.composition import compose_application
+from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
 from nuself.storage import auto_backend
 
@@ -20,6 +21,7 @@ def test_application_graph_reuses_one_authority_repository_graph(
     graph = compose_application(paths, backend)
 
     assert graph.paths is paths
+    assert graph.config == ConfigSystem.load(project_root=tmp_path)
     assert not hasattr(graph, "_backend")
     assert not hasattr(graph, "composition_storage")
     assert graph.notifications._backend is backend

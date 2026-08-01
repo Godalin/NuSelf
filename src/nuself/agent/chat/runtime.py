@@ -44,7 +44,6 @@ from nuself.conversation import (
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.llm import (
     LangChainLLMEndpoint,
-    configured_langchain_chat_models,
 )
 from nuself.logs import runtime_event_log_sink
 from nuself.memory.audit import run_memory_observed
@@ -92,20 +91,16 @@ class ConversationGraphRuntime:
         self,
         resources: ConversationResources,
         *,
-        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
-        settings: ChatAgentSettings | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...],
+        settings: ChatAgentSettings,
         event_publisher: EventPublisher | None = None,
         response_service: ConversationResponseService | None = None,
         compression_agent: TextAgent | None = None,
         approval_port: ApprovalPort | None = None,
     ) -> None:
         project_root = resources.tools.project_root
-        self._langchain_models: tuple[LangChainLLMEndpoint, ...] = (
-            langchain_models
-            if langchain_models is not None
-            else configured_langchain_chat_models(project_root)
-        )
-        self._settings = settings or ChatAgentSettings.from_project(project_root)
+        self._langchain_models = langchain_models
+        self._settings = settings
         self._project_root = project_root
         self._event_publisher = (
             event_publisher

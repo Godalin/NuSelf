@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit repeated configuration loading across application, Chat, daemon, Reason
-export, notification, and model composition; consolidate only within one
-operation/process snapshot without preventing intentional reloads.
+Audit model/agent factory composition for repeated endpoint construction inside
+one daemon or Chat graph; reuse resolved endpoint capabilities where ownership
+is shared without creating a global model registry.
 
 ## Constraints
 
@@ -160,6 +160,19 @@ operation/process snapshot without preventing intentional reloads.
   persistence and reflection repository/schedule state remain confined to
   application-owned composition. No facade or resource-bundle layer was added.
 - Reason/application focused suite: 532 passed. Post-workspace-reuse
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `ApplicationGraph` now owns one immutable configuration snapshot. Chat,
+  daemon scheduling, notification adapter composition, endpoint construction,
+  and Reason export language policy reuse it; explicit config inspection and
+  documented per-operation adapter reloads remain independent.
+- `ConversationGraphRuntime` no longer discovers settings or endpoints from a
+  project root. Both are required construction inputs, and its obsolete
+  `ChatAgentSettings.from_project` composition shortcut is gone.
+- Chat persona tools reuse the same resolved endpoint tuple as response and
+  compression components instead of constructing a second configured model
+  set. Reason export planner/runner receive language preference explicitly.
+- Config/Chat/daemon focused suite: 524 passed. Post-config-snapshot
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

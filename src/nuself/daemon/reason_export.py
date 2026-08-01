@@ -20,7 +20,6 @@ from pydantic import (
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.agent.text import TextAgent, default_text_agent
 from nuself.clock import utc_now_iso
-from nuself.config import ConfigSystem
 from nuself.reason.domain import ReasoningStep, ReasoningThread
 from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
@@ -159,13 +158,12 @@ def persist_export_failure(
 def build_reason_export_section_planner(
     project_root: Path,
     *,
+    language_preference: str,
     agent: StructuredAgent[ReasonSectionPlanOutput] | None = None,
 ) -> SectionPlanner:
     """Return an instance-scoped typed-agent section planner."""
 
-    lang = ConfigSystem.load(
-        project_root=project_root
-    ).chat.language_preference
+    lang = language_preference
     section_agent = (
         agent
         if agent is not None
@@ -258,10 +256,12 @@ class ReasonExportService:
         reason_service: ReasonService,
         workspace_store: PrivateWorkspaceStore,
         task_sink: ExportTaskSink,
+        language_preference: str,
         text_agent: TextAgent | None = None,
         job_definitions: JobDefinitionRegistry | None = None,
     ) -> None:
         self._project_root = project_root
+        self._language_preference = language_preference
         self._workspace_store = workspace_store
         self._text_agent = (
             text_agent
@@ -508,9 +508,7 @@ class ReasonExportService:
         total: int,
     ) -> str:
         del index, total
-        lang = ConfigSystem.load(
-            project_root=self._project_root
-        ).chat.language_preference
+        lang = self._language_preference
         system = (
             f"You are a writing assistant. Compose a {manifest.mode} in "
             f"{manifest.output_format} format from the provided reason steps. "

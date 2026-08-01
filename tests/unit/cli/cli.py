@@ -155,7 +155,10 @@ def _initialize_cli_test_authority(  # pyright: ignore[reportUnusedFunction]
         )
         def no_configured_endpoints(
             _project_root: Path | None = None,
+            *,
+            config: object | None = None,
         ) -> tuple[()]:
+            del config
             return ()
 
         monkeypatch.setattr(

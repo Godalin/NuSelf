@@ -10,7 +10,7 @@ from nuself.application.memory import (
 )
 from nuself.application.data_admin import DataAdminService
 from nuself.application.trace import TraceServices, compose_trace_services
-from nuself.config import RuntimePaths
+from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification import NotificationOutbox
 from nuself.memory.query import MemoryService
@@ -29,6 +29,7 @@ class ApplicationGraph:
     """Concrete services sharing one selected authority."""
 
     paths: RuntimePaths
+    config: SystemConfig
     conversations: ConversationStore
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
@@ -64,6 +65,7 @@ def compose_application(
     )
     return ApplicationGraph(
         paths=paths,
+        config=ConfigSystem.load(project_root=paths.project_root),
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,

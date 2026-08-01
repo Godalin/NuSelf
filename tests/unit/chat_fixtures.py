@@ -19,7 +19,10 @@ from nuself.agent.text import TextAgent
 from nuself.application.composition import compose_application
 from nuself.application.persona import load_personas_from_memory
 from nuself.config import runtime_paths
-from nuself.llm import LangChainLLMEndpoint
+from nuself.llm import (
+    LangChainLLMEndpoint,
+    configured_langchain_chat_models,
+)
 from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -39,7 +42,6 @@ from nuself.runtime.frontend import ApprovalPort
 from nuself.storage import get_default_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
-from nuself.config import ConfigSystem
 
 
 class ConversationGraphRuntime(_ConversationGraphRuntime):
@@ -122,14 +124,29 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 project_root=project_root,
             ),
             conversation_store=conversation_store or application.conversations,
-            language_preference=ConfigSystem.load(
-                project_root=project_root
-            ).chat.language_preference,
+            language_preference=application.config.chat.language_preference,
         )
         super().__init__(
             resources,
-            langchain_models=langchain_models,
-            settings=settings,
+            langchain_models=(
+                langchain_models
+                if langchain_models is not None
+                else configured_langchain_chat_models(
+                    project_root,
+                    config=application.config,
+                )
+            ),
+            settings=settings or ChatAgentSettings(
+                recent_messages=(
+                    application.config.chat.context.recent_messages
+                ),
+                summary_trigger_messages=(
+                    application.config.chat.context.summary_trigger_messages
+                ),
+                summary_target_chars=(
+                    application.config.chat.context.summary_target_chars
+                ),
+            ),
             event_publisher=event_publisher,
             response_service=response_service,
             compression_agent=compression_agent,

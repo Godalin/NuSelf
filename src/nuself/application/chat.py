@@ -10,6 +10,7 @@ from nuself.agent.chat import (
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService
+from nuself.agent.text import LangChainTextAgent
 from nuself.application.composition import ApplicationGraph
 from nuself.persona.tools import build_persona_tools
 from nuself.application.persona import load_personas_from_memory
@@ -17,7 +18,6 @@ from nuself.reason.output_contracts import SectionPlanner
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.jobs import JobSink
-from nuself.config import ConfigSystem
 from nuself.llm import configured_langchain_chat_models
 
 __all__ = ["ChatResult", "compose_conversation_runtime"]
@@ -35,7 +35,11 @@ def compose_conversation_runtime(
     """Build chat from one authority graph plus surface-owned adapters."""
 
     paths = application.paths
-    config = ConfigSystem.load(project_root=paths.project_root)
+    config = application.config
+    models = configured_langchain_chat_models(
+        paths.project_root,
+        config=config,
+    )
     resources = ConversationResources(
         tools=ToolResources(
             project_root=paths.project_root,
@@ -49,6 +53,11 @@ def compose_conversation_runtime(
                     paths.project_root,
                     repository=application.persona_prompts,
                     trace_recorder=application.trace.recorder,
+                    text_agent=LangChainTextAgent(
+                        endpoints=models,
+                        project_root=paths.project_root,
+                        component="persona",
+                    ),
                 )
             ),
             job_sink=job_sink,
@@ -64,7 +73,7 @@ def compose_conversation_runtime(
     )
     return ConversationGraphRuntime(
         resources,
-        langchain_models=configured_langchain_chat_models(paths.project_root),
+        langchain_models=models,
         settings=ChatAgentSettings(
             recent_messages=config.chat.context.recent_messages,
             summary_trigger_messages=(

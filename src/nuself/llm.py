@@ -25,7 +25,7 @@ from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 
-from nuself.config import ConfigSystem
+from nuself.config import ConfigSystem, SystemConfig
 from nuself.config import runtime_paths
 from nuself.runtime.diagnostics import (
     redact_sensitive_text,
@@ -61,9 +61,13 @@ class LangChainLLMEndpoint:
 # ============================================================================
 
 
-def configured_langchain_chat_models(project_root: Path | None = None) -> tuple[LangChainLLMEndpoint, ...]:
+def configured_langchain_chat_models(
+    project_root: Path | None = None,
+    *,
+    config: SystemConfig | None = None,
+) -> tuple[LangChainLLMEndpoint, ...]:
     """Return configured LangChain chat models in failover order with stateful start."""
-    endpoints = _configured_llm_endpoints(project_root)
+    endpoints = _configured_llm_endpoints(project_root, config=config)
     if not endpoints:
         return ()
     start_index = _load_llm_state(
@@ -78,11 +82,15 @@ def configured_langchain_chat_models(project_root: Path | None = None) -> tuple[
     return tuple(ordered)
 
 
-def _configured_llm_endpoints(project_root: Path | None = None) -> tuple[LangChainLLMEndpoint, ...]:
+def _configured_llm_endpoints(
+    project_root: Path | None = None,
+    *,
+    config: SystemConfig | None = None,
+) -> tuple[LangChainLLMEndpoint, ...]:
     """Return LangChain endpoint wrappers from config (no stateful ordering)."""
-    config = ConfigSystem.load(project_root=project_root)
+    effective = config or ConfigSystem.load(project_root=project_root)
     result: list[LangChainLLMEndpoint] = []
-    for index, ep_cfg in enumerate(config.llm.endpoints):
+    for index, ep_cfg in enumerate(effective.llm.endpoints):
         if ep_cfg.api_key.strip() == "":
             continue
         settings = LLMSettings(

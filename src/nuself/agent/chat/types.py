@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.conversation import CompletedTurn, ConversationMessage, ConversationState
-from nuself.config import ConfigSystem
 
 ConversationNodeName = Literal[
     "prepare_context",
@@ -58,20 +56,6 @@ class ChatAgentSettings:
     recent_messages: int
     summary_trigger_messages: int
     summary_target_chars: int
-
-    @classmethod
-    def from_project(
-        cls, project_root: Path | None = None
-    ) -> ChatAgentSettings:
-        config = ConfigSystem.load(project_root=project_root)
-        return cls(
-            recent_messages=config.chat.context.recent_messages,
-            summary_trigger_messages=(
-                config.chat.context.summary_trigger_messages
-            ),
-            summary_target_chars=config.chat.context.summary_target_chars,
-        )
-
 
 @dataclass(frozen=True)
 class ChatResult:

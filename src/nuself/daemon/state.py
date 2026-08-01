@@ -12,7 +12,6 @@ from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import compose_reason_advancer
-from nuself.config import ConfigSystem
 from nuself.conversation import CompletedTurn
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (
@@ -80,22 +79,24 @@ class DaemonState:
                 projection=self.activity_broker.publish,
             )
         )
+        config = application.config
         self.reason_export_service = ReasonExportService(
             self.project_root,
             reason_service=self.application.reason_service,
             workspace_store=self.application.reason_workspace,
             task_sink=self._schedule_reason_export,
+            language_preference=config.chat.language_preference,
         )
         self.conversation_runtime = compose_conversation_runtime(
             self.application,
             job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
-                self.project_root
+                self.project_root,
+                language_preference=config.chat.language_preference,
             ),
             event_publisher=self.event_publisher,
         )
 
-        config = ConfigSystem.load(project_root=self.project_root)
         self.memory_curator = compose_memory_curator(self.application)
         self.reflection_scheduler = compose_reflection_scheduler(
             self.application,
