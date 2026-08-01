@@ -377,6 +377,10 @@ already produced by an orchestrator; dependency source must not vary between a
 hidden constructor fallback and the operation input. Input resolution must
 produce one concrete step or raise before mutation, so persistence and audit
 code operate on a non-optional domain value rather than repeat fallback checks.
+Pause, resume, resolve, and archive remain explicit Reason use cases, while the
+shared transition rule owns their common ID-or-index resolution, validation,
+persistence, and audit path. Public semantic names must not require duplicate
+adapter logic.
 Chat tools, model-backed advancement, service operations, and output export
 reuse that store instead of constructing equivalent authority-scoped adapters.
 `PrivateWorkspaceStore.paths(owner_id)` is its sole workspace resolver and has

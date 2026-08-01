@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reason pause, resume, resolve, and archive keep their explicit service API
+  while their shared transition rule now owns ID-or-index resolution, removing
+  four repeated adapter steps.
 - Reason advancement now resolves one concrete step before mutation, removing
   repeated impossible null branches and a one-use optional-summary helper from
   state construction, persistence, and auditing.

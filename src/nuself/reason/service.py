@@ -260,20 +260,16 @@ class ReasonService:
         return updated
 
     def pause_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "paused")
+        return self._transition(id_or_index, "paused")
 
     def resume_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "active")
+        return self._transition(id_or_index, "active")
 
     def resolve_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "resolved")
+        return self._transition(id_or_index, "resolved")
 
     def archive_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "archived")
+        return self._transition(id_or_index, "archived")
 
     def delete_thread(self, id_or_index: str) -> str:
         thread = self._repository.resolve_thread(id_or_index)
@@ -305,7 +301,12 @@ class ReasonService:
 
     # ── Internal ───────────────────────────────────────────────────
 
-    def _transition(self, thread: ReasoningThread, new_status: ReasonStatus) -> ReasoningThread:
+    def _transition(
+        self,
+        id_or_index: str,
+        new_status: ReasonStatus,
+    ) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index)
         allowed: dict[ReasonStatus, tuple[ReasonStatus, ...]] = {
             "active": ("paused", "resolved", "archived"),
             "paused": ("active", "resolved", "archived"),

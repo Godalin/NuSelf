@@ -9,21 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Make the resolved Reason advancement step non-optional throughout mutation.
+Centralize Reason status-reference resolution in the shared transition rule.
 
 ## Ordered Steps
 
-1. Confirm `advance_thread()` either raises during input resolution or has one
-   concrete `ReasoningStep` before state construction and persistence.
-2. Express that invariant once; remove the pass branch, downstream optional
-   checks, and the one-use optional-summary helper.
-3. Run focused Reason tests and the complete verification gates; update
+1. Confirm pause, resume, resolve, and archive are distinct public use cases but
+   repeat identical thread-reference resolution before `_transition()`.
+2. Let the shared transition rule resolve the reference once and reduce each
+   public operation to its semantic target status.
+3. Run focused Reason/CLI tests and the complete verification gates; update
    evidence and commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve advancement errors, state transitions, transactionality, and audit
+- Preserve transition validation, reference semantics, persistence, and audit
   values.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
@@ -38,6 +38,12 @@ Make the resolved Reason advancement step non-optional throughout mutation.
 
 ## Phase Evidence
 
+- Reason pause, resume, resolve, and archive remain distinct public use cases,
+  while `_transition()` now owns their common ID-or-index resolution alongside
+  validation, persistence, and audit. Removed four repeated resolution steps
+  without exposing a generic status setter. Focused Reason/CLI/REPL tests: 360
+  passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - `ReasonService.advance_thread()` now resolves its optional operation inputs
   into one concrete `ReasoningStep` before any mutation. Removed the empty
   success branch, nine impossible downstream null fallbacks, and the one-use
