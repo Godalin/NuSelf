@@ -11,16 +11,14 @@ JobSink = Callable[["JobMessage"], None]
 _JOB_PAYLOAD_FIELDS = frozenset({"resource_id", "data"})
 
 
-def _empty_job_data() -> dict[str, object]:
-    return {}
-
-
 @dataclass(frozen=True)
 class JobPayload:
     """Routing identity and optional hints carried by a job envelope."""
 
     resource_id: str
-    data: Mapping[str, object] = field(default_factory=_empty_job_data)
+    data: Mapping[str, object] = field(
+        default_factory=dict[str, object]
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.resource_id, str) or not self.resource_id.strip():  # pyright: ignore[reportUnnecessaryIsInstance]

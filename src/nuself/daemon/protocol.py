@@ -67,10 +67,6 @@ class DaemonExtraFrameData(ProtocolError):
     """Raised when a one-frame connection sends bytes after its newline."""
 
 
-def empty_payload() -> dict[str, JsonValue]:
-    return {}
-
-
 def new_request_id() -> str:
     return uuid4().hex
 
@@ -80,7 +76,9 @@ class DaemonRequest:
     """Request sent from a CLI client to the daemon."""
 
     type: RequestType
-    payload: dict[str, JsonValue] = field(default_factory=empty_payload)
+    payload: dict[str, JsonValue] = field(
+        default_factory=dict[str, JsonValue]
+    )
     request_id: str = field(default_factory=new_request_id)
     version: int = PROTOCOL_VERSION
 
@@ -114,7 +112,9 @@ class DaemonResponse:
 
     request_id: str
     status: ResponseStatus
-    payload: dict[str, JsonValue] = field(default_factory=empty_payload)
+    payload: dict[str, JsonValue] = field(
+        default_factory=dict[str, JsonValue]
+    )
     error: str | None = None
     version: int = PROTOCOL_VERSION
 

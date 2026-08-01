@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue auditing small public helpers and service composition after removing
-the conversation model's single-use empty-list factory. Notification delivery
-state methods remain separate because they encode durable recovery stages.
+Continue the typed default-factory audit across domain models. Consolidate only
+zero-logic empty-container helpers with no external consumer; keep named
+factories when their type recursion or semantics improve the model contract.
 
 ## Constraints
 
@@ -184,6 +184,16 @@ state methods remain separate because they encode durable recovery stages.
 - Conversation/notification focused suite: 77 passed. Post-helper cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
+- Application composition helpers remain justified by distinct authority,
+  projection, model, or surface-adapter boundaries. The apparent repeated
+  `_optional_non_blank_string` definitions are two overload signatures and one
+  implementation, so they remain intact.
+- Protocol `empty_payload()` and runtime-job `_empty_job_data()` were pure
+  single-use `{}` factories; typed `dict[...]` factories now provide the same
+  isolation and stronger direct field typing without extra symbols.
+- Protocol/runtime-message/payload/transport focused suite: 152 passed.
+  Post-factory cleanup `uv run --locked pytest -q`: 2455 passed; Pyright:
+  0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field
