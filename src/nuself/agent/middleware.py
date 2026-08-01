@@ -12,7 +12,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from nuself.runtime import encode_json_value, freeze_json_value
+from nuself.runtime.messages import encode_json_value, freeze_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.warning_definitions import (
     TerminalWarningDefinition,

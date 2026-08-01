@@ -69,7 +69,11 @@ from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepos
 from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
+)
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.execution import current_cancellation

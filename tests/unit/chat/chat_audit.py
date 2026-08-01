@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 
 from nuself.agent.chat import audit
-from nuself.runtime import observability
+import nuself.runtime.observability as observability
 from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     UnknownAuditDefinitionError,

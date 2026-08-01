@@ -214,7 +214,7 @@ def test_handler_middleware_wraps_in_registration_order() -> None:
 def test_handler_registry_compiles_middleware_only_when_sealed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.runtime import handlers
+    import nuself.runtime.handlers as handlers
 
     registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
 

@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Measure the Runtime and Chat package-root dependency fans. Retain a root only
-if it is a cohesive, deliberately consumed public API; otherwise move internal
-callers to owning modules and remove eager aggregation without adding aliases.
+Narrow the Chat package root to its justified runtime-facing contract, or make
+it import-light if direct owning-module imports are clearer. Remove leaked
+conversation storage and composition resources from that boundary.
 
 ## Constraints
 
@@ -232,6 +232,14 @@ callers to owning modules and remove eager aggregation without adding aliases.
   are gone. The Trace CLI now imports only its repository-owned error and
   visibility filter, while tests name their domain and service modules.
 - Trace/Profile/CLI/boundary focused suite: 394 passed. Post-facade cleanup
+  `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- The 129-line `nuself.runtime` facade is now an import-light namespace.
+  Production code and migration scripts import serialization from `messages`
+  and execution scope from `context`; event/job tests use their owning modules.
+  Importing one codec no longer initializes cleanup, registries, handlers,
+  events, jobs, diagnostics, and execution infrastructure transitively.
+- Runtime/infrastructure focused suite: 305 passed. Post-Runtime cleanup
   `uv run --locked pytest -q`: 2451 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

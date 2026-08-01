@@ -28,7 +28,7 @@ from nuself.logs import (
     write_audit_envelope,
     write_log_event,
 )
-from nuself.runtime import (
+from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
 )

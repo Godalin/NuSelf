@@ -7,7 +7,7 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from nuself.runtime import encode_json_value
+from nuself.runtime.messages import encode_json_value
 from nuself.storage import StorageCollection
 
 REFLECTION_SCHEDULE_STATE_VERSION = 1

@@ -11,7 +11,7 @@ from nuself.derived import write_derived_index
 from nuself.domain.memory import MemoryCandidate, merge_relations
 from nuself.domain.profile import ProfileItem
 from nuself.runtime.observability import decode_observed_record
-from nuself.runtime import freeze_json_value
+from nuself.runtime.messages import freeze_json_value
 from nuself.storage import StorageBackend
 
 

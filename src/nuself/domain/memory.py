@@ -8,7 +8,7 @@ from typing import Literal, Protocol, TypeAlias, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now_iso
-from nuself.runtime import freeze_json_value, thaw_json_value
+from nuself.runtime.messages import freeze_json_value, thaw_json_value
 
 MemoryEntryType: TypeAlias = Literal[
     "source_note",

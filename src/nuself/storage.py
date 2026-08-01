@@ -19,7 +19,7 @@ from nuself.private_fs import (
     create_private_file,
     ensure_private_directory,
 )
-from nuself.runtime import encode_json_value
+from nuself.runtime.messages import encode_json_value
 from nuself.storage_audit import report_backend_close_failure
 
 if TYPE_CHECKING:

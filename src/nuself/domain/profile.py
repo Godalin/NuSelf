@@ -15,7 +15,7 @@ from nuself.domain.memory import (
     empty_evidence_list,
     empty_relations_dict,
 )
-from nuself.runtime import freeze_json_value, thaw_json_value
+from nuself.runtime.messages import freeze_json_value, thaw_json_value
 
 
 def empty_str_list() -> list[str]:

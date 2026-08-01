@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import cast
 
-from nuself.runtime import decode_json_value, encode_json_value
+from nuself.runtime.messages import decode_json_value, encode_json_value
 from scripts.database_migrations.schema_identity import SCHEMA_COLLECTIONS
 
 COLLECTIONS = SCHEMA_COLLECTIONS[3]

@@ -10,18 +10,20 @@ from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
     build_reason_job_definition_registry,
 )
-from nuself.runtime import (
-    RUNTIME_SCHEMA_VERSION,
-    JobMessage,
-    MessageKind,
+from nuself.runtime.context import (
     RuntimeContext,
-    RuntimeEnvelope,
     bind_runtime_context,
     current_runtime_context,
-    decode_json_value,
-    encode_json_value,
     runtime_context,
     use_runtime_context,
+)
+from nuself.runtime.jobs import JobMessage
+from nuself.runtime.messages import (
+    RUNTIME_SCHEMA_VERSION,
+    MessageKind,
+    RuntimeEnvelope,
+    decode_json_value,
+    encode_json_value,
 )
 
 

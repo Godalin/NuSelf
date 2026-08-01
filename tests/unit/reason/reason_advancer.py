@@ -33,7 +33,11 @@ from nuself.reason.advancer import (
 )
 from nuself.reason.domain import ReasoningThread
 from nuself.reason.errors import ReasonAdvanceError
-from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
+)
 from nuself.storage import _create_sqlite_backend, get_default_backend
 from nuself.workspace import PrivateWorkspaceStore
 

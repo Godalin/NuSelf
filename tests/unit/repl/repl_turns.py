@@ -16,7 +16,7 @@ from nuself.logs import (
     LogEvent,
     read_log_events,
 )
-from nuself.runtime import (
+from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
     runtime_context,

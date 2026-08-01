@@ -29,6 +29,9 @@ The following import rules are mandatory:
 
 - `nuself.runtime` is dependency-neutral infrastructure. It must not import
   CLI, daemon, agent, TUI, REPL, or business-domain packages.
+- The `nuself.runtime` package root is an import-light namespace. Consumers
+  import `messages`, `context`, `events`, `jobs`, or the other owning module;
+  the root must not eagerly aggregate independent runtime facilities.
 - Storage, configuration, scope, clock, and private-filesystem foundations
   must not import presentation or process adapters.
 - Business-domain packages must not import CLI, daemon, TUI, or REPL modules.

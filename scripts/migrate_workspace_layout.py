@@ -15,7 +15,7 @@ from nuself.private_fs import (
     ensure_private_file,
     require_private_file,
 )
-from nuself.runtime import decode_json_value, encode_json_value
+from nuself.runtime.messages import decode_json_value, encode_json_value
 from scripts.database_migrations.schema_identity import validate_schema
 
 

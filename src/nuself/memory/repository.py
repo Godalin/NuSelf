@@ -25,7 +25,7 @@ from nuself.domain.memory import (
 from nuself.domain.profile import ProfileItem
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record
-from nuself.runtime import freeze_json_value
+from nuself.runtime.messages import freeze_json_value
 from nuself.storage import StorageBackend
 
 

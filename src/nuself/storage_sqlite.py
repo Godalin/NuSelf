@@ -25,7 +25,7 @@ from nuself.private_fs import (
     harden_private_file,
     require_private_file,
 )
-from nuself.runtime import (
+from nuself.runtime.messages import (
     decode_json_value,
     encode_json_value,
     freeze_json_value,

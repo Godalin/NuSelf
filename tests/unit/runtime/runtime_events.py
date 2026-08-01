@@ -10,19 +10,18 @@ from nuself.logs import (
     runtime_event_log_sink,
     write_runtime_event,
 )
-from nuself.runtime import (
+from nuself.runtime.event_definitions import (
     DuplicateEventDefinitionError,
     EventDefinitionRegistry,
     EventDefinitionRegistrySealedError,
     EventDefinitionRegistryUnsealedError,
-    EventDeliveryError,
-    EventPublisher,
-    RuntimeLogEventPayload,
-    RuntimeEnvelope,
     RuntimeEventDefinition,
     UnknownEventDefinitionError,
     build_event_definition_registry,
 )
+from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.events import EventDeliveryError, EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
 
 
 def test_event_publisher_delivers_matching_projections_in_order() -> None:

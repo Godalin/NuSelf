@@ -26,7 +26,7 @@ from langgraph.store.base import (
 
 from nuself.config import runtime_paths
 from nuself.private_fs import require_private_file
-from nuself.runtime import decode_json_value, encode_json_value
+from nuself.runtime.messages import decode_json_value, encode_json_value
 
 __all__ = [
     "SqliteStore",

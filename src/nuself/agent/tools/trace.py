@@ -7,7 +7,7 @@ from langchain_core.tools import BaseTool
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, observed, readonly, tool
 from nuself.runtime.feature_execution import FeatureExecutor
-from nuself.runtime import encode_json_value
+from nuself.runtime.messages import encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.trace.repository import TraceNotFound
 from nuself.trace.service import TraceQueryService

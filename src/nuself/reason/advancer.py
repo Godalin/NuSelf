@@ -37,7 +37,7 @@ from nuself.reason.domain import (
 from nuself.reason.audit import report_reason_failure
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.persona.prompt_repo import PersonaPromptRepository
-from nuself.runtime import current_runtime_context, runtime_context
+from nuself.runtime.context import current_runtime_context, runtime_context
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
 
