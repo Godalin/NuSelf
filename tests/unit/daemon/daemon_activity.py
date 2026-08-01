@@ -10,8 +10,21 @@ from nuself.daemon.activity import (
 )
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
-from nuself.daemon.state import DaemonState
+from nuself.daemon.state import DaemonState as _DaemonState
+from daemon_fixtures import DaemonStateOwner
 from nuself.logs import LogEvent, project_log_events, write_log_event
+
+_STATE_OWNER = DaemonStateOwner()
+
+
+def DaemonState(project_root: Path) -> _DaemonState:
+    return _STATE_OWNER.create(project_root)
+
+
+@pytest.fixture(autouse=True)
+def _close_states():  # pyright: ignore[reportUnusedFunction]
+    yield
+    _STATE_OWNER.close()
 
 
 def _event(turn_id: str, message: str) -> LogEvent:

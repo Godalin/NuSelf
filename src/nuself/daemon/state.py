@@ -4,17 +4,12 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, replace
-from pathlib import Path
 from uuid import uuid4
 
 from nuself.application.chat import ChatResult, compose_conversation_runtime
 from nuself.application.curator import compose_memory_curator
 from nuself.application.knowledge_projection import publish_chat_observation
-from nuself.application.runtime import (
-    ApplicationRuntime,
-    current_application_runtime,
-    open_application_runtime,
-)
+from nuself.application.composition import ApplicationGraph
 from nuself.application.reflection import compose_reflection_scheduler
 from nuself.application.reason import (
     compose_reason_advancer,
@@ -74,30 +69,23 @@ class DaemonState:
 
     def __init__(
         self,
-        project_root: Path,
-        *,
-        application_runtime: ApplicationRuntime | None = None,
+        application: ApplicationGraph,
     ) -> None:
-        self.project_root = project_root
-        self.application_runtime = (
-            application_runtime
-            or current_application_runtime()
-            or open_application_runtime(project_root)
-        )
-        paths = self.application_runtime.paths
+        self.application = application
+        paths = application.paths
+        self.project_root = paths.project_root
         self.authority_id = paths.scope.authority_id
-        self.application = self.application_runtime.application
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()
         self.event_publisher.attach_projection(
             runtime_event_log_sink(
-                project_root,
+                self.project_root,
                 projection=self.activity_broker.publish,
             )
         )
         self.reason_export_service = ReasonExportService(
-            project_root,
+            self.project_root,
             reason_service=compose_reason_service(self.application),
             workspace_store=PrivateWorkspaceStore(
                 paths,
@@ -108,12 +96,12 @@ class DaemonState:
             self.application,
             job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
-                project_root
+                self.project_root
             ),
             event_publisher=self.event_publisher,
         )
 
-        config = ConfigSystem.load(project_root=project_root)
+        config = ConfigSystem.load(project_root=self.project_root)
         self.memory_curator = compose_memory_curator(self.application)
         self.memory_curator_interval_seconds: float = (
             config.daemon.memory_curator.interval_seconds
@@ -169,7 +157,7 @@ class DaemonState:
         self.scheduler = DaemonScheduler(
             handlers,
             event_publisher=self.event_publisher,
-            project_root=project_root,
+            project_root=self.project_root,
         )
         self.reason_export_service.bind_task_sink(
             self._schedule_reason_export

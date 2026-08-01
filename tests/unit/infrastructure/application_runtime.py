@@ -6,32 +6,52 @@ from pathlib import Path
 
 import pytest
 
+from nuself.application import runtime as runtime_module
 from nuself.application.runtime import (
     ApplicationRuntimeClosedError,
     open_application_runtime,
+    use_application_runtime,
 )
 from nuself.cli.composition import (
     compose_cli_application,
-    use_cli_application_runtime,
 )
 
 
-def test_application_runtime_is_lazy_and_reuses_one_graph(
+def test_application_runtime_factory_does_not_open_storage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened = False
+
+    def unexpected_backend(project_root: Path):
+        nonlocal opened
+        opened = True
+        raise AssertionError("storage opened during runtime construction")
+
+    monkeypatch.setattr(
+        runtime_module,
+        "get_default_backend",
+        unexpected_backend,
+    )
+
+    open_application_runtime(tmp_path)
+
+    assert opened is False
+
+
+def test_application_runtime_reuses_one_graph_and_closes_idempotently(
     tmp_path: Path,
 ) -> None:
     runtime = open_application_runtime(tmp_path)
 
-    assert runtime.opened is False
     first = runtime.application
 
-    assert runtime.opened is True
     assert runtime.application is first
     assert first.paths is runtime.paths
 
     runtime.close()
     runtime.close()
 
-    assert runtime.closed is True
     with pytest.raises(ApplicationRuntimeClosedError):
         _ = runtime.application
 
@@ -41,7 +61,7 @@ def test_cli_composition_borrows_the_scoped_runtime_graph(
 ) -> None:
     runtime = open_application_runtime(tmp_path)
     try:
-        with use_cli_application_runtime(runtime):
+        with use_application_runtime(runtime):
             first = compose_cli_application(tmp_path)
             second = compose_cli_application(tmp_path)
 
@@ -56,7 +76,7 @@ def test_cli_composition_rejects_authority_drift(
 ) -> None:
     runtime = open_application_runtime(tmp_path)
     try:
-        with use_cli_application_runtime(runtime):
+        with use_application_runtime(runtime):
             with pytest.raises(RuntimeError, match="different authority"):
                 compose_cli_application(tmp_path / "other")
     finally:

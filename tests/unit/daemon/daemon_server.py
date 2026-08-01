@@ -18,6 +18,7 @@ from conversation_fixtures import ConversationStore
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState as _DaemonState
+from daemon_fixtures import DaemonStateOwner
 from nuself.logs import read_log_events
 from nuself.memory.observation import MemoryObservation
 from nuself.notification import OutboxEntry
@@ -29,23 +30,23 @@ from nuself.daemon.scheduler import (
     DaemonTaskSubmission,
 )
 
-_CREATED_STATES: list[_DaemonState] = []
+_STATE_OWNER = DaemonStateOwner()
+
+
+def _new_daemon_state(project_root: Path) -> _DaemonState:
+    return _STATE_OWNER.create(project_root)
 
 
 def DaemonState(project_root: Path) -> _DaemonState:
     """Build the request-serving state used by these adapter tests."""
 
-    state = _DaemonState(project_root)
-    state.scheduler.start()
-    _CREATED_STATES.append(state)
-    return state
+    return _STATE_OWNER.create(project_root, start=True)
 
 
 @pytest.fixture(autouse=True)
 def _close_states():  # pyright: ignore[reportUnusedFunction]
     yield
-    while _CREATED_STATES:
-        _CREATED_STATES.pop().stop_background_tasks()
+    _STATE_OWNER.close()
 
 class StaticResponseService:
     def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
@@ -463,7 +464,7 @@ def test_committed_chat_survives_followup_admission_failure(
 def test_daemon_chat_fails_closed_when_scheduler_is_not_running(
     tmp_path: Path,
 ) -> None:
-    state = _DaemonState(tmp_path)
+    state = _new_daemon_state(tmp_path)
     called = False
 
     class UnexpectedRuntime:
@@ -524,7 +525,7 @@ def test_daemon_ping_returns_pong(tmp_path: Path) -> None:
 
 
 def test_daemon_health_returns_scheduler_snapshot(tmp_path: Path) -> None:
-    state = _DaemonState(tmp_path)
+    state = _new_daemon_state(tmp_path)
     response = handle_request(
         DaemonRequest(type="health", payload={}, request_id="health1"),
         state,

@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from nuself.daemon.state import DaemonState
+from nuself.daemon.state import DaemonState as _DaemonState
+from daemon_fixtures import DaemonStateOwner
 from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
     build_reason_job_definition_registry,
@@ -20,6 +21,18 @@ from nuself.runtime.context import (
 from nuself.runtime.job_definitions import UnknownJobDefinitionError
 from nuself.runtime.jobs import JobMessage
 from nuself.storage import write_json_atomic
+
+_STATE_OWNER = DaemonStateOwner()
+
+
+def DaemonState(project_root: Path) -> _DaemonState:
+    return _STATE_OWNER.create(project_root)
+
+
+@pytest.fixture(autouse=True)
+def _close_states():  # pyright: ignore[reportUnusedFunction]
+    yield
+    _STATE_OWNER.close()
 
 
 def _message(
@@ -54,13 +67,13 @@ def _manifest(
 
 
 def _manifest_path(
-    state: DaemonState,
+    state: _DaemonState,
     *,
     job_id: str = "job-1",
     thread_id: str = "thread-1",
 ) -> Path:
     return (
-        state.application_runtime.paths.exports_dir
+        state.application.paths.exports_dir
         / "reason"
         / thread_id
         / "jobs"

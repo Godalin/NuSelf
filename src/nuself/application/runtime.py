@@ -14,10 +14,7 @@ from nuself.application.composition import (
     compose_application,
 )
 from nuself.config import RuntimePaths, runtime_paths
-from nuself.storage import (
-    StorageBackend,
-    get_default_backend,
-)
+from nuself.storage import get_default_backend
 
 class ApplicationRuntimeClosedError(RuntimeError):
     """Raised when application resources are requested after teardown."""
@@ -28,7 +25,6 @@ class ApplicationRuntime:
 
     def __init__(self, paths: RuntimePaths) -> None:
         self._paths = paths
-        self._backend: StorageBackend | None = None
         self._application: ApplicationGraph | None = None
         self._closed = False
         self._lock = threading.RLock()
@@ -46,22 +42,11 @@ class ApplicationRuntime:
                 )
             if self._application is None:
                 backend = get_default_backend(self._paths.project_root)
-                self._backend = backend
                 self._application = compose_application(
                     self._paths,
                     backend,
                 )
             return self._application
-
-    @property
-    def opened(self) -> bool:
-        with self._lock:
-            return self._application is not None
-
-    @property
-    def closed(self) -> bool:
-        with self._lock:
-            return self._closed
 
     def close(self) -> None:
         with self._lock:

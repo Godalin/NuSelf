@@ -500,12 +500,8 @@ def test_pid_is_published_only_after_successful_bind(
         def handle_request(self) -> None:
             self.state.shutdown_requested.set()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> ExitingState:
-        return ExitingState(project_root)
+    def make_state(application: object) -> ExitingState:
+        return ExitingState(paths.project_root)
 
     def ignore_signal(
         signal_number: int,
@@ -566,12 +562,8 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
             transitions.append("request")
             self.state.shutdown_requested.set()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> OrderedState:
-        state = OrderedState(project_root)
+    def make_state(application: object) -> OrderedState:
+        state = OrderedState(paths.project_root)
         states.append(state)
         return state
 
@@ -648,12 +640,8 @@ def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
         ) -> None:
             return None
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> FailingState:
-        state = FailingState(project_root)
+    def make_state(application: object) -> FailingState:
+        state = FailingState(paths.project_root)
         states.append(state)
         return state
 
@@ -741,12 +729,8 @@ def test_worker_readiness_failure_never_publishes_ready_lifecycle(
         ) -> None:
             return None
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> UnreadyState:
-        state = UnreadyState(project_root)
+    def make_state(application: object) -> UnreadyState:
+        state = UnreadyState(paths.project_root)
         states.append(state)
         return state
 
@@ -808,12 +792,8 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
     paths.socket_path.write_text("stale", encoding="utf-8")
     states: list[_UnstartedDaemonState] = []
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> _UnstartedDaemonState:
-        state = _UnstartedDaemonState(project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(paths.project_root)
         states.append(state)
         return state
 
@@ -884,12 +864,8 @@ def test_pid_publication_failure_cleans_bound_socket_without_starting_workers(
         ) -> None:
             return None
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> _UnstartedDaemonState:
-        state = _UnstartedDaemonState(project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(paths.project_root)
         states.append(state)
         return state
 
@@ -948,12 +924,8 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
             self.stop_calls.append("scheduler")
             raise RuntimeError("scheduler stop failed")
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> FailingCleanupState:
-        state = FailingCleanupState(project_root)
+    def make_state(application: object) -> FailingCleanupState:
+        state = FailingCleanupState(paths.project_root)
         states.append(state)
         return state
 
@@ -1119,12 +1091,8 @@ def test_stopped_event_is_written_after_owned_cleanup(
         def handle_request(self) -> None:
             self.state.shutdown_requested.set()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> ExitingState:
-        state = ExitingState(project_root)
+    def make_state(application: object) -> ExitingState:
+        state = ExitingState(paths.project_root)
         states.append(state)
         return state
 
@@ -1198,12 +1166,8 @@ def test_signal_restore_failure_joins_daemon_cleanup_failures(
         def restore(self) -> bool:
             raise OSError("signal restore failed")
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> _UnstartedDaemonState:
-        return _UnstartedDaemonState(project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        return _UnstartedDaemonState(paths.project_root)
 
     def fail_bind(
         socket_path: str,

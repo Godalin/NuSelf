@@ -76,8 +76,7 @@ from nuself.runtime.execution import current_cancellation
 from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
-from nuself.application.runtime import open_application_runtime
-from nuself.cli.composition import use_cli_application_runtime
+from nuself.application.runtime import open_application_runtime, use_application_runtime
 
 
 def _authority(workspace: Path) -> Path:
@@ -88,7 +87,7 @@ def _authority(workspace: Path) -> Path:
 def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
     runtime = open_application_runtime(_authority(tmp_path))
     try:
-        with use_cli_application_runtime(runtime):
+        with use_application_runtime(runtime):
             yield
     finally:
         runtime.close()

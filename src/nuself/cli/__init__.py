@@ -61,7 +61,8 @@ from nuself.cli.entrypoints import (
     EntrypointController,
 )
 from nuself.cli.handlers import dispatch_cli
-from nuself.cli.composition import compose_cli_application, use_cli_application_runtime
+from nuself.cli.composition import compose_cli_application
+from nuself.application.runtime import use_application_runtime
 from nuself.cli.parser import (
     EntrypointHandlers,
 )
@@ -154,7 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     result: int = CliExitCode.SUCCESS
     application_runtime = open_application_runtime(project_root)
     try:
-        with use_cli_application_runtime(application_runtime):
+        with use_application_runtime(application_runtime):
             result = dispatch_cli(args, parser)
     except BaseException as exc:
         primary_error = exc

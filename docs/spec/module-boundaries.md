@@ -60,6 +60,9 @@ It is context-manageable, closes idempotently, and rejects graph access after
 close. It is only created by an outer process adapter; domain code receives
 the graph's narrow repositories and services rather than looking up the
 runtime.
+The runtime stores only the lazily composed graph and closed lifecycle state;
+it does not mirror the default backend cache or publish opened/closed
+inspection flags that no process adapter uses.
 
 `get_default_backend()` and `runtime_paths()` are compatibility-free
 composition helpers, not domain service locators. Domain repositories must not
@@ -198,12 +201,19 @@ import the concrete store, chat runtime, or agent package.
 `ApplicationRuntime` is the only public authority lifecycle abstraction.
 Parallel path/backend owners with narrower names are prohibited because they
 make teardown responsibility ambiguous.
+Outer adapters use its context boundary directly rather than publishing
+adapter-named pass-through aliases. Adapter composition helpers remain only
+when they enforce adapter-specific authority or capability rules.
 `ApplicationGraph` is a composition result, not a service locator. Process
 adapters may borrow domain-facing capabilities from it, but raw
 `StorageBackend`, `StorageCollection`, and repository construction remain
 inside application composition, storage administration, and migrations.
 Initialized CLI and REPL commands always run inside one `ApplicationRuntime`;
 helper functions must not create a fallback graph when that scope is absent.
+The daemon server likewise owns its `ApplicationRuntime` and injects the
+already-composed `ApplicationGraph` into request/task state. `DaemonState`
+must not inspect a context variable, construct a fallback runtime, or retain
+the lifecycle owner after composition.
 
 Cross-domain APIs stay coarse enough to represent a use case. Do not wrap
 every repository method in a one-method interface, introduce a generic service

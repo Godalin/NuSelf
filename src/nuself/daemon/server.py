@@ -130,10 +130,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     try:
         _reconcile_stale_runtime_metadata(paths)
         with use_application_runtime(application_runtime):
-            state = DaemonState(
-                paths.project_root,
-                application_runtime=application_runtime,
-            )
+            state = DaemonState(application_runtime.application)
         signal_owner = DaemonSignalOwner(state.shutdown_requested)
         signal_owner.install()
 

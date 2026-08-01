@@ -5,9 +5,8 @@ from pathlib import Path
 import pytest
 
 from nuself.agent.chat import ChatResult
-from nuself.application.runtime import open_application_runtime
+from nuself.application.runtime import open_application_runtime, use_application_runtime
 from nuself.cli import chat
-from nuself.cli.composition import use_cli_application_runtime
 from nuself.conversation import CompletedTurn
 from nuself.daemon.client import (
     DaemonApplicationError,
@@ -27,7 +26,7 @@ from nuself.runtime.execution import CancellationToken, use_cancellation
 def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
     runtime = open_application_runtime(tmp_path)
     try:
-        with use_cli_application_runtime(runtime):
+        with use_application_runtime(runtime):
             yield
     finally:
         runtime.close()

@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the next high-cost composition and lifecycle seams after completing
-shared registered-failure projection across infrastructure and domain audit
-adapters.
+Audit the next adapter and domain composition seams after removing redundant
+runtime state, lifecycle aliases, and hidden daemon composition fallback.
 
 ## Constraints
 
@@ -39,6 +38,17 @@ adapters.
 - Registered-failure focused suite: 272 passed; endpoint failover integration:
   45 passed.
 - Post-interpreter `uv run --locked pytest -q`: 2447 passed; Pyright remains
+  0 errors and 0 warnings.
+- `ApplicationRuntime` no longer mirrors the backend cache or exposes unused
+  opened/closed flags; its behavioral laziness, reuse, idempotent close, and
+  post-close rejection remain tested.
+- CLI uses the sole application runtime context directly; the pass-through
+  `use_cli_application_runtime` alias is gone while authority-drift validation
+  remains in CLI composition.
+- Daemon server injects `ApplicationGraph` into `DaemonState`; state no longer
+  discovers, creates, or retains an `ApplicationRuntime`.
+- Composition/lifecycle focused suite: 62 passed.
+- Post-ownership `uv run --locked pytest -q`: 2448 passed; Pyright remains
   0 errors and 0 warnings.
 
 ## Last Completed Goal
