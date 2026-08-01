@@ -12,14 +12,8 @@ from nuself.domain.memory import (
     MemoryCandidate,
     MemoryEvidence,
     PrivacyLevel,
-    empty_evidence_list,
-    empty_relations_dict,
 )
 from nuself.runtime.messages import freeze_json_value, thaw_json_value
-
-
-def empty_str_list() -> list[str]:
-    return []
 
 
 def _optional_float(data: dict[str, object], field_name: str) -> float | None:
@@ -108,8 +102,8 @@ class ProfileItem:
     type: str
     title: str
     body: str
-    tags: Sequence[str] = field(default_factory=empty_str_list)
-    source_refs: Sequence[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=list[str])
+    source_refs: Sequence[str] = field(default_factory=list[str])
     confidence: float = 1.0
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
@@ -120,8 +114,12 @@ class ProfileItem:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    relations: Mapping[str, Sequence[str]] = field(default_factory=empty_relations_dict)
-    evidence: Sequence[MemoryEvidence] = field(default_factory=empty_evidence_list)
+    relations: Mapping[str, Sequence[str]] = field(
+        default_factory=dict[str, list[str]]
+    )
+    evidence: Sequence[MemoryEvidence] = field(
+        default_factory=list[MemoryEvidence]
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(

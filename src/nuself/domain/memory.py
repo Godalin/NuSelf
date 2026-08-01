@@ -39,22 +39,6 @@ def new_memory_candidate_id() -> str:
     return f"cand_{uuid4().hex}"
 
 
-def empty_str_list() -> list[str]:
-    return []
-
-
-def empty_object_dict() -> dict[str, object]:
-    return {}
-
-
-def empty_evidence_list() -> list["MemoryEvidence"]:
-    return []
-
-
-def empty_relations_dict() -> dict[str, list[str]]:
-    return {}
-
-
 def merge_relations(
     base: Mapping[str, Sequence[str]],
     other: Mapping[str, Sequence[str]],
@@ -110,8 +94,8 @@ class MemoryEntry:
     type: MemoryEntryType
     title: str
     body: str
-    tags: Sequence[str] = field(default_factory=empty_str_list)
-    source_refs: Sequence[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=list[str])
+    source_refs: Sequence[str] = field(default_factory=list[str])
     confidence: float = 1.0
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
@@ -124,9 +108,15 @@ class MemoryEntry:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    relations: Mapping[str, Sequence[str]] = field(default_factory=empty_relations_dict)
-    evidence: Sequence[MemoryEvidence] = field(default_factory=empty_evidence_list)
-    payload: Mapping[str, object] = field(default_factory=empty_object_dict)
+    relations: Mapping[str, Sequence[str]] = field(
+        default_factory=dict[str, list[str]]
+    )
+    evidence: Sequence[MemoryEvidence] = field(
+        default_factory=list[MemoryEvidence]
+    )
+    payload: Mapping[str, object] = field(
+        default_factory=dict[str, object]
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -320,8 +310,8 @@ class MemoryCandidate:
     title: str
     body: str
     action: MemoryCandidateAction = "create"
-    tags: Sequence[str] = field(default_factory=empty_str_list)
-    source_refs: Sequence[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=list[str])
+    source_refs: Sequence[str] = field(default_factory=list[str])
     confidence: float = 0.7
     importance: float = 0.5
     privacy: PrivacyLevel = "private"
@@ -336,8 +326,12 @@ class MemoryCandidate:
     valid_from: str | None = None
     valid_until: str | None = None
     temporal_note: str = ""
-    relations: Mapping[str, Sequence[str]] = field(default_factory=empty_relations_dict)
-    evidence: Sequence[MemoryEvidence] = field(default_factory=empty_evidence_list)
+    relations: Mapping[str, Sequence[str]] = field(
+        default_factory=dict[str, list[str]]
+    )
+    evidence: Sequence[MemoryEvidence] = field(
+        default_factory=list[MemoryEvidence]
+    )
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -519,10 +513,12 @@ class MemoryObject:
 
     type: str
     payload: Mapping[str, object]
-    metadata: Mapping[str, object] = field(default_factory=empty_object_dict)
+    metadata: Mapping[str, object] = field(
+        default_factory=dict[str, object]
+    )
     confidence: float = 1.0
     importance: float = 1.0
-    source_refs: Sequence[str] = field(default_factory=empty_str_list)
+    source_refs: Sequence[str] = field(default_factory=list[str])
     review_state: ReviewState = "draft"
     privacy: PrivacyLevel = "private"
     id: str = field(default_factory=new_memory_entry_id)

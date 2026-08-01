@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue the typed default-factory audit across domain models. Consolidate only
-zero-logic empty-container helpers with no external consumer; keep named
-factories when their type recursion or semantics improve the model contract.
+Audit remaining one-line module helpers for redundant pass-through behavior.
+Keep identity generation, validation, normalization, codecs, and dependency
+direction boundaries; remove only wrappers that add no contract.
 
 ## Constraints
 
@@ -194,6 +194,14 @@ factories when their type recursion or semantics improve the model contract.
 - Protocol/runtime-message/payload/transport focused suite: 152 passed.
   Post-factory cleanup `uv run --locked pytest -q`: 2455 passed; Pyright:
   0 errors, 0 warnings; sdist and wheel build succeeded.
+- Fifteen additional empty-container helpers across memory, profile, source,
+  trace, notification, interactive-session, repository-stat, and reason-output
+  models had no caller beyond dataclass/Pydantic defaults. Parameterized
+  built-ins now express those exact types directly; ID/time and semantic
+  factories remain named.
+- Affected memory/profile/trace/notification/reason/session focused suite:
+  604 passed. Post-domain-factory cleanup `uv run --locked pytest -q`: 2455
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

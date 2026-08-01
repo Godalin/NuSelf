@@ -29,14 +29,6 @@ from nuself.runtime.messages import freeze_json_value
 from nuself.storage import StorageBackend
 
 
-def empty_str_counts() -> dict[str, int]:
-    return {}
-
-
-def empty_str_floats() -> dict[str, float]:
-    return {}
-
-
 @dataclass(frozen=True)
 class MemorySearchFilters:
     """Deterministic filters for entry search."""
@@ -56,15 +48,23 @@ class MemoryStats:
 
     entries_total: int
     candidates_total: int
-    entries_by_type: Mapping[str, int] = field(default_factory=empty_str_counts)
-    entries_by_review_state: Mapping[str, int] = field(default_factory=empty_str_counts)
-    candidates_by_review_state: Mapping[str, int] = field(default_factory=empty_str_counts)
+    entries_by_type: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
+    entries_by_review_state: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
+    candidates_by_review_state: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
     entries_with_observed_at: int = 0
     entries_with_evidence: int = 0
     pending_candidates: int = 0
     avg_importance: float = 0.0
     max_importance: float = 0.0
-    avg_importance_by_type: Mapping[str, float] = field(default_factory=empty_str_floats)
+    avg_importance_by_type: Mapping[str, float] = field(
+        default_factory=dict[str, float]
+    )
 
     def __post_init__(self) -> None:
         for field_name in (

@@ -69,10 +69,6 @@ def _timestamp_id() -> str:
     return utc_now().strftime("%Y%m%dT%H%M%S%fZ")
 
 
-def empty_metadata() -> dict[str, object]:
-    return {}
-
-
 @dataclass(frozen=True)
 class ThoughtTrace:
     """One durable thought provenance record."""
@@ -90,7 +86,9 @@ class ThoughtTrace:
     conversation_id: str | None = None
     visibility: TraceVisibility = "private"
     created_at: str = field(default_factory=utc_now_iso)
-    metadata: Mapping[str, object] = field(default_factory=empty_metadata)
+    metadata: Mapping[str, object] = field(
+        default_factory=dict[str, object]
+    )
 
     def __post_init__(self) -> None:
         if self.kind not in TRACE_KINDS:
@@ -172,7 +170,9 @@ class TraceLink:
     summary: str
     id: str = field(default_factory=new_trace_link_id)
     created_at: str = field(default_factory=utc_now_iso)
-    metadata: Mapping[str, object] = field(default_factory=empty_metadata)
+    metadata: Mapping[str, object] = field(
+        default_factory=dict[str, object]
+    )
 
     def __post_init__(self) -> None:
         if self.source_id.strip() == "":

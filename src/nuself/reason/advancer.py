@@ -79,10 +79,6 @@ class TrackedItemOutput(BaseModel):
     status: str = "active"
 
 
-def _empty_tracked_item_outputs() -> list[TrackedItemOutput]:
-    return []
-
-
 class ReasonStepOutput(BaseModel):
     """Framework-native structured response for one reason advance."""
 
@@ -94,10 +90,10 @@ class ReasonStepOutput(BaseModel):
     output: str = Field(description="Your full current thinking, analysis, or draft — the observable product of this step")
     evidence_refs: list[str] = Field(default_factory=list, description="Reference strings for sources or evidence used")
     confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="How confident you are in this step, from 0.0 to 1.0")
-    new_findings: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="New findings or ideas to track")
-    new_pending: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="New open questions or unresolved points")
-    retired_findings: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="Previously tracked items that are now completed or abandoned")
-    next_steps: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="Planned next actions")
+    new_findings: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="New findings or ideas to track")
+    new_pending: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="New open questions or unresolved points")
+    retired_findings: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="Previously tracked items that are now completed or abandoned")
+    next_steps: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="Planned next actions")
     terminal_status: TerminalStatus = Field(default="continue", description="One of: continue, suggest_resolved, suggest_paused")
     terminal_reason: str = Field(default="", description="Why this terminal status was chosen; empty if continuing normally")
 

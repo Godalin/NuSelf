@@ -72,10 +72,6 @@ class AdapterDelivery:
         )
 
 
-def _empty_adapter_deliveries() -> dict[str, AdapterDelivery]:
-    return {}
-
-
 @dataclass(frozen=True)
 class OutboxEntry:
     """One notification intent in the outbox."""
@@ -91,7 +87,7 @@ class OutboxEntry:
     attempts: int = 0
     required_adapters: tuple[str, ...] = ()
     deliveries: Mapping[str, AdapterDelivery] = field(
-        default_factory=_empty_adapter_deliveries
+        default_factory=dict[str, AdapterDelivery]
     )
     context: RuntimeContext = field(default_factory=current_runtime_context)
 

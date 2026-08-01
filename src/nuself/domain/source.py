@@ -14,10 +14,6 @@ from nuself.domain.memory import PrivacyLevel
 SourceKind: TypeAlias = Literal["markdown", "text"]
 
 
-def empty_str_list() -> list[str]:
-    return []
-
-
 def source_id_for_path(path: Path) -> str:
     return f"src_{uuid5(NAMESPACE_URL, str(path.resolve())).hex}"
 
@@ -36,7 +32,7 @@ class SourceDocument:
     kind: SourceKind
     origin: str = "local"
     privacy: PrivacyLevel = "private"
-    tags: Sequence[str] = field(default_factory=empty_str_list)
+    tags: Sequence[str] = field(default_factory=list[str])
     source_date: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)

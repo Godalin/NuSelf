@@ -22,35 +22,29 @@ class InteractiveRetryOffer:
     request_may_have_completed: bool
 
 
-def empty_conversation_start_indexes() -> dict[str, int]:
-    return {}
-
-
-def empty_captured_conversation_messages() -> dict[str, list[tuple[int, str, str]]]:
-    return {}
-
-
-def empty_captured_log_events() -> dict[str, list[LogEvent]]:
-    return {}
-
-
-def empty_captured_log_events_by_message() -> dict[str, dict[int, list[LogEvent]]]:
-    return {}
-
-
 @dataclass
 class InteractiveSession:
     """State that belongs to one interactive CLI connection."""
 
     connected_at: datetime
-    conversation_start_indexes: dict[str, int] = field(default_factory=empty_conversation_start_indexes)
-    captured_messages: dict[str, list[tuple[int, str, str]]] = field(default_factory=empty_captured_conversation_messages)
-    captured_next_indexes: dict[str, int] = field(default_factory=empty_conversation_start_indexes)
-    captured_log_events: dict[str, list[LogEvent]] = field(default_factory=empty_captured_log_events)
-    captured_log_events_by_message: dict[str, dict[int, list[LogEvent]]] = field(
-        default_factory=empty_captured_log_events_by_message
+    conversation_start_indexes: dict[str, int] = field(
+        default_factory=dict[str, int]
     )
-    exported_next_indexes: dict[str, int] = field(default_factory=empty_conversation_start_indexes)
+    captured_messages: dict[str, list[tuple[int, str, str]]] = field(
+        default_factory=dict[str, list[tuple[int, str, str]]]
+    )
+    captured_next_indexes: dict[str, int] = field(
+        default_factory=dict[str, int]
+    )
+    captured_log_events: dict[str, list[LogEvent]] = field(
+        default_factory=dict[str, list[LogEvent]]
+    )
+    captured_log_events_by_message: dict[str, dict[int, list[LogEvent]]] = field(
+        default_factory=dict[str, dict[int, list[LogEvent]]]
+    )
+    exported_next_indexes: dict[str, int] = field(
+        default_factory=dict[str, int]
+    )
     retry_offer: InteractiveRetryOffer | None = None
     retry_requested: bool = False
 

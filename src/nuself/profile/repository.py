@@ -15,16 +15,14 @@ from nuself.runtime.messages import freeze_json_value
 from nuself.storage import StorageBackend
 
 
-def empty_str_counts() -> dict[str, int]:
-    return {}
-
-
 @dataclass(frozen=True)
 class ProfileStats:
     """Compact summary of derived profile state."""
 
     items_total: int
-    items_by_type: Mapping[str, int] = field(default_factory=empty_str_counts)
+    items_by_type: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
     items_with_evidence: int = 0
 
     def __post_init__(self) -> None:
