@@ -195,12 +195,11 @@ are not accepted as booleans. Wrong top-level shapes, obsolete nested LLM
 objects, unknown fields, and invalid values fail explicitly rather than being
 silently discarded.
 
-The v0.3 loader has one narrow v0.2.5 compatibility boundary before strict
-validation: it removes the retired `experimental.langmem_adapter` field and
-emits one fixed, payload-free deprecation warning per configuration path. No
-other unknown field is ignored. The frozen official v0.2.5 example config must
-load successfully through this boundary, and the compatibility shim may be
-removed only with the future configuration-system redesign.
+The runtime loader accepts only the current schema. It does not remove,
+translate, warn about, or otherwise normalize retired configuration fields;
+unknown v0.2.5 fields such as `experimental.langmem_adapter` fail strict
+validation. One-time migrations belong in repository scripts rather than the
+installed runtime.
 
 Before reading a present `<authority-root>/config.yaml`, NuSelf hardens the
 managed authority root to `0700`, rejects non-regular files and symlinks, and
@@ -213,11 +212,9 @@ Secret values are never read from a permissive or redirected file.
 ## Email Delivery
 
 Email uses the selected authority's `config.yaml`. The obsolete
-`private/email.toml` path is not read. If an enabled configuration has no
-non-blank `email.to_address`, loading raises a typed configuration-migration
-error before Pydantic validation. The diagnostic explicitly explains that
-v0.3 no longer reads `private/email.toml` and names the current YAML fields,
-without reading or rendering any legacy credential.
+`private/email.toml` path is not read. Enabled email is validated solely from
+the current YAML fields; missing required values produce the same input-hidden
+Pydantic validation error as any other invalid current configuration.
 
 When `email.enabled` is true, `email.smtp.host`, `email.from_address`, and
 `email.to_address` must be non-empty. SMTP `username` and `password` must be

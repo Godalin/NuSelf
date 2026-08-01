@@ -87,8 +87,8 @@ llm:
     timeout_seconds: 60
 ```
 
-For an Anthropic Messages endpoint, add `anthropic: true`. NuSelf does not
-guess provider protocol from a URL or model name.
+For an Anthropic Messages endpoint, add `anthropic: true`. NuSelf does not guess
+provider protocol; the runtime accepts only the current schema, so migrate obsolete v0.2.5 fields before startup.
 
 Inspect the effective, credential-redacted configuration:
 

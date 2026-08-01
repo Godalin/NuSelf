@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 import stat
-import warnings
 
 import pytest
 from pydantic import ValidationError
@@ -12,7 +11,6 @@ from nuself.config import (
     ConfigSystem,
     EmailConfig,
     EmailSmtpConfig,
-    LegacyEmailConfigurationMigrationError,
     LlmEndpointConfig,
     SystemConfig,
     runtime_paths,
@@ -169,50 +167,19 @@ def test_non_finite_timeouts_are_rejected_before_runtime_clients(
         ConfigSystem.load(project_root=tmp_path)
 
 
-def test_complete_official_v025_config_loads_through_narrow_migration(
+def test_retired_v025_config_field_is_rejected(
     tmp_path: Path,
 ) -> None:
-    fixture = (
-        Path(__file__).resolve().parents[3]
-        / "tests"
-        / "fixtures"
-        / "config"
-        / "v0.2.5.yaml"
-    )
     (tmp_path / "config.yaml").write_text(
-        fixture.read_text(encoding="utf-8"),
+        "experimental:\n  langmem_adapter: false\n",
         encoding="utf-8",
     )
 
-    with pytest.warns(
-        RuntimeWarning,
-        match="deprecated_v025_langmem_adapter",
-    ):
-        config = ConfigSystem.load(project_root=tmp_path)
-
-    assert len(config.llm.endpoints) == 1
-    assert config.llm.endpoints[0].base_url == "https://api.openai.com/v1"
-    assert config.llm.endpoints[0].timeout_seconds == 60
-    assert config.chat.context.recent_messages == 12
-    assert config.chat.context.summary_trigger_messages == 18
-    assert config.daemon.memory_curator.interval_seconds == 300
-    assert config.daemon.reflection_scheduler.check_interval_seconds == 600
-    assert config.daemon.notification_delivery.interval_seconds == 30
-    assert config.reflection.scheduler.interval_seconds == 3600
-    assert config.reflection.gate.relevance_threshold == 0.5
-    assert config.reflection.gate.persona_discussion_threshold == 0.7
-    assert config.reflection.moderator.max_discussion_rounds == 10
-    assert config.email.enabled is False
-    assert config.email.to_address == ""
-    assert config.experimental.vector_index is False
-
-    with warnings.catch_warnings(record=True) as repeated:
-        warnings.simplefilter("always")
-        assert ConfigSystem.load(project_root=tmp_path) is config
-    assert repeated == []
+    with pytest.raises(ValidationError, match="langmem_adapter"):
+        ConfigSystem.load(project_root=tmp_path)
 
 
-def test_enabled_legacy_email_raises_typed_safe_migration_error(
+def test_enabled_email_ignores_legacy_file_and_uses_current_validation(
     tmp_path: Path,
 ) -> None:
     authority = tmp_path
@@ -239,16 +206,12 @@ def test_enabled_legacy_email_raises_typed_safe_migration_error(
         encoding="utf-8",
     )
 
-    with pytest.raises(
-        LegacyEmailConfigurationMigrationError,
-        match="no longer reads private/email.toml",
-    ) as captured:
+    with pytest.raises(ValidationError) as captured:
         ConfigSystem.load(project_root=tmp_path)
 
     message = str(captured.value)
     assert legacy_secret not in message
-    assert "email.to_address" in message
-    assert "email.smtp.username" in message
+    assert "to_address" in message
 
 
 def test_config_read_hardens_authority_root_and_file(

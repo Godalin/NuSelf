@@ -77,7 +77,8 @@ llm:
     timeout_seconds: 60
 ```
 
-Anthropic Messages 端点需要加入 `anthropic: true`。NuSelf 不会根据 URL 或模型名猜测协议。
+Anthropic Messages 端点需要加入 `anthropic: true`。NuSelf 不会根据 URL 或模型名猜测协议；
+运行时只接受当前配置 schema，启动前请显式迁移已经废弃的 v0.2.5 字段。
 
 查看经过凭据脱敏的实际配置：
 

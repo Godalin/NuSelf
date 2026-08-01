@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Configuration loading now accepts only the current strict schema; removed
+  runtime mutation/warnings for `experimental.langmem_adapter` and the special
+  v0.2.5 email migration error.
 - Removed a one-helper Reason list alias and made Persona discussion reuse the
   existing identical non-blank text constraint from its domain dependency.
 - Runtime context decoding now accepts only canonical `conversation_id` and

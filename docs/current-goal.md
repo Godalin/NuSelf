@@ -9,23 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove stale Reflection model re-exports.
+Remove runtime v0.2.5 configuration migration.
 
 ## Ordered Steps
 
-1. Confirm Reflection scheduler does not consume its same-name imports of the
-   candidate-list and relevance-score structured output models.
-2. Remove the migration-era implicit re-exports so each framework output model
-   has one owning module and import path.
-3. Run focused Reflection and module-boundary tests and complete verification
-   gates; update
-   evidence and commit without pushing.
+1. Confirm the loader still mutates retired `langmem_adapter` input and raises
+   a legacy-email-specific error before current schema validation.
+2. Remove the compatibility function, warning cache, dedicated exception, and
+   frozen v0.2.5 fixture; require current configuration fields directly.
+3. Update user documentation and changelog, run focused Config tests and full
+   verification gates, then commit without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve the Reflection scheduler, candidate generation and relevance gate
-  contracts, including framework-native structured output validation.
+- Preserve current list-shaped LLM normalization, strict Pydantic/schema parity,
+  credential redaction, configuration layering, and managed-file hardening.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -39,6 +38,13 @@ Remove stale Reflection model re-exports.
 
 ## Phase Evidence
 
+- Configuration loading now validates only the current schema. Removed the
+  v0.2.5 mutation function, one-time warning cache, legacy-email exception,
+  obsolete fixture, and the normalization path parameter used only by that
+  shim. Retired `langmem_adapter` input now fails strict validation and an old
+  `email.toml` cannot affect or leak into current email validation. Focused
+  Config/documentation/boundary tests: 125 passed; full suite: 2439 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Reflection scheduler no longer imports and implicitly re-exports the
   candidate-list and relevance-score Pydantic models it does not consume. Each
   structured output now has one truthful owner/import path while scheduler,
