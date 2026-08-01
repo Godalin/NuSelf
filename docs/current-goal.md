@@ -9,14 +9,13 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove test-controlled public state from the macOS notification adapter.
+Make macOS notification escaping an internal implementation detail.
 
 ## Ordered Steps
 
-1. Confirm `has_osascript` is mutated only by tests and production needs an
-   immutable construction-time environment snapshot.
-2. Make the field private; tests control `shutil.which()` before construction
-   instead of changing adapter state afterward.
+1. Confirm `escape()` is called only by `send()` and direct unit tests.
+2. Move it to a private module function; validate quoting/backslashes through
+   the actual subprocess command rather than the helper API.
 3. Run focused macOS adapter tests and full gates, then commit without pushing.
 
 ## Exclusions
@@ -26,8 +25,7 @@ Remove test-controlled public state from the macOS notification adapter.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve discovery timing, dry-run behavior, escaping, timeout, audit, and
-  delivery results without adding an injection sentinel.
+- Preserve exact AppleScript quoting and subprocess behavior.
 
 ## Constraints
 
@@ -39,6 +37,11 @@ Remove test-controlled public state from the macOS notification adapter.
 
 ## Phase Evidence
 
+- macOS AppleScript escaping is now a private module implementation detail
+  consumed only by `send()`. Replaced two direct helper tests with one stronger
+  assertion over the exact emitted `osascript` command covering quotes and
+  backslashes. Focused macOS adapter tests: 8 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `MacOSNotificationAdapter` now keeps its construction-time `osascript`
   discovery result private. Tests control `shutil.which()` before construction
   rather than mutating adapter state; no sentinel or alternate constructor was

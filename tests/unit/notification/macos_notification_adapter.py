@@ -157,9 +157,21 @@ def test_osascript_timeout_diagnostic_preserves_false(
     assert result is False
 
 
-def test_escape_quotes() -> None:
-    assert MacOSNotificationAdapter.escape('say "hello"') == '"say \\"hello\\""'
+def test_send_escapes_quotes_and_backslashes(tmp_path: Path) -> None:
+    adapter = _delivery_adapter(tmp_path, available=True)
+    escaped = OutboxEntry(
+        id="escaped",
+        title='say "hello"',
+        body="path\\to\\file",
+        status="pending",
+        idempotency_key="escaped",
+    )
 
+    with patch("nuself.notification.macos.subprocess.run") as run:
+        run.return_value = MagicMock(returncode=0, stderr="")
+        assert adapter.send(escaped) is True
 
-def test_escape_backslash() -> None:
-    assert MacOSNotificationAdapter.escape("path\\to\\file") == '"path\\\\to\\\\file"'
+    assert run.call_args.args[0][2] == (
+        'display notification "path\\\\to\\\\file" '
+        'with title "say \\"hello\\""'
+    )

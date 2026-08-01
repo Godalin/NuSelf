@@ -38,7 +38,10 @@ class MacOSNotificationAdapter:
             )
             return True
 
-        script = f'display notification {self.escape(entry.body)} with title {self.escape(entry.title)}'
+        script = (
+            f"display notification {_escape_osascript(entry.body)} "
+            f"with title {_escape_osascript(entry.title)}"
+        )
         try:
             result = subprocess.run(
                 ["osascript", "-e", script],
@@ -74,6 +77,7 @@ class MacOSNotificationAdapter:
             return False
         return True
 
-    @staticmethod
-    def escape(text: str) -> str:
-        return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def _escape_osascript(text: str) -> str:
+    return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
