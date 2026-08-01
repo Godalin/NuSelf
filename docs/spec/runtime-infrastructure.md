@@ -261,8 +261,11 @@ A queue-capacity failure does not erase durable work; a later scan or restart
 must rediscover it.
 
 One dispatcher owns admission state and a bounded executor performs handlers.
-All scheduler state (pending tasks, active identities, busy resources, delayed
-tasks, and stopping state) is protected by one short-held condition. No handler,
+Scheduler lifecycle has one monotonic phase (`created`, `running`, `stopping`,
+or `stopped`); running and admission health are derived from it rather than
+stored as independent booleans. All scheduler state (pending tasks, active
+identities, busy resources, delayed tasks, and lifecycle phase) is protected by
+one short-held condition. No handler,
 database operation, model call, file operation, event projection, audit write,
 or approval prompt runs while that condition is held. Tasks declare one primary
 resource; multi-record consistency remains a repository transaction concern.

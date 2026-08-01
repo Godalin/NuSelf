@@ -22,6 +22,7 @@ from nuself.runtime.observability import publish_observed_event
 
 TaskHandler = Callable[["DaemonTask"], object]
 TaskAdmission = Literal["admitted", "coalesced"]
+SchedulerPhase = Literal["created", "running", "stopping", "stopped"]
 
 
 class DaemonSchedulerError(RuntimeError):
@@ -121,12 +122,9 @@ class DaemonScheduler:
         self._busy_resources: set[str] = set()
         self._running_count = 0
         self._sequence = 0
-        self._started = False
         # Composition and startup recovery may admit work before the
         # dispatcher starts. Shutdown is the only transition that closes it.
-        self._accepting = True
-        self._stopping = False
-        self._shutdown_complete = False
+        self._phase: SchedulerPhase = "created"
         self._last_error: str | None = None
         self._dispatcher: threading.Thread | None = None
         self._executor = ThreadPoolExecutor(
@@ -138,13 +136,13 @@ class DaemonScheduler:
         """Start the sole dispatcher and open admission."""
 
         with self._condition:
-            if self._shutdown_complete or self._stopping:
+            if self._phase in {"stopping", "stopped"}:
                 raise DaemonSchedulerStoppedError(
                     "daemon scheduler has already stopped"
                 )
-            if self._started:
+            if self._phase == "running":
                 return
-            self._started = True
+            self._phase = "running"
             self._dispatcher = threading.Thread(
                 target=self._dispatch,
                 name="nuself-scheduler",
@@ -166,7 +164,7 @@ class DaemonScheduler:
         if interval_seconds is not None and interval_seconds <= 0:
             raise ValueError("task interval must be positive")
         with self._condition:
-            if not self._accepting:
+            if self._phase not in {"created", "running"}:
                 raise DaemonSchedulerStoppedError(
                     "daemon scheduler is not accepting tasks"
                 )
@@ -199,11 +197,11 @@ class DaemonScheduler:
         with self._condition:
             return DaemonSchedulerSnapshot(
                 running=(
-                    self._started
+                    self._phase == "running"
                     and self._dispatcher is not None
                     and self._dispatcher.is_alive()
                 ),
-                accepting=self._accepting,
+                accepting=self._phase in {"created", "running"},
                 pending=len(self._pending),
                 in_flight=self._running_count,
                 capacity=self._max_concurrency,
@@ -222,10 +220,9 @@ class DaemonScheduler:
             raise ValueError("scheduler shutdown timeout must not be negative")
         deadline = self._clock() + timeout
         with self._condition:
-            if self._shutdown_complete:
+            if self._phase == "stopped":
                 return
-            self._accepting = False
-            self._stopping = True
+            self._phase = "stopping"
             if cancel_pending:
                 pending = tuple(self._pending)
                 self._pending.clear()
@@ -242,14 +239,14 @@ class DaemonScheduler:
                 )
         self._executor.shutdown(wait=True, cancel_futures=False)
         with self._condition:
-            self._shutdown_complete = True
+            self._phase = "stopped"
 
     def _dispatch(self) -> None:
         while True:
             with self._condition:
                 queued = self._next_runnable_locked()
                 while queued is None:
-                    if self._stopping and self._running_count == 0:
+                    if self._phase == "stopping" and self._running_count == 0:
                         return
                     self._condition.wait(self._wait_timeout_locked())
                     queued = self._next_runnable_locked()
@@ -370,7 +367,7 @@ class DaemonScheduler:
                 self._last_error = None
             if (
                 queued.interval_seconds is not None
-                and self._accepting
+                and self._phase == "running"
             ):
                 repeated = _QueuedTask(
                     task=queued.task,

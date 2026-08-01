@@ -9,9 +9,8 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the unified scheduler task/submission model for mirrored state and
-adapter-only methods while preserving coalescing, resource serialization, and
-shutdown completion.
+Audit daemon server startup/cleanup composition for duplicated lifecycle state
+or wrapper steps while preserving one process owner and exhaustive cleanup.
 
 ## Constraints
 
@@ -92,6 +91,13 @@ shutdown completion.
 - Activity-only close and event-classification helpers are now private module
   details instead of implied cross-module APIs.
 - Activity/client focused suite: 120 passed. Post-activity cleanup
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- Scheduler task, submission, completion, active identity, and busy-resource
+  state remain necessary for coalescing and serialization. Four lifecycle
+  booleans were replaced by one monotonic `created/running/stopping/stopped`
+  phase; running and accepting health now derive from that source.
+- Scheduler/daemon focused suite: 50 passed. Post-scheduler-lifecycle
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 
