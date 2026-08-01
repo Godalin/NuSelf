@@ -9,7 +9,6 @@ from langchain_core.tools import BaseTool
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
-from nuself.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
     from nuself.application.composition import ApplicationGraph
@@ -25,10 +24,7 @@ def compose_reason_advancer(
 
     return default_reason_advancer(
         paths=application.paths,
-        workspace_store=PrivateWorkspaceStore(
-            application.paths,
-            scope="reason",
-        ),
+        workspace_store=application.reason_workspace,
         persona_repository=application.persona_prompts,
         trace_recorder=application.trace.recorder,
         readonly_tools=readonly_tools,

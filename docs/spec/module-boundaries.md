@@ -297,7 +297,10 @@ originate at one application boundary; an optional model-backed advancer is a
 single-operation dependency rather than a second service graph.
 `ReasonService` itself receives repository, workspace store, and trace recorder
 as required dependencies. Reason scheduling and output export must receive an
-existing reason service and workspace store. Cooldown mutation is a reason
+existing reason service and the single application-owned workspace store.
+Chat tools, model-backed advancement, service operations, and output export
+reuse that store instead of constructing equivalent authority-scoped adapters.
+Cooldown mutation is a reason
 service use case; scheduling must not receive or expose the repository merely
 to persist it. Daemon workers may own queues and workspace adapters, but must
 not create or infer a second reason persistence graph. Agent reason tools

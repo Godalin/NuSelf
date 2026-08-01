@@ -34,6 +34,7 @@ def test_application_graph_reuses_one_authority_repository_graph(
     )
     assert graph.memory.sources._profile_repository is graph.memory.profile
     assert not hasattr(graph, "reason")
+    assert graph.reason_service._workspace_store is graph.reason_workspace
     assert graph.reflection_service._repository is graph.reflection
     assert graph.reflection_service._reason_service is graph.reason_service
     assert not hasattr(graph.trace, "repository")

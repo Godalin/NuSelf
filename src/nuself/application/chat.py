@@ -17,7 +17,6 @@ from nuself.reason.output_contracts import SectionPlanner
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.jobs import JobSink
-from nuself.workspace import PrivateWorkspaceStore
 from nuself.config import ConfigSystem
 from nuself.llm import configured_langchain_chat_models
 
@@ -43,10 +42,7 @@ def compose_conversation_runtime(
             memory=application.memory_service,
             reflections=application.reflection_service,
             reasons=application.reason_service,
-            reason_workspace=PrivateWorkspaceStore(
-                paths,
-                scope="reason",
-            ),
+            reason_workspace=application.reason_workspace,
             traces=application.trace.query,
             persona_tools=tuple(
                 build_persona_tools(

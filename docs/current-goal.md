@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Audit the remaining `ApplicationGraph` concrete-resource exposure—conversation,
-notification, persona, and reflection scheduling—and remove only boundaries
-that duplicate an existing complete API.
+Audit repeated configuration loading across application, Chat, daemon, Reason
+export, notification, and model composition; consolidate only within one
+operation/process snapshot without preventing intentional reloads.
 
 ## Constraints
 
@@ -150,6 +150,16 @@ that duplicate an existing complete API.
   state remains captured through SQLite backup.
 - Layout migration suite: 8 passed; the concurrent publication case passed
   three additional consecutive process runs. Post-race-fix
+  `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- `ApplicationGraph` now composes one Reason workspace store and reuses it for
+  the Reason service, Chat tools, model-backed advancement, and daemon export;
+  three equivalent authority-scoped adapter constructions are gone.
+- Conversation store/history remain distinct write/read capabilities;
+  NotificationOutbox is already the complete notification API; persona prompt
+  persistence and reflection repository/schedule state remain confined to
+  application-owned composition. No facade or resource-bundle layer was added.
+- Reason/application focused suite: 532 passed. Post-workspace-reuse
   `uv run --locked pytest -q`: 2449 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

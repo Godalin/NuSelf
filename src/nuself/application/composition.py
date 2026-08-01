@@ -35,6 +35,7 @@ class ApplicationGraph:
     memory_service: MemoryService
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
+    reason_workspace: PrivateWorkspaceStore
     reason_service: ReasonService
     reflection: ReflectionRepository
     reflection_service: ReflectionService
@@ -54,10 +55,11 @@ def compose_application(
     trace = compose_trace_services(paths, backend)
     reason = ReasonRepository(paths, backend=backend)
     reflection = ReflectionRepository(paths, backend=backend)
+    reason_workspace = PrivateWorkspaceStore(paths, scope="reason")
     reason_service = ReasonService(
         paths.project_root,
         repository=reason,
-        workspace_store=PrivateWorkspaceStore(paths, scope="reason"),
+        workspace_store=reason_workspace,
         trace_recorder=trace.recorder,
     )
     return ApplicationGraph(
@@ -75,6 +77,7 @@ def compose_application(
             backend.collection("persona_prompts"),
             paths,
         ),
+        reason_workspace=reason_workspace,
         reason_service=reason_service,
         reflection=reflection,
         reflection_service=ReflectionService(

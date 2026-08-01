@@ -40,7 +40,6 @@ from nuself.runtime.events import EventPublisher
 from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.observability import publish_observed_event
 from nuself.runtime.jobs import JobMessage
-from nuself.workspace import PrivateWorkspaceStore
 
 
 @dataclass(frozen=True)
@@ -84,10 +83,7 @@ class DaemonState:
         self.reason_export_service = ReasonExportService(
             self.project_root,
             reason_service=self.application.reason_service,
-            workspace_store=PrivateWorkspaceStore(
-                paths,
-                scope="reason",
-            ),
+            workspace_store=self.application.reason_workspace,
             task_sink=self._schedule_reason_export,
         )
         self.conversation_runtime = compose_conversation_runtime(
