@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Scheduler capacity and stopped-admission failures now remain distinct direct
+  runtime errors without an unused common exception base.
 - Daemon lifecycle cleanup now shuts down its sole scheduler directly. The
   state-level plural `stop_background_tasks` pass-through API was removed;
   startup still owns durable recovery and recurring task admission.

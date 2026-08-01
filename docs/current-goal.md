@@ -9,27 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the false plural daemon stop façade. Lifecycle ownership, fixtures, and
-failure injection should stop the sole scheduler directly; retain the startup
-orchestrator because it also recovers durable work and admits periodic tasks.
+Remove the unused daemon scheduler exception family while preserving its two
+actionable failure types. Capacity and stopped admission remain distinct direct
+`RuntimeError` subclasses; no caller consumes their common base.
 
 ## Ordered Steps
 
-1. Update the daemon contract to identify the scheduler as the shutdown
-   capability rather than a plural state-level background-task API.
-2. Delete `DaemonState.stop_background_tasks()` and bind server cleanup to
-   `scheduler.shutdown` directly.
-3. Make daemon test ownership and lifecycle failure doubles target the same
-   scheduler capability; retain recovery/start orchestration unchanged.
+1. Confirm every scheduler error consumer distinguishes concrete capacity and
+   stopped failures rather than catching a family.
+2. Make both concrete errors inherit `RuntimeError` directly and delete the
+   unused `DaemonSchedulerError` base.
+3. Keep scheduler admission, deferred-work handling, error messages, and
+   concrete exception tests unchanged.
 4. Run daemon tests, Pyright, full pytest, and package build; update evidence
    and commit without pushing.
 
 ## Exclusions
 
-- Do not remove or split the single scheduler.
-- Do not move durable recovery or periodic admission into server lifecycle.
-- Do not change cleanup order, cleanup aggregation, readiness, shutdown
-  timeout, pending-task cancellation, or scheduler lifecycle semantics.
+- Do not merge capacity and stopped admission failures.
+- Do not replace typed scheduler failures with text inspection.
+- Do not change admission, deferred-work recovery, lifecycle, or scheduler
+  concurrency semantics.
 
 ## Constraints
 
@@ -41,6 +41,11 @@ orchestrator because it also recovers durable work and admits periodic tasks.
 
 ## Phase Evidence
 
+- Removed the zero-consumer `DaemonSchedulerError` family root. Capacity and
+  stopped-admission errors remain independently typed and the daemon still
+  handles both as durable follow-up deferral without inspecting error text.
+  Focused daemon tests: 169 passed; full suite: 2436 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 - Daemon server cleanup, test ownership, and lifecycle failure injection now
   call the sole scheduler's `shutdown()` capability directly. Removed the
   state-level `stop_background_tasks()` pass-through while retaining startup's

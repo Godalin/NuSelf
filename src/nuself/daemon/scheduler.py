@@ -24,15 +24,11 @@ TaskHandler = Callable[["DaemonTask"], object]
 SchedulerPhase = Literal["created", "running", "stopping", "stopped"]
 
 
-class DaemonSchedulerError(RuntimeError):
-    """Base error for scheduler lifecycle and admission failures."""
-
-
-class DaemonSchedulerCapacityError(DaemonSchedulerError):
+class DaemonSchedulerCapacityError(RuntimeError):
     """Raised when bounded volatile admission is full."""
 
 
-class DaemonSchedulerStoppedError(DaemonSchedulerError):
+class DaemonSchedulerStoppedError(RuntimeError):
     """Raised when work is submitted outside the running lifecycle."""
 
 

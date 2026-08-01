@@ -272,6 +272,11 @@ recovery and periodic discovery may therefore submit the same identity safely.
 A queue-capacity failure does not erase durable work; a later scan or restart
 must rediscover it.
 
+Capacity exhaustion and stopped admission are separate concrete scheduler
+errors because callers handle both as recoverable wake-up deferral. They inherit
+the standard runtime error directly; there is no broader scheduler-error family
+without an independent consumer or policy.
+
 One dispatcher owns admission state and a bounded executor performs handlers.
 Scheduler lifecycle has one monotonic phase (`created`, `running`, `stopping`,
 or `stopped`); running and admission health are derived from it rather than
