@@ -9,8 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue removing duplicated validation after strict codecs and sealed exact
-catalogs. Keep one authority for each closed identity set.
+Continue module-level reachability auditing. Remove legacy modules whose only
+consumer is their own test after confirming the current composition root owns
+the behavior.
 
 ## Constraints
 
@@ -345,6 +346,13 @@ catalogs. Keep one authority for each closed identity set.
 - Handler/daemon-request/transport focused suite: 94 passed. Post-key-view
   cleanup `uv run --locked pytest -q`: 2447 passed; Pyright: 0 errors,
   0 warnings; sdist and wheel build succeeded.
+- The entire `nuself.authority` module was legacy: `get_authority_root()` had no
+  caller and `ensure_authority_root()` was called only by its own test. It and
+  that test are gone; scope resolution plus `scope init` remain the sole
+  managed-authority initialization path.
+- Scope/config/lifecycle focused suite: 94 passed. Post-authority-module cleanup
+  `uv run --locked pytest -q`: 2446 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

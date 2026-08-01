@@ -11,7 +11,6 @@ from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
 from nuself.logs import read_log_events
-from nuself.authority import ensure_authority_root
 from nuself.runtime.definitions import DefinitionRegistrySealedError
 
 
@@ -27,17 +26,6 @@ def test_daemon_lifecycle_warning_registry_is_complete_and_sealed() -> None:
 
 def _no_sleep(seconds: float) -> None:
     del seconds
-
-
-def test_ensure_authority_root_creates_runtime_dirs(tmp_path: Path) -> None:
-    paths = ensure_authority_root(tmp_path)
-
-    assert paths.authority_root.is_dir()
-    assert paths.runtime_dir.is_dir()
-    assert paths.logs_dir.is_dir()
-    assert (tmp_path / "sources").is_dir()
-    assert (tmp_path / "derived").is_dir()
-    assert (tmp_path / "shares").is_dir()
 
 
 def test_status_when_daemon_is_missing(tmp_path: Path) -> None:
