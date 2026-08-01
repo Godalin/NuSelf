@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue AST-assisted auditing of single-use private helpers. Remove only
-helpers without policy or reusable domain meaning; retain callbacks and
-validators that own failure, protocol, or composition semantics.
+Continue AST-assisted auditing of single-use private helpers and capability
+accessors. Remove local service-locator aliases while preserving application-
+owned domain services and one composition lookup per operation.
 
 ## Constraints
 
@@ -282,6 +282,12 @@ validators that own failure, protocol, or composition semantics.
   compression callback remains separate because it owns failure isolation and
   audit reporting.
 - CLI/Chat focused suite: 511 passed. Post-callback cleanup
+  `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
+- REPL `_reason_service()` had one caller and only traversed the application
+  graph. The command now resolves the graph-owned ReasonService once directly;
+  the helper and its otherwise-unused type import are gone.
+- REPL/Reason/CLI/boundary focused suite: 702 passed. Post-accessor cleanup
   `uv run --locked pytest -q`: 2455 passed; Pyright: 0 errors, 0 warnings;
   sdist and wheel build succeeded.
 

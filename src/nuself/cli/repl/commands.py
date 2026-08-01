@@ -30,7 +30,6 @@ from nuself.memory.source_repository import (
 )
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import (
@@ -58,12 +57,6 @@ def _reflection_service(
     project_root: Path | None,
 ) -> ReflectionService:
     return compose_cli_application(project_root).reflection_service
-
-
-def _reason_service(
-    project_root: Path | None,
-) -> ReasonService:
-    return compose_cli_application(project_root).reason_service
 
 
 def indent_lines(lines: list[str], prefix: str) -> list[str]:
@@ -145,7 +138,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
 
 
 def handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
-    service = _reason_service(project_root)
+    service = compose_cli_application(project_root).reason_service
     if command == "":
         return interactive_reason_help()
     if command == "list":
