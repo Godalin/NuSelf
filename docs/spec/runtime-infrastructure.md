@@ -454,6 +454,11 @@ It contains:
   `trace_id`);
 - JSON-safe typed payload.
 
+Runtime context records accept only those canonical correlation field names.
+The former chat `thread_id` spelling is not decoded as an alias for
+`conversation_id`; Reason-owned payloads may still use their distinct domain
+`thread_id` field.
+
 Payload mappings and nested collections are frozen on construction. Consumers
 receive immutable message data and `to_record()` returns a detached JSON-safe
 copy for persistence or transport. `from_record()` is the symmetric strict

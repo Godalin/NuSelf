@@ -64,17 +64,9 @@ class RuntimeContext:
         cls,
         record: Mapping[str, object],
     ) -> RuntimeContext:
-        """Decode one detached context, including the pre-v0.3.1 alias."""
+        """Decode one detached context with canonical field names."""
 
         normalized = dict(record)
-        legacy_thread_id = normalized.pop("thread_id", None)
-        if legacy_thread_id is not None:
-            if "conversation_id" in normalized:
-                raise ValueError(
-                    "runtime context cannot contain both thread_id and "
-                    "conversation_id"
-                )
-            normalized["conversation_id"] = legacy_thread_id
         unknown = set(normalized) - _CONTEXT_FIELDS
         if unknown:
             raise ValueError(

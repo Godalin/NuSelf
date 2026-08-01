@@ -9,22 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unused explicit configuration-cache reset API.
+Remove the pre-v0.3.1 RuntimeContext thread alias.
 
 ## Ordered Steps
 
-1. Confirm `ConfigSystem.clear_cache()` has no production caller and its sole
-   test call is unnecessary because missing files are never cached.
-2. Document automatic cache invalidation and remove the public reset method
-   without a compatibility alias.
-3. Run focused Config/CLI tests and complete verification gates; update
-   evidence and commit without pushing.
+1. Confirm `thread_id` in `RuntimeContext` is only the former chat conversation
+   name, not Reason's still-current domain thread identity.
+2. Make context decoding accept only canonical `conversation_id` and remove the
+   pre-v0.3.1 alias/ambiguity branch.
+3. Replace compatibility tests with strict rejection evidence, then run focused
+   Runtime tests and complete verification gates; update evidence and commit
+   without pushing.
 
 ## Exclusions
 
 - Do not eagerly create export directories or workspace storage.
-- Preserve path/mtime/size memoization, changed-file invalidation, missing-file
-  discovery, layered configuration, and daemon restart semantics.
+- Preserve canonical runtime correlation fields, Reason thread IDs in Reason
+  payloads/audits, immutable envelopes, and strict unknown-field rejection.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
 
@@ -38,6 +39,12 @@ Remove the unused explicit configuration-cache reset API.
 
 ## Phase Evidence
 
+- `RuntimeContext.from_record()` now accepts only canonical correlation field
+  names. Removed the pre-v0.3.1 chat `thread_id` → `conversation_id` alias and
+  its ambiguity branch; strict tests now reject the old spelling while Reason's
+  distinct domain `thread_id` remains unchanged. Focused Runtime tests: 110
+  passed; full suite: 2439 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - `ConfigSystem` no longer exposes `clear_cache()`, whose only caller was an
   unnecessary test step after creating a previously missing file. Config loads
   still memoize immutable values by path/mtime/size, replace stale entries, and
@@ -430,8 +437,9 @@ Remove the unused explicit configuration-cache reset API.
 - Memory optimization and endpoint failover now call their shared classifiers
   directly; the exact pass-through aliases are gone. The sole legacy-email
   migration error now inherits `ValueError` directly because no caller catches
-  a migration-error family. Durable pre-v0.3.1 RuntimeContext decoding and the
-  supported v0.2.5 email upgrade remain intentionally intact. Focused
+  a migration-error family. The supported v0.2.5 email upgrade remained
+  intentionally intact; the then-preserved RuntimeContext alias was removed in
+  a later phase recorded above. Focused
   memory/agent/config tests: 188 passed; full suite: 2434 passed; Pyright: 0
   errors, 0 warnings; sdist and wheel build succeeded.
 - Removed seven zero-consumer public helpers spanning the obsolete reasoning
