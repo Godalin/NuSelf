@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Memory curator recovery and operator inspection now share the plan store's
+  single typed `get()` operation. The duplicate `resumable()` read and
+  standalone one-use observation-ID validator were removed.
 - Visible-handle parsing now keeps selection-shape classification private and
   exposes only the shared parse/resolve operations used by command adapters.
 - SQLite rollback-only and rollback-cleanup failures now remain distinct direct

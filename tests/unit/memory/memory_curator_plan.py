@@ -104,6 +104,17 @@ def test_plan_locks_are_per_thread_and_stable_after_exception(
         pass
 
 
+@pytest.mark.parametrize("observation_id", ("invalid", "obs_/escape"))
+def test_plan_lock_rejects_invalid_observation_identity(
+    tmp_path: Path,
+    observation_id: str,
+) -> None:
+    store = memory_curator_plan_store(tmp_path)
+
+    with pytest.raises(ValueError, match="invalid observation id"):
+        store.exclusive(observation_id)
+
+
 class _FailingCloseHandle:
     def fileno(self) -> int:
         return 42

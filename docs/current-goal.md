@@ -9,26 +9,27 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Collapse the two zero-consumer public visible-selection classifiers into one
-private parser detail. Keep the shared public parse/resolve APIs and all stable
-ID versus visible-index behavior unchanged.
+Collapse duplicate curator-plan reads into one typed store API and return the
+single observation-ID lock-path check to its owning `exclusive()` operation.
+Keep durable recovery, corruption reporting, and lock behavior unchanged.
 
 ## Ordered Steps
 
-1. Confirm `uses_visible_selection_syntax()` and
-   `looks_like_visible_index_range()` have no external consumers.
-2. Replace both with one private classifier used by
-   `resolve_visible_handle_selection()`.
-3. Preserve compact ranges, comma selections, numeric indexes, hyphenated
-   stable IDs, validation, ordering, and deduplication.
-4. Run handle/CLI tests, Pyright, full pytest, and package build; update
-   evidence and commit without pushing.
+1. Confirm `MemoryCuratorPlanStore.get()` and `resumable()` have identical
+   decode, identity, and corruption semantics.
+2. Make curator recovery use `get()` and delete the duplicate `resumable()`
+   method.
+3. Inline the zero-consumer `validate_observation_id()` helper into
+   `exclusive()`, which exclusively owns the derived lock path.
+4. Run curator-plan/memory/CLI tests, Pyright, full pytest, and package build;
+   update evidence and commit without pushing.
 
 ## Exclusions
 
-- Do not move handle parsing into individual command handlers.
-- Do not make a hyphenated stable ID look like a numeric range.
-- Do not change public parse/resolve signatures or visible-index semantics.
+- Do not change wire decoding, identity correlation, or corrupt-record reports.
+- Do not change lock paths, no-follow/private-file behavior, contention, or
+  cleanup failure provenance.
+- Do not change durable plan resume, completion, or discard behavior.
 
 ## Constraints
 
@@ -40,6 +41,12 @@ ID versus visible-index behavior unchanged.
 
 ## Phase Evidence
 
+- Curator recovery now uses the same typed `MemoryCuratorPlanStore.get()` as
+  operator inspection; removed the identical `resumable()` implementation.
+  Observation-ID validation now stays in `exclusive()`, the sole lock-path
+  owner, instead of a zero-consumer public helper. Source removes 26 lines and
+  adds 3; focused curator-plan/memory/CLI tests: 355 passed; full suite: 2439
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Collapsed the zero-external-consumer visible selection and range classifiers
   into one private `_uses_visible_selection_syntax()` detail. Public shared
   parse/resolve operations remain unchanged, as do numeric indexes, compact

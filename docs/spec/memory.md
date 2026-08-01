@@ -140,8 +140,10 @@ message, or identifier.
 - A plan is an authoritative typed record. Invalid JSON, observation identity,
   source reference, or actions are corrupt state: report `record_decode_failed` and abort rather than
   calling the model or guessing whether prior candidate effects committed.
-- Curator runtime and operator tooling share one typed plan store for path
-  validation, strict decoding, corruption reporting, and exact-observation delete.
+- Curator runtime and operator tooling share one typed plan store and one
+  `get()` read operation for path validation, strict decoding, corruption
+  reporting, and exact-observation deletion. Recovery is a use of that read,
+  not a parallel store API.
 - `nuself memory plan show <observation>` exposes only operational metadata:
   observation ID, source reference, observation time, action count, action/type, optional
   target ID, and deterministic candidate ID. It must not print candidate

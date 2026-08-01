@@ -606,7 +606,7 @@ class MemoryCurator:
         observation_id: str,
     ) -> MemoryCuratorPlan | None:
         try:
-            return self._plan_store.resumable(observation_id)
+            return self._plan_store.get(observation_id)
         except MemoryCuratorPlanCorruptError as exc:
             raise ValueError(
                 diagnostic_exception_message(exc)

@@ -241,27 +241,6 @@ class MemoryCuratorPlanStore:
         ) as exc:
             self._raise_corrupt(observation_id, exc)
 
-    def resumable(
-        self,
-        observation_id: str,
-    ) -> MemoryCuratorPlan | None:
-        try:
-            raw = self._collection.get(observation_id)
-            if raw is None:
-                return None
-            raw_mapping = _without_storage_id(raw)
-            plan = MemoryCuratorPlan.from_wire(
-                raw_mapping,
-                expected_observation_id=observation_id,
-                allowed_types=self._registry.names(),
-            )
-            return plan
-        except (
-            TypeError,
-            ValueError,
-        ) as exc:
-            self._raise_corrupt(observation_id, exc)
-
     def save(self, plan: MemoryCuratorPlan) -> MemoryCuratorPlan:
         self._collection.put(plan.observation_id, plan.to_wire())
         return plan
@@ -280,7 +259,8 @@ class MemoryCuratorPlanStore:
     def exclusive(self, observation_id: str) -> MemoryCuratorPlanLock:
         """Return the authoritative mutation lock for one observation."""
 
-        validate_observation_id(observation_id)
+        if not observation_id.startswith("obs_") or "/" in observation_id:
+            raise ValueError(f"invalid observation id: {observation_id}")
         return MemoryCuratorPlanLock(
             self._paths.runtime_dir
             / "curator-locks"
@@ -304,11 +284,6 @@ class MemoryCuratorPlanStore:
             "inspect with 'nuself memory plan show OBSERVATION' or explicitly "
             "discard with 'nuself memory plan discard OBSERVATION --force'"
         ) from exc
-
-
-def validate_observation_id(observation_id: str) -> None:
-    if not observation_id.startswith("obs_") or "/" in observation_id:
-        raise ValueError(f"invalid observation id: {observation_id}")
 
 
 def _without_storage_id(
