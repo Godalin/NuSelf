@@ -205,9 +205,6 @@ invocation are distinct exception sources:
   through the handler boundary and is handled by the socket adapter's generic
   invocation-failure path, not relabeled as malformed client payload.
 
-`echo` is the deliberate exception: its contract is an arbitrary JSON object,
-so passing its payload through unchanged is the typed behavior of that request.
-
 Success response payload field sets are also exact:
 
 - `ping` and `shutdown` return one string `message`;

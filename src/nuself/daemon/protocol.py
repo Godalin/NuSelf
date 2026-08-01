@@ -22,7 +22,6 @@ JsonValue: TypeAlias = (
 RequestType: TypeAlias = Literal[
     "ping",
     "health",
-    "echo",
     "chat",
     "shutdown",
     "activity_open",
@@ -33,7 +32,6 @@ ResponseStatus: TypeAlias = Literal["ok", "error"]
 REQUEST_TYPES: tuple[RequestType, ...] = (
     "ping",
     "health",
-    "echo",
     "chat",
     "shutdown",
     "activity_open",

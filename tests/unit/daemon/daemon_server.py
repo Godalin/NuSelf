@@ -564,16 +564,6 @@ def test_daemon_health_returns_scheduler_snapshot(tmp_path: Path) -> None:
     assert scheduler["in_flight"] == 0
     assert scheduler["capacity"] == 4
 
-def test_daemon_echo_returns_payload(tmp_path: Path) -> None:
-    state = DaemonState(tmp_path)
-    request = DaemonRequest(type="echo", payload={"test": "data"}, request_id="echo1")
-
-    response = handle_request(request, state)
-
-    assert response.status == "ok"
-    assert response.payload["test"] == "data"
-
-
 def test_daemon_shutdown_sets_flag(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     request = DaemonRequest(type="shutdown", payload={}, request_id="shutdown1")

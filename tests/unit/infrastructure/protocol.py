@@ -15,7 +15,7 @@ from nuself.daemon.protocol import (
 
 
 def test_request_round_trip() -> None:
-    request = DaemonRequest(type="echo", payload={"message": "hello"}, request_id="r1")
+    request = DaemonRequest(type="ping", payload={"message": "hello"}, request_id="r1")
 
     parsed = DaemonRequest.from_json_line(request.to_json_line())
 
@@ -89,12 +89,12 @@ def test_protocol_rejects_missing_newline_and_invalid_utf8() -> None:
 def test_protocol_rejects_non_finite_json_numbers() -> None:
     with pytest.raises(ProtocolError, match="invalid JSON constant"):
         DaemonRequest.from_json_line(
-            b'{"version":1,"request_id":"r","type":"echo",'
+            b'{"version":1,"request_id":"r","type":"ping",'
             b'"payload":{"value":NaN}}\n'
         )
     with pytest.raises(ProtocolError, match="non-finite number"):
         DaemonRequest(
-            type="echo",
+            type="ping",
             payload={"value": float("inf")},
         ).to_json_line()
 
@@ -128,12 +128,12 @@ def test_protocol_rejects_non_finite_json_numbers() -> None:
             "duplicate JSON object field",
         ),
         (
-            b'{"version":1,"request_id":"r","type":"echo",'
+            b'{"version":1,"request_id":"r","type":"ping",'
             b'"payload":{"value":1e999}}\n',
             "non-finite number",
         ),
         (
-            b'{"version":1,"request_id":"r","type":"echo",'
+            b'{"version":1,"request_id":"r","type":"ping",'
             b'"payload":{"value":1,"value":2}}\n',
             "duplicate JSON object field",
         ),
@@ -159,11 +159,11 @@ def test_request_rejects_ambiguous_envelope_fields(
             version=True,  # type: ignore[arg-type]
         ),
         DaemonRequest(
-            type="echo",
+            type="ping",
             payload={1: "not a string key"},  # type: ignore[dict-item]
         ),
         DaemonRequest(
-            type="echo",
+            type="ping",
             payload={"nested": [object()]},  # type: ignore[list-item]
         ),
     ],

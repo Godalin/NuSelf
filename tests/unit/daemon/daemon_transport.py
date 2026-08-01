@@ -730,7 +730,7 @@ def test_client_request_encoding_failure_is_not_retryable(
 
     with pytest.raises(DaemonConnectionError) as captured:
         client.request(
-            "echo",
+            "ping",
             {"value": float("nan")},
             project_root=tmp_path,
         )

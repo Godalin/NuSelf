@@ -9,9 +9,9 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Continue the daemon/service API audit at the request boundary: look for
-transport-shaped methods, repeated lifecycle queries, or pass-through helpers
-that can be removed without narrowing domain use cases.
+Continue auditing application and daemon service boundaries for methods or
+composition helpers with no production consumer. Remove only surface whose
+deletion shortens a real call path; retain complete domain use cases.
 
 ## Constraints
 
@@ -156,6 +156,13 @@ that can be removed without narrowing domain use cases.
 - Scheduler/activity/server focused suite: 50 passed.
 - Post-scheduler-state cleanup `uv run --locked pytest -q`: 2457 passed;
   Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
+- The daemon's `echo` request had no production client, CLI, or domain use case;
+  it existed only as a transport test hook. It is gone from the wire request
+  catalog and sealed handler registry, and framing tests now use the real
+  `ping` request type.
+- Protocol/request/transport focused suite: 115 passed. Post-request-surface
+  cleanup `uv run --locked pytest -q`: 2456 passed; Pyright: 0 errors,
+  0 warnings; sdist and wheel build succeeded.
 
 - Memory, reason, persona, notification, reflection, Chat, endpoint, storage,
   and observability audit validators now compose the shared exact-field

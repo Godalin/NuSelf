@@ -81,7 +81,6 @@ def build_daemon_request_registry() -> DaemonRequestRegistry:
     registry.use(_daemon_request_scope)
     registry.register("ping", _handle_ping)
     registry.register("health", _handle_health)
-    registry.register("echo", _handle_echo)
     registry.register("chat", _handle_chat)
     registry.register("shutdown", _handle_shutdown)
     registry.register("activity_open", _handle_activity_open)
@@ -169,14 +168,6 @@ def _handle_health(
         )
     )
     return DaemonResponse.ok(request, payload.to_wire())
-
-
-def _handle_echo(
-    request: DaemonRequest,
-    state: DaemonRequestState,
-) -> DaemonResponse:
-    del state
-    return DaemonResponse.ok(request, request.payload)
 
 
 def _handle_chat(
