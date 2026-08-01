@@ -9,24 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Unify the duplicate blocking managed-file lock lifecycle used by conversation
-and notification resources.
+Remove redundant caller-side directory preparation now owned by the shared
+managed resource-lock primitive.
 
 ## Ordered Steps
 
-1. Confirm conversation and notification use behavior-identical blocking
-   managed-file locks and that special-purpose lock contracts remain distinct.
-2. Add one dependency-neutral managed lock context to `private_fs` and replace
-   both duplicate stateful lock classes.
-3. Run private-filesystem, conversation, and notification tests, then Pyright,
-   full pytest, and package build; update evidence and commit without pushing.
+1. Confirm `blocking_private_file_lock()` already creates and hardens the lock
+   file's complete managed parent path.
+2. Remove duplicate directory preparation and now-unused imports from both
+   domain call sites.
+3. Run focused tests and the complete verification gates; update evidence and
+   commit without pushing.
 
 ## Exclusions
 
-- Do not change resource identity, blocking behavior, or lock-file lifetime.
-- Do not merge non-blocking daemon ownership, schema migration, append-log, or
-  memory-curator lock contracts.
-- Do not add a lock registry, lock manager, or process-global state.
+- Do not move resource identity or mutation-scope ownership out of domains.
+- Do not weaken managed-path symlink or owner-only permission enforcement.
+- Do not change blocking behavior or lock-file lifetime.
 
 ## Constraints
 
@@ -38,6 +37,13 @@ and notification resources.
 
 ## Phase Evidence
 
+- Conversation and notification lock call sites now rely on the shared lock
+  primitive's existing parent-path preparation. Removed both redundant
+  `ensure_private_directory()` calls and imports while retaining identical
+  managed permissions, symlink checks, lock paths, and blocking behavior.
+  Implementation removes 10 lines and adds 2. Focused tests: 50 passed; full
+  suite: 2443 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Conversation and notification resource locks now reuse
   `blocking_private_file_lock()` for owner-only file preparation and blocking
   `flock` lifecycle. Removed both duplicate stateful lock classes while each

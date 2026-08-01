@@ -10,10 +10,7 @@ import time
 from typing import Generator, Literal, TypeVar, cast
 
 from nuself.config import RuntimePaths
-from nuself.private_fs import (
-    blocking_private_file_lock,
-    ensure_private_directory,
-)
+from nuself.private_fs import blocking_private_file_lock
 from nuself.storage import StorageBackend
 
 ConversationRole = Literal["user", "assistant"]
@@ -314,7 +311,6 @@ class ConversationStore:
         conversation_id: str,
     ) -> AbstractContextManager[None]:
         self._validate_id(conversation_id)
-        ensure_private_directory(self._locks_dir)
         return blocking_private_file_lock(
             self._locks_dir / f"{conversation_id}.lock"
         )

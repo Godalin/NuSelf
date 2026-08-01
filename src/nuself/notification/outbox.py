@@ -16,10 +16,7 @@ from nuself.notification.model import (
     parse_aware_timestamp,
 )
 from nuself.runtime.observability import decode_observed_record
-from nuself.private_fs import (
-    blocking_private_file_lock,
-    ensure_private_directory,
-)
+from nuself.private_fs import blocking_private_file_lock
 from nuself.storage import (
     StorageBackend,
     validate_storage_key,
@@ -46,7 +43,6 @@ class NotificationOutbox:
     ) -> AbstractContextManager[None]:
         """Serialize one entry across delivery, dismiss, and deletion."""
         validate_storage_key(entry_id)
-        ensure_private_directory(self._entry_lock_directory)
         return blocking_private_file_lock(
             self._entry_lock_directory / f"{entry_id}.lock"
         )
