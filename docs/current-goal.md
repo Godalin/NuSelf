@@ -9,16 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Compose application configuration from the already-resolved scope.
+Preserve the resolved scope when opening the CLI application runtime.
 
 ## Ordered Steps
 
-1. Add an application-composition regression proving workspace config inherits
-   user defaults and applies workspace overrides.
-2. Replace path-only `ConfigSystem.load()` with `load_scope(paths.scope)`;
-   perform no second authority resolution inside the graph composer.
-3. Run focused config/application tests and full gates, then commit without
-   pushing.
+1. Add a runtime regression proving an explicit `NuSelfScope` remains the exact
+   scope carried by `RuntimePaths`.
+2. Let the runtime factory accept a scope or authority path and pass the CLI's
+   already-resolved scope instead of only `scope.root`.
+3. Run focused scope/runtime/CLI tests and full gates, then commit without push.
 
 ## Exclusions
 
@@ -27,8 +26,8 @@ Compose application configuration from the already-resolved scope.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve strict configuration validation, layer order, immutable graph
-  configuration, lazy model construction, and storage ownership.
+- Preserve lazy backend opening, authority drift checks, runtime cleanup, CLI
+  parser fields, and path-based infrastructure/test callers.
 
 ## Constraints
 
@@ -40,6 +39,12 @@ Compose application configuration from the already-resolved scope.
 
 ## Phase Evidence
 
+- `open_application_runtime()` now accepts an explicit `NuSelfScope`, and CLI
+  main passes the scope it already resolved rather than only `scope.root`.
+  Path-based internal/test callers remain supported; a regression proves the
+  exact workspace scope reaches `RuntimePaths`. Focused scope/runtime/CLI tests:
+  42 passed; full suite: 2442 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - `compose_application()` now loads configuration from `paths.scope` instead of
   reconstructing a path-only authority. A new composition regression proves
   workspace graphs inherit user language defaults and apply workspace context

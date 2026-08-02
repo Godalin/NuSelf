@@ -14,6 +14,7 @@ from nuself.application.composition import (
     compose_application,
 )
 from nuself.config import RuntimePaths, runtime_paths
+from nuself.scope import NuSelfScope
 from nuself.storage import ClosableStorageBackend, auto_backend
 from nuself.storage_audit import report_backend_close_failure
 
@@ -101,11 +102,11 @@ class ApplicationRuntime:
 
 
 def open_application_runtime(
-    project_root: Path | None = None,
+    authority: NuSelfScope | Path | None = None,
 ) -> ApplicationRuntime:
     """Resolve one authority without opening storage until first use."""
 
-    return ApplicationRuntime(runtime_paths(project_root))
+    return ApplicationRuntime(runtime_paths(authority))
 
 
 _CURRENT_APPLICATION_RUNTIME: ContextVar[

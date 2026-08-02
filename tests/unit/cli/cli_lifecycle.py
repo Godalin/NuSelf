@@ -7,6 +7,7 @@ import pytest
 
 from nuself.cli import CliLifecycleError, main
 from nuself.cli.exit_codes import CliExitCode
+from nuself.scope import NuSelfScope
 
 
 class _Parser:
@@ -56,8 +57,9 @@ def test_cli_closes_application_runtime_after_success(
         )
         return 7
 
-    def open_runtime(project_root: Path) -> _Runtime:
-        return _Runtime(project_root, events=events)
+    def open_runtime(scope: NuSelfScope) -> _Runtime:
+        assert scope.kind == "workspace"
+        return _Runtime(scope.root, events=events)
 
     monkeypatch.setattr("nuself.cli.build_parser", lambda: parser)
     monkeypatch.setattr(
@@ -94,8 +96,9 @@ def test_cli_closes_runtime_then_reraises_same_control_exception(
         del args, parser
         raise primary
 
-    def open_runtime(project_root: Path) -> _Runtime:
-        return _Runtime(project_root, events=events)
+    def open_runtime(scope: NuSelfScope) -> _Runtime:
+        assert scope.kind == "workspace"
+        return _Runtime(scope.root, events=events)
 
     monkeypatch.setattr("nuself.cli.dispatch_cli", fail_dispatch)
     monkeypatch.setattr(
@@ -128,8 +131,9 @@ def test_cli_interrupt_closes_runtime_without_traceback(
         del args, parser
         raise KeyboardInterrupt
 
-    def open_runtime(project_root: Path) -> _Runtime:
-        return _Runtime(project_root, events=events)
+    def open_runtime(scope: NuSelfScope) -> _Runtime:
+        assert scope.kind == "workspace"
+        return _Runtime(scope.root, events=events)
 
     monkeypatch.setattr("nuself.cli.dispatch_cli", interrupt_dispatch)
     monkeypatch.setattr(
@@ -181,9 +185,10 @@ def test_cli_cleanup_failure_retains_primary_as_cause(
         del kwargs
         reports.append(error)
 
-    def open_runtime(project_root: Path) -> _Runtime:
+    def open_runtime(scope: NuSelfScope) -> _Runtime:
+        assert scope.kind == "workspace"
         return _Runtime(
-            project_root,
+            scope.root,
             close_error=cleanup_error,
         )
 

@@ -18,6 +18,7 @@ from nuself.cli.composition import (
     compose_cli_application,
     compose_cli_backend,
 )
+from nuself.scope import resolve_scope
 
 
 def test_application_runtime_factory_does_not_open_storage(
@@ -40,6 +41,17 @@ def test_application_runtime_factory_does_not_open_storage(
     open_application_runtime(tmp_path)
 
     assert opened is False
+
+
+def test_application_runtime_preserves_explicit_scope(tmp_path: Path) -> None:
+    scope = resolve_scope(
+        workspace=tmp_path / "workspace",
+        environ={"NUSELF_HOME": str((tmp_path / "user").resolve())},
+    )
+
+    runtime = open_application_runtime(scope)
+
+    assert runtime.paths.scope is scope
 
 
 def test_application_runtime_reuses_one_graph_and_closes_idempotently(

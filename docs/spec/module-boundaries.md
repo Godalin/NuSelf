@@ -62,8 +62,11 @@ accepts only the resolved database path; it must not offer a convenience
 constructor that resolves project or authority scope again.
 
 `ApplicationRuntime` is the shared authority-lifetime owner. Its public
-factory resolves paths without opening storage; the first graph access selects
-one backend and constructs the complete authority-scoped `ApplicationGraph`.
+factory accepts the already-resolved `NuSelfScope` (or a path-only internal
+authority when no scope metadata exists) and resolves paths without opening
+storage. CLI composition passes its resolved scope rather than discarding it to
+the root path. The first graph access selects one backend and constructs the
+complete authority-scoped `ApplicationGraph`.
 First access and close are serialized by one non-reentrant lifecycle lock;
 runtime composition must not recursively request its own graph.
 It is context-manageable, closes idempotently, and rejects graph access after

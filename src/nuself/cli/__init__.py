@@ -96,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     project_root = scope.root
     primary_error: BaseException | None = None
     result: int = CliExitCode.SUCCESS
-    application_runtime = open_application_runtime(project_root)
+    application_runtime = open_application_runtime(scope)
     try:
         with use_application_runtime(application_runtime):
             result = dispatch_cli(args, parser)

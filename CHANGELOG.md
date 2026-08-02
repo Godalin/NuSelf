@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The CLI now passes its resolved `NuSelfScope` into `ApplicationRuntime`
+  instead of discarding workspace/user-layer metadata to a root path.
 - Application composition now loads configuration from its already-resolved
   scope, preserving user defaults beneath workspace overrides.
 - Daemon request state and its socket adapter now expose the selected
