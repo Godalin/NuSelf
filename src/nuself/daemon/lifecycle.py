@@ -17,7 +17,7 @@ from nuself.daemon.instance import daemon_instance_owned
 from nuself.private_fs import ensure_private_file
 from nuself.scope import NuSelfScope
 from nuself.runtime.observability import report_corrupt_record
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningSchemaError,

@@ -14,7 +14,7 @@ from langgraph.types import Command
 
 from nuself.runtime.messages import encode_json_value, freeze_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningSchemaError,

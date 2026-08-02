@@ -9,7 +9,7 @@ from nuself.runtime.definitions import (
     DuplicateDefinitionError,
     UnknownDefinitionError,
 )
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningRegistryUnsealedError,

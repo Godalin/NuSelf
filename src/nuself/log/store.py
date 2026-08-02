@@ -46,7 +46,7 @@ from nuself.log.warning import (
     LOG_TERMINAL_WARNING_REGISTRY,
 )
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     emit_registered_terminal_warning,
 )
 

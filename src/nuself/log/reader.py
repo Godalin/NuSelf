@@ -13,7 +13,7 @@ from nuself.log.store import component_log_paths, log_path
 from nuself.log.warning import LOG_TERMINAL_WARNING_REGISTRY
 from nuself.runtime.audit.types import LOG_COMPONENTS, LogComponent
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.warning_definitions import emit_registered_terminal_warning
+from nuself.runtime.warning import emit_registered_terminal_warning
 
 
 def read_log_events(

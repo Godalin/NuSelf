@@ -28,7 +28,7 @@ from nuself.runtime.diagnostics import (
 )
 from nuself.runtime.event.publisher import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningSchemaError,

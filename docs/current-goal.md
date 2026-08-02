@@ -5,43 +5,27 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-In progress — group runtime infrastructure by owned capability.
+Idle — no active implementation goal.
 
 ## Objective
 
-Replace the flat Audit, Event, Job, Log, and Feature runtime files with compact
-owned subpackages, split the oversized log store, and migrate every caller
-without compatibility forwarding modules.
+No active objective.
 
 ## Next Steps
 
-1. Audit remaining flat files, run full gates, commit each complete boundary,
-   return to Idle, and stop.
+1. Define the next objective, exclusions, ordered steps, and completion evidence
+   before implementation.
 
 ## Exclusions
 
-- Preserve runtime behavior, persisted and wire schemas, event names, log
-  locations, public CLI behavior, and exception semantics.
-- Do not add generic `model.py` files where a more precise owner name exists.
-- Do not retain old-path aliases, forwarding modules, or import shims.
-- Do not move single-owner domain or adapter behavior into runtime.
+- Do not start non-trivial implementation while this goal is idle.
 
 ## Last Verification
 
-- Baseline: Pyright 0 errors, 0 warnings; 2394 tests passed; package build
-  succeeded before this goal. A direct strict check of `logs.py` plus the
-  complete runtime package also reports 0 errors and 0 warnings.
-- Audit package: Pyright 0 errors, 0 warnings; 279 focused audit and boundary
-  tests passed; no old Audit source path remains.
-- Job/Event packages: Pyright 0 errors, 0 warnings; 123 focused message,
-  scheduler, publication, definition, and boundary tests passed; no old Job or
-  Event source path remains.
-- Log package: the former 1043-line `logs.py` and two scattered runtime files
-  are separated into `record`, `store`, `reader`, and `warning` owners under
-  `nuself.log`; every caller uses a precise owner and no forwarding module
-  remains. Pyright reports 0 errors and 0 warnings; 191 focused log, runtime,
-  daemon, REPL, and boundary tests pass.
-- Feature package: policy declarations and their injected-port interpreter now
-  live under `runtime.feature` as `policy` and `execution`; no generic model or
-  compatibility facade was added. Pyright reports 0 errors and 0 warnings; 209
-  focused Feature, Agent, Persona, and boundary tests pass.
+- Runtime infrastructure grouping completed: Audit, Event, Job, and Feature use
+  compact owned subpackages; Log uses the top-level `nuself.log` package with
+  separate `record`, `store`, `reader`, and `warning` owners.
+- All callers use precise owner imports. Old paths and compatibility forwarding
+  modules are absent; remaining flat runtime files each own one neutral concern.
+- Full Pyright: 0 errors, 0 warnings. Full pytest passed. Source distribution
+  and wheel build succeeded for NuSelf 0.3.1.

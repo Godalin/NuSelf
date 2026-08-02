@@ -15,7 +15,7 @@ import pytest
 
 import nuself.log.reader as log_reader
 import nuself.log.store as logs
-from nuself.runtime.warning_definitions import TerminalWarningSchemaError
+from nuself.runtime.warning import TerminalWarningSchemaError
 from nuself.log.reader import InteractiveLogCursor, read_log_events
 from nuself.log.store import (
     LogAppendLifecycleError,

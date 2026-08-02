@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from nuself.runtime.audit.types import LOG_COMPONENTS
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningSchemaError,

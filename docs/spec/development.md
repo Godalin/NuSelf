@@ -460,7 +460,7 @@ single-use forwarding functions around those adapters.
   Process-local observer delivery supplies only the caught exception; callable
   identity, presentation, schema, and terminal fallback remain logging-core
   policy.
-- `runtime/warning_definitions.py` owns reusable sealed terminal-warning
+- `runtime/warning.py` owns reusable sealed terminal-warning
   definition and rendering mechanics. `log/warning.py` composes its closed six-event
   taxonomy and supplies typed facts, never free-form warning strings.
 - `daemon/lifecycle.py` owns the sealed raw process-log rotation warning
