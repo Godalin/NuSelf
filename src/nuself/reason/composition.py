@@ -1,4 +1,4 @@
-"""Application-owned composition for the reason domain."""
+"""Reason-owned workflow composition from supplied capabilities."""
 
 from __future__ import annotations
 

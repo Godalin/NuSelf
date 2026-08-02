@@ -8,7 +8,7 @@ import sys
 from typing import cast
 
 from nuself.cli.composition import cli_application
-from nuself.application.curator import (
+from nuself.memory.composition import (
     compose_memory_curator,
     compose_memory_optimizer,
 )

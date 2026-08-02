@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.application.trace import compose_trace_services
+from nuself.trace.composition import compose_trace_services
 from nuself.config import runtime_paths
 from reason_fixtures import ReasonService
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository

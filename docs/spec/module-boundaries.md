@@ -85,26 +85,24 @@ service locators. Domain repositories must not call them. Direct CLI mode and
 daemon mode construct the same service graph; transport and lifecycle ownership
 are their only differences.
 
-The trace package is the first migrated domain boundary. `TraceRepository`
-requires an explicit `StorageBackend` and `RuntimePaths`, and `TraceRecorder`
-and `TraceQueryService` require an explicit repository. `nuself.application`
-owns the factory that assembles those concrete objects into immutable
-`TraceServices`; the domain package does not own an authority-resolving
-factory. Reintroducing backend or path resolution in the trace package is
+`TraceRepository` requires an explicit `StorageBackend` and `RuntimePaths`, and
+`TraceRecorder` and `TraceQueryService` require an explicit repository. Trace
+owns the factory that assembles those supplied resources into immutable
+`TraceServices`; domain-owned composition must not resolve authority or open
+storage. Reintroducing backend or path resolution in Trace composition is
 forbidden and covered by executable architecture tests.
 
 Profile follows the same boundary: `ProfileItemRepository` receives resolved
-paths and storage, profile aggregation receives a repository, and the
-application layer owns concrete profile construction. Neither domain may
-recover authority resources from a project root.
+paths and storage, and profile aggregation receives a repository. Concrete
+Memory composition supplies Profile's already-resolved resources; neither
+domain may recover authority resources from a project root.
 
-`ReasonRepository` likewise receives resolved paths and storage, and the
-application layer owns its concrete factory. Existing reason workflow
-constructors remain migration scope and may still resolve authority while the
-service graph is centralized, but the repository itself must never recover
-authority. Reason domain modules must not import the application package:
-doing so creates an application→reason→application cycle during cold process
-startup.
+`ReasonRepository` likewise receives resolved paths and storage. Reason owns
+its concrete workflow composition and accepts the graph capabilities needed by
+each factory explicitly. Its repository and composition must never recover
+authority. Type-only knowledge of `ApplicationGraph` is permitted only in
+domain composition modules; Reason runtime and service modules must not import
+the application package.
 
 `ReflectionRepository` follows the same persistence boundary: construction
 requires resolved paths and the selected backend, while concrete assembly is
@@ -148,7 +146,8 @@ Writing the document record is likewise internal to ingestion; callers provide
 a source path rather than assembling a partial stored document without its
 chunks.
 
-Application memory composition builds the concrete production registry graph.
+Memory-owned composition builds the concrete production registry graph from
+supplied paths and storage.
 Custom memory type and relation registries remain repository-construction
 concerns for focused domain tests, not unused variability in the application
 composition API.
@@ -186,8 +185,8 @@ Interrupt and exceptional exits follow the same outer cleanup path as normal
 completion. Graph construction and explicit infrastructure borrowing share one
 lock-owned lazy backend acquisition path; closing also releases the runtime's
 graph reference after admission is closed.
-Application-owned Chat, daemon, notification, and model composition reuse that
-snapshot. Explicit configuration inspection and adapters documented to reload
+Domain-owned Chat, daemon, notification, and model composition reuse that
+application snapshot. Explicit configuration inspection and adapters documented to reload
 per operation may still call the loader; nested composition must not reload the
 same snapshot merely to obtain one subsection.
 One daemon startup resolves and orders its configured LLM endpoints once.
@@ -201,10 +200,10 @@ set and produce the normal typed model-unavailable outcome on invocation.
 Chat-only aggregation lives in `agent.tools.composition`; domain code imports
 its concrete tool module directly so importing decorators or one tool cannot
 initialize Reason, Reflection, Memory, and Persona transitively.
-`nuself.agent.chat` is likewise an import-light namespace. Application
-composition imports its runtime, settings, result DTOs, response service, and
-resource snapshots from their owning modules; the package root must not expose
-conversation storage or initialize the complete Chat graph on import.
+`nuself.agent.chat` is likewise an import-light namespace. Its concrete
+composition module imports the engine, settings, result DTOs, response service,
+and resource snapshots from their owning modules; the package root must not
+expose conversation storage or initialize the complete Chat graph on import.
 Domain package roots follow the same import-light rule when no cohesive public
 facade is consumed by production code. The Reason, Persona, Reflection, Trace,
 and Profile package roots are namespaces rather than aggregators: internal
@@ -214,8 +213,8 @@ workspace storage, graph orchestration, discussion, scheduling, or organization
 as a side effect.
 
 Daemon chat receives its memory, profile, reflection, trace, and conversation
-collaborators from that graph. `application.chat` resolves them once into an
-immutable `ConversationResources` snapshot, with a nested `ToolResources`
+collaborators from that graph. `agent.chat.composition` resolves them once into
+an immutable `ConversationResources` snapshot, with a nested `ToolResources`
 snapshot for the narrower tool boundary. Neither owns lifecycle, dispatch,
 storage selection, or business behavior; they prevent the same resources from
 being forwarded independently through every nested constructor. Conversation
@@ -313,9 +312,10 @@ capabilities; it must not retain the whole graph as a runtime service locator.
 It must not inspect a context variable, construct a fallback runtime, or retain
 the lifecycle owner after composition.
 
-The `nuself.application` package root is an import-light namespace. Process
-adapters import each composition function or immutable resource bundle from
-its owning application module; the root does not grow a second catalog of the
+The `nuself.application` package root is an import-light namespace. The package
+contains only authority lifecycle, the complete graph root, and genuine
+cross-domain use cases; concrete domain factories and immutable domain bundles
+belong to their domain packages. The root does not grow a second catalog of the
 composition graph. By contrast, `nuself.decorators` is the deliberate public
 spelling for the cohesive inert feature-declaration DSL and may re-export the
 policies and decorators owned by `runtime.features`.
@@ -337,7 +337,7 @@ is required only where one domain invokes another domain's capability.
 `ConversationGraphRuntime` is an agent orchestration consumer, not a
 composition root. Memory query/repository, conversation storage, reflection, reason,
 trace, and persona-tool capabilities are mandatory inputs. Production and
-evaluation surfaces obtain the concrete graph from `application.chat`.
+evaluation surfaces obtain the concrete graph from `agent.chat.composition`.
 The model/tool loop remains the framework-native LangChain `create_agent`
 graph. NuSelf's fixed context, response, and state-update stages form one
 direct typed pipeline; compression is follow-up work after commit. Wrapping

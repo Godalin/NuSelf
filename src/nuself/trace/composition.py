@@ -1,4 +1,4 @@
-"""Application-owned composition for the trace domain."""
+"""Trace-owned capability composition from supplied resources."""
 
 from __future__ import annotations
 

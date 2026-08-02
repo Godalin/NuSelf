@@ -23,7 +23,7 @@ from pydantic import BaseModel, ValidationError
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
 from conversation_fixtures import ConversationStore
 from nuself.application.composition import compose_application
-from nuself.application.reflection import compose_reflection_scheduler
+from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.config import runtime_paths
 from nuself.domain.proactive import IdeaCandidate

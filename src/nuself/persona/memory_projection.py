@@ -1,4 +1,4 @@
-"""Application-owned persona prompt persistence composition."""
+"""Persona definitions projected from public Memory entries."""
 
 from __future__ import annotations
 

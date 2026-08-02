@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.application.reason import (
+from nuself.reason.composition import (
     compose_reason_advancer,
 )
 from nuself.cli.composition import cli_application

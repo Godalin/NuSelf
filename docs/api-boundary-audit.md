@@ -89,7 +89,7 @@ must replace implementations instead of stable capabilities.
 
 Minimal correction: define consumer-owned ports for candidate context,
 discussion, publication, provenance, and schedule state. Compose all concrete
-implementations once in `application.reflection`; inject language/config as
+implementations once in `reflection.composition`; inject language/config as
 values.
 
 ### A4 — Resolved: graph-shaped conversation projection
@@ -134,7 +134,7 @@ Risk: memory schema and persona schema evolve together, while default fallback
 construction hides model/config dependencies.
 
 Minimal correction: define a `PersonaDefinitionSource` API returning persona
-DTOs. Put the memory-to-persona projection in `application.persona`; inject
+DTOs. Put the memory-to-persona projection in `persona.memory_projection`; inject
 discussion/activation/synthesis capabilities and resolved settings.
 
 ### A7 — Resolved: process-adapter recomposition

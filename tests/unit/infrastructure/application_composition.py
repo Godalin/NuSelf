@@ -103,11 +103,11 @@ def test_reason_prompt_models_are_composed_lazily(
         return "Composed prompt."
 
     monkeypatch.setattr(
-        "nuself.application.reason.configured_langchain_chat_models",
+        "nuself.reason.composition.configured_langchain_chat_models",
         configured_models,
     )
     monkeypatch.setattr(
-        "nuself.application.reason.generate_reasoning_prompt",
+        "nuself.reason.composition.generate_reasoning_prompt",
         generate_prompt,
     )
 

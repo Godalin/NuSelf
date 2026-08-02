@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from nuself.agent.middleware import ToolOutcome
 from nuself.application.composition import compose_application
-from nuself.application.reason import compose_reason_advancer
+from nuself.reason.composition import compose_reason_advancer
 from nuself.config import runtime_paths
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
 from nuself.logs import read_log_events
@@ -88,7 +88,7 @@ def test_application_reason_composition_resolves_models_from_graph_config(
         return (endpoint,)
 
     monkeypatch.setattr(
-        "nuself.application.reason.configured_langchain_chat_models",
+        "nuself.reason.composition.configured_langchain_chat_models",
         configured,
     )
 

@@ -76,16 +76,25 @@ an interactive operation crosses into an owned worker thread, the same
 application authority is bound into that call and remains owned by the outer
 CLI lifecycle.
 
-Application composition is deliberately concrete. A composition helper exists
-only when it assembles policy or multiple dependencies for a real consumer;
-one-line repository constructors and pass-through accessors are not service
-APIs. The root constructs those repositories directly, while application
-services continue to express complete domain use cases.
+The application package owns authority lifetime, the complete graph root, and
+orchestration that genuinely crosses domain boundaries. It is not a horizontal
+catalog of concrete domain factories. Chat, Memory, Persona, Reason,
+Reflection, and Trace own concrete composition beside their services and
+repositories; the application root invokes those factories while retaining one
+resource graph. This ownership rule adds no generic composition framework or
+base-class hierarchy.
+
+A composition helper exists only when it assembles policy or multiple
+dependencies for a real consumer; one-line repository constructors and
+pass-through accessors are not service APIs. Domain composition receives
+already-resolved paths, storage, config, or graph capabilities and must never
+reselect authority resources.
 
 Reflection orchestration receives candidate generation, relevance,
-organization, discussion, publication, and trace capabilities from
-application composition. Persona's memory projection is likewise
-application-owned, so neither domain imports the other's persistence model.
+organization, discussion, publication, and trace capabilities from its
+domain-owned composition. Persona owns its read-only projection from Memory's
+public repository contract; neither domain opens the other's persistence or
+selects authority resources.
 The daemon keeps one scheduler and one resource-serialization mechanism; a
 small closed task catalog prevents producer/handler name drift without adding
 per-domain schedulers or locks.

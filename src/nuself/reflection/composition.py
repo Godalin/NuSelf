@@ -1,4 +1,4 @@
-"""Application-owned composition for the reflection domain."""
+"""Reflection-owned orchestration composition."""
 
 from __future__ import annotations
 

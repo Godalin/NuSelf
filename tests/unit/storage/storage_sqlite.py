@@ -39,7 +39,7 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.memory.source_repository import SourceRepository
-from nuself.application.trace import compose_trace_services
+from nuself.trace.composition import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository

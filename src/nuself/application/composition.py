@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nuself.application.memory import (
+from nuself.memory.composition import (
     MemoryRepositories,
     compose_memory_repositories,
 )
-from nuself.application.reason import compose_reason_prompt_generator
+from nuself.reason.composition import compose_reason_prompt_generator
 from nuself.application.data_admin import DataAdminService
-from nuself.application.trace import TraceServices, compose_trace_services
+from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification.outbox import NotificationOutbox

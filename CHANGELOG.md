@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Concrete composition, models, background workflows, and evaluation code now
+  live with their owning domains; shared application/runtime packages retain
+  only their actual architectural responsibilities.
 - One-shot Chat now reuses its per-turn conversation runtime for delayed
   compression instead of rebuilding the complete model/tool resource graph.
 - CLI adapters now borrow the already-selected application graph or backend

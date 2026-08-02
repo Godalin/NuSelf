@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.application.trace import compose_trace_services
+from nuself.trace.composition import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.scheduler import ReasonScheduler as _ReasonScheduler

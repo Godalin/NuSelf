@@ -34,7 +34,7 @@ from nuself.conversation import (
 )
 from conversation_fixtures import ConversationStore
 from nuself.agent.tool_utils import tool_service_component
-from nuself.application.trace import compose_trace_services
+from nuself.trace.composition import compose_trace_services
 from nuself.config import runtime_paths
 from nuself.domain.memory import MemoryEntry
 from nuself.domain.profile import ProfileItem
@@ -1549,7 +1549,7 @@ def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, 
 
     monkeypatch.setattr(sys.stdin, "isatty", _isatty)
     monkeypatch.setattr(builtins, "input", _input)
-    monkeypatch.setattr("nuself.application.reason.generate_reasoning_prompt", _generate_reasoning_prompt)
+    monkeypatch.setattr("nuself.reason.composition.generate_reasoning_prompt", _generate_reasoning_prompt)
 
     tool = _chat_tool(tmp_path, "reason_propose")
     result = _invoke_chat_tool(
@@ -1592,7 +1592,7 @@ def test_reason_propose_creates_conversation_when_proposal_audit_is_unavailable(
         return "Test-generated reasoning prompt."
 
     monkeypatch.setattr(
-        "nuself.application.reason.generate_reasoning_prompt",
+        "nuself.reason.composition.generate_reasoning_prompt",
         generate_prompt,
     )
 

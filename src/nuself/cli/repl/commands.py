@@ -168,7 +168,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
         thread_ref = command.removeprefix("advance ").strip()
-        from nuself.application.reason import compose_reason_advancer
+        from nuself.reason.composition import compose_reason_advancer
 
         advancer = compose_reason_advancer(
             cli_application()

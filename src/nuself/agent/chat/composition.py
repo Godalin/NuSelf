@@ -1,6 +1,8 @@
-"""Shared conversation-runtime composition for direct and daemon surfaces."""
+"""Chat-owned conversation-runtime composition for process surfaces."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from nuself.agent.chat.types import (
     ChatAgentSettings,
@@ -11,9 +13,8 @@ from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.text import LangChainTextAgent
-from nuself.application.composition import ApplicationGraph
 from nuself.persona.tools import build_persona_tools
-from nuself.application.persona import load_personas_from_memory
+from nuself.persona.memory_projection import load_personas_from_memory
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
@@ -22,11 +23,14 @@ from nuself.llm import configured_langchain_chat_models
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import runtime_event_log_sink
 
+if TYPE_CHECKING:
+    from nuself.application.composition import ApplicationGraph
+
 __all__ = ["ChatResult", "compose_conversation_runtime"]
 
 
 def compose_conversation_runtime(
-    application: ApplicationGraph,
+    application: "ApplicationGraph",
     *,
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,

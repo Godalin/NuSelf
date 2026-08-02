@@ -6,12 +6,12 @@ import threading
 from dataclasses import dataclass, replace
 from uuid import uuid4
 
-from nuself.application.chat import ChatResult, compose_conversation_runtime
-from nuself.application.curator import compose_memory_curator
+from nuself.agent.chat.composition import ChatResult, compose_conversation_runtime
+from nuself.memory.composition import compose_memory_curator
 from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
-from nuself.application.reflection import compose_reflection_scheduler
-from nuself.application.reason import compose_reason_advancer
+from nuself.reflection.composition import compose_reflection_scheduler
+from nuself.reason.composition import compose_reason_advancer
 from nuself.agent.text import LangChainTextAgent
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.reason_export import (

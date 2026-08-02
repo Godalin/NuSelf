@@ -147,7 +147,7 @@ class FixtureResponseService:
 
 def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     """Run one golden fixture and return the eval result."""
-    from nuself.application.chat import compose_conversation_runtime
+    from nuself.agent.chat.composition import compose_conversation_runtime
     from nuself.application.runtime import open_application_runtime
 
     with open_application_runtime(project_root) as runtime:
