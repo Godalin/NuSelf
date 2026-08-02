@@ -22,7 +22,7 @@ from nuself.logs import (
     read_log_events,
     write_log_event,
 )
-from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.audit.types import LogComponent
 from nuself.runtime.execution import OwnedCall, current_cancellation
 from nuself.runtime.log_event import LogEvent
 

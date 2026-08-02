@@ -26,13 +26,13 @@ from nuself.logs import (
     write_audit_envelope,
     write_log_event,
 )
-from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.audit.types import LogComponent
 from nuself.runtime.log_event import LogEvent
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
 )
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
 )
 from nuself.runtime.definitions import DefinitionRegistrySealedError

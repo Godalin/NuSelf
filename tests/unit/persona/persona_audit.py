@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 
 from nuself.persona import audit
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
@@ -100,7 +100,7 @@ def test_persona_audit_rejects_unknown_event_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 
@@ -124,7 +124,7 @@ def test_persona_audit_rejects_sensitive_metadata_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 

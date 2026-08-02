@@ -23,11 +23,11 @@ from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
 )
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
 )
-from nuself.runtime.audit_types import (
+from nuself.runtime.audit.types import (
     LOG_COMPONENTS,
     LogComponent,
     LogLevel,

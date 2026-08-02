@@ -7,7 +7,7 @@ import pytest
 
 from nuself.daemon import audit
 from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,
@@ -84,7 +84,7 @@ def test_lifecycle_audit_rejects_unknown_event_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 
@@ -147,7 +147,7 @@ def test_lifecycle_audit_rejects_invalid_transition_metadata_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 
@@ -175,7 +175,7 @@ def test_lifecycle_audit_enforces_error_policy_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 

@@ -18,7 +18,7 @@ from nuself.agent.errors import (
     AgentProtocolError,
 )
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.runtime.audit_definitions import AuditEventDefinition
+from nuself.runtime.audit.definition import AuditEventDefinition
 from nuself.llm import (
     LLMSettings,
     LangChainLLMEndpoint,
@@ -188,7 +188,7 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         create_agent,
     )
     monkeypatch.setattr(
-        "nuself.runtime.auditing.report_defined_failure",
+        "nuself.runtime.audit.catalog.report_defined_failure",
         report_failure,
     )
     monkeypatch.setattr(

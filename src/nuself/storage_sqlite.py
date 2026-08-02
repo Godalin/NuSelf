@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Protocol, cast
 from uuid import uuid4
 
-from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.audit.types import LogComponent
 from nuself.private_fs import (
     PRIVATE_FILE_MODE,
     ensure_private_directory,

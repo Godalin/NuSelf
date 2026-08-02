@@ -5,26 +5,34 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+In progress — group runtime infrastructure by owned capability.
 
 ## Objective
 
-No active objective. Domain audit modules now instantiate one shared sealed
-catalog while retaining ownership of event names and metadata validation.
+Replace the flat Audit, Event, Job, Log, and Feature runtime files with compact
+owned subpackages, split the oversized log store, and migrate every caller
+without compatibility forwarding modules.
 
 ## Next Steps
 
-None.
+1. Move Job and Event contracts into `runtime/job` and `runtime/event`.
+2. Replace top-level `logs.py` and scattered log files with `nuself/log` owners.
+3. Move Feature policy and execution into `runtime/feature`.
+4. Audit remaining flat files, run full gates, commit each complete boundary,
+   return to Idle, and stop.
 
 ## Exclusions
 
-None while idle.
+- Preserve runtime behavior, persisted and wire schemas, event names, log
+  locations, public CLI behavior, and exception semantics.
+- Do not add generic `model.py` files where a more precise owner name exists.
+- Do not retain old-path aliases, forwarding modules, or import shims.
+- Do not move single-owner domain or adapter behavior into runtime.
 
 ## Last Verification
 
-- Pyright: 0 errors, 0 warnings.
-- Pytest: 2394 passed.
-- Package build: source distribution and wheel succeeded for `0.3.1`.
-- Audit convergence: 390 net lines removed; primary domain audit modules have
-  no delivery wrappers, and specialized endpoint, request, transport, and
-  cleanup helpers remain only where they add redaction, context, or metadata.
+- Baseline: Pyright 0 errors, 0 warnings; 2394 tests passed; package build
+  succeeded before this goal. A direct strict check of `logs.py` plus the
+  complete runtime package also reports 0 errors and 0 warnings.
+- Audit package: Pyright 0 errors, 0 warnings; 279 focused audit and boundary
+  tests passed; no old Audit source path remains.

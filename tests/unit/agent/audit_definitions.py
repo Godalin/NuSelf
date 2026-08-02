@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 import pytest
 
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditDefinitionRegistrySealedError,
     AuditDefinitionRegistryUnsealedError,

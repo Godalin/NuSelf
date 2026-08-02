@@ -12,15 +12,15 @@ from nuself.logs import (
     write_audit_envelope,
     write_log_event,
 )
-from nuself.runtime.audit_types import LogComponent, LogLevel
+from nuself.runtime.audit.types import LogComponent, LogLevel
 from nuself.runtime.log_event import LogEvent
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.audit_types import LOG_COMPONENTS
+from nuself.runtime.audit.types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,

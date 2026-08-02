@@ -7,7 +7,7 @@ from nuself.daemon.transport_audit import (
     report_daemon_transport_failure,
 )
 from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,

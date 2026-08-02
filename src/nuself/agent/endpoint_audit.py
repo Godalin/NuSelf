@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 from nuself.llm import redacted_llm_diagnostic
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.auditing import AuditCatalog
+from nuself.runtime.audit.catalog import AuditCatalog
 
 type AgentEndpointComponent = Literal[
     "chat",

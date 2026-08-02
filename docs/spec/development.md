@@ -440,10 +440,10 @@ single-use forwarding functions around those adapters.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
   exact per-event semantic validators, messages, and best-effort audit sink
   boundary. Like daemon request and transport audits, it composes the shared
-  `runtime.audit_definitions` contract rather than defining a parallel registry,
+  `runtime.audit.definition` contract rather than defining a parallel registry,
   definition, schema error, or exact-field helper.
 - `runtime/definitions.py` owns generic sealed definition-registry mechanics;
-  `runtime/audit_definitions.py` owns the shared direct persisted-audit contract.
+  `runtime/audit/definition.py` owns the shared direct persisted-audit contract.
 - `runtime/observability.py` owns the sealed secondary-failure taxonomy.
   Domain audit writers and event publishers provide only the failed primary
   identity; they never define local write/delivery failure event aliases.

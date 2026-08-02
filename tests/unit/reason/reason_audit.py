@@ -6,11 +6,11 @@ from typing import cast
 import pytest
 
 from nuself.reason import audit
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
-from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.audit.types import LogComponent
 
 _CANONICAL: tuple[
     tuple[str, str, dict[str, object], int | None],
@@ -334,7 +334,7 @@ def test_reason_audit_rejects_unknown_event_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 
@@ -360,7 +360,7 @@ def test_reason_completion_observer_uses_fixed_projection(
         calls.append((operation, kwargs))
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.run_observed_best_effort",
+        "nuself.runtime.audit.catalog.run_observed_best_effort",
         run_observed,
     )
     operation = lambda: ["reason-1"]

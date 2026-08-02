@@ -890,7 +890,7 @@ Structured logs are an append-only sink and read model.
   best-effort sink: an unknown event or invalid level, status, error, or
   metadata is a programming error, not an audit persistence failure.
 - Neutral audit component and level types live below the log sink in
-  `runtime.audit_types`; definition infrastructure must not import the
+  `runtime.audit.types`; definition infrastructure must not import the
   persistence module merely to describe a contract.
 - The immutable log projection and record codec live below persistence in
   `runtime.log_event`. Protocol, audit-definition, and presentation modules

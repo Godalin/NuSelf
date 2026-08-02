@@ -12,7 +12,7 @@ from nuself.config import runtime_paths
 from nuself.logs import (
     read_log_events,
 )
-from nuself.runtime.audit_types import LOG_COMPONENTS, LogComponent
+from nuself.runtime.audit.types import LOG_COMPONENTS, LogComponent
 from nuself.tui.render import render_log_event, render_log_event_json
 
 

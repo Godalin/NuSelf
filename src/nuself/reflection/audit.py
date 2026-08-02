@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Literal
 
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata as _require_exact_fields,
 )
-from nuself.runtime.auditing import AuditCatalog
+from nuself.runtime.audit.catalog import AuditCatalog
 
 type ReflectionAuditEvent = Literal[
     "schedule_blocked",

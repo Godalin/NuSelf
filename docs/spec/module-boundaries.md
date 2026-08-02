@@ -29,9 +29,10 @@ The following import rules are mandatory:
 
 - `nuself.runtime` is dependency-neutral infrastructure. It must not import
   CLI, daemon, agent, TUI, REPL, or business-domain packages.
-- The `nuself.runtime` package root is an import-light namespace. Consumers
-  import `messages`, `context`, `events`, `jobs`, or the other owning module;
-  the root must not eagerly aggregate independent runtime facilities.
+- The `nuself.runtime` package root and its capability-package roots are
+  import-light namespaces. Audit consumers import the precise owner such as
+  `runtime.audit.catalog`; package roots must not eagerly aggregate independent
+  facilities.
 - Storage, configuration, scope, clock, and private-filesystem foundations
   must not import presentation or process adapters.
 - Business-domain packages must not import CLI, daemon, TUI, or REPL modules.
@@ -598,7 +599,11 @@ candidates. Domain policy, terminal wording, provider-specific behavior, and
 one-off convenience wrappers remain with their owners.
 
 Shared modules use specific names such as `runtime.handlers` or
-`runtime.cleanup`; new catch-all `utils`, `helpers`, or `common` modules are
+`runtime.cleanup`; related Audit facilities use their owned runtime subpackage.
+Files use precise single-word responsibility names; `model.py` is not mandatory
+and must not replace a more informative name such as `definition`, `message`,
+`publisher`, `payload`, `catalog`, or `policy`. New catch-all `utils`, `helpers`,
+or `common` modules are
 forbidden. Existing modules with those names must remain narrowly scoped.
 
 Logging persistence remains the single internal event-log implementation, but

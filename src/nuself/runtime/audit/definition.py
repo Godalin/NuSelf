@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from nuself.runtime.audit_types import LOG_COMPONENTS, LogComponent, LogLevel
+from nuself.runtime.audit.types import LOG_COMPONENTS, LogComponent, LogLevel
 from nuself.runtime.definitions import (
     DefinitionRegistry,
     DefinitionRegistrySealedError,

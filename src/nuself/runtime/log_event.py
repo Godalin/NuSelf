@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import uuid4
 
-from nuself.runtime.audit_types import LOG_COMPONENTS, LogComponent, LogLevel
+from nuself.runtime.audit.types import LOG_COMPONENTS, LogComponent, LogLevel
 from nuself.runtime.identities import require_persisted_event_name
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,

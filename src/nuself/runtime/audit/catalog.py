@@ -7,13 +7,13 @@ from pathlib import Path
 from types import MappingProxyType
 
 from nuself.logs import write_log_event
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
-from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.audit.types import LogComponent
 from nuself.runtime.log_event import LogEvent
 from nuself.runtime.observability import (
     report_defined_failure,

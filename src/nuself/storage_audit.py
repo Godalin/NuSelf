@@ -6,12 +6,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.auditing import AuditCatalog
+from nuself.runtime.audit.catalog import AuditCatalog
 from nuself.runtime.cleanup import (
     CleanupFailure,
     cleanup_failure_records,

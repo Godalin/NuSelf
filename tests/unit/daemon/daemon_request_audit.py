@@ -8,7 +8,7 @@ from nuself.daemon.request_audit import (
     write_daemon_request_audit,
 )
 from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,

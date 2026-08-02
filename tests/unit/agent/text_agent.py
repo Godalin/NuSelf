@@ -12,7 +12,7 @@ from nuself.agent import failover as failover_module
 from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.text import LangChainTextAgent
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
-from nuself.runtime.audit_definitions import AuditEventDefinition
+from nuself.runtime.audit.definition import AuditEventDefinition
 
 
 class _FakeModel:
@@ -119,7 +119,7 @@ def test_text_agent_uses_shared_endpoint_failover(
         del project_root, endpoint_index
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.report_defined_failure",
+        "nuself.runtime.audit.catalog.report_defined_failure",
         report_failure,
     )
     monkeypatch.setattr(

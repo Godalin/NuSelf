@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 from nuself.runtime.log_event import LogEvent
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.auditing import AuditCatalog
+from nuself.runtime.audit.catalog import AuditCatalog
 from nuself.runtime.context import runtime_context
 
 type DaemonRequestAuditEvent = Literal[

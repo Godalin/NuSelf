@@ -104,7 +104,7 @@ from nuself.cli.readiness import (
     MODEL_READY,
     NO_READINESS,
 )
-from nuself.runtime.audit_types import LOG_COMPONENTS
+from nuself.runtime.audit.types import LOG_COMPONENTS
 from nuself.trace.model import TRACE_KINDS
 
 

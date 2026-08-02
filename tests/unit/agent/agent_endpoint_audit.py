@@ -9,7 +9,7 @@ from nuself.agent.endpoint_audit import (
     AGENT_ENDPOINT_AUDIT,
     report_agent_endpoint_failure,
 )
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,
@@ -110,7 +110,7 @@ def test_agent_endpoint_failure_uses_fixed_safe_projection(
         calls.append((exc, kwargs))
 
     monkeypatch.setattr(
-        "nuself.runtime.auditing.report_defined_failure",
+        "nuself.runtime.audit.catalog.report_defined_failure",
         report_failure,
     )
 

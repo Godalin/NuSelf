@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from nuself.runtime.audit_types import LOG_COMPONENTS
+from nuself.runtime.audit.types import LOG_COMPONENTS
 from nuself.runtime.warning_definitions import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
