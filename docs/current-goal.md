@@ -9,22 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Give `ApplicationRuntime` one backend acquisition path.
+Remove the single-use daemon chat timeout getter.
 
 ## Ordered Steps
 
-1. Specify one lock-owned lazy backend acquisition primitive shared by graph
-   and infrastructure access.
-2. Remove duplicated acquisition branches and clear the graph reference during
-   idempotent close.
-3. Add mixed concurrent-access coverage, run focused/full gates, record
-   evidence, and commit without pushing.
+1. Specify direct consumption of the application-owned timeout at the daemon
+   chat client call.
+2. Inline the lookup and remove helper-only tests/API.
+3. Replace them with a workspace-layer adapter regression, run focused/full
+   gates, record evidence, and commit without pushing.
 
 ## Exclusions
 
-- Preserve lazy opening, one graph/config snapshot, backend borrowing,
-  authority checks, close diagnostics, idempotency, and closed-state errors.
-- Do not expose the acquisition primitive or add a resource-manager hierarchy.
+- Preserve timeout validation/fallback, workspace layering, client error
+  classification, runtime context, and chat presentation.
+- Do not add a config subsection facade or cache.
 
 ## Constraints
 
@@ -36,6 +35,12 @@ Give `ApplicationRuntime` one backend acquisition path.
 
 ## Phase Evidence
 
+- Daemon chat now reads `request_timeout_seconds` directly at its
+  `client.chat()` call. Removed the single-use timeout getter and three tests of
+  that internal getter; one adapter-boundary regression now proves the actual
+  workspace request inherits and transmits the user-layer timeout. Focused
+  chat/CLI tests: 341 passed; full suite: 2444 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - `ApplicationRuntime.application` and `.backend` now share one lock-owned lazy
   backend acquisition primitive, eliminating duplicate resource creation
   branches. Close also releases the graph reference while retaining idempotent

@@ -20,6 +20,7 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.runtime.execution import CancellationToken, use_cancellation
+from nuself.scope import resolve_scope
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +51,52 @@ def _chat_result(
             turn_id=turn_id,
         ),
     )
+
+
+def test_daemon_chat_preserves_user_timeout_in_workspace_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_root = tmp_path / "user"
+    workspace = tmp_path / "workspace"
+    user_root.mkdir()
+    (workspace / ".nuself").mkdir(parents=True)
+    (user_root / "config.yaml").write_text(
+        "chat:\n  request_timeout_seconds: 37\n",
+        encoding="utf-8",
+    )
+    scope = resolve_scope(
+        workspace=workspace,
+        environ={"NUSELF_HOME": str(user_root)},
+    )
+    captured_timeout = 0.0
+
+    def respond(*args: object, **kwargs: object) -> ChatResponsePayload:
+        del args
+        nonlocal captured_timeout
+        timeout = kwargs["timeout"]
+        assert isinstance(timeout, (int, float))
+        captured_timeout = float(timeout)
+        return ChatResponsePayload(
+            answer="done",
+            conversation_id="default",
+            evidence_references=(),
+            epistemic_status=None,
+        )
+
+    monkeypatch.setattr(chat.client, "chat", respond)
+    runtime = open_application_runtime(scope)
+    try:
+        with use_application_runtime(runtime):
+            result = chat.send_daemon_chat_interactive(
+                "hello",
+                scope.root,
+            )
+    finally:
+        runtime.close()
+
+    assert result.reply == "done"
+    assert captured_timeout == 37
 
 
 def test_daemon_connection_failure_is_retryable(

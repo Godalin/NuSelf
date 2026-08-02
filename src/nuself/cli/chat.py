@@ -71,7 +71,10 @@ def send_daemon_chat_interactive(
                 conversation_id=conversation_id,
                 turn_id=turn_id,
                 project_root=project_root,
-                timeout=chat_request_timeout_seconds(project_root),
+                timeout=(
+                    compose_cli_application(project_root)
+                    .config.chat.request_timeout_seconds
+                ),
             )
         except client.DaemonConnectionError as exc:
             cancellation = current_cancellation()
@@ -118,15 +121,6 @@ def send_daemon_chat_interactive(
             code=CliExitCode.SUCCESS,
             reply=response.answer,
         )
-
-
-def chat_request_timeout_seconds(project_root: Path | None) -> float:
-    """Return the configured daemon chat request timeout."""
-
-    return compose_cli_application(
-        project_root
-    ).config.chat.request_timeout_seconds
-
 
 def send_one_shot_chat(
     message: str,

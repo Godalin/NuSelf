@@ -4,20 +4,17 @@ from pathlib import Path
 import pytest
 
 from nuself.conversation import ConversationStore
-from nuself.cli.chat import chat_request_timeout_seconds
 from nuself.cli.commands.reason import handle_reason_start
 from nuself.cli.repl.commands import (
     handle_interactive_history_command,
     handle_interactive_persona_command,
     handle_interactive_reason_command,
 )
-from nuself.config import ChatConfig, ConfigSystem
 from nuself.logs import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
 from nuself.reason.service import ReasonService
 from nuself.application.runtime import open_application_runtime, use_application_runtime
-from nuself.scope import resolve_scope
 
 
 @pytest.fixture(autouse=True)
@@ -26,56 +23,6 @@ def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunctio
     try:
         with use_application_runtime(runtime):
             yield
-    finally:
-        runtime.close()
-
-
-def test_chat_timeout_uses_default_after_malformed_yaml(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    (tmp_path / "config.yaml").write_text(
-        "chat: [unterminated",
-        encoding="utf-8",
-    )
-    timeout = chat_request_timeout_seconds(tmp_path)
-
-    assert timeout == ChatConfig().request_timeout_seconds
-    assert "ignoring unreadable config" in capsys.readouterr().err
-
-
-def test_chat_timeout_does_not_hide_unexpected_config_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def fail_load(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("config implementation failed")
-
-    monkeypatch.setattr(ConfigSystem, "load_scope", fail_load)
-
-    with pytest.raises(RuntimeError, match="config implementation failed"):
-        chat_request_timeout_seconds(tmp_path)
-
-
-def test_chat_timeout_preserves_user_config_in_workspace_scope(
-    tmp_path: Path,
-) -> None:
-    user_root = tmp_path / "user"
-    workspace = tmp_path / "workspace"
-    user_root.mkdir()
-    (workspace / ".nuself").mkdir(parents=True)
-    (user_root / "config.yaml").write_text(
-        "chat:\n  request_timeout_seconds: 37\n",
-        encoding="utf-8",
-    )
-    scope = resolve_scope(
-        workspace=workspace,
-        environ={"NUSELF_HOME": str(user_root)},
-    )
-    runtime = open_application_runtime(scope)
-    try:
-        with use_application_runtime(runtime):
-            assert chat_request_timeout_seconds(scope.root) == 37
     finally:
         runtime.close()
 

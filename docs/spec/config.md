@@ -17,7 +17,9 @@ Application composition owns this effective immutable configuration for its
 resolved scope. Ordinary CLI and daemon consumers read `ApplicationGraph.config`
 instead of reloading configuration from an authority path, which cannot
 reconstruct the user layer beneath workspace scope. Explicit configuration and
-scope inspection commands remain separate read-only projections.
+scope inspection commands remain separate read-only projections. Consumers
+read the required subsection at their operation boundary; single-use field
+getter functions must not mirror the immutable graph.
 
 ## Config Sections
 
