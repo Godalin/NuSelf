@@ -19,6 +19,7 @@ from nuself.persona.discussion import SharedPersonaDiscussionService
 from nuself.reason.service import ReasonService
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
+from nuself.source.service import SourceService
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def compose_reflection_resources(
 def compose_reflection_scheduler(
     paths: RuntimePaths,
     memory: MemoryRepositories,
+    sources: SourceService,
     conversation_history: ConversationHistoryService,
     repository: ReflectionRepository,
     service: ReflectionService,
@@ -70,7 +72,7 @@ def compose_reflection_scheduler(
     generator = IdeaCandidateGenerator(
         paths.authority_root,
         memory_repository=memory.entries,
-        source_repository=memory.sources,
+        source_service=sources,
         profile_repository=memory.profile,
         conversation_history=conversation_history,
         language_preference=language_preference,

@@ -34,11 +34,11 @@ behavior, grouped by subsystem. Configurable defaults live in
 |----------|-----------|-------|--------|
 | `DEFAULT_MEMORY_LIMIT` | `memory/service.py:14` | 8 | Default memory search result limit |
 | scoring weights | `memory/service.py:201-236` | various | Title/body/tag/confidence/importance boost values |
-| `min_quality_chars` | `memory/curator.py:28` | 120 | Minimum body chars for memory curation |
-| `existing_memory_limit` | `memory/curator.py:29` | 12 | Existing entries loaded for dedup context |
+| `min_quality_chars` | `memory/curator/worker.py` | 120 | Minimum body chars for memory curation |
+| `existing_memory_limit` | `memory/curator/worker.py` | 12 | Existing entries loaded for dedup context |
 | `memory_limit` | `memory/optimizer.py:25` | 50 | Batch size for memory optimization |
-| `DEFAULT_CHUNK_TARGET_CHARS` | `memory/source_repository.py:17` | 1200 | Target chunk size for source ingestion |
-| `DEFAULT_SOURCE_SEARCH_LIMIT` | `memory/source_repository.py:18` | 8 | Default source search limit |
+| `CHUNK_TARGET_CHARS` | `source/local.py` | 1200 | Target chunk size for local-source ingestion |
+| `DEFAULT_LIMIT` | `source/service.py` | 8 | Default Source search limit |
 | `limit=8, depth=1` | `memory/repository.py:305-306` | 8, 1 | Default graph search limit and depth |
 
 ## Persona

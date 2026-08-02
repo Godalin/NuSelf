@@ -100,10 +100,7 @@ class ConversationGraphRuntime:
         self._conversation_store = resources.conversation_store
         self._language_preference = resources.language_preference
         self._trace_recorder = resources.trace_recorder
-        memory_query_service = resources.tools.memory
-        self._context_preparer = ConversationContextPreparer(
-            memory_query_service
-        )
+        self._context_preparer = ConversationContextPreparer()
         self._state_manager = ConversationStateManager(
             text_agent=(
                 compression_agent
@@ -130,7 +127,6 @@ class ConversationGraphRuntime:
             langchain_models=self._langchain_models,
             language_preference=self._language_preference,
             reflection_settings=resources.reflection_settings,
-            memory_query_service=memory_query_service,
             persona_definitions=resources.personas,
         )
         self._tool_runtime = ConversationToolRuntime(
@@ -353,9 +349,6 @@ class ConversationGraphRuntime:
         context_metadata: dict[str, object] = {
             "recent_message_count": turn_state.recent_message_count,
             "summary_present": bool(turn_state.persisted_state.summary),
-            "memory_match_count": turn_state.memory_match_count,
-            "profile_match_count": turn_state.profile_match_count,
-            "source_match_count": turn_state.source_match_count,
             "prompt_message_count": turn_state.prompt_message_count,
         }
         if metrics_observer is not None:
@@ -507,7 +500,7 @@ class ConversationGraphRuntime:
     def _system_prompt(self, state: ConversationTurnState) -> str:
         parts = [
             "You are NuSelf, a private AI mirror for one person.",
-            "Use the user's memory entries and source chunks as durable context. Do not invent memories.",
+            "Use memory and source tools when durable personal or external context is relevant. Do not invent memories.",
             "Populate the structured response fields answer, evidence_references, confidence, and epistemic_status.",
             "answer must be the user-facing text. evidence_references must cite relevant memory ids or source refs when available.",
             "Use internal persona synthesis as private context only. "
@@ -522,8 +515,6 @@ class ConversationGraphRuntime:
         ]
         if self._language_preference != "en":
             parts.append(f"Respond to the user in {self._language_preference}.")
-        if state.memory_context != "":
-            parts.extend(["", "Relevant memory context:", state.memory_context])
         if state.persisted_state.summary != "":
             parts.extend(["", "Compressed conversation so far:", state.persisted_state.summary])
         parts.extend(self._tool_runtime.prompt_sections())

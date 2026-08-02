@@ -44,7 +44,7 @@ from nuself.log.reader import read_log_events
 from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
+from nuself.source.repository import SourceRepository
 from nuself.runtime.job.message import JobMessage, JobSink
 from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
@@ -119,6 +119,7 @@ def _chat_tool(
         project_root=tmp_path,
         memory=query_service
         or MemoryService(memory_repository),
+        sources=application.sources,
         reflections=ReflectionService(
             repo,
             application.reason.service,
@@ -203,7 +204,7 @@ class FailingResponseService:
         return draft
 
 
-def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
+def test_chat_agent_does_not_inject_memory_entries(tmp_path: Path) -> None:
     repo = memory_entry_repository(tmp_path)
     repo.save(
         MemoryEntry(
@@ -220,8 +221,8 @@ def test_chat_agent_includes_memory_entries(tmp_path: Path) -> None:
 
     assert result.answer == "agent reply"
     system_prompt = llm.calls[0][0].text
-    assert "Clarity matters" in system_prompt
-    assert "Prefer explicit assumptions." in system_prompt
+    assert "Clarity matters" not in system_prompt
+    assert "Prefer explicit assumptions." not in system_prompt
 
 
 def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
@@ -244,7 +245,7 @@ def test_chat_agent_omits_irrelevant_memory_entries(tmp_path: Path) -> None:
     assert "Clarity matters" not in system_prompt
 
 
-def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
+def test_chat_agent_does_not_inject_source_chunks_by_default(tmp_path: Path) -> None:
     source_path = tmp_path / "source.md"
     source_path.write_text(
         "\n".join(
@@ -258,20 +259,19 @@ def test_chat_agent_includes_source_chunks_by_default(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    source_repository(tmp_path).ingest_path(source_path)
+    source_repository(tmp_path).ingest(source_path)
     llm = FakeResponseService()
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("durable source evidence")
 
     system_prompt = llm.calls[0][0].text
-    assert "Relevant memory context:" in system_prompt
-    assert "Source chunks:" in system_prompt
-    assert "Source Evidence" in system_prompt
-    assert "ref=source:" in system_prompt
+    assert "Relevant memory context:" not in system_prompt
+    assert "Source chunks:" not in system_prompt
+    assert "Source Evidence" not in system_prompt
 
 
-def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
+def test_chat_agent_does_not_inject_profile_items_by_default(tmp_path: Path) -> None:
     profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
@@ -283,15 +283,13 @@ def test_chat_agent_includes_profile_items_by_default(tmp_path: Path) -> None:
         )
     )
     llm = FakeResponseService()
-    agent = ConversationGraphRuntime(tmp_path, response_service=llm, memory_query_service=MemoryService(memory_entry_repository(tmp_path), profile_repository=profile_repo))
+    agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 
     agent.respond("direct answers")
 
     system_prompt = llm.calls[0][0].text
-    assert "Profile items:" in system_prompt
-    assert "Direct style" in system_prompt
-    assert "source:profile:0" in system_prompt
-
+    assert "Direct style" not in system_prompt
+    assert "Prefer direct answers." not in system_prompt
 
 def test_chat_agent_parses_structured_response(tmp_path: Path) -> None:
     response_service = StaticResponseService(
@@ -1044,7 +1042,8 @@ def test_chat_agent_includes_tool_descriptions_in_system_prompt(tmp_path: Path) 
     system_prompt = llm.calls[0][0].text
     assert "Available tools:" in system_prompt
     assert "memory_search" in system_prompt
-    assert "Search durable memory" in system_prompt
+    assert "Search personal long-term memory" in system_prompt
+    assert "source_search" in system_prompt
 
 
 def test_chat_agent_includes_service_skills_in_system_prompt(tmp_path: Path) -> None:
@@ -1083,6 +1082,7 @@ def test_conversation_runtime_tools_declare_service_ownership(
     tools = runtime._tool_runtime.tools  # pyright: ignore[reportPrivateUsage]
     expected_by_prefix = {
         "memory": "memory",
+        "source": "source",
         "reflection": "reflection",
         "reason": "reasoning",
         "trace": "trace",

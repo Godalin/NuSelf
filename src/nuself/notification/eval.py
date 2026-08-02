@@ -168,6 +168,7 @@ def _evaluate_scheduler(
     scheduler = compose_reflection_scheduler(
         application.paths,
         application.memory,
+        application.sources,
         application.conversation_history,
         application.reflection.repository,
         application.reflection.service,

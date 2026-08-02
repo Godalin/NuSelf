@@ -14,6 +14,7 @@ from nuself.reflection.service import ReflectionService
 from nuself.runtime.job.message import JobSink
 from nuself.trace.service import TraceQueryService
 from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.source.service import SourceService
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class ToolResources:
 
     project_root: Path
     memory: MemoryService
+    sources: SourceService
     reflections: ReflectionService
     reasons: ReasonService
     reason_workspace: PrivateWorkspaceStore

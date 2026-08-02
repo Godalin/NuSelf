@@ -49,8 +49,8 @@ from nuself.daemon.lifecycle import (
 )
 from nuself.daemon.protocol import DaemonResponse
 from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryEvidence
-from nuself.memory.curator_contract import MemoryAction
-from nuself.memory.curator_plan import (
+from nuself.memory.curator.contract import MemoryAction
+from nuself.memory.curator.plan import (
     MemoryCuratorPlan,
     MemoryCuratorPlanStore,
 )
@@ -476,7 +476,6 @@ def test_interactive_memory_candidates_profile_and_sources(
         [
             "--workspace",
             str(tmp_path),
-            "memory",
             "source",
             "ingest",
             str(source_path),
@@ -1901,11 +1900,11 @@ def test_memory_group_help_describes_nested_commands(capsys: CaptureFixture) -> 
             "reject",
             "Reject review candidates by ID, index, or selection.",
         ],
-        ("memory", "source"): [
+        ("source",): [
             "ingest",
-            "Ingest a source document.",
-            "extract",
-            "Extract memory candidates from one source document.",
+            "Ingest a local document or directory.",
+            "search",
+            "Search source chunks.",
         ],
         ("memory", "profile"): [
             "list",
@@ -2811,7 +2810,6 @@ def test_memory_source_ingest_list_show_and_chunks(
         [
             "--workspace",
             str(tmp_path),
-            "memory",
             "source",
             "ingest",
             str(source_path),
@@ -2822,15 +2820,15 @@ def test_memory_source_ingest_list_show_and_chunks(
         ]
     )
     ingest_output = capsys.readouterr().out
-    list_result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
+    list_result = main(["--workspace", str(tmp_path), "source", "list"])
     list_output = capsys.readouterr().out
     source_id = list_output.split()[2].removeprefix("id=")
     show_result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "show", "0"]
+        ["--workspace", str(tmp_path), "source", "show", "0"]
     )
     show_output = capsys.readouterr().out
     chunks_result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "chunks", "0"]
+        ["--workspace", str(tmp_path), "source", "chunks", "0"]
     )
     chunks_output = capsys.readouterr().out
 
@@ -2869,7 +2867,6 @@ def test_memory_source_search(
         [
             "--workspace",
             str(tmp_path),
-            "memory",
             "source",
             "ingest",
             str(source_path),
@@ -2881,7 +2878,6 @@ def test_memory_source_search(
         [
             "--workspace",
             str(tmp_path),
-            "memory",
             "source",
             "search",
             "durable citation",
@@ -2894,157 +2890,6 @@ def test_memory_source_search(
     assert "source:" in search_output
     assert "Searchable Source" in search_output
     assert "durable citation material" in search_output
-
-
-def test_memory_source_extract_creates_reviewable_profile_candidate(
-    tmp_path: Path, capsys: CaptureFixture
-) -> None:
-    source_path = tmp_path / "profile-source.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Profile Source",
-                "tags: [mirror]",
-                "---",
-                "The user prefers concise, doc-aligned answers.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    main(
-        [
-            "--workspace",
-            str(tmp_path),
-            "memory",
-            "source",
-            "ingest",
-            str(source_path),
-        ]
-    )
-    capsys.readouterr()
-
-    list_result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
-    capsys.readouterr()
-
-    extract_result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "extract", "0"]
-    )
-    extract_output = capsys.readouterr().out
-    candidate_list_result = main(
-        ["--workspace", str(tmp_path), "memory", "review", "list"]
-    )
-    candidate_list_output = capsys.readouterr().out
-
-    assert list_result == 0
-    assert extract_result == 0
-    assert candidate_list_result == 0
-    assert "Extracted source candidates:" in extract_output
-    assert "profile_fact" in candidate_list_output
-
-
-def test_memory_source_delete_cascades_profile_items(
-    tmp_path: Path, capsys: CaptureFixture
-) -> None:
-    source_path = tmp_path / "profile-source.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Profile Source",
-                "tags: [mirror]",
-                "---",
-                "The user prefers concise, doc-aligned answers.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    main(
-        [
-            "--workspace",
-            str(tmp_path),
-            "memory",
-            "source",
-            "ingest",
-            str(source_path),
-        ]
-    )
-    capsys.readouterr()
-    list_result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
-    list_output = capsys.readouterr().out
-    source_id = list_output.split()[2].removeprefix("id=")
-    main(["--workspace", str(tmp_path), "memory", "source", "extract", source_id])
-    capsys.readouterr()
-
-    delete_result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "delete", "0"]
-    )
-    delete_output = capsys.readouterr().out
-    profile_list_result = main(
-        ["--workspace", str(tmp_path), "memory", "profile", "list"]
-    )
-    profile_list_output = capsys.readouterr().out
-
-    assert list_result == 0
-    assert delete_result == 0
-    assert "Deleted source document:" in delete_output
-    assert profile_list_result == 0
-    assert "No profile items." in profile_list_output
-
-
-def test_memory_profile_delete_removes_accepted_source_candidate(
-    tmp_path: Path, capsys: CaptureFixture
-) -> None:
-    source_path = tmp_path / "profile-source.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Profile Source",
-                "tags: [mirror]",
-                "---",
-                "The user prefers concise, doc-aligned answers.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    main(
-        [
-            "--workspace",
-            str(tmp_path),
-            "memory",
-            "source",
-            "ingest",
-            str(source_path),
-        ]
-    )
-    capsys.readouterr()
-    list_result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
-    list_output = capsys.readouterr().out
-    source_id = list_output.split()[2].removeprefix("id=")
-    main(["--workspace", str(tmp_path), "memory", "source", "extract", source_id])
-    capsys.readouterr()
-    candidate_repo = memory_candidate_repository(_authority(tmp_path))
-    candidate_id = candidate_repo.list()[0].id
-    main(["--workspace", str(tmp_path), "memory", "review", "accept", candidate_id])
-    capsys.readouterr()
-    profile_repo = _profile_repository(tmp_path)
-    assert profile_repo.list()
-
-    delete_result = main(
-        ["--workspace", str(tmp_path), "memory", "profile", "delete", "0"]
-    )
-    delete_output = capsys.readouterr().out
-    profile_list_result = main(
-        ["--workspace", str(tmp_path), "memory", "profile", "list"]
-    )
-    profile_list_output = capsys.readouterr().out
-
-    assert list_result == 0
-    assert delete_result == 0
-    assert "Deleted profile item:" in delete_output
-    assert profile_list_result == 0
-    assert "No profile items." in profile_list_output
 
 
 def test_memory_profile_search_filters_and_query(
@@ -4579,7 +4424,7 @@ def test_interactive_sources_lists_documents(
     source_path = tmp_path / "notes.txt"
     source_path.write_text("Notes\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest_path(source_path)
+    repo.ingest(source_path)
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem sources\n:q\n"))
     monkeypatch.setattr(
@@ -4994,9 +4839,9 @@ def test_memory_source_list_shows_documents(
     source_path = tmp_path / "test.txt"
     source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest_path(source_path)
+    repo.ingest(source_path)
 
-    result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
+    result = main(["--workspace", str(tmp_path), "source", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "[source] [0]" in captured.out
@@ -5006,7 +4851,7 @@ def test_memory_source_list_shows_documents(
 def test_memory_source_list_empty_shows_message(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    result = main(["--workspace", str(tmp_path), "memory", "source", "list"])
+    result = main(["--workspace", str(tmp_path), "source", "list"])
     captured = capsys.readouterr()
     assert result == 0
     assert "No source documents." in captured.out
@@ -5018,10 +4863,10 @@ def test_memory_source_show_displays_document(
     source_path = tmp_path / "test.txt"
     source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest_path(source_path)
-    doc = repo.list_documents()[0]
+    repo.ingest(source_path)
+    doc = repo.list()[0]
 
-    result = main(["--workspace", str(tmp_path), "memory", "source", "show", doc.id])
+    result = main(["--workspace", str(tmp_path), "source", "show", doc.id])
     captured = capsys.readouterr()
     assert result == 0
     assert "Test Source" in captured.out
@@ -5031,7 +4876,7 @@ def test_memory_source_show_missing_document(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "show", "missing-id"]
+        ["--workspace", str(tmp_path), "source", "show", "missing-id"]
     )
     captured = capsys.readouterr()
     assert result == 1
@@ -5044,21 +4889,21 @@ def test_memory_source_delete_removes_document(
     source_path = tmp_path / "test.txt"
     source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest_path(source_path)
-    doc = repo.list_documents()[0]
+    repo.ingest(source_path)
+    doc = repo.list()[0]
 
     result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "delete", doc.id]
+        ["--workspace", str(tmp_path), "source", "delete", doc.id]
     )
     assert result == 0
-    assert len(source_repository(_authority(tmp_path)).list_documents()) == 0
+    assert len(source_repository(_authority(tmp_path)).list()) == 0
 
 
 def test_memory_source_chunks_empty_shows_message(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "chunks", "some-id"]
+        ["--workspace", str(tmp_path), "source", "chunks", "some-id"]
     )
     captured = capsys.readouterr()
     assert result == 0
@@ -5069,22 +4914,11 @@ def test_memory_source_search_empty_shows_message(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "search", "xyz"]
+        ["--workspace", str(tmp_path), "source", "search", "xyz"]
     )
     captured = capsys.readouterr()
     assert result == 0
     assert "No matching source chunks." in captured.out
-
-
-def test_memory_source_extract_missing_document(
-    tmp_path: Path, capsys: CaptureFixture
-) -> None:
-    result = main(
-        ["--workspace", str(tmp_path), "memory", "source", "extract", "missing-id"]
-    )
-    captured = capsys.readouterr()
-    assert result == 1
-    assert "Source document not found: missing-id" in captured.err
 
 
 def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) -> None:
@@ -5739,8 +5573,8 @@ def test_top_level_help_describes_commands(capsys: CaptureFixture) -> None:
 
     assert exc_info.value.code == 0
     assert "memory" in captured.out
-    assert "Manage memory entries, sources, profiles, reviews, and" in captured.out
-    assert "the memory graph." in captured.out
+    assert "Manage personal memories, profiles, reviews, and" in captured.out
+    assert "Manage imported external knowledge." in captured.out
     assert "reason" in captured.out
     assert "Manage long-run reasoning threads." in captured.out
     assert "dev" in captured.out
@@ -5916,7 +5750,7 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
         ["memory", "profile", "--help"],
         ["memory", "review", "--help"],
         ["memory", "types", "--help"],
-        ["memory", "source", "--help"],
+        ["source", "--help"],
         ["conversation", "list", "--help"],
         ["conversation", "show", "--help"],
         ["conversation", "new", "--help"],
@@ -5982,13 +5816,12 @@ def test_cli_version_matches_project_metadata(capsys: CaptureFixture) -> None:
         ["memory", "review", "reject", "--help"],
         ["memory", "review", "edit", "--help"],
         ["memory", "review", "merge", "--help"],
-        ["memory", "source", "ingest", "--help"],
-        ["memory", "source", "list", "--help"],
-        ["memory", "source", "show", "--help"],
-        ["memory", "source", "delete", "--help"],
-        ["memory", "source", "chunks", "--help"],
-        ["memory", "source", "search", "--help"],
-        ["memory", "source", "extract", "--help"],
+        ["source", "ingest", "--help"],
+        ["source", "list", "--help"],
+        ["source", "show", "--help"],
+        ["source", "delete", "--help"],
+        ["source", "chunks", "--help"],
+        ["source", "search", "--help"],
     ],
 )
 def test_third_level_subcommand_help(argv: list[str]) -> None:

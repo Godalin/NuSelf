@@ -30,6 +30,7 @@ from nuself.cli.commands.dev import (
 )
 from nuself.cli.commands.eval import handle_eval
 from nuself.cli.commands.memory.parser import add_memory_parser
+from nuself.cli.commands.source import add_source_parser
 from nuself.cli.commands.notifications import (
     handle_notify_clear,
     handle_notify_dismiss,
@@ -299,6 +300,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     )
 
     add_memory_parser(subparsers, bindings)
+    add_source_parser(subparsers, bindings)
 
     conversation_parser = subparsers.add_parser(
         "conversation",

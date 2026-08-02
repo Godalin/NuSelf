@@ -69,36 +69,29 @@ uv run nuself memory review reject <candidate-id>
 
 Use `--help` for index selection and batch operations.
 
-## Import Source Documents
+## External Source Documents
 
 Place Markdown or plain-text material under the selected authority's
 `sources/`, then ingest a
 file or directory:
 
 ```bash
-uv run nuself memory source ingest .nuself/sources/notes.md --tag notes
-uv run nuself memory source ingest .nuself/sources/archive --tag archive
+uv run nuself source ingest .nuself/sources/notes.md --tag notes
+uv run nuself source ingest .nuself/sources/archive --tag archive
 ```
 
 Inspect imported sources and chunks:
 
 ```bash
-uv run nuself memory source list
-uv run nuself memory source show <source-id>
-uv run nuself memory source chunks <source-id>
-uv run nuself memory source search "citation"
+uv run nuself source list
+uv run nuself source show <source-id>
+uv run nuself source chunks <source-id>
+uv run nuself source search "citation"
 ```
 
-Extract reviewable profile candidates:
-
-```bash
-uv run nuself memory source extract <source-id>
-uv run nuself memory profile list
-uv run nuself memory profile search "preference"
-```
-
-Source deletion and profile deletion are explicit operations; read the
-subcommand help before removing data.
+Source is an independent external-knowledge library. It does not create
+personal memories or profile candidates. Chat searches it only when the Agent
+calls a Source tool.
 
 ## Relations And Graph
 

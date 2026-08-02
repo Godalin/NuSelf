@@ -148,8 +148,8 @@ uv run nuself memory update
 ### Import personal notes
 
 ```bash
-uv run nuself memory source ingest ~/notes.md --tag notes
-uv run nuself memory source list
+uv run nuself source ingest ~/notes.md --tag notes
+uv run nuself source list
 ```
 
 ### Continue a long-running question

@@ -9,15 +9,9 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.conversation import ConversationMessage
-from nuself.memory.service import MemoryQuery, MemoryService
 
 
 class ConversationContextPreparer:
-    def __init__(
-        self, memory_query_service: MemoryService
-    ) -> None:
-        self._memory_query_service = memory_query_service
-
     def prepare(
         self, state: ConversationTurnState
     ) -> ConversationNodeResult:
@@ -34,19 +28,12 @@ class ConversationContextPreparer:
                 turn_id=state.turn_id,
             ),
         )
-        packed_memory = self._memory_query_service.pack(
-            MemoryQuery(text=state.user_message)
-        )
         return ConversationNodeResult(
             state=replace(
                 state,
                 base_messages=base_messages,
                 active_messages=active_messages,
-                memory_context=packed_memory.text,
                 recent_message_count=len(base_messages),
-                memory_match_count=len(packed_memory.matches),
-                profile_match_count=len(packed_memory.profile_matches),
-                source_match_count=len(packed_memory.source_matches),
                 node_trace=(
                     *state.node_trace,
                     "prepare_context",

@@ -24,7 +24,7 @@ from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryEntryNotFound,
 )
-from nuself.memory.source_repository import (
+from nuself.source.repository import (
     SourceDocumentNotFound,
 )
 from nuself.persona.audit import PERSONA_AUDIT
@@ -107,31 +107,31 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
     if command == "sources":
-        repo = memory.sources
-        documents = repo.list_documents()
+        service = cli_application().sources
+        documents = service.list()
         if not documents:
             return "No source documents."
         return "\n".join(
-            render_source_row(document, index=index, chunk_count=len(repo.list_chunks(document.id)))
+            render_source_row(document, index=index, chunk_count=len(service.chunks(document.id)))
             for index, document in enumerate(documents)
         )
     if command.startswith("source "):
         source_id = command.removeprefix("source ").strip()
-        repo = memory.sources
+        service = cli_application().sources
         try:
             source_id = resolve_visible_handle(
                 source_id,
-                repo.list_documents(),
+                service.list(),
                 label="source document",
                 get_id=lambda document: document.id,
             )
         except VisibleHandleError as exc:
             return diagnostic_exception_message(exc)
         try:
-            document = repo.get_document(source_id)
+            document = service.get(source_id)
         except SourceDocumentNotFound:
             return f"Source document not found: {source_id}"
-        return render_source_detail(document, chunk_count=len(repo.list_chunks(document.id)))
+        return render_source_detail(document, chunk_count=len(service.chunks(document.id)))
     return interactive_memory_help(command)
 
 

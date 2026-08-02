@@ -6,6 +6,16 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Split imported documents into an independent Source domain and top-level
+  `nuself source` command family. Source ingestion and deletion no longer
+  create or remove personal Memory/Profile records.
+- Restored tool-driven context: Chat and persona preparation no longer perform
+  ambient Memory, Profile, or Source retrieval. Agents use the Memory and
+  Source skills and read-only tools only when the current discussion needs
+  durable context.
+- Grouped the Memory curator implementation under one owned subpackage and
+  removed obsolete source-extraction and prompt-packing code.
+
 - Concrete composition, models, background workflows, and evaluation code now
   live with their owning domains; shared application/runtime packages retain
   only their actual architectural responsibilities.

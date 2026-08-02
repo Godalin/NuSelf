@@ -164,6 +164,7 @@ def send_one_shot_chat_interactive(
                 application.config,
                 application.conversations,
                 application.memory_service,
+                application.sources,
                 application.memory.entries,
                 application.reflection.service,
                 application.reason.service,

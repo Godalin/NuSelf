@@ -80,7 +80,8 @@ inspection command under `dev`, read-only by default.
 `ReflectionScheduler` accepts concrete `NotificationOutbox` and
 `TraceRecorder` implementations, imports persona implementation types, and
 constructs `SharedPersonaDiscussionService` inside `reflect()`. Candidate
-generation likewise accepts concrete memory/source/profile repositories and
+generation accepts explicit Memory/Profile capabilities plus the Source
+service and
 loads global configuration internally.
 
 Risk: reflection silently owns persona/model/config composition, cannot be

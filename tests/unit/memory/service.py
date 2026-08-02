@@ -10,14 +10,8 @@ from memory_fixtures import (
 
 from pathlib import Path
 
-from nuself.config.settings import runtime_paths
 from nuself.memory.model import MemoryEntry
-from nuself.profile.model import ProfileItem
 from nuself.memory.service import MemoryQuery, MemoryService
-from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
-from nuself.profile.repository import ProfileItemRepository
-from tests.backend import owned_backend
 
 
 def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> None:
@@ -49,7 +43,7 @@ def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> Non
     assert "reviewed" in matches[0].reasons
 
 
-def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
+def test_memory_query_returns_typed_matches_without_prompt_packing(tmp_path: Path) -> None:
     repo = memory_entry_repository(tmp_path)
     entry = repo.save(
         MemoryEntry(
@@ -64,112 +58,10 @@ def test_memory_query_packs_context_with_metadata(tmp_path: Path) -> None:
     )
     service = MemoryService(repo)
 
-    packed = service.pack(MemoryQuery(text="direct style"))
+    matches = service.search(MemoryQuery(text="direct style"))
 
-    assert len(packed.matches) == 1
-    assert entry.id in packed.text
-    assert "Memory entries:" in packed.text
-    assert "type=style_trait" in packed.text
-    assert "observed_at=2026-05-07T10:00:00+00:00" in packed.text
-    assert "valid_from=2026-05-07" in packed.text
-    assert "updated_at=" in packed.text
-    assert "temporal_note=Observed during CLI output discussion." in packed.text
-    assert "match=" in packed.text
-
-
-def test_memory_query_packs_source_chunks_with_references(tmp_path: Path) -> None:
-    source_path = tmp_path / "source.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Source Context",
-                "tags: [retrieval]",
-                "date: 2026-05-08",
-                "---",
-                "Source chunks provide durable evidence.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    entry_repo = memory_entry_repository(tmp_path)
-    source_repo = source_repository(tmp_path)
-    source_repo.ingest_path(source_path)
-    service = MemoryService(entry_repo, source_repo)
-
-    packed = service.pack(MemoryQuery(text="durable evidence"))
-
-    assert packed.matches == ()
-    assert len(packed.source_matches) == 1
-    assert "Source chunks:" in packed.text
-    assert "Source Context" in packed.text
-    assert "ref=source:" in packed.text
-    assert "source_date=2026-05-08" in packed.text
-    assert "updated_at=" in packed.text
-    assert "Source chunks provide durable evidence." in packed.text
-
-
-def test_memory_query_packs_profile_items_with_references(tmp_path: Path) -> None:
-    entry_repo = memory_entry_repository(tmp_path)
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    profile_repo.save(
-        ProfileItem(
-            type="profile_fact",
-            title="Concise output",
-            body="Prefers concise command output.",
-            tags=["cli", "style"],
-            source_refs=["source:profile:0"],
-            observed_at="2026-05-07",
-        )
-    )
-    service = MemoryService(entry_repo, profile_repository=profile_repo)
-
-    packed = service.pack(MemoryQuery(text="concise command"))
-
-    assert len(packed.profile_matches) == 1
-    assert packed.matches == ()
-    assert "Profile items:" in packed.text
-    assert "Concise output" in packed.text
-    assert "source:profile:0" in packed.text
-    assert "observed_at=2026-05-07" in packed.text
-
-
-def test_memory_query_returns_empty_context_for_irrelevant_query(tmp_path: Path) -> None:
-    repo = memory_entry_repository(tmp_path)
-    repo.save(
-        MemoryEntry(
-            type="belief",
-            title="Clarity matters",
-            body="Prefer explicit assumptions.",
-            tags=["style"],
-        )
-    )
-    service = MemoryService(repo)
-
-    packed = service.pack(MemoryQuery(text="weather forecast"))
-
-    assert packed.text == ""
-    assert packed.matches == ()
-
-
-def test_memory_query_includes_profile_items_in_default_chat_context(tmp_path: Path) -> None:
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
-    profile_repo.save(
-        ProfileItem(
-            type="profile_fact",
-            title="Direct style",
-            body="Prefer direct answers.",
-            tags=["style"],
-            source_refs=["source:profile:0"],
-        )
-    )
-    service = MemoryService(memory_entry_repository(tmp_path), profile_repository=profile_repo)
-
-    packed = service.pack(MemoryQuery(text="direct answers"))
-
-    assert len(packed.profile_matches) == 1
-    assert "Profile items:" in packed.text
-    assert "Direct style" in packed.text
+    assert [match.entry.id for match in matches] == [entry.id]
+    assert not hasattr(service, "pack")
 
 
 def test_memory_query_uses_type_descriptor_affinity(tmp_path: Path) -> None:

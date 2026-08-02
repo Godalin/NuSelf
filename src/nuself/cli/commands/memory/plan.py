@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from nuself.cli.application import cli_application
-from nuself.memory.curator_plan import (
+from nuself.memory.curator.plan import (
     MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLockContended,
     MemoryCuratorPlanNotFound,

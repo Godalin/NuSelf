@@ -9,8 +9,8 @@ import multiprocessing
 
 import pytest
 
-from nuself.memory.curator_contract import MemoryAction
-from nuself.memory.curator_plan import (
+from nuself.memory.curator.contract import MemoryAction
+from nuself.memory.curator.plan import (
     MemoryCuratorPlan,
     MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLock,
@@ -154,7 +154,7 @@ def test_plan_lock_acquire_preserves_contention_and_cleanup_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import nuself.memory.curator_plan as plan_module
+    import nuself.memory.curator.plan as plan_module
 
     handle = _FailingCloseHandle()
 
@@ -192,7 +192,7 @@ def test_plan_lock_release_preserves_unlock_and_cleanup_failures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import nuself.memory.curator_plan as plan_module
+    import nuself.memory.curator.plan as plan_module
 
     handle = _FailingCloseHandle()
 

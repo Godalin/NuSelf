@@ -136,8 +136,8 @@ uv run nuself memory update
 ### 导入个人笔记
 
 ```bash
-uv run nuself memory source ingest ~/notes.md --tag notes
-uv run nuself memory source list
+uv run nuself source ingest ~/notes.md --tag notes
+uv run nuself source list
 ```
 
 ### 延续长期问题

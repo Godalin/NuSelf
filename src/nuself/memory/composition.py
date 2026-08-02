@@ -10,20 +10,19 @@ from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )
-from nuself.memory.curator import MemoryCurator
-from nuself.memory.curator_contract import CuratorActionsOutput
+from nuself.memory.curator.worker import MemoryCurator
+from nuself.memory.curator.contract import CuratorActionsOutput
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
-from nuself.memory.curator_plan import MemoryCuratorPlanStore
+from nuself.memory.curator.plan import MemoryCuratorPlanStore
 from nuself.memory.observation import MemoryObservationRepository
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
     OptimizeActionsOutput,
 )
-from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
@@ -35,7 +34,6 @@ class MemoryRepositories:
 
     entries: MemoryEntryRepository
     candidates: MemoryCandidateRepository
-    sources: SourceRepository
     profile: ProfileItemRepository
     observations: MemoryObservationRepository
     curator_plans: MemoryCuratorPlanStore
@@ -58,16 +56,9 @@ def compose_memory_repositories(
         entry_repository=entries,
         profile_repository=profile,
     )
-    sources = SourceRepository(
-        paths,
-        backend=backend,
-        candidate_repository=candidates,
-        profile_repository=profile,
-    )
     return MemoryRepositories(
         entries=entries,
         candidates=candidates,
-        sources=sources,
         profile=profile,
         observations=MemoryObservationRepository(backend),
         curator_plans=MemoryCuratorPlanStore(paths, backend),

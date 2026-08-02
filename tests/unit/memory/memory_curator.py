@@ -31,7 +31,7 @@ from nuself.memory.model import (
 )
 from nuself.profile.model import ProfileItem
 from nuself.log.reader import read_log_events
-from nuself.memory.curator_contract import (
+from nuself.memory.curator.contract import (
     CuratorActionsOutput,
     MemoryCuratorSettings,
     actions_from_output as _actions_from_output,

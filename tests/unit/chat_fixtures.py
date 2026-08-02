@@ -26,7 +26,7 @@ from nuself.agent.endpoint import (
 from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
+from nuself.source.service import SourceService
 from nuself.persona.tools import build_persona_tools
 from nuself.persona.definition import (
     PersonaDefinition,
@@ -62,7 +62,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         response_service: ConversationResponseService | None = None,
         compression_agent: TextAgent | None = None,
         memory_repository: MemoryEntryRepository | None = None,
-        source_repository: SourceRepository | None = None,
+        source_service: SourceService | None = None,
         profile_repository: ProfileItemRepository | None = None,
         reflection_repository: ReflectionRepository | None = None,
         trace_recorder: TraceRecorder | None = None,
@@ -85,8 +85,8 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             )
         )
         entries = memory_repository or application.memory.entries
-        sources = source_repository or application.memory.sources
-        profile = profile_repository or application.memory.profile
+        sources = source_service or application.sources
+        del profile_repository
         reflections = (
             application.reflection.service
             if reflection_repository is None
@@ -104,7 +104,8 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             tools=ToolResources(
                 project_root=project_root,
                 memory=memory_query_service
-                or MemoryService(entries, sources, profile),
+                or MemoryService(entries),
+                sources=sources,
                 reflections=reflections,
                 reasons=reason_service
                 or application.reason.service,

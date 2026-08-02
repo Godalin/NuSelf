@@ -486,8 +486,11 @@ Direct service-status queries, such as asking how many memory/reflection/reason/
 
 | Tool             | Purpose                                                               |
 | ---------------- | --------------------------------------------------------------------- |
-| `memory_search`  | Query durable memory, profiles, and source chunks.                    |
+| `memory_search`  | Query personal durable memory.                                        |
 | `memory_count`   | Count durable memory entries with optional type/tag filters.          |
+| `source_search`  | Search external document chunks on demand.                            |
+| `source_get`     | Read a selected external document or chunk.                           |
+| `source_list`    | List available external documents.                                    |
 | `selves_consult` | Invoke the internal multi-persona subagent for perspective synthesis. |
 
 Tool names must start with the owning subsystem name. This keeps agent-visible tool calls readable in logs and avoids generic names such as `search_*`, `list_*`, or `show_*` becoming ambiguous as more subsystems are exposed.
@@ -665,7 +668,7 @@ The detailed tool catalog above should be read as grouped capability blocks, not
 
 | Family                         | Typical tools                                                                                                                                                                                     | Decorator need       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Read-only discovery            | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
+| Read-only discovery            | `memory_search`, `memory_count`, `source_search`, `source_get`, `source_list`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
 | Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | sometimes `approval` |
 | Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `approval`           |
 
@@ -728,7 +731,14 @@ The system prompt should include:
 
 The memory skill lives in `src/nuself/agent/skills/memory.md` and must include this behavioral contract:
 
-> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `{tool:search}` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `{tool:search}` is listed. If you do not call `{tool:search}`, do not claim that no memory exists."
+> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `{tool:search}` before answering unless the answer is fully present in the current visible conversation. Do not say you lack memory tools when `{tool:search}` is listed. If you do not call `{tool:search}`, do not claim that no memory exists."
+
+### Source Skill
+
+The Source skill must state that external documents are not personal Memory and
+are never ambient context. It directs the Agent to call `{tool:search}` only for
+questions that may benefit from imported material, retry one distinct broader
+query after an empty result, and use `{tool:get}` for a selected full record.
 
 ### Reflection Skill
 

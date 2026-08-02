@@ -9,7 +9,7 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
-from nuself.memory.service import MemoryQuery, MemoryService
+from nuself.memory.service import MemoryMatch, MemoryQuery, MemoryService
 from nuself.memory.repository import MemoryEntryNotFound
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.execution import FeatureExecutor
@@ -23,6 +23,22 @@ def _string_tuple_filter(
     if isinstance(value, str):
         return (value,) if value else ()
     return tuple(str(item) for item in value if str(item))
+
+
+def _format_match(match: MemoryMatch) -> str:
+    entry = match.entry
+    tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
+    relations = ";".join(
+        f"{name}:{','.join(targets)}"
+        for name, targets in entry.relations.items()
+        if targets
+    )
+    relation_text = f" relations={relations}" if relations else ""
+    return (
+        f"- {entry.title} [id={entry.id} type={entry.type} "
+        f"confidence={entry.confidence:.2f}{tags}{relation_text} "
+        f"match={','.join(match.reasons)}]: {entry.body}"
+    )
 
 
 @dataclass(frozen=True)
@@ -44,7 +60,7 @@ def build_memory_tool_set(
     @tool(
         name="memory_search",
         description=(
-            "Search durable memory (entries, derived profiles, and source chunks) for relevant context. "
+            "Search personal long-term memory for relevant context. "
             "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
             "Returns formatted memory context with matches, scores, and match reasons."
         ),
@@ -58,7 +74,7 @@ def build_memory_tool_set(
         types: list[str] | str | None = None,
         tags: list[str] | str | None = None,
     ) -> str:
-        """Search durable memory, profile, and source chunks for relevant context."""
+        """Search personal long-term memory for relevant context."""
         try:
             query_str = str(query) if query else ""
             limit_int = int(limit)
@@ -68,7 +84,7 @@ def build_memory_tool_set(
             return "Error: query must be a non-empty string"
         if limit_int < 1:
             return "Error: limit must be a positive integer"
-        packed = service.pack(
+        matches = service.search(
             MemoryQuery(
                 text=query_str.strip(),
                 limit=limit_int,
@@ -76,14 +92,14 @@ def build_memory_tool_set(
                 tags=_string_tuple_filter(tags),
             )
         )
-        if not packed.text:
+        if not matches:
             return (
                 f"No matches found for query: {query_str}. "
                 "If this is the first empty search for the current question, "
                 "retry memory_search exactly once with a distinct broader "
                 "query using fewer, shorter, or synonymous keywords."
             )
-        return packed.text
+        return "\n".join(_format_match(match) for match in matches)
 
     @tool(
         name="memory_count",

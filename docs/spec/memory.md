@@ -49,8 +49,8 @@ Rules:
 
 ## Read-Model Collection Ownership
 
-`MemoryEntry`, `MemoryCandidate`, `MemoryObject`, `ProfileItem`, and
-`SourceDocument` are immutable persisted read models. They must not retain
+`MemoryEntry`, `MemoryCandidate`, `MemoryObject`, and `ProfileItem` are
+immutable persisted read models. They must not retain
 aliases to caller-owned containers. Construction and wire decoding recursively
 freeze tags, source references, relations, payload, metadata, and collection
 membership around immutable `MemoryEvidence` records.
@@ -78,20 +78,6 @@ caller may retain or inspect a statistics snapshot but cannot mutate an
 apparently frozen result or alter the dictionaries supplied while composing
 that snapshot. Profile does not expose a parallel statistics API without a
 product consumer.
-
-### Source Ingestion (`source ingest`)
-
-1. Accept single `.md`/`.txt` files or recurse into directories.
-2. Parse YAML front matter (`title`, `tags`, `date`, `origin`, `privacy`).
-3. Chunk by paragraphs targeting ~1200 chars per chunk.
-4. Write one `SourceDocument` and per-chunk `SourceChunk` files under `<authority-root>/sources/`.
-5. No candidates created automatically.
-
-### Source Extraction (`source extract`)
-
-1. Create one `MemoryCandidate` per chunk with `action="create"`, `type="profile_fact"`.
-2. Deterministic ID: `cand_<uuid5(source_ref)>`.
-3. Save to `MemoryCandidateRepository` for manual review.
 
 ### Validation Gates on Save
 
@@ -391,11 +377,11 @@ ProfileItem and delete targets have no MemoryEntry review-state transition.
 ## Memory Service (`MemoryService`)
 
 The application composes one service for user-facing retrieval and bounded
-entry mutation. It owns context packing, filtered counts, archive, and
+entry mutation. It owns typed search results, filtered counts, archive, and
 importance updates; successful mutations are complete when the repository write
 returns. Agent tools receive only this service and never the entry repository.
 Repository bundles remain internal application resources for workflows that
-coordinate candidates, sources, observations, curator plans, and profiles.
+coordinate candidates, observations, curator plans, and profiles.
 Memory intake, curation, and optimization receive typed structured agents from
 CLI/application composition. Domain constructors do not resolve configuration
 or model endpoints and retain direct agent injection for deterministic tests.
@@ -431,6 +417,11 @@ or synonymous keywords before reporting that no matching stored memory was
 found. The second empty result ends retrieval; the agent must not loop. This
 conversation policy does not change deterministic `MemoryService`
 scoring or make a claim that the authority contains no memories.
+
+Chat context preparation must not query Memory or inject a packed Memory
+section. Memory is available only through explicit Agent tool calls governed by
+the Memory skill. Tool adapters render typed `MemoryMatch` values for the model;
+the domain service does not construct prompt sections.
 
 The one-shot `memory search` command uses the same ranked token query service
 as the chat tool, then applies its CLI-only temporal and exact filters to those

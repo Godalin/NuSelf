@@ -9,9 +9,8 @@ from typing import Literal, cast
 from uuid import uuid5, NAMESPACE_URL
 
 from nuself.runtime.clock import utc_now_iso
-from nuself.memory.model import PrivacyLevel
-
 type SourceKind = Literal["markdown", "text"]
+type PrivacyLevel = Literal["private", "shareable"]
 
 
 def source_id_for_path(path: Path) -> str:

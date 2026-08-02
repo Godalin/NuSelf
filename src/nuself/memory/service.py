@@ -1,4 +1,4 @@
-"""Deterministic memory query and context packing."""
+"""Personal long-term memory application service."""
 
 from __future__ import annotations
 
@@ -7,10 +7,7 @@ from dataclasses import dataclass
 import re
 
 from nuself.memory.model import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
-from nuself.profile.model import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository, SymbolicGraphEdge, SymbolicGraphNode
-from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
-from nuself.profile.contracts import ProfileRepositoryPort
 
 DEFAULT_MEMORY_LIMIT = 8
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -37,39 +34,16 @@ class MemoryMatch:
     reasons: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class PackedMemoryContext:
-    """Memory context ready to be inserted into an agent prompt."""
-
-    text: str
-    matches: tuple[MemoryMatch, ...]
-    profile_matches: tuple["ProfileMatch", ...] = ()
-    source_matches: tuple[SourceChunkMatch, ...] = ()
-
-
-@dataclass(frozen=True)
-class ProfileMatch:
-    """A ranked derived profile item with explainable match reasons."""
-
-    item: ProfileItem
-    score: float
-    reasons: tuple[str, ...]
-
-
 class MemoryService:
     """Complete user-facing memory query and entry-mutation service."""
 
     def __init__(
         self,
         repository: MemoryEntryRepository,
-        source_repository: SourceRepository | None = None,
-        profile_repository: ProfileRepositoryPort | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._repository = repository
-        self._source_repository = source_repository
-        self._profile_repository = profile_repository
         self._relation_registry = relation_registry or repository.relation_registry
         self._registry = registry or default_memory_type_registry()
 
@@ -140,98 +114,6 @@ class MemoryService:
         self._repository.save(updated)
         return updated
 
-    def _search_sources(self, query: MemoryQuery) -> list[SourceChunkMatch]:
-        if self._source_repository is None:
-            return []
-        return self._source_repository.search(query.text, limit=query.limit)
-
-    def _search_profiles(self, query: MemoryQuery) -> list[ProfileMatch]:
-        if self._profile_repository is None:
-            return []
-        matches: list[ProfileMatch] = []
-        for item in self._profile_repository.list():
-            if not _matches_query_filters(item.type, item.tags, query):
-                continue
-            match = _score_profile_item(item, query.text)
-            if match is not None:
-                matches.append(match)
-        return sorted(matches, key=lambda match: (-match.score, match.item.updated_at, match.item.id))[: query.limit]
-
-    def pack(self, query: MemoryQuery) -> PackedMemoryContext:
-        matches = tuple(self.search(query))
-        profile_matches = tuple(self._search_profiles(query))
-        source_matches = tuple(self._search_sources(query))
-        if not matches and not profile_matches and not source_matches:
-            return PackedMemoryContext(text="", matches=(), profile_matches=(), source_matches=())
-        lines: list[str] = []
-        if matches:
-            lines.append("Memory entries:")
-        for match in matches:
-            entry = match.entry
-            tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
-            reasons = ",".join(match.reasons)
-            relations = _relation_context(entry)
-            relation_text = f" relations={relations}" if relations else ""
-            temporal_text = _memory_temporal_context(
-                observed_at=entry.observed_at,
-                updated_at=entry.updated_at,
-                valid_from=entry.valid_from,
-                valid_until=entry.valid_until,
-                temporal_note=entry.temporal_note,
-            )
-            lines.append(
-                f"- {entry.title} "
-                f"[id={entry.id} type={entry.type} confidence={entry.confidence:.2f}{tags}"
-                f"{temporal_text}{relation_text} match={reasons}]: "
-                f"{entry.body}"
-            )
-        if profile_matches:
-            if lines:
-                lines.append("")
-            lines.append("Profile items:")
-        for match in profile_matches:
-            item = match.item
-            tags = f" tags={','.join(item.tags)}" if item.tags else ""
-            sources = f" sources={','.join(item.source_refs)}" if item.source_refs else ""
-            reasons = ",".join(match.reasons)
-            temporal_text = _memory_temporal_context(
-                observed_at=item.observed_at,
-                updated_at=item.updated_at,
-                valid_from=item.valid_from,
-                valid_until=item.valid_until,
-                temporal_note=item.temporal_note,
-            )
-            lines.append(
-                f"- {item.title} "
-                f"[id={item.id} type={item.type} confidence={item.confidence:.2f}{tags}{sources}"
-                f"{temporal_text} match={reasons}]: "
-                f"{item.body}"
-            )
-        if source_matches:
-            if lines:
-                lines.append("")
-            lines.append("Source chunks:")
-        for match in source_matches:
-            chunk = match.chunk
-            document = match.document
-            tags = f" tags={','.join(document.tags)}" if document.tags else ""
-            reasons = ",".join(match.reasons)
-            source_date = f" source_date={document.source_date}" if document.source_date else ""
-            updated_at = f" updated_at={document.updated_at}" if document.updated_at else ""
-            lines.append(
-                f"- {document.title} "
-                f"[ref={chunk.source_ref} source_id={document.id} kind={document.kind}{tags}"
-                f"{source_date}{updated_at} match={reasons}]: "
-                f"{chunk.text}"
-            )
-        return PackedMemoryContext(
-            text="\n".join(lines),
-            matches=matches,
-            profile_matches=profile_matches,
-            source_matches=source_matches,
-        )
-
-
 def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) -> MemoryMatch | None:
     title = entry.title.casefold()
     body = entry.body.casefold()
@@ -278,34 +160,6 @@ def _score_entry(entry: MemoryEntry, raw_query: str, tokens: tuple[str, ...]) ->
         score += min(entry.importance, 1.0) * 0.5
         reasons.append("importance")
     return MemoryMatch(entry=entry, score=score, reasons=tuple(reasons))
-
-
-def _memory_temporal_context(
-    *,
-    observed_at: str | None,
-    updated_at: str,
-    valid_from: str | None,
-    valid_until: str | None,
-    temporal_note: str,
-) -> str:
-    fields: list[str] = []
-    if observed_at:
-        fields.append(f"observed_at={observed_at}")
-    if valid_from:
-        fields.append(f"valid_from={valid_from}")
-    if valid_until:
-        fields.append(f"valid_until={valid_until}")
-    if temporal_note:
-        fields.append(f"temporal_note={_compact_temporal_note(temporal_note)}")
-    fields.append(f"updated_at={updated_at}")
-    return " " + " ".join(fields)
-
-
-def _compact_temporal_note(note: str, limit: int = 120) -> str:
-    compact = " ".join(note.split())
-    if len(compact) <= limit:
-        return compact
-    return compact[: limit - 3].rstrip() + "..."
 
 
 def _expand_related_matches(
@@ -472,66 +326,6 @@ def _type_affinity_score(memory_type: str, query: str, tokens: tuple[str, ...]) 
         elif hint_normalized in tokens:
             score += 1.0
     return min(score, 3.0)
-
-
-def _relation_context(entry: MemoryEntry) -> str:
-    parts: list[str] = []
-    for relation_name, target_ids in entry.relations.items():
-        if target_ids:
-            parts.append(f"{relation_name}:{','.join(target_ids)}")
-    return ";".join(parts)
-
-
-def _score_profile_item(item: ProfileItem, raw_query: str) -> ProfileMatch | None:
-    title = item.title.casefold()
-    body = item.body.casefold()
-    tags = tuple(tag.casefold() for tag in item.tags)
-    source_refs = tuple(source_ref.casefold() for source_ref in item.source_refs)
-    query = raw_query.casefold().strip()
-    score = 0.0
-    reasons: list[str] = []
-
-    if query != "" and query in title:
-        score += 5.0
-        reasons.append("title_phrase")
-    if query != "" and query in body:
-        score += 3.0
-        reasons.append("body_phrase")
-    if query != "" and any(query in tag for tag in tags):
-        score += 4.0
-        reasons.append("tag_phrase")
-    if query != "" and any(query in source_ref for source_ref in source_refs):
-        score += 2.0
-        reasons.append("source_ref_phrase")
-
-    type_score = _type_affinity_score(item.type, query, _query_tokens(raw_query))
-    if type_score > 0.0:
-        score += type_score
-        reasons.append("type_descriptor")
-
-    for token in _query_tokens(raw_query):
-        if token in title:
-            score += 3.0
-            _append_once(reasons, "title")
-        if any(token in tag for tag in tags):
-            score += 2.5
-            _append_once(reasons, "tag")
-        if token in body:
-            score += 1.0
-            _append_once(reasons, "body")
-        if any(token in source_ref for source_ref in source_refs):
-            score += 0.5
-            _append_once(reasons, "source_ref")
-
-    if score <= 0.0:
-        return None
-    confidence = item.confidence
-    if confidence > 0:
-        score += min(confidence, 1.0) * 0.25
-        reasons.append("confidence")
-    return ProfileMatch(item=item, score=score, reasons=tuple(reasons))
-
-
 def _query_tokens(text: str) -> tuple[str, ...]:
     tokens: list[str] = []
     for match in WORD_RE.finditer(text.casefold()):

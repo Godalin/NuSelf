@@ -16,14 +16,15 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
-from nuself.memory.curator_plan import MemoryCuratorPlanStore
-from nuself.memory.curator_contract import (
+from nuself.memory.curator.plan import MemoryCuratorPlanStore
+from nuself.memory.curator.contract import (
     CuratorActionsOutput,
     MemoryCuratorSettings,
 )
-from nuself.memory.curator import MemoryCurator as _MemoryCurator
+from nuself.memory.curator.worker import MemoryCurator as _MemoryCurator
 from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
-from nuself.memory.source_repository import SourceRepository
+from nuself.source.repository import SourceRepository
+from nuself.source.service import SourceService
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage.contract import StorageBackend
 from tests.backend import owned_backend
@@ -102,23 +103,10 @@ def source_repository(
     backend: StorageBackend | None = None,
     candidate_repository: MemoryCandidateRepository | None = None,
     profile_repository: ProfileItemRepository | None = None,
-) -> SourceRepository:
+) -> SourceService:
+    del candidate_repository, profile_repository
     paths, selected_backend = _resources(root_or_paths, backend)
-    profile = profile_repository or ProfileItemRepository(
-        paths,
-        backend=selected_backend,
-    )
-    candidates = candidate_repository or memory_candidate_repository(
-        paths,
-        backend=selected_backend,
-        profile_repository=profile,
-    )
-    return SourceRepository(
-        paths,
-        backend=selected_backend,
-        candidate_repository=candidates,
-        profile_repository=profile,
-    )
+    return SourceService(SourceRepository(paths, backend=selected_backend))
 
 
 class MemoryCurator(_MemoryCurator):
@@ -190,7 +178,7 @@ class MemoryCurator(_MemoryCurator):
             source_trace_id=source_trace_id,
         )
         if observation is None:
-            from nuself.memory.curator_contract import MemoryCuratorResult
+            from nuself.memory.curator.contract import MemoryCuratorResult
             return MemoryCuratorResult(0, 0, 0, 0, self._test_paths.logs_dir / "memory.log")
         return super().run_once(observation.id)
 

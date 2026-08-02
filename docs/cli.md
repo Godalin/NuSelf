@@ -92,7 +92,7 @@ uv run nuself memory search "retrieval"
 uv run nuself memory preview
 uv run nuself memory stats
 uv run nuself memory review list
-uv run nuself memory source list
+uv run nuself source list
 uv run nuself memory profile list
 uv run nuself memory graph search "project"
 ```
@@ -192,7 +192,7 @@ The CLI help is the current command reference:
 ```bash
 uv run nuself --help
 uv run nuself memory --help
-uv run nuself memory source --help
+uv run nuself source --help
 ```
 
 The authoritative command, output, and REPL contracts are maintained in

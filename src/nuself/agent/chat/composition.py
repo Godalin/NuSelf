@@ -29,6 +29,7 @@ from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.log.store import runtime_event_log_sink
 from nuself.trace.composition import TraceServices
 from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.source.service import SourceService
 
 __all__ = ["ChatResult", "compose_conversation_runtime"]
 
@@ -38,6 +39,7 @@ def compose_conversation_runtime(
     config: SystemConfig,
     conversations: ConversationStore,
     memory_service: MemoryService,
+    source_service: SourceService,
     memory_entries: MemoryEntryRepository,
     reflection_service: ReflectionService,
     reason_service: ReasonService,
@@ -66,6 +68,7 @@ def compose_conversation_runtime(
         tools=ToolResources(
             project_root=paths.authority_root,
             memory=memory_service,
+            sources=source_service,
             reflections=reflection_service,
             reasons=reason_service,
             reason_workspace=reason_workspace,

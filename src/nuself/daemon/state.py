@@ -92,6 +92,7 @@ class DaemonState:
             config,
             application.conversations,
             application.memory_service,
+            application.sources,
             application.memory.entries,
             application.reflection.service,
             application.reason.service,
@@ -118,6 +119,7 @@ class DaemonState:
         self.reflection_scheduler = compose_reflection_scheduler(
             paths,
             application.memory,
+            application.sources,
             application.conversation_history,
             application.reflection.repository,
             application.reflection.service,

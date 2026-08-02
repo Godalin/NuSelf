@@ -261,8 +261,15 @@ def test_cross_domain_services_receive_foreign_capabilities() -> None:
             "nuself.trace.repository",
         },
         "memory/repository.py": {"nuself.profile.repository"},
-        "memory/source_repository.py": {"nuself.profile.repository"},
-        "memory/service.py": {"nuself.profile.repository"},
+        "memory/service.py": {
+            "nuself.profile.repository",
+            "nuself.source.repository",
+            "nuself.source.service",
+        },
+        "source/repository.py": {
+            "nuself.memory.repository",
+            "nuself.profile.repository",
+        },
     }
     violations = [
         f"{relative} -> {module}"

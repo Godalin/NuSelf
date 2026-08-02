@@ -21,7 +21,7 @@ from nuself.memory.model import (
 from nuself.memory.audit import (
     MEMORY_AUDIT,
 )
-from nuself.memory.curator_contract import (
+from nuself.memory.curator.contract import (
     CuratorActionsOutput,
     MemoryAction,
     MemoryActionType,
@@ -30,7 +30,7 @@ from nuself.memory.curator_contract import (
     MemoryDecision,
     actions_from_output as _actions_from_output,
 )
-from nuself.memory.curator_plan import (
+from nuself.memory.curator.plan import (
     MemoryCuratorPlan,
     MemoryCuratorPlanLockContended,
     MemoryCuratorPlanStore,

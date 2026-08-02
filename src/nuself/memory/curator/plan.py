@@ -13,7 +13,7 @@ from nuself.memory.model import (
     MemoryTypeRegistry,
     default_memory_type_registry,
 )
-from nuself.memory.curator_contract import (
+from nuself.memory.curator.contract import (
     CuratorActionItem,
     MemoryAction,
     action_from_item,

@@ -87,7 +87,6 @@ class ConversationTurnState:
     persisted_state: ConversationState
     user_message: str
     turn_id: str | None = None
-    memory_context: str = ""
     base_messages: tuple[ConversationMessage, ...] = ()
     active_messages: tuple[ConversationMessage, ...] = ()
     final_response: ChatStructuredOutput | None = None
@@ -96,9 +95,6 @@ class ConversationTurnState:
     node_trace: tuple[ConversationNodeName, ...] = ()
     stage_durations_ms: tuple[tuple[str, int], ...] = ()
     recent_message_count: int = 0
-    memory_match_count: int = 0
-    profile_match_count: int = 0
-    source_match_count: int = 0
     prompt_message_count: int = 0
 
     @classmethod

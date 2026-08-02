@@ -21,6 +21,8 @@ from nuself.reflection.composition import (
     compose_reflection_resources,
 )
 from nuself.storage.contract import StorageBackend
+from nuself.source.composition import compose_source_service
+from nuself.source.service import SourceService
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,7 @@ class ApplicationGraph:
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
     memory_service: MemoryService
+    sources: SourceService
     notifications: NotificationOutbox
     persona_prompts: PersonaPromptRepository
     reason: ReasonResources
@@ -49,6 +52,7 @@ def compose_application(
 
     conversations = ConversationStore(paths, backend=backend)
     memory = compose_memory_repositories(paths, backend)
+    sources = compose_source_service(paths, backend)
     trace = compose_trace_services(paths, backend)
     config = ConfigSystem.load_scope(paths.scope)
     reason = compose_reason_resources(
@@ -69,11 +73,8 @@ def compose_application(
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,
-        memory_service=MemoryService(
-            memory.entries,
-            memory.sources,
-            memory.profile,
-        ),
+        memory_service=MemoryService(memory.entries),
+        sources=sources,
         notifications=NotificationOutbox(paths, backend),
         persona_prompts=PersonaPromptRepository(
             backend.collection("persona_prompts"),

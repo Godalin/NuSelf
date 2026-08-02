@@ -13,6 +13,7 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`agent-tools.md`](agent-tools.md) | Agent-facing tool contracts, approval boundaries, and capability groups |
 | [`llm.md`](llm.md) | Model invocation, structured output, endpoint failover, and framework boundaries |
 | [`memory.md`](memory.md) | Memory intake, curation, optimization, query, type system, symbolic graph |
+| [`source.md`](source.md) | External document ingestion, retrieval, connectors, and Source tools |
 | [`reflection.md`](reflection.md) | Reflection scheduler event taxonomy, pipeline flow, discussion outcomes |
 | [`reason.md`](reason.md) | Long-run reasoning threads for sustained work on explicit topics |
 | [`reason-output.md`](reason-output.md) | Reason-scoped long-form export and output composition |

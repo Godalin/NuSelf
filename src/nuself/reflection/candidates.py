@@ -17,7 +17,7 @@ from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
 from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
+from nuself.source.service import SourceService
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reflection.audit import REFLECTION_AUDIT
 
@@ -57,7 +57,7 @@ class IdeaCandidateGenerator:
         project_root: Path,
         *,
         memory_repository: MemoryEntryRepository,
-        source_repository: SourceRepository,
+        source_service: SourceService,
         profile_repository: ProfileItemRepository,
         conversation_history: ConversationHistoryReader,
         language_preference: str,
@@ -66,7 +66,7 @@ class IdeaCandidateGenerator:
     ) -> None:
         self._project_root = project_root
         self._memory_repository = memory_repository
-        self._source_repository = source_repository
+        self._source_service = source_service
         self._profile_repository = profile_repository
         self._conversation_history = conversation_history
         self._agent = agent or default_structured_agent(
@@ -131,7 +131,7 @@ class IdeaCandidateGenerator:
             ),
             sources="\n".join(
                 f"- {document.title or document.id}"
-                for document in self._source_repository.list_documents()[-5:]
+                for document in self._source_service.list()[-5:]
             ),
         )
 

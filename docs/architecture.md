@@ -176,7 +176,7 @@ verification remains repository tooling under `scripts` and is not shipped.
 
 Concrete models live with their owning domain (`memory.model`,
 `profile.model`, `reason.model`, `reflection.model`, `trace.model`, and
-`memory.source_model`). NuSelf has no
+`source.record`). NuSelf has no
 horizontal `domain` package that separates a model from the repository and
 service that own its semantics.
 Conversation is likewise an owned package: `model` contains persisted types,

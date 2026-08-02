@@ -9,7 +9,6 @@ from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.config.settings import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate
 from nuself.agent.endpoint import LangChainLLMEndpoint
-from nuself.memory.service import MemoryQuery, MemoryService
 from nuself.persona.definition import (
     PersonaDefinition,
     PersonaInput,
@@ -40,11 +39,9 @@ class ConversationPersonaOrchestrator:
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         language_preference: str,
         reflection_settings: ReflectionSettings,
-        memory_query_service: MemoryService,
         persona_definitions: tuple[PersonaDefinition, ...],
     ) -> None:
         self._project_root = project_root
-        self._memory_query_service = memory_query_service
         self._persona_definitions = persona_definitions
         graph_agents = (
             persona_graph_agents(
@@ -102,16 +99,10 @@ class ConversationPersonaOrchestrator:
         context: str | None = None,
     ) -> str:
         conversation_id = current_runtime_context().conversation_id or "default"
-        memory_context = self._memory_query_service.pack(
-            MemoryQuery(text=topic)
-        ).text
         extra_context = context.strip() if isinstance(context, str) else ""
-        combined_context = "\n\n".join(
-            part for part in (memory_context, extra_context) if part
-        )
         persona_input = PersonaInput(
             user_message=topic,
-            memory_context=combined_context,
+            memory_context=extra_context,
         )
         activation = self._activation_policy.decide(persona_input)
         selected_personas = (

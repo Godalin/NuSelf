@@ -7,7 +7,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from nuself.log.record import LogEvent
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
-from nuself.memory.source_model import SourceDocument
+from nuself.source.record import SourceDocument
 from nuself.notification.model import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reason.model import ReasoningStep

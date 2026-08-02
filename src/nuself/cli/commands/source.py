@@ -1,19 +1,20 @@
-"""One-shot memory source command handlers."""
+"""External source command family."""
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+from typing import Any
 
 from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, resolve_handle
-from nuself.memory.model import PrivacyLevel
-from nuself.memory.source_model import SourceChunk
-from nuself.memory.source_repository import (
-    SourceChunkMatch,
+from nuself.source.record import PrivacyLevel, SourceChunk
+from nuself.source.repository import (
     SourceDocumentNotFound,
-    SourceRepository,
 )
+from nuself.source.service import SourceMatch, SourceService
+from nuself.cli.handlers import CliHandlerBindings
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.memory import render_source_detail, render_source_row
 
@@ -33,7 +34,7 @@ def _format_chunk_summary(chunk: SourceChunk) -> str:
     )
 
 
-def _format_chunk_match(match: SourceChunkMatch) -> str:
+def _format_chunk_match(match: SourceMatch) -> str:
     chunk = match.chunk
     document = match.document
     reasons = ",".join(match.reasons)
@@ -52,21 +53,21 @@ def _privacy_arg(value: object) -> PrivacyLevel:
 
 def _resolve_source_id(
     args: argparse.Namespace,
-    repository: SourceRepository,
+    service: SourceService,
 ) -> str | None:
     return resolve_handle(
         args.source_id,
-        repository.list_documents(),
+        service.list(),
         label="source",
         get_id=lambda document: document.id,
     )
 
 
-def handle_memory_source_ingest(
+def handle_source_ingest(
     args: argparse.Namespace,
 ) -> int:
     try:
-        result = cli_application().memory.sources.ingest_path(
+        result = cli_application().sources.ingest(
             args.path,
             tags=list(args.tag),
             privacy=_privacy_arg(args.privacy),
@@ -78,8 +79,8 @@ def handle_memory_source_ingest(
     return 0
 
 
-def handle_memory_source_list(args: argparse.Namespace) -> int:
-    documents = cli_application().memory.sources.list_documents()
+def handle_source_list(args: argparse.Namespace) -> int:
+    documents = cli_application().sources.list()
     if not documents:
         print("No source documents.")
         return 0
@@ -88,13 +89,13 @@ def handle_memory_source_list(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_memory_source_show(args: argparse.Namespace) -> int:
-    repository = cli_application().memory.sources
-    source_id = _resolve_source_id(args, repository)
+def handle_source_show(args: argparse.Namespace) -> int:
+    service = cli_application().sources
+    source_id = _resolve_source_id(args, service)
     if source_id is None:
         return 1
     try:
-        document = repository.get_document(source_id)
+        document = service.get(source_id)
     except SourceDocumentNotFound:
         print(
             f"Source document not found: {source_id}",
@@ -104,22 +105,21 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
     print_ansi(
         render_source_detail(
             document,
-            chunk_count=len(repository.list_chunks(document.id)),
+            chunk_count=len(service.chunks(document.id)),
         )
     )
     return 0
 
 
-def handle_memory_source_delete(
+def handle_source_delete(
     args: argparse.Namespace,
 ) -> int:
-    memory = cli_application().memory
-    repository = memory.sources
-    source_id = _resolve_source_id(args, repository)
+    service = cli_application().sources
+    source_id = _resolve_source_id(args, service)
     if source_id is None:
         return 1
     try:
-        repository.delete_document(source_id)
+        service.delete(source_id)
     except SourceDocumentNotFound:
         print(
             f"Source document not found: {source_id}",
@@ -130,19 +130,19 @@ def handle_memory_source_delete(
     return 0
 
 
-def handle_memory_source_chunks(
+def handle_source_chunks(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.sources
+    service = cli_application().sources
     source_ref = getattr(args, "source_id", None)
     source_id = (
-        _resolve_source_id(args, repository)
+        _resolve_source_id(args, service)
         if source_ref is not None
         else None
     )
     if source_ref is not None and source_id is None:
         return 1
-    chunks = repository.list_chunks(source_id)
+    chunks = service.chunks(source_id)
     if not chunks:
         print("No source chunks.")
         return 0
@@ -151,10 +151,10 @@ def handle_memory_source_chunks(
     return 0
 
 
-def handle_memory_source_search(
+def handle_source_search(
     args: argparse.Namespace,
 ) -> int:
-    matches = cli_application().memory.sources.search(
+    matches = cli_application().sources.search(
         args.query, limit=args.limit
     )
     if not matches:
@@ -165,29 +165,27 @@ def handle_memory_source_search(
     return 0
 
 
-def handle_memory_source_extract(
-    args: argparse.Namespace,
-) -> int:
-    memory = cli_application().memory
-    source_id = _resolve_source_id(args, memory.sources)
-    if source_id is None:
-        return 1
-    try:
-        candidates = memory.sources.extract_candidates(source_id)
-    except SourceDocumentNotFound:
-        print(
-            f"Source document not found: {source_id}",
-            file=sys.stderr,
-        )
-        return 1
-    if not candidates:
-        print("No source chunks to extract.")
-        return 0
-    candidate_repository = memory.candidates
-    for candidate in candidates:
-        candidate_repository.save(candidate)
-    print(
-        "Extracted source candidates: "
-        f"source={source_id} candidates={len(candidates)}"
-    )
-    return 0
+def add_source_parser(subparsers: Any, bindings: CliHandlerBindings) -> None:
+    bind = bindings.bind
+    source = subparsers.add_parser("source", help="Manage imported external knowledge.")
+    bindings.bind_help(source)
+    commands = source.add_subparsers(dest="source_command", metavar="<command>")
+    ingest = commands.add_parser("ingest", help="Ingest a local document or directory.")
+    ingest.add_argument("path", type=Path)
+    ingest.add_argument("--tag", action="append", default=[])
+    ingest.add_argument("--privacy", choices=["private", "shareable"], default="private")
+    bind(ingest, handle_source_ingest)
+    bind(commands.add_parser("list", help="List source documents."), handle_source_list)
+    show = commands.add_parser("show", help="Show a source document.")
+    show.add_argument("source_id")
+    bind(show, handle_source_show)
+    delete = commands.add_parser("delete", help="Delete a source document and its chunks.")
+    delete.add_argument("source_id")
+    bind(delete, handle_source_delete)
+    chunks = commands.add_parser("chunks", help="List source chunks.")
+    chunks.add_argument("source_id", nargs="?")
+    bind(chunks, handle_source_chunks)
+    search = commands.add_parser("search", help="Search source chunks.")
+    search.add_argument("query")
+    search.add_argument("--limit", type=int, default=8)
+    bind(search, handle_source_search)

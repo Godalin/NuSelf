@@ -505,8 +505,9 @@ single-use forwarding functions around those adapters.
   are split by subdomain instead of collected in one oversized module.
   `cli/commands/memory/profile.py` owns profile list/search/show/delete
   handlers and their list ordering and handle resolution.
-  `cli/commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
-  extract handlers and source-specific output formatting.
+  External knowledge is not a Memory subdomain:
+  `cli/commands/source.py` owns source ingest/list/show/delete/chunks/search
+  handlers and source-specific output formatting.
   `cli/commands/memory/candidate.py` owns candidate review handlers, ordering, and
   single/multiple visible-handle resolution. `cli/commands/memory/common.py` owns
   command-layer memory trace recording shared across memory command modules.

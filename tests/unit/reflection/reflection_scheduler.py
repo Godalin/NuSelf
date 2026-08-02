@@ -198,7 +198,7 @@ def _generator(
         project_root,
         agent=agent,  # type: ignore[arg-type]
         memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
+        source_service=application.sources,
         profile_repository=application.memory.profile,
         conversation_history=application.conversation_history,
         language_preference="en",
@@ -276,6 +276,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     return compose_reflection_scheduler(
         application.paths,
         application.memory,
+        application.sources,
         application.conversation_history,
         application.reflection.repository,
         application.reflection.service,
@@ -849,7 +850,7 @@ def test_generator_injects_language_instruction(tmp_path: Path) -> None:
         tmp_path,
         agent=agent,
         memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
+        source_service=application.sources,
         profile_repository=application.memory.profile,
         conversation_history=application.conversation_history,
         language_preference="zh-CN",
