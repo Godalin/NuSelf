@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from nuself.config import ConfigSystem
+from nuself.cli.composition import compose_cli_application
 from nuself.logs import read_log_events
 from nuself.runtime.log_event import LogEvent
 
@@ -39,7 +39,7 @@ def startup_interactive_notices(
     )
     notices: list[InteractiveNotice] = []
     try:
-        config = ConfigSystem.load(project_root=project_root)
+        config = compose_cli_application(project_root).config
     except (OSError, ValueError):
         config = None
         notices.append(

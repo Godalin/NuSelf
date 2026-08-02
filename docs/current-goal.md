@@ -9,21 +9,23 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove private forwarding functions from the CLI composition root.
+Use the authority-scoped application config throughout ordinary CLI flows.
 
 ## Ordered Steps
 
-1. Specify direct binding of fixed Chat/REPL dependencies at parser
-   composition, without single-use forwarding callables.
-2. Replace reply-printer and curator forwarding functions with standard
-   partial bindings and migrate tests to the real adapter seams.
-3. Run focused and full gates, then commit without pushing.
+1. Specify `ApplicationGraph.config` as the process surface's effective
+   resolved configuration; ordinary consumers must not reload from a root path.
+2. Move daemon chat timeout and REPL startup notices to the application config,
+   removing two path-only `ConfigSystem.load()` calls.
+3. Add a workspace-layer regression, run focused/full gates, record evidence,
+   and commit without pushing.
 
 ## Exclusions
 
-- Preserve entrypoint callback protocols, reply rendering, memory curation,
-  daemon/local selection, REPL behavior, and parser isolation.
-- Do not move launch policy into the root or add a callback facade/class.
+- Preserve malformed-config fallback/diagnostics, timeout behavior, notice
+  content, log inspection, scope mismatch warnings, and CLI cleanup.
+- Keep explicit `dev scope/config` inspection independent; do not add a config
+  facade or runtime reload path.
 
 ## Constraints
 
@@ -35,6 +37,13 @@ Remove private forwarding functions from the CLI composition root.
 
 ## Phase Evidence
 
+- Daemon chat timeout selection and REPL startup notices now consume the
+  already-composed `ApplicationGraph.config`; removed their independent
+  path-only `ConfigSystem.load()` calls. Ordinary process surfaces therefore
+  share one immutable effective config, while explicit scope inspection remains
+  independent. A workspace regression proves user-layer timeout inheritance.
+  Focused config/chat/REPL tests: 39 passed; full suite: 2445 passed; Pyright:
+  0 errors, 0 warnings; sdist and wheel build succeeded.
 - The CLI composition root now binds the reply printer and memory-curator
   callback directly with standard partial application. Removed three private
   single-use forwarding functions plus their type-only imports; entrypoint

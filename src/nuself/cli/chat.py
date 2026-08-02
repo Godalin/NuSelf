@@ -17,7 +17,6 @@ from nuself.agent.chat.audit import (
 from nuself.cli.output import print_ansi
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.config import ConfigSystem
 from nuself.daemon import client
 from nuself.memory.audit import report_memory_failure
 from nuself.runtime.context import runtime_context
@@ -124,9 +123,9 @@ def send_daemon_chat_interactive(
 def chat_request_timeout_seconds(project_root: Path | None) -> float:
     """Return the configured daemon chat request timeout."""
 
-    return ConfigSystem.load(
-        project_root=project_root
-    ).chat.request_timeout_seconds
+    return compose_cli_application(
+        project_root
+    ).config.chat.request_timeout_seconds
 
 
 def send_one_shot_chat(

@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon chat timeouts and interactive startup notices now reuse the resolved
+  application configuration, preserving user/workspace layering and removing
+  duplicate path-only config loads.
 - The CLI composition root now binds Chat and REPL dependencies directly,
   removing three private forwarding functions from the launch path.
 - Daemon recurring-task registration is now the sole periodic task subset,

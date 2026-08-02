@@ -5,10 +5,12 @@ from pathlib import Path
 import pytest
 
 from nuself.cli.repl.notices import (
+    InteractiveNotice,
     print_interactive_notices,
     startup_interactive_notices,
     turn_interactive_notices,
 )
+from nuself.application.runtime import open_application_runtime, use_application_runtime
 from nuself.logs import write_log_event
 from nuself.runtime.log_event import LogEvent
 
@@ -28,6 +30,19 @@ def _event(component: str, event: str) -> LogEvent:
     )
 
 
+def _startup_notices(
+    authority: Path,
+    *,
+    cwd: Path,
+) -> tuple[InteractiveNotice, ...]:
+    runtime = open_application_runtime(authority)
+    try:
+        with use_application_runtime(runtime):
+            return startup_interactive_notices(authority, cwd=cwd)
+    finally:
+        runtime.close()
+
+
 def test_startup_reports_missing_model_and_explicit_scope_mismatch(
     tmp_path: Path,
 ) -> None:
@@ -36,7 +51,7 @@ def test_startup_reports_missing_model_and_explicit_scope_mismatch(
     user_authority.mkdir()
     (workspace / ".nuself").mkdir(parents=True)
 
-    notices = startup_interactive_notices(
+    notices = _startup_notices(
         user_authority,
         cwd=workspace,
     )
@@ -88,7 +103,7 @@ def test_startup_groups_recent_hidden_failures(tmp_path: Path) -> None:
         metadata={"response_status": "ok", "fallback": False},
     )
 
-    notices = startup_interactive_notices(authority, cwd=tmp_path)
+    notices = _startup_notices(authority, cwd=tmp_path)
 
     messages = "\n".join(notice.message for notice in notices)
     assert "Recent logs contain 1 memory record decode failure(s)" in messages
@@ -126,7 +141,7 @@ def test_startup_suppresses_failure_resolved_by_later_record_update(
         },
     )
 
-    notices = startup_interactive_notices(authority, cwd=tmp_path)
+    notices = _startup_notices(authority, cwd=tmp_path)
 
     assert all(
         notice.code != "recent-memory-records-unreadable"
@@ -174,7 +189,7 @@ def test_startup_keeps_unrepaired_and_post_repair_failures(
         },
     )
 
-    notices = startup_interactive_notices(authority, cwd=tmp_path)
+    notices = _startup_notices(authority, cwd=tmp_path)
 
     [notice] = [
         item

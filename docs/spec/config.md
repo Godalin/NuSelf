@@ -13,6 +13,12 @@ the lower layer; mappings merge recursively. Scope selection and the strict
 separation between layered configuration and single-authority state are
 governed by [`scope.md`](scope.md).
 
+Application composition owns this effective immutable configuration for its
+resolved scope. Ordinary CLI and daemon consumers read `ApplicationGraph.config`
+instead of reloading configuration from an authority path, which cannot
+reconstruct the user layer beneath workspace scope. Explicit configuration and
+scope inspection commands remain separate read-only projections.
+
 ## Config Sections
 
 | Section | Dataclass | Purpose |

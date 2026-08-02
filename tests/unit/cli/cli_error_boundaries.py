@@ -17,6 +17,7 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
 from nuself.reason.service import ReasonService
 from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.scope import resolve_scope
 
 
 @pytest.fixture(autouse=True)
@@ -50,10 +51,33 @@ def test_chat_timeout_does_not_hide_unexpected_config_failure(
     def fail_load(*args: object, **kwargs: object) -> None:
         raise RuntimeError("config implementation failed")
 
-    monkeypatch.setattr(ConfigSystem, "load", fail_load)
+    monkeypatch.setattr(ConfigSystem, "load_scope", fail_load)
 
     with pytest.raises(RuntimeError, match="config implementation failed"):
         chat_request_timeout_seconds(tmp_path)
+
+
+def test_chat_timeout_preserves_user_config_in_workspace_scope(
+    tmp_path: Path,
+) -> None:
+    user_root = tmp_path / "user"
+    workspace = tmp_path / "workspace"
+    user_root.mkdir()
+    (workspace / ".nuself").mkdir(parents=True)
+    (user_root / "config.yaml").write_text(
+        "chat:\n  request_timeout_seconds: 37\n",
+        encoding="utf-8",
+    )
+    scope = resolve_scope(
+        workspace=workspace,
+        environ={"NUSELF_HOME": str(user_root)},
+    )
+    runtime = open_application_runtime(scope)
+    try:
+        with use_application_runtime(runtime):
+            assert chat_request_timeout_seconds(scope.root) == 37
+    finally:
+        runtime.close()
 
 
 def test_history_reports_empty_missing_conversation(tmp_path: Path) -> None:
