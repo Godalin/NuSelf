@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.conversation import ConversationState
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.repl.input import interactive_help
 from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
@@ -178,9 +178,7 @@ def export_interactive_transcript(
 ) -> tuple[Path, str]:
     paths = runtime_paths(project_root)
     if messages is None:
-        conversation = compose_cli_application(
-            project_root
-        ).conversations.load(conversation_id)
+        conversation = cli_application().conversations.load(conversation_id)
         messages = conversation_messages_from_index(conversation, start_index)
     if not messages:
         raise ValueError("no chat messages in this connection yet")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from nuself.config import ConfigSystem
-from nuself.cli.composition import compose_cli_backend
+from nuself.cli.composition import cli_backend
 from nuself.private_fs import ensure_managed_directory
 from nuself.scope import NuSelfScope, resolve_runtime_paths
 
@@ -22,7 +22,7 @@ def handle_init(args: argparse.Namespace) -> int:
         paths.runtime_dir,
     ):
         ensure_managed_directory(paths.authority_root, directory)
-    compose_cli_backend(paths.authority_root)
+    cli_backend()
     print(
         f"Initialized NuSelf {scope.kind} authority: "
         f"{paths.authority_root}"

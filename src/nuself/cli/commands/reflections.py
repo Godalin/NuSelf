@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.reflection.service import ReflectionService
@@ -18,7 +18,7 @@ from nuself.tui.render import (
 
 
 def _service(args: argparse.Namespace) -> ReflectionService:
-    return compose_cli_application(args.project_root).reflection_service
+    return cli_application().reflection_service
 
 
 def handle_reflection_list(args: argparse.Namespace) -> int:

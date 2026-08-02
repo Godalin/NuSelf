@@ -9,7 +9,7 @@ from nuself.cli.daemon_lifecycle import (
     restart_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi
 from nuself.cli.persona_management import (
     create_persona,
@@ -55,7 +55,7 @@ theme = TerminalTheme()
 def _reflection_service(
     project_root: Path | None,
 ) -> ReflectionService:
-    return compose_cli_application(project_root).reflection_service
+    return cli_application().reflection_service
 
 
 def handle_interactive_memory_command(command: str, project_root: Path | None) -> str:
@@ -63,15 +63,13 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         return "No memory-context trace is available for the last answer yet."
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
-        entries = compose_cli_application(
-            project_root
-        ).memory.entries.search(query)
+        entries = cli_application().memory.entries.search(query)
         if not entries:
             return "No matching memory entries."
         return "\n".join(
             render_memory_entry_row(entry) for entry in entries
         )
-    memory = compose_cli_application(project_root).memory
+    memory = cli_application().memory
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
         try:
@@ -145,7 +143,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
 
 
 def handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
-    service = compose_cli_application(project_root).reason_service
+    service = cli_application().reason_service
     if command == "":
         return interactive_reason_help()
     if command == "list":
@@ -173,7 +171,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         from nuself.application.reason import compose_reason_advancer
 
         advancer = compose_reason_advancer(
-            compose_cli_application(project_root)
+            cli_application()
         )
         try:
             thread = service.advance_thread(
@@ -245,7 +243,7 @@ def interactive_reason_help(command: str | None = None) -> str:
 
 
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
-    service = compose_cli_application(project_root).trace.query
+    service = cli_application().trace.query
     if command in {"", "list"}:
         traces = service.list_traces()
         if not traces:
@@ -284,7 +282,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = compose_cli_application(project_root).persona_prompts
+        repo = cli_application().persona_prompts
         if command in {"", "list"}:
             prompts = list_persona_prompts(project_root)
             if not prompts:
@@ -346,7 +344,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 
 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
-    scope = compose_cli_application(project_root).paths.scope
+    scope = cli_application().paths.scope
     try:
         result = restart_daemon_observed(scope)
     except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
@@ -418,7 +416,7 @@ def interactive_memory_help(command: str | None = None) -> str:
 
 def handle_interactive_history_command(project_root: Path | None, conversation_id: str) -> str:
     try:
-        state = compose_cli_application(project_root).conversations.load(
+        state = cli_application().conversations.load(
             conversation_id
         )
     except Exception as exc:
@@ -445,7 +443,7 @@ def handle_interactive_history_command(project_root: Path | None, conversation_i
 
 
 def handle_interactive_whoami_command(project_root: Path | None) -> str:
-    repo = compose_cli_application(project_root).memory.profile
+    repo = cli_application().memory.profile
     items = repo.list()
     if not items:
         return "No profile items yet."
@@ -535,7 +533,7 @@ def handle_interactive_notify_command(
 ) -> str:
     from nuself.tui.render import render_outbox_summary
 
-    outbox = compose_cli_application(project_root).notifications
+    outbox = cli_application().notifications
     entries = (
         outbox.list()
         if include_all
@@ -562,7 +560,7 @@ def handle_interactive_notify_show_command(project_root: Path | None, entry_id: 
     from nuself.tui.render import render_outbox_detail
 
     try:
-        entry = compose_cli_application(project_root).notifications.get(
+        entry = cli_application().notifications.get(
             entry_id
         )
     except OutboxEntryNotFound:
@@ -577,7 +575,7 @@ def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str,
         build_notification_adapters,
     )
 
-    application = compose_cli_application(project_root)
+    application = cli_application()
     outbox = application.notifications
     try:
         outbox.get(entry_id)
@@ -607,7 +605,7 @@ def handle_interactive_watch_command(project_root: Path | None) -> None:
 
     from nuself.tui.render import render_outbox_summary
 
-    outbox = compose_cli_application(project_root).notifications
+    outbox = cli_application().notifications
     seen: set[str] = set()
     for entry in outbox.list():
         seen.add(entry.id)
@@ -625,7 +623,7 @@ def handle_interactive_watch_command(project_root: Path | None) -> None:
 
 
 def handle_interactive_conversations_command(project_root: Path | None) -> str:
-    store = compose_cli_application(project_root).conversations
+    store = cli_application().conversations
     ids = store.list()
     if not ids:
         return "No active conversations."

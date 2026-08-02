@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, resolve_handle
 from nuself.domain.memory import PrivacyLevel
 from nuself.domain.source import SourceChunk
@@ -66,7 +66,7 @@ def handle_memory_source_ingest(
     args: argparse.Namespace,
 ) -> int:
     try:
-        result = compose_cli_application(args.project_root).memory.sources.ingest_path(
+        result = cli_application().memory.sources.ingest_path(
             args.path,
             tags=list(args.tag),
             privacy=_privacy_arg(args.privacy),
@@ -79,9 +79,7 @@ def handle_memory_source_ingest(
 
 
 def handle_memory_source_list(args: argparse.Namespace) -> int:
-    documents = compose_cli_application(
-        args.project_root
-    ).memory.sources.list_documents()
+    documents = cli_application().memory.sources.list_documents()
     if not documents:
         print("No source documents.")
         return 0
@@ -91,7 +89,7 @@ def handle_memory_source_list(args: argparse.Namespace) -> int:
 
 
 def handle_memory_source_show(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.sources
+    repository = cli_application().memory.sources
     source_id = _resolve_source_id(args, repository)
     if source_id is None:
         return 1
@@ -115,7 +113,7 @@ def handle_memory_source_show(args: argparse.Namespace) -> int:
 def handle_memory_source_delete(
     args: argparse.Namespace,
 ) -> int:
-    memory = compose_cli_application(args.project_root).memory
+    memory = cli_application().memory
     repository = memory.sources
     source_id = _resolve_source_id(args, repository)
     if source_id is None:
@@ -135,7 +133,7 @@ def handle_memory_source_delete(
 def handle_memory_source_chunks(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.sources
+    repository = cli_application().memory.sources
     source_ref = getattr(args, "source_id", None)
     source_id = (
         _resolve_source_id(args, repository)
@@ -156,7 +154,7 @@ def handle_memory_source_chunks(
 def handle_memory_source_search(
     args: argparse.Namespace,
 ) -> int:
-    matches = compose_cli_application(args.project_root).memory.sources.search(
+    matches = cli_application().memory.sources.search(
         args.query, limit=args.limit
     )
     if not matches:
@@ -170,7 +168,7 @@ def handle_memory_source_search(
 def handle_memory_source_extract(
     args: argparse.Namespace,
 ) -> int:
-    memory = compose_cli_application(args.project_root).memory
+    memory = cli_application().memory
     source_id = _resolve_source_id(args, memory.sources)
     if source_id is None:
         return 1

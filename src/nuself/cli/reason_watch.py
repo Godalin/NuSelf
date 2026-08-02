@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from nuself.cli.output import print_ansi
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.reason.errors import ReasonNotFound
 from nuself.tui.reason import render_reason_detail, render_step_watch_entry
 from nuself.tui.render import TerminalTheme
@@ -21,7 +21,7 @@ def watch_reason_steps(
     thread_ref: str | None = None,
 ) -> None:
     """Watch reasoning steps, optionally restricted to one thread."""
-    service = compose_cli_application(project_root).reason_service
+    service = cli_application().reason_service
     threads = service.list_threads(status="all")
     if thread_ref is not None:
         try:

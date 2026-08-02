@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.cli.presentation import (
     brand_banner,
@@ -49,7 +49,7 @@ def run_repl(
     def curate_session(root: Path | None) -> None:
         if daemon_activity:
             return
-        application = compose_cli_application(root)
+        application = cli_application()
         for observation in application.memory.observations.pending():
             run_memory_curator(root, observation.id)
 

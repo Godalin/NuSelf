@@ -9,7 +9,7 @@ import time
 from typing import cast
 
 from nuself.cli.output import print_ansi, resolve_handle
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.exit_codes import CliExitCode
 from nuself.notification.outbox import (
     NotificationOutbox,
@@ -114,7 +114,7 @@ def _watch_stop_requested(interval: float) -> bool:
 
 
 def handle_notify_send(args: argparse.Namespace) -> int:
-    application = compose_cli_application(args.project_root)
+    application = cli_application()
     outbox = application.notifications
     entry_id = _resolve_entry_id(args, outbox)
     if entry_id is None:
@@ -162,4 +162,4 @@ def handle_notify_clear(args: argparse.Namespace) -> int:
 
 
 def _outbox(args: argparse.Namespace) -> NotificationOutbox:
-    return compose_cli_application(args.project_root).notifications
+    return cli_application().notifications

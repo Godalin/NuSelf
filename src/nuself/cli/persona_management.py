@@ -9,7 +9,7 @@ from nuself.cli.output import (
     resolve_handle,
     resolve_handle_selection,
 )
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.persona.audit import run_persona_observed
@@ -23,7 +23,7 @@ _theme = TerminalTheme()
 def list_persona_prompts(
     project_root: Path | None,
 ) -> tuple[PersonaPrompt, ...]:
-    return compose_cli_application(project_root).persona_prompts.list()
+    return cli_application().persona_prompts.list()
 
 
 def resolve_persona_id(
@@ -65,7 +65,7 @@ def create_persona(
     name: str,
     prompt_text: str,
 ) -> int:
-    application = compose_cli_application(project_root)
+    application = cli_application()
     repository = application.persona_prompts
     persona = create_persona_prompt(name, prompt_text)
     existing = repository.get_by_name(name)
@@ -99,7 +99,7 @@ def delete_personas(
     *,
     confirmed: bool = False,
 ) -> int:
-    application = compose_cli_application(project_root)
+    application = cli_application()
     repository = application.persona_prompts
     prompt_ids = _resolve_persona_ids(persona_ref, repository.list())
     if prompt_ids is None:
@@ -143,7 +143,7 @@ def set_persona_enabled(
     enabled: bool,
     confirmed: bool = False,
 ) -> int:
-    application = compose_cli_application(project_root)
+    application = cli_application()
     repository = application.persona_prompts
     prompt_id = _resolve_persona_id(persona_ref, repository.list())
     if prompt_id is None:

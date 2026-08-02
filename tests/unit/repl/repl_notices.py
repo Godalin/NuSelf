@@ -72,7 +72,7 @@ def test_startup_does_not_misclassify_application_failure(
         raise OSError("storage unavailable")
 
     monkeypatch.setattr(
-        "nuself.cli.repl.notices.compose_cli_application",
+        "nuself.cli.repl.notices.cli_application",
         fail_composition,
     )
 

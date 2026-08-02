@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.output import (
     print_ansi,
@@ -89,7 +89,7 @@ def _resolve_candidate_ids(
 def handle_memory_candidate_list(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.candidates
+    repository = cli_application().memory.candidates
     candidates = _candidates_for_list(
         repository,
         include_reviewed=args.all,
@@ -120,7 +120,7 @@ def handle_memory_candidate_list(
 def handle_memory_candidate_show(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.candidates
+    repository = cli_application().memory.candidates
     candidate_id = _resolve_candidate_id(args, repository)
     if candidate_id is None:
         return 1
@@ -139,7 +139,7 @@ def handle_memory_candidate_show(
 def handle_memory_candidate_accept(
     args: argparse.Namespace,
 ) -> int:
-    application = compose_cli_application(args.project_root)
+    application = cli_application()
     repository = application.memory.candidates
     candidate_ids = _resolve_candidate_ids(args, repository)
     if candidate_ids is None:
@@ -172,7 +172,7 @@ def handle_memory_candidate_accept(
 def handle_memory_candidate_reject(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.candidates
+    repository = cli_application().memory.candidates
     candidate_ids = _resolve_candidate_ids(args, repository)
     if candidate_ids is None:
         return 1
@@ -192,7 +192,7 @@ def handle_memory_candidate_reject(
 def handle_memory_candidate_edit(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.candidates
+    repository = cli_application().memory.candidates
     candidate_id = _resolve_candidate_id(args, repository)
     if candidate_id is None:
         return 1
@@ -221,7 +221,7 @@ def handle_memory_candidate_edit(
 def handle_memory_candidate_merge(
     args: argparse.Namespace,
 ) -> int:
-    application = compose_cli_application(args.project_root)
+    application = cli_application()
     repository = application.memory.candidates
     candidate_id = _resolve_candidate_id(args, repository)
     if candidate_id is None:

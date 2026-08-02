@@ -7,12 +7,12 @@ import sys
 from collections.abc import Callable
 
 from nuself.conversation import ConversationState
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_conversation_list(args: argparse.Namespace) -> int:
-    ids = compose_cli_application(args.project_root).conversations.list()
+    ids = cli_application().conversations.list()
     if not ids:
         print("No active conversations.")
         return 0
@@ -22,7 +22,7 @@ def handle_conversation_list(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_show(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     state = store.load(args.conversation_id)
     if not state.messages and args.conversation_id not in store.list():
         print(f"Conversation not found: {args.conversation_id}", file=sys.stderr)
@@ -41,7 +41,7 @@ def handle_conversation_show(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_create(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     if args.conversation_id in store.list():
         print(f"Conversation already exists: {args.conversation_id}", file=sys.stderr)
         return 1
@@ -67,7 +67,7 @@ def _run_conversation_action(
 
 
 def handle_conversation_rename(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     return _run_conversation_action(
         lambda: store.rename(args.old_conversation_id, args.new_conversation_id),
         f"Renamed conversation: {args.old_conversation_id} -> {args.new_conversation_id}",
@@ -75,7 +75,7 @@ def handle_conversation_rename(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_branch(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     return _run_conversation_action(
         lambda: store.branch(
             args.source_conversation_id, args.new_conversation_id, args.index
@@ -85,7 +85,7 @@ def handle_conversation_branch(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_archive(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     return _run_conversation_action(
         lambda: store.archive(args.conversation_id),
         f"Archived conversation: {args.conversation_id}",
@@ -93,7 +93,7 @@ def handle_conversation_archive(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_delete(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     return _run_conversation_action(
         lambda: store.delete(args.conversation_id),
         f"Deleted conversation: {args.conversation_id}",
@@ -101,7 +101,7 @@ def handle_conversation_delete(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_unarchive(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).conversations
+    store = cli_application().conversations
     return _run_conversation_action(
         lambda: store.unarchive(args.conversation_id),
         f"Unarchived conversation: {args.conversation_id}",
@@ -109,7 +109,7 @@ def handle_conversation_unarchive(args: argparse.Namespace) -> int:
 
 
 def handle_conversation_archived(args: argparse.Namespace) -> int:
-    ids = compose_cli_application(args.project_root).conversations.list_archived()
+    ids = cli_application().conversations.list_archived()
     if not ids:
         print("No archived conversations.")
         return 0

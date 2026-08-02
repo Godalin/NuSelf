@@ -7,7 +7,7 @@ import json
 import sys
 from typing import cast
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.application.curator import (
     compose_memory_curator,
     compose_memory_optimizer,
@@ -20,7 +20,7 @@ from nuself.memory.optimizer import (
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
-    application = compose_cli_application(args.project_root)
+    application = cli_application()
     curator = compose_memory_curator(application)
     pending = application.memory.observations.pending()
     for observation in pending:
@@ -32,7 +32,7 @@ def handle_memory_update(args: argparse.Namespace) -> int:
 def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
     result = compose_memory_optimizer(
-        compose_cli_application(args.project_root),
+        cli_application(),
         settings=settings,
     ).run_once()
     print(
@@ -43,7 +43,7 @@ def handle_memory_optimize(args: argparse.Namespace) -> int:
 
 
 def handle_memory_export(args: argparse.Namespace) -> int:
-    entries = compose_cli_application(args.project_root).memory.entries.list()
+    entries = cli_application().memory.entries.list()
     data = [entry.to_wire() for entry in entries]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
@@ -71,7 +71,7 @@ def handle_memory_import(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    application = compose_cli_application(args.project_root)
+    application = cli_application()
     repository = application.memory.entries
     data = cast(list[object], raw)
     imported = 0

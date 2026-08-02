@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.logs import read_log_events
 from nuself.runtime.log_event import LogEvent
 
@@ -38,7 +38,7 @@ def startup_interactive_notices(
         else None
     )
     notices: list[InteractiveNotice] = []
-    config = compose_cli_application(project_root).config
+    config = cli_application().config
     if not any(
         endpoint.api_key.strip()
         and endpoint.base_url.strip()

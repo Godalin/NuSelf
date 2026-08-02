@@ -8,7 +8,7 @@ import sys
 from nuself.application.reason import (
     compose_reason_advancer,
 )
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound
@@ -28,7 +28,7 @@ REASON_VERBS: dict[str, tuple[str, str]] = {
 def _service(
     args: argparse.Namespace,
 ) -> ReasonService:
-    return compose_cli_application(args.project_root).reason_service
+    return cli_application().reason_service
 
 
 def handle_reason_list(args: argparse.Namespace) -> int:
@@ -100,7 +100,7 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
-    application = compose_cli_application(args.project_root)
+    application = cli_application()
     service = application.reason_service
     advancer = None
     if args.action == "advance":

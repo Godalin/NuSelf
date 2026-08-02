@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.runtime.log_event import LogEvent
 from nuself.cli.repl.transcript import (
     is_shareable_transcript_log,
@@ -89,9 +89,7 @@ class InteractiveSession:
 
     def start_index_for(self, project_root: Path | None, conversation_id: str) -> int:
         if conversation_id not in self.conversation_start_indexes:
-            next_index = compose_cli_application(
-                project_root
-            ).conversations.load(conversation_id).next_message_index
+            next_index = cli_application().conversations.load(conversation_id).next_message_index
             self.conversation_start_indexes[conversation_id] = next_index
             self.captured_next_indexes[conversation_id] = next_index
         return self.conversation_start_indexes[conversation_id]
@@ -99,9 +97,7 @@ class InteractiveSession:
     def capture_new_messages(self, project_root: Path | None, conversation_id: str) -> None:
         start_index = self.start_index_for(project_root, conversation_id)
         capture_start = self.captured_next_indexes.get(conversation_id, start_index)
-        conversation = compose_cli_application(
-            project_root
-        ).conversations.load(conversation_id)
+        conversation = cli_application().conversations.load(conversation_id)
         new_messages = conversation_messages_from_index(conversation, capture_start)
         if not new_messages:
             return

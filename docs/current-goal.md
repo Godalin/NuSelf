@@ -9,21 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Restore this file as a concise active board before selecting the next code
-reduction.
+Remove redundant authority arguments from CLI application borrowing.
 
 ## Ordered Steps
 
-1. Remove completed phase history and stale implementation descriptions from
-   this active board.
-2. Preserve only the persistent constraints and the latest verified baseline.
-3. Verify the document contract, commit the cleanup, then inspect the next
-   application/daemon reduction without pushing.
+1. Specify the CLI root as the sole scope-selection and runtime-lifecycle owner.
+2. Rename the misleading composition helpers to parameter-free graph/backend
+   borrowing operations and migrate every CLI/test caller without aliases.
+3. Run focused/full gates, record the current evidence, and commit without
+   pushing.
 
 ## Exclusions
 
-- Do not move completed internal refactor history into another rolling log.
-- Do not change runtime behavior in this documentation correction.
+- Preserve one runtime/backend/graph per CLI process and explicit infrastructure
+  access to the backend.
+- Do not change command syntax, selected authority, or domain service APIs.
 - Do not declare the persistent simplification goal complete.
 
 ## Constraints
@@ -37,8 +37,12 @@ reduction.
 
 ## Completion Evidence
 
-- The previous configuration phase removed the parallel single-file loader in
-  commit `0290bafb`; the full suite passed 2447 tests, Pyright reported 0 errors
-  and 0 warnings, and both distribution artifacts built successfully.
-- This board contains one active phase and one current evidence baseline;
-  completed detail remains available through Git and `CHANGELOG.md`.
+- CLI application access now consists of parameter-free `cli_application()` and
+  `cli_backend()` borrowing operations. The CLI root remains the sole authority
+  selector and runtime lifecycle owner; source/test/spec search finds no old
+  composition names or path-bearing calls. Focused runtime/CLI/REPL tests: 579
+  passed; full suite: 2446 passed; Pyright: 0 errors, 0 warnings; sdist and wheel
+  build succeeded.
+- The active board was restored from 1634 stale/history-heavy lines to 44 lines
+  in commit `d2cd6c92`; completed detail remains available through Git and
+  `CHANGELOG.md`.

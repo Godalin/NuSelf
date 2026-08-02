@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.memory.curator_plan import (
     MemoryCuratorPlanCorruptError,
     MemoryCuratorPlanLockContended,
@@ -15,7 +15,7 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_memory_plan_show(args: argparse.Namespace) -> int:
-    store = compose_cli_application(args.project_root).memory.curator_plans
+    store = cli_application().memory.curator_plans
     try:
         plan = store.get(args.observation_id)
     except (MemoryCuratorPlanCorruptError, ValueError) as exc:
@@ -56,7 +56,7 @@ def handle_memory_plan_discard(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    store = compose_cli_application(args.project_root).memory.curator_plans
+    store = cli_application().memory.curator_plans
     try:
         store.discard(args.observation_id)
     except MemoryCuratorPlanLockContended:

@@ -9,7 +9,7 @@ from pathlib import Path
 from nuself.application.chat import ChatResult, compose_conversation_runtime
 from nuself.application.curator import compose_memory_curator
 from nuself.application.knowledge_projection import publish_chat_observation
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.agent.chat.audit import (
     report_chat_failure,
     write_chat_audit,
@@ -72,7 +72,7 @@ def send_daemon_chat_interactive(
                 turn_id=turn_id,
                 project_root=project_root,
                 timeout=(
-                    compose_cli_application(project_root)
+                    cli_application()
                     .config.chat.request_timeout_seconds
                 ),
             )
@@ -164,7 +164,7 @@ def send_one_shot_chat_interactive(
                 conversation_id,
                 turn_id=turn_id,
             )
-            application = compose_cli_application(project_root)
+            application = cli_application()
             observation = publish_chat_observation(
                 application.memory.observations,
                 turn=result.require_completed_turn(),
@@ -202,7 +202,7 @@ def run_memory_curator(
 
     try:
         result = compose_memory_curator(
-            compose_cli_application(project_root)
+            cli_application()
         ).run_once(observation_id)
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
@@ -232,7 +232,7 @@ def run_one_shot_chat(
     """Invoke the local conversation runtime and return its committed result."""
 
     return compose_conversation_runtime(
-        compose_cli_application(project_root),
+        cli_application(),
         approval_port=TerminalApprovalPort(),
     ).respond(
         message,
@@ -247,7 +247,7 @@ def _compress_after_reply(
 ) -> None:
     try:
         compose_conversation_runtime(
-            compose_cli_application(project_root),
+            cli_application(),
             approval_port=TerminalApprovalPort(),
         ).compress_conversation(conversation_id)
     except Exception as exc:

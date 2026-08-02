@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, resolve_handle
 from nuself.domain.profile import ProfileItem
 from nuself.profile.repository import (
@@ -58,7 +58,7 @@ def _resolve_profile_id(
 def handle_memory_profile_list(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.profile
+    repository = cli_application().memory.profile
     items = _items_for_list(
         repository, sort_by=args.sort_by
     )
@@ -73,7 +73,7 @@ def handle_memory_profile_list(
 def handle_memory_profile_search(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.profile
+    repository = cli_application().memory.profile
     items = repository.search(
         args.query,
         ProfileSearchFilters(
@@ -95,7 +95,7 @@ def handle_memory_profile_search(
 def handle_memory_profile_show(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.profile
+    repository = cli_application().memory.profile
     profile_id = _resolve_profile_id(args, repository)
     if profile_id is None:
         return 1
@@ -114,7 +114,7 @@ def handle_memory_profile_show(
 def handle_memory_profile_delete(
     args: argparse.Namespace,
 ) -> int:
-    repository = compose_cli_application(args.project_root).memory.profile
+    repository = cli_application().memory.profile
     profile_id = _resolve_profile_id(args, repository)
     if profile_id is None:
         return 1

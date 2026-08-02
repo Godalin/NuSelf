@@ -15,8 +15,8 @@ from nuself.application.runtime import (
     use_application_runtime,
 )
 from nuself.cli.composition import (
-    compose_cli_application,
-    compose_cli_backend,
+    cli_application,
+    cli_backend,
 )
 from nuself.scope import resolve_scope
 
@@ -159,15 +159,15 @@ def test_application_runtime_closes_backend_after_composition_failure(
     backend.close.assert_called_once_with()
 
 
-def test_cli_composition_borrows_the_scoped_runtime_graph(
+def test_cli_access_borrows_the_scoped_runtime_graph(
     tmp_path: Path,
 ) -> None:
     runtime = open_application_runtime(tmp_path)
     try:
         with use_application_runtime(runtime):
-            first = compose_cli_application(tmp_path)
-            second = compose_cli_application(tmp_path)
-            backend = compose_cli_backend(tmp_path)
+            first = cli_application()
+            second = cli_application()
+            backend = cli_backend()
 
         assert first is second
         assert first is runtime.application
@@ -176,18 +176,6 @@ def test_cli_composition_borrows_the_scoped_runtime_graph(
         runtime.close()
 
 
-def test_cli_composition_rejects_authority_drift(
-    tmp_path: Path,
-) -> None:
-    runtime = open_application_runtime(tmp_path)
-    try:
-        with use_application_runtime(runtime):
-            with pytest.raises(RuntimeError, match="different authority"):
-                compose_cli_application(tmp_path / "other")
-    finally:
-        runtime.close()
-
-
-def test_cli_composition_requires_active_runtime(tmp_path: Path) -> None:
+def test_cli_access_requires_active_runtime() -> None:
     with pytest.raises(RuntimeError, match="runtime is not active"):
-        compose_cli_application(tmp_path)
+        cli_application()

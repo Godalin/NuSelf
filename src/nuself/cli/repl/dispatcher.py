@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.conversation import ConversationState
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.memory_preview import format_memory_preview
 from nuself.cli.output import print_ansi
@@ -504,7 +504,7 @@ def _handle_conversation_switch(
     if conversation_id == "":
         print_ansi(handle_interactive_conversations_command(project_root))
         return ("", current_conversation_id)
-    store = compose_cli_application(project_root).conversations
+    store = cli_application().conversations
     if conversation_id not in store.list():
         store.save(ConversationState.empty(conversation_id))
     print(f"Switched to conversation: {conversation_id}")
@@ -521,7 +521,7 @@ def _handle_conversation_rename(
         print(interactive_help(":rename"))
     else:
         try:
-            compose_cli_application(project_root).conversations.rename(
+            cli_application().conversations.rename(
                 current_conversation_id, new_id
             )
             print(f"Renamed conversation to: {new_id}")
@@ -549,7 +549,7 @@ def _handle_conversation_branch(
         print(interactive_help(":branch"))
     else:
         try:
-            compose_cli_application(project_root).conversations.branch(
+            cli_application().conversations.branch(
                 current_conversation_id, new_id, index
             )
             print(f"Branched to conversation: {new_id}")
@@ -564,7 +564,7 @@ def _handle_conversation_archive(
 ) -> InteractiveCommandResult:
     print()
     try:
-        compose_cli_application(project_root).conversations.archive(current_conversation_id)
+        cli_application().conversations.archive(current_conversation_id)
         print(f"Archived conversation: {current_conversation_id}")
     except ValueError as exc:
         print(f"Error: {diagnostic_exception_message(exc)}")
@@ -581,7 +581,7 @@ def _handle_conversation_unarchive(
         print(interactive_help(":unarchive"))
     else:
         try:
-            compose_cli_application(project_root).conversations.unarchive(conversation_id)
+            cli_application().conversations.unarchive(conversation_id)
             print(f"Unarchived conversation: {conversation_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
@@ -590,7 +590,7 @@ def _handle_conversation_unarchive(
 
 def _print_archived_conversations(project_root: Path | None) -> None:
     print()
-    ids = compose_cli_application(project_root).conversations.list_archived()
+    ids = cli_application().conversations.list_archived()
     if not ids:
         print("No archived conversations.")
     else:
@@ -604,7 +604,7 @@ def _handle_conversation_delete(
 ) -> InteractiveCommandResult:
     print()
     try:
-        compose_cli_application(project_root).conversations.delete(current_conversation_id)
+        cli_application().conversations.delete(current_conversation_id)
         print(f"Deleted conversation: {current_conversation_id}")
     except ValueError as exc:
         print(f"Error: {diagnostic_exception_message(exc)}")

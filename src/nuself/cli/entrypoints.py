@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.conversation import ConversationState, ConversationStore
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.daemon_lifecycle import (
     start_daemon_observed,
 )
@@ -161,7 +161,7 @@ class EntrypointController:
         return self._run_daemon_interactive(args.project_root)
 
     def handle_open(self, args: argparse.Namespace) -> int:
-        store = compose_cli_application(args.project_root).conversations
+        store = cli_application().conversations
         target = self._prepare_open_conversation(args, store)
         if target is None:
             return CliExitCode.FAILURE

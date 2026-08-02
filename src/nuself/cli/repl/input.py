@@ -14,7 +14,7 @@ from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
 from nuself.agent.chat.audit import run_chat_observed
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.repl.registry import (
     command_tokens,
     render_help_lines,
@@ -123,9 +123,7 @@ class InteractiveCompleter(Completer):
 
     def _all_thread_ids_with_status(self) -> list[str]:
         def load() -> list[str]:
-            service = compose_cli_application(
-                self._project_root
-            ).reason_service
+            service = cli_application().reason_service
             return [
                 f"{thread.id} ({thread.status}, {thread.topic[:40]})"
                 for thread in service.list_threads(status="all")
@@ -143,9 +141,7 @@ class InteractiveCompleter(Completer):
     def _conversation_completions(self, word: str) -> Iterable[Completion]:
         conversations = (
             run_chat_observed(
-                lambda: compose_cli_application(
-                    self._project_root
-                ).conversations.list(),
+                lambda: cli_application().conversations.list(),
                 event="completion_load_failed",
                 project_root=self._project_root,
                 metadata={"completion": "conversations"},
@@ -159,9 +155,7 @@ class InteractiveCompleter(Completer):
     def _archived_conversation_completions(self, word: str) -> Iterable[Completion]:
         conversations = (
             run_chat_observed(
-                lambda: compose_cli_application(
-                    self._project_root
-                ).conversations.list_archived(),
+                lambda: cli_application().conversations.list_archived(),
                 event="completion_load_failed",
                 project_root=self._project_root,
                 metadata={"completion": "archived_conversations"},

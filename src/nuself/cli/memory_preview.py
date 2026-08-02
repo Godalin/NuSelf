@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.tui.memory import render_memory_entry_row
 
 DEFAULT_PREVIEW_LIMIT = 8
@@ -15,7 +15,7 @@ def format_memory_preview(
     limit: int = DEFAULT_PREVIEW_LIMIT,
 ) -> str:
     normalized_limit = max(limit, 1)
-    entries = compose_cli_application(project_root).memory.entries.list()
+    entries = cli_application().memory.entries.list()
     if not entries:
         return "No memory entries."
     shown = entries[:normalized_limit]

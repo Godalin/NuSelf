@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- CLI adapters now borrow the already-selected application graph or backend
+  without repeatedly passing and resolving the same authority path.
 - Configuration now has one scope-based loading entry point; removed the
   parallel single-file/path loader and its duplicate filesystem policy.
 - Structured-agent composition no longer reloads model configuration from a

@@ -14,7 +14,7 @@ import tempfile
 from typing import cast
 
 from nuself.application.data_admin import DataAdminService, DataResource
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.private_fs import ensure_private_directory
@@ -52,7 +52,7 @@ def _write_change_audit(
 
 
 def _service(args: argparse.Namespace) -> DataAdminService:
-    return compose_cli_application(args.project_root).data
+    return cli_application().data
 
 
 def _resource(

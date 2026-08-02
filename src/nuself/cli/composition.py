@@ -2,43 +2,28 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from nuself.application.composition import ApplicationGraph
 from nuself.application.runtime import (
     ApplicationRuntime,
     current_application_runtime,
 )
-from nuself.config import runtime_paths
 from nuself.storage import ClosableStorageBackend
 
 
-def _runtime_for_authority(
-    project_root: Path | None,
-) -> ApplicationRuntime:
+def _current_runtime() -> ApplicationRuntime:
     current = current_application_runtime()
     if current is None:
         raise RuntimeError("CLI application runtime is not active")
-    requested = runtime_paths(project_root)
-    if requested.authority_root != current.paths.authority_root:
-        raise RuntimeError(
-            "CLI handler requested a different authority than its "
-            "application runtime"
-        )
     return current
 
 
-def compose_cli_application(
-    project_root: Path | None,
-) -> ApplicationGraph:
-    """Compose one graph for a CLI command's selected authority."""
+def cli_application() -> ApplicationGraph:
+    """Borrow the graph owned by the active CLI runtime."""
 
-    return _runtime_for_authority(project_root).application
+    return _current_runtime().application
 
 
-def compose_cli_backend(
-    project_root: Path | None,
-) -> ClosableStorageBackend:
+def cli_backend() -> ClosableStorageBackend:
     """Borrow storage for an explicit CLI infrastructure operation."""
 
-    return _runtime_for_authority(project_root).backend
+    return _current_runtime().backend

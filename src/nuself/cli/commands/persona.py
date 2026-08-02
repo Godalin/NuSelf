@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from nuself.cli.output import print_ansi
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.persona_management import (
     create_persona,
     delete_personas,
@@ -63,7 +63,7 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 
 
 def handle_persona_show(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).persona_prompts
+    repository = cli_application().persona_prompts
     prompt_id = resolve_persona_id(args.project_root, args.persona_id)
     if prompt_id is None:
         return 1

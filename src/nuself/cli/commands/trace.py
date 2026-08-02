@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 from typing import cast
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
@@ -30,7 +30,7 @@ def _trace_visibility_filter(
 
 
 def _trace_query(project_root: Path | None) -> TraceQueryService:
-    return compose_cli_application(project_root).trace.query
+    return cli_application().trace.query
 
 
 def handle_trace_list(args: argparse.Namespace) -> int:
