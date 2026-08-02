@@ -37,8 +37,8 @@ class RecordingActivityBroker:
 
 
 class MiddlewareState:
-    def __init__(self, project_root: Path) -> None:
-        self.project_root = project_root
+    def __init__(self, authority_root: Path) -> None:
+        self.authority_root = authority_root
         self.activity_broker = RecordingActivityBroker()
 
 
@@ -155,7 +155,7 @@ def test_daemon_middleware_applies_context_and_activity_observation(
             "daemon",
             "middleware_test",
             "middleware test",
-            project_root=state.project_root,
+            project_root=state.authority_root,
         )
         return DaemonResponse.ok(request)
 

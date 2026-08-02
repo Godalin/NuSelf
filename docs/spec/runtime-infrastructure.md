@@ -410,7 +410,8 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
   `daemon/response_delivery_failed`.
 
 `nuself.daemon.socket_server` owns the Unix-socket transport adapter. Its
-`NuSelfUnixServer` stores only the structural `DaemonRequestState`; its
+`NuSelfUnixServer` stores only the structural `DaemonRequestState`, whose
+filesystem capability is the selected `authority_root`; its
 `RequestHandler` reads one bounded frame, decodes one `DaemonRequest`, calls
 the typed daemon request registry boundary, encodes one `DaemonResponse`, and
 writes one bounded frame. The module must not import `DaemonState` or the

@@ -59,31 +59,31 @@ class DaemonState:
         application: ApplicationGraph,
     ) -> None:
         paths = application.paths
-        self.project_root = paths.authority_root
+        self.authority_root = paths.authority_root
         self.authority_id = paths.scope.authority_id
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()
         self.event_publisher.attach_projection(
             runtime_event_log_sink(
-                self.project_root,
+                self.authority_root,
                 projection=self.activity_broker.publish,
             )
         )
         config = application.config
         langchain_models = configured_langchain_chat_models(
-            self.project_root,
+            self.authority_root,
             config=config,
         )
         self.reason_export_service = ReasonExportService(
-            self.project_root,
+            self.authority_root,
             reason_service=application.reason_service,
             workspace_store=application.reason_workspace,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
             text_agent=LangChainTextAgent(
                 endpoints=langchain_models,
-                project_root=self.project_root,
+                project_root=self.authority_root,
                 component="reasoning",
             ),
         )
@@ -91,7 +91,7 @@ class DaemonState:
             application,
             job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
-                self.project_root,
+                self.authority_root,
                 language_preference=config.chat.language_preference,
                 langchain_models=langchain_models,
             ),
@@ -119,7 +119,7 @@ class DaemonState:
         )
         reason_interval = config.daemon.reason_scheduler.interval_seconds
         self.reason_scheduler = ReasonScheduler(
-            self.project_root,
+            self.authority_root,
             advancer=compose_reason_advancer(
                 application,
                 readonly_tools=self.conversation_runtime.readonly_tools(),
@@ -159,7 +159,7 @@ class DaemonState:
         self.scheduler = DaemonScheduler(
             handlers,
             event_publisher=self.event_publisher,
-            project_root=self.project_root,
+            project_root=self.authority_root,
         )
 
     def start_background_tasks(self) -> None:
@@ -286,7 +286,7 @@ class DaemonState:
                         "error_type": type(exc).__name__,
                     },
                 ).to_mapping(),
-                project_root=self.project_root,
+                project_root=self.authority_root,
                 failure_component="daemon",
             )
 

@@ -234,14 +234,14 @@ def _handler_fake(
 ) -> object:
     server = object.__new__(NuSelfUnixServer)
     server.state = SimpleNamespace(  # type: ignore[assignment]
-        project_root=project_root
+        authority_root=project_root
     )
     return SimpleNamespace(
         connection=FakeConnection(raw),
         rfile=raw,
         wfile=writer,
         server=server,
-        _request_project_root=lambda: project_root,
+        _request_authority_root=lambda: project_root,
     )
 
 
@@ -257,34 +257,34 @@ def _invalid_success_response(
     )
 
 
-def test_request_project_root_reads_owned_server_state(tmp_path: Path) -> None:
+def test_request_authority_root_reads_owned_server_state(tmp_path: Path) -> None:
     from nuself.daemon.socket_server import NuSelfUnixServer, RequestHandler
 
     server = object.__new__(NuSelfUnixServer)
-    server.state = SimpleNamespace(project_root=tmp_path)  # type: ignore[assignment]
+    server.state = SimpleNamespace(authority_root=tmp_path)  # type: ignore[assignment]
     handler = SimpleNamespace(server=server)
 
-    assert RequestHandler._request_project_root(handler) == tmp_path  # type: ignore[arg-type]
+    assert RequestHandler._request_authority_root(handler) == tmp_path  # type: ignore[arg-type]
 
 
-def test_request_project_root_omits_unowned_server_state() -> None:
+def test_request_authority_root_omits_unowned_server_state() -> None:
     from nuself.daemon.socket_server import RequestHandler
 
     handler = SimpleNamespace(
         server=SimpleNamespace(
-            state=SimpleNamespace(project_root=Path("/must-not-be-read"))
+            state=SimpleNamespace(authority_root=Path("/must-not-be-read"))
         )
     )
 
-    assert RequestHandler._request_project_root(handler) is None  # type: ignore[arg-type]
+    assert RequestHandler._request_authority_root(handler) is None  # type: ignore[arg-type]
 
 
-def test_request_project_root_does_not_hide_owned_state_failure() -> None:
+def test_request_authority_root_does_not_hide_owned_state_failure() -> None:
     from nuself.daemon.socket_server import NuSelfUnixServer, RequestHandler
 
     class BrokenState:
         @property
-        def project_root(self) -> Path:
+        def authority_root(self) -> Path:
             raise RuntimeError("request state is broken")
 
     server = object.__new__(NuSelfUnixServer)
@@ -292,7 +292,7 @@ def test_request_project_root_does_not_hide_owned_state_failure() -> None:
     handler = SimpleNamespace(server=server)
 
     with pytest.raises(RuntimeError, match="request state is broken"):
-        RequestHandler._request_project_root(handler)  # type: ignore[arg-type]
+        RequestHandler._request_authority_root(handler)  # type: ignore[arg-type]
 
 
 def test_server_clean_eof_returns_without_response(tmp_path: Path) -> None:

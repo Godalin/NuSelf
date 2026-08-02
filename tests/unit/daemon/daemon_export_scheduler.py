@@ -74,7 +74,7 @@ def _manifest_path(
     thread_id: str = "thread-1",
 ) -> Path:
     return (
-        runtime_paths(state.project_root).exports_dir
+        runtime_paths(state.authority_root).exports_dir
         / "reason"
         / thread_id
         / "jobs"

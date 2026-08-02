@@ -653,7 +653,7 @@ def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: p
         rfile=io.BytesIO(raw),
         wfile=io.BytesIO(),
         server=server,
-        _request_project_root=lambda: tmp_path,
+        _request_authority_root=lambda: tmp_path,
     )
 
     def boom(request: DaemonRequest, state: object) -> DaemonResponse:

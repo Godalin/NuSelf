@@ -9,15 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the temporary `RuntimePaths.project_root` authority alias.
+Use authority terminology at the daemon request-state boundary.
 
 ## Ordered Steps
 
-1. Specify `authority_root` as the sole canonical root exposed by
-   `RuntimePaths`; distinguish unrelated workspace/project parameters.
-2. Migrate every typed-path consumer and test, then delete the temporary alias.
-3. Prove no alias reads remain; run scope/application/daemon focused tests and
-   full gates, then commit without pushing.
+1. Specify `DaemonRequestState.authority_root` as the socket/request adapter
+   capability; keep lower-level diagnostic keyword compatibility out of scope.
+2. Rename the concrete daemon state field, request handlers, socket helper, and
+   structural test doubles without adding an adapter property.
+3. Prove no daemon request-state `project_root` remains; run focused daemon
+   tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -26,8 +27,8 @@ Remove the temporary `RuntimePaths.project_root` authority alias.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve every resolved path value, authority ID, scope selection, and
-  filesystem/daemon behavior; do not rename unrelated public parameters here.
+- Preserve every path value, request/response behavior, audit destination,
+  authority identity, and socket error boundary.
 
 ## Constraints
 
@@ -39,6 +40,12 @@ Remove the temporary `RuntimePaths.project_root` authority alias.
 
 ## Phase Evidence
 
+- `DaemonState`, structural `DaemonRequestState`, request handlers, and the Unix
+  socket adapter now expose the selected `authority_root` explicitly. Removed
+  the request-state `project_root` name without adding a compatibility property;
+  lower-level diagnostic keyword names remain a separate boundary. Focused
+  daemon request/socket/state tests: 111 passed; full suite: 2440 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `RuntimePaths` now exposes `authority_root` as its sole canonical root field.
   Migrated application, daemon, storage, memory, Reason, Reflection,
   Notification, Persona, Trace, CLI, and test consumers, then removed the

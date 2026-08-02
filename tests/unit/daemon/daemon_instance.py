@@ -413,7 +413,7 @@ class _TestScheduler:
 
 class _UnstartedDaemonState:
     def __init__(self, project_root: Path) -> None:
-        self.project_root = project_root
+        self.authority_root = project_root
         self.shutdown_requested = threading.Event()
         self.start_calls: list[str] = []
         self.stop_calls: list[str] = []

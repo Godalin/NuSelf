@@ -50,7 +50,7 @@ class DaemonRequestPayloadError(ProtocolError):
 
 
 class DaemonRequestState(Protocol):
-    project_root: Path
+    authority_root: Path
     authority_id: str
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
@@ -121,7 +121,7 @@ def handle_request(
         report_daemon_request_failure(
             exc,
             event="request_rejected",
-            project_root=state.project_root,
+            project_root=state.authority_root,
             request_id=request.request_id,
             metadata={"request_type": request.type},
         )
@@ -181,7 +181,7 @@ def _handle_chat(
             report_daemon_request_failure(
                 exc,
                 event="chat_turn_failed",
-                project_root=state.project_root,
+                project_root=state.authority_root,
                 request_id=request.request_id,
             )
             return DaemonResponse.fail_from_exception(
@@ -203,7 +203,7 @@ def _handle_chat(
     ):
         write_daemon_request_audit(
             "chat_turn_completed",
-            project_root=state.project_root,
+            project_root=state.authority_root,
             request_id=request.request_id,
             duration_ms=duration_ms,
             metadata={
@@ -221,7 +221,7 @@ def _handle_shutdown(
     state.shutdown_requested.set()
     write_daemon_request_audit(
         "shutdown_requested",
-        project_root=state.project_root,
+        project_root=state.authority_root,
         request_id=request.request_id,
     )
     return DaemonResponse.ok(
