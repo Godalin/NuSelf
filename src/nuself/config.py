@@ -319,7 +319,6 @@ def _is_sensitive_config_key(key: str) -> bool:
     )
 
 
-_CONFIG_CACHE: dict[tuple[str, int, int], SystemConfig] = {}
 class ConfigSystem:
     """Unified configuration loader."""
 
@@ -362,46 +361,19 @@ class ConfigSystem:
 
     @classmethod
     def load(cls, config_path: Path | None = None, project_root: Path | None = None) -> SystemConfig:
-        """Load configuration from YAML with defaults.
-
-        Results are memoized per ``(path, mtime, size)`` so repeated loads in one
-        process (the chat path alone loads config several times per turn) do not
-        re-read and re-validate the file every call. A changed file invalidates its
-        entry; a missing file is never cached (so a later-created file is picked up).
-        The parsed ``SystemConfig`` is frozen, so sharing one instance is safe.
-        """
+        """Load one configuration file with defaults."""
         if config_path is None and project_root is None:
             return cls.load_scope(resolve_scope())
         if config_path is None and project_root is not None:
             config_path = project_root / "config.yaml"
 
-        cache_key: tuple[str, int, int] | None = None
         if config_path and config_path.exists():
             if project_root is not None:
                 ensure_private_directory(
                     runtime_paths(project_root).authority_root
                 )
             harden_private_file(config_path)
-            try:
-                stat = config_path.stat()
-                cache_key = (str(config_path), stat.st_mtime_ns, stat.st_size)
-            except OSError:
-                cache_key = None
-            if cache_key is not None:
-                cached = _CONFIG_CACHE.get(cache_key)
-                if cached is not None:
-                    return cached
-
-        result = cls._build(config_path)
-        if cache_key is not None:
-            path_key = cache_key[0]
-            stale_keys = [
-                key for key in _CONFIG_CACHE if key[0] == path_key
-            ]
-            for key in stale_keys:
-                _CONFIG_CACHE.pop(key, None)
-            _CONFIG_CACHE[cache_key] = result
-        return result
+        return cls._build(config_path)
 
     @classmethod
     def load_scope(cls, scope: NuSelfScope) -> SystemConfig:

@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Removed the obsolete process-global single-file configuration cache;
+  application runtimes still own one immutable snapshot, while explicit later
+  loads always inspect current file contents.
 - REPL startup notices no longer misclassify application or storage composition
   failures as invalid configuration; readiness remains the configuration
   diagnostic boundary and unexpected failures propagate.

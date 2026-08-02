@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+import os
 from pathlib import Path
 import stat
 
@@ -227,6 +228,36 @@ def test_config_read_hardens_authority_root_and_file(
 
     assert stat.S_IMODE(authority.stat().st_mode) == 0o700
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+
+
+def test_config_reload_does_not_trust_reused_file_metadata(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "chat:\n  language_preference: en\n",
+        encoding="utf-8",
+    )
+    original_stat = config_path.stat()
+
+    assert (
+        ConfigSystem.load(project_root=tmp_path).chat.language_preference
+        == "en"
+    )
+
+    config_path.write_text(
+        "chat:\n  language_preference: fr\n",
+        encoding="utf-8",
+    )
+    os.utime(
+        config_path,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+
+    assert (
+        ConfigSystem.load(project_root=tmp_path).chat.language_preference
+        == "fr"
+    )
 
 
 def test_config_read_rejects_symlink(tmp_path: Path) -> None:

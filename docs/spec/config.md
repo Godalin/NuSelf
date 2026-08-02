@@ -84,11 +84,12 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 If a configuration layer is missing, loading proceeds with lower layers. No
 error is raised.
 
-Single-file loads memoize validated immutable configuration by path, mtime, and
-size. A changed file replaces stale entries automatically, while a missing file
-is never cached so later creation is discovered. There is no explicit cache
-reset API without a runtime reload use case; daemon configuration remains fixed
-until restart.
+Configuration loaders do not retain process-global path/metadata caches.
+`ApplicationRuntime` already owns one immutable effective snapshot for each
+CLI invocation or daemon lifetime; explicit later loads read the current file
+instead of trusting potentially reused mtime/size metadata. Daemon
+configuration remains fixed until restart because its application graph is
+fixed, not because the loader caches files.
 
 `nuself dev health` does not report a missing config file as unhealthy.
 `nuself dev config` describes the effective file/default state and explicitly

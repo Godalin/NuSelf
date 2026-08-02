@@ -9,22 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove REPL startup's redundant configuration-error catch.
+Remove the obsolete process-global single-file config cache.
 
 ## Ordered Steps
 
-1. Specify readiness as the owner of expected configuration diagnostics and
-   application composition as fail-fast after readiness.
-2. Remove the broad REPL notice catch that misclassifies graph/storage errors
-   as invalid configuration.
-3. Add a propagation regression, run focused/full gates, record evidence, and
-   commit without pushing.
+1. Specify application-owned immutable snapshots instead of global loader
+   memoization.
+2. Remove cache state/key invalidation and simplify `ConfigSystem.load()` to a
+   hardened read/validate operation.
+3. Add a same-size/same-mtime reload regression, run focused/full gates, record
+   evidence, and commit without pushing.
 
 ## Exclusions
 
-- Preserve readiness actions, missing-model notice, authority mismatch notice,
-  recent-failure aggregation, and outer CLI cleanup/error handling.
-- Do not duplicate readiness parsing inside REPL or add a generic fallback.
+- Preserve config hardening, defaults, validation, malformed-file fallback,
+  layered scope loading, and daemon restart semantics.
+- Do not add another cache or live daemon reload mechanism.
 
 ## Constraints
 
@@ -36,6 +36,12 @@ Remove REPL startup's redundant configuration-error catch.
 
 ## Phase Evidence
 
+- Removed `_CONFIG_CACHE` and its path/mtime/size invalidation machinery from
+  `ConfigSystem.load()`. Application runtimes already freeze one effective
+  snapshot, while explicit loads now always read current contents. A regression
+  proves a same-size rewrite with the original mtime is observed. Focused
+  config/readiness/chat tests: 92 passed; full suite: 2446 passed; Pyright: 0
+  errors, 0 warnings; sdist and wheel build succeeded.
 - REPL startup notices now consume the composed graph without catching
   `OSError`/`ValueError` as configuration failures. Expected invalid config is
   already owned by command readiness; storage and composition failures retain
