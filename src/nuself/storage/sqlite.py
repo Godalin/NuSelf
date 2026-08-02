@@ -12,10 +12,8 @@ import sqlite3
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
-from uuid import uuid4
 
 from nuself.runtime.audit.types import LogComponent
 from nuself.private_fs import (
@@ -186,20 +184,8 @@ class SqliteStorageIdentityError(SqliteStorageLifecycleError):
     """Raised when an existing database is not a NuSelf authority."""
 
 
-class ThoughtPackValidationError(ValueError):
-    """Raised when an external SQLite file is not a compatible thought pack."""
-
-
-@dataclass(frozen=True)
-class ThoughtPackInspection:
-    """Read-only metadata for one validated thought pack."""
-
-    schema_version: int
-    collection_counts: tuple[tuple[str, int], ...]
-
-    @property
-    def total_items(self) -> int:
-        return sum(count for _, count in self.collection_counts)
+class SqliteSchemaValidationError(ValueError):
+    """A SQLite file does not contain a compatible NuSelf schema."""
 
 
 class _SqliteWalCheckpointBusyError(RuntimeError):
@@ -454,7 +440,7 @@ class SqliteStorageBackend:
         if destination.resolve() == self._db_path.resolve():
             raise ValueError("SQLite backup destination must differ from source")
         with self._lock:
-            _backup_connection_to_path(
+            backup_connection_to_path(
                 self._conn,
                 destination,
                 managed=managed,
@@ -614,68 +600,7 @@ class SqliteStorageBackend:
             ]
 
 
-def import_sqlite_thought_pack(
-    source: Path,
-    destination: Path,
-    *,
-    managed: bool = False,
-) -> int:
-    """Validate and atomically import one external thought-pack snapshot."""
-    temporary = destination.with_name(
-        f".{destination.name}.{uuid4().hex}.tmp"
-    )
-    with _readonly_thought_pack(source) as source_connection:
-        try:
-            version = _validate_thought_pack_connection(source_connection)
-            _backup_connection_to_path(
-                source_connection,
-                temporary,
-                managed=managed,
-            )
-            temporary.replace(destination)
-            return version
-        finally:
-            temporary.unlink(missing_ok=True)
-
-
-def inspect_sqlite_thought_pack(source: Path) -> ThoughtPackInspection:
-    """Validate and inspect one thought pack without modifying it."""
-    with _readonly_thought_pack(source) as connection:
-        version = _validate_thought_pack_connection(connection)
-        counts = tuple(
-            (
-                collection_name,
-                _thought_pack_collection_count(
-                    connection,
-                    collection_name,
-                ),
-            )
-            for collection_name in COLLECTION_NAMES
-        )
-    return ThoughtPackInspection(
-        schema_version=version,
-        collection_counts=counts,
-    )
-
-
-@contextmanager
-def _readonly_thought_pack(
-    source: Path,
-) -> Generator[sqlite3.Connection, None, None]:
-    source_uri = f"{source.resolve().as_uri()}?mode=ro"
-    try:
-        connection = sqlite3.connect(source_uri, uri=True)
-    except sqlite3.DatabaseError as exc:
-        raise ThoughtPackValidationError(
-            "thought pack is not a readable SQLite database"
-        ) from exc
-    try:
-        yield connection
-    finally:
-        connection.close()
-
-
-def _backup_connection_to_path(
+def backup_connection_to_path(
     source: sqlite3.Connection,
     destination: Path,
     *,
@@ -750,53 +675,7 @@ def _harden_sqlite_sidecars(database: Path) -> None:
             ensure_private_file(sidecar)
 
 
-def _thought_pack_collection_count(
-    connection: sqlite3.Connection,
-    collection_name: str,
-) -> int:
-    has_records = connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='records'"
-    ).fetchone()
-    if has_records is not None:
-        row = connection.execute(
-            "SELECT COUNT(*) FROM records WHERE collection = ?",
-            (collection_name,),
-        ).fetchone()
-    else:
-        table = _collection_table(collection_name)
-        row = connection.execute(
-            f"SELECT COUNT(*) FROM {_identifier(table)}"
-        ).fetchone()
-    count = row[0] if row is not None and len(row) == 1 else None
-    if type(count) is not int or count < 0:
-        raise ThoughtPackValidationError(
-            f"thought pack collection {collection_name} has an invalid count"
-        )
-    return count
-
-
-def _validate_thought_pack_connection(
-    connection: sqlite3.Connection,
-) -> int:
-    try:
-        check_rows = connection.execute("PRAGMA quick_check").fetchall()
-        if not check_rows or any(
-            len(row) != 1 or row[0] != "ok"
-            for row in check_rows
-        ):
-            raise ThoughtPackValidationError(
-                "thought pack failed SQLite quick_check"
-            )
-        return _validate_nuself_schema_connection(connection)
-    except ThoughtPackValidationError:
-        raise
-    except sqlite3.DatabaseError as exc:
-        raise ThoughtPackValidationError(
-            "thought pack is not a valid SQLite database"
-        ) from exc
-
-
-def _validate_nuself_schema_connection(
+def validate_nuself_schema(
     connection: sqlite3.Connection,
     *,
     authority: bool = False,
@@ -812,7 +691,7 @@ def _validate_nuself_schema_connection(
             if len(row) == 1 and isinstance(row[0], str)
         }
         if "_schema_version" not in tables:
-            raise ThoughtPackValidationError(
+            raise SqliteSchemaValidationError(
                 "thought pack is missing NuSelf schema metadata"
             )
         version_info = connection.execute(
@@ -823,7 +702,7 @@ def _validate_nuself_schema_connection(
             for row in version_info
             if len(row) >= 6
         ) != (("version", "INTEGER", 1, 0),):
-            raise ThoughtPackValidationError(
+            raise SqliteSchemaValidationError(
                 "thought pack has invalid NuSelf schema metadata"
             )
         version_rows = connection.execute(
@@ -839,7 +718,7 @@ def _validate_nuself_schema_connection(
             or not versions
             or versions != tuple(range(1, versions[-1] + 1))
         ):
-            raise ThoughtPackValidationError(
+            raise SqliteSchemaValidationError(
                 "thought pack has an invalid schema version history"
             )
         version = versions[-1]
@@ -850,7 +729,7 @@ def _validate_nuself_schema_connection(
                     f"{version} is newer than supported version "
                     f"{SQLITE_SCHEMA_VERSION}"
                 )
-            raise ThoughtPackValidationError(
+            raise SqliteSchemaValidationError(
                 f"thought pack schema version {version} is newer than "
                 f"supported version {SQLITE_SCHEMA_VERSION}"
             )
@@ -861,7 +740,7 @@ def _validate_nuself_schema_connection(
                 "workspace_entries",
             }
             if tables != expected_tables:
-                raise ThoughtPackValidationError(
+                raise SqliteSchemaValidationError(
                     "thought pack has invalid schema v4+ table set"
                 )
             _validate_compact_table(
@@ -895,7 +774,7 @@ def _validate_nuself_schema_connection(
         for collection_name in required_collections:
             table = _collection_table(collection_name)
             if table not in tables:
-                raise ThoughtPackValidationError(
+                raise SqliteSchemaValidationError(
                     f"thought pack is missing collection table {table}"
                 )
             table_info = connection.execute(
@@ -907,7 +786,7 @@ def _validate_nuself_schema_connection(
                 and column[5] == 1
                 for column in table_info
             ):
-                raise ThoughtPackValidationError(
+                raise SqliteSchemaValidationError(
                     f"thought pack collection {table} has no id primary key"
                 )
         if authority and version < SQLITE_SCHEMA_VERSION:
@@ -917,10 +796,10 @@ def _validate_nuself_schema_connection(
                 f"{SQLITE_SCHEMA_VERSION}"
             )
         return version
-    except ThoughtPackValidationError:
+    except SqliteSchemaValidationError:
         raise
     except sqlite3.DatabaseError as exc:
-        raise ThoughtPackValidationError(
+        raise SqliteSchemaValidationError(
             "thought pack is not a valid SQLite database"
         ) from exc
 
@@ -966,7 +845,7 @@ def _validate_compact_table(
         or f"JSON_VALID({json_column.upper()})" not in normalized
         or f"JSON_TYPE({json_column.upper()}) = 'OBJECT'" not in normalized
     ):
-        raise ThoughtPackValidationError(
+        raise SqliteSchemaValidationError(
             f"thought pack has invalid schema v4 table {table}"
         )
     indexes = connection.execute(
@@ -983,7 +862,7 @@ def _validate_compact_table(
         else ()
     )
     if secondary != expected_secondary:
-        raise ThoughtPackValidationError(
+        raise SqliteSchemaValidationError(
             f"thought pack has invalid schema v4+ indexes on {table}"
         )
     if secondary_index is not None:
@@ -991,7 +870,7 @@ def _validate_compact_table(
             f"PRAGMA index_info({_identifier(secondary_index[0])})"
         ).fetchall()
         if tuple(row[2] for row in index_columns) != (secondary_index[1],):
-            raise ThoughtPackValidationError(
+            raise SqliteSchemaValidationError(
                 f"thought pack has invalid schema v4+ index on {table}"
             )
 
@@ -1001,13 +880,13 @@ def _validate_existing_nuself_database(source: Path) -> int:
 
     try:
         with _readonly_authority_identity(source) as connection:
-            return _validate_nuself_schema_connection(
+            return validate_nuself_schema(
                 connection,
                 authority=True,
             )
     except SqliteStorageUnsupportedVersionError:
         raise
-    except ThoughtPackValidationError as exc:
+    except SqliteSchemaValidationError as exc:
         raise SqliteStorageIdentityError(
             "existing SQLite database is not a valid NuSelf authority"
         ) from exc
@@ -1023,7 +902,7 @@ def _readonly_authority_identity(
     try:
         connection = sqlite3.connect(source_uri, uri=True)
     except sqlite3.DatabaseError as exc:
-        raise ThoughtPackValidationError(
+        raise SqliteSchemaValidationError(
             "SQLite authority is not a readable database"
         ) from exc
     try:

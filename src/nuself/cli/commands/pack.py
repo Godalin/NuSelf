@@ -11,12 +11,12 @@ from nuself.config import runtime_paths
 from nuself.cli.application import cli_backend
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage.sqlite import (
-    SqliteStorageBackend,
+from nuself.storage.pack import (
     ThoughtPackValidationError,
     import_sqlite_thought_pack,
     inspect_sqlite_thought_pack,
 )
+from nuself.storage.sqlite import SqliteStorageBackend
 
 _PACK_EXPORT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _WINDOWS_DEVICE_NAME = re.compile(

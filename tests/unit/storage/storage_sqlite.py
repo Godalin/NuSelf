@@ -32,6 +32,7 @@ from typing import Callable, cast
 import pytest
 
 import nuself.storage.sqlite as sqlite_storage
+import nuself.storage.pack as pack_storage
 from nuself.log.reader import read_log_events
 from nuself.notification.outbox import NotificationOutbox
 from nuself.memory.repository import (
@@ -50,6 +51,7 @@ from nuself.storage.authority import (
     open_sqlite_backend,
 )
 from nuself.storage.contract import COLLECTION_NAMES
+from nuself.storage.pack import inspect_sqlite_thought_pack
 from nuself.storage.sqlite import (
     SqliteStorageBackend,
     SqliteStorageBackupCleanupError,
@@ -60,7 +62,6 @@ from nuself.storage.sqlite import (
     SqliteStorageUnsupportedVersionError,
     SqliteTransactionCleanupError,
     SqliteTransactionRollbackOnlyError,
-    inspect_sqlite_thought_pack,
 )
 
 
@@ -650,7 +651,7 @@ def test_online_backup_includes_wal_data_and_closes_destination(
         return tracked
 
     monkeypatch.setattr(
-        "nuself.storage.sqlite.sqlite3.connect",
+        "nuself.storage.pack.sqlite3.connect",
         tracking_connect,
     )
     destination = tmp_path / "exports" / "snapshot.sqlite"
@@ -1008,7 +1009,7 @@ def test_authority_open_does_not_run_thought_pack_integrity_scan(
         raise AssertionError("ordinary authority open ran quick_check")
 
     monkeypatch.setattr(
-        sqlite_storage,
+        pack_storage,
         "_validate_thought_pack_connection",
         unexpected_integrity_scan,
     )

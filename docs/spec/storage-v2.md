@@ -42,9 +42,9 @@ Storage infrastructure lives in the import-light `nuself.storage` package:
   opaque-key validation;
 - `atomic` owns durable atomic text and JSON replacement;
 - `authority` owns canonical SQLite selection and creation lifecycle;
-- `sqlite` currently owns the live SQLite backend, transaction semantics, and
-  explicit thought-pack validation/exchange; these cohesive regions may be
-  separated without changing their authority contract;
+- `sqlite` owns the live SQLite backend, transaction semantics, schema identity
+  validation, schema leases, and consistent backup primitive;
+- `pack` owns explicit thought-pack integrity scanning, inspection, and import;
 - `workspace` adapts the authority's `workspace_entries` table to LangGraph's
   official `BaseStore` contract and adds namespace-scoped agent views;
 - `audit` owns storage lifecycle audit definitions and reporting.

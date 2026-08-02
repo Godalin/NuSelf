@@ -17,10 +17,8 @@ top-level LangGraph `store.py` adapter under the same package as `workspace`.
 
 ## Next Steps
 
-1. Split contract, atomic, authority, and audit owners; migrate their callers.
-2. Separate the SQLite backend from thought-pack validation and exchange.
-3. Audit remaining responsibilities and old paths.
-4. Run full Pyright, pytest, and build gates; commit complete boundaries,
+1. Audit remaining responsibilities and old paths.
+2. Run full Pyright, pytest, and build gates; commit complete boundaries,
    return this file to Idle, and stop.
 
 ## Exclusions
@@ -47,3 +45,8 @@ top-level LangGraph `store.py` adapter under the same package as `workspace`.
   `storage.workspace`, together with private workspace path resolution, rather
   than a second top-level storage concept. 256 focused storage, workspace,
   composition, Agent, Reason, notification, and conversation tests pass.
+- SQLite/pack split: live authority identity, schema leases, transactions, and
+  backup primitives remain in `storage.sqlite`; explicit quick-check,
+  inspection, and import live in `storage.pack`. Dependencies flow from pack to
+  SQLite with no cycle. Full Pyright reports 0 errors and 0 warnings; 148
+  focused SQLite, pack, and migration tests pass.
