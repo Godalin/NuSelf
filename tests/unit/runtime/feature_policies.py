@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.agent.tools.decorated import materialize_tool
-from nuself.runtime.feature_execution import (
+from nuself.runtime.feature.execution import (
     FeatureAuditRecord,
     FeatureConfirmationDeclined,
     FeatureExecutor,
@@ -14,7 +14,7 @@ from nuself.runtime.feature_execution import (
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.runtime.features import (
+from nuself.runtime.feature.policy import (
     FeaturePolicyConflictError,
     audited,
     component,

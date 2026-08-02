@@ -180,8 +180,9 @@ NuSelf does not stamp every domain from an empty package template.
 
 Feature functions declare cross-cutting behavior through orthogonal decorators
 for tool identity, component ownership, effects, confirmation, observation,
-and audit. Decorators attach immutable policy only. Shared middleware executes
-those policies while domain functions remain directly testable callables.
+and audit. `runtime.feature.policy` owns those inert declarations while
+`runtime.feature.execution` interprets them through injected ports. Domain
+functions remain directly testable callables.
 
 Major domains are:
 

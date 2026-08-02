@@ -10,7 +10,7 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.store import ScopedWorkspace
 
 

@@ -49,7 +49,7 @@ from nuself.runtime.event.payload import (
     RuntimeLogLevel,
 )
 from nuself.runtime.event.publisher import EventPublisher
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (

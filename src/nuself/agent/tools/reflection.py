@@ -16,7 +16,7 @@ from nuself.decorators import (
 from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 
 
 def build_reflection_tools(

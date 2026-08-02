@@ -54,7 +54,7 @@ from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.tui.approval import TerminalApprovalPort
 from nuself.agent.tools.resources import ToolResources
 

@@ -25,7 +25,7 @@ from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.job.message import JobSink
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.workspace import PrivateWorkspaceStore
 
 

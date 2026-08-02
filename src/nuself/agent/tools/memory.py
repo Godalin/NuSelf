@@ -12,7 +12,7 @@ from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.memory.service import MemoryQuery, MemoryService
 from nuself.memory.repository import MemoryEntryNotFound
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 
 
 def _string_tuple_filter(

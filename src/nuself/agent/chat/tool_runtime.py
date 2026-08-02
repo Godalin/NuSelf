@@ -20,7 +20,7 @@ from nuself.agent.tools.composition import build_langchain_chat_tools
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.agent.tools.resources import ToolResources
 from nuself.decorators import component, observed, readonly, tool
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.runtime.observability import (
     report_observability_projection_failure,
 )

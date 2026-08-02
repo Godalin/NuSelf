@@ -8,11 +8,11 @@ from typing import cast
 
 from langchain_core.tools import StructuredTool
 
-from nuself.runtime.feature_execution import (
+from nuself.runtime.feature.execution import (
     FeatureConfirmationDeclined,
     FeatureExecutor,
 )
-from nuself.runtime.features import require_tool_spec
+from nuself.runtime.feature.policy import require_tool_spec
 
 def materialize_tool[**P, R](
     function: Callable[P, R],

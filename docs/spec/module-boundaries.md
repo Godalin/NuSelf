@@ -416,7 +416,7 @@ cross-domain use cases; concrete domain factories and immutable domain bundles
 belong to their domain packages. The root does not grow a second catalog of the
 composition graph. By contrast, `nuself.decorators` is the deliberate public
 spelling for the cohesive inert feature-declaration DSL and may re-export the
-policies and decorators owned by `runtime.features`.
+policies and decorators owned by `runtime.feature.policy`.
 
 The `nuself.notification` package root is also import-light. Immutable records
 and strict codecs belong to `notification.model`; storage and entry locking

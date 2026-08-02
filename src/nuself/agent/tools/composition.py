@@ -12,7 +12,7 @@ from nuself.agent.tools.reflection import build_reflection_tools
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.tools.selves import build_selves_tools
 from nuself.agent.tools.trace import build_trace_tools
-from nuself.runtime.feature_execution import FeatureExecutor
+from nuself.runtime.feature.execution import FeatureExecutor
 
 
 def build_langchain_chat_tools(

@@ -15,8 +15,7 @@ without compatibility forwarding modules.
 
 ## Next Steps
 
-1. Move Feature policy and execution into `runtime/feature`.
-2. Audit remaining flat files, run full gates, commit each complete boundary,
+1. Audit remaining flat files, run full gates, commit each complete boundary,
    return to Idle, and stop.
 
 ## Exclusions
@@ -42,3 +41,7 @@ without compatibility forwarding modules.
   `nuself.log`; every caller uses a precise owner and no forwarding module
   remains. Pyright reports 0 errors and 0 warnings; 191 focused log, runtime,
   daemon, REPL, and boundary tests pass.
+- Feature package: policy declarations and their injected-port interpreter now
+  live under `runtime.feature` as `policy` and `execution`; no generic model or
+  compatibility facade was added. Pyright reports 0 errors and 0 warnings; 209
+  focused Feature, Agent, Persona, and boundary tests pass.
