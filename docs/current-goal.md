@@ -9,15 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the policy-free lifecycle failure formatting facade.
+Inline the daemon-list command's single-use formatter.
 
 ## Ordered Steps
 
-1. Confirm `format_lifecycle_failure()` only forwards the shared diagnostic
-   formatter and has no lifecycle-specific policy.
-2. Use `diagnostic_exception_message()` directly at CLI presentation sites and
-   remove the facade/imports.
-3. Run focused lifecycle/CLI tests and full gates, then commit without pushing.
+1. Confirm `format_daemon_list()` has one production caller and no direct API
+   consumer.
+2. Render its fixed two-line table in `handle_daemon_list()` and remove the
+   standalone function.
+3. Run focused daemon CLI tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -26,7 +26,7 @@ Remove the policy-free lifecycle failure formatting facade.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve safe exception-chain rendering and all lifecycle audit behavior.
+- Preserve exact daemon-list text, status observation, and exit codes.
 
 ## Constraints
 
@@ -38,6 +38,11 @@ Remove the policy-free lifecycle failure formatting facade.
 
 ## Phase Evidence
 
+- The daemon-list command now renders its fixed header and row directly.
+  Removed the single-use `format_daemon_list()` public function while preserving
+  exact output, status observation, and exit behavior. Focused daemon
+  CLI/lifecycle tests: 373 passed; full suite: 2440 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - CLI daemon lifecycle failures now use the shared safe diagnostic formatter at
   their presentation sites. Removed the lifecycle-specific one-line forwarding
   function and its imports while leaving shared start/stop/restart audit

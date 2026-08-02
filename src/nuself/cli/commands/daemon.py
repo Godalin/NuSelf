@@ -15,16 +15,6 @@ from nuself.daemon import client, lifecycle
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
-def format_daemon_list(status: lifecycle.DaemonStatus) -> str:
-    pid = status.pid if status.pid is not None else "-"
-    return "\n".join(
-        [
-            "name status pid socket",
-            f"local {status.phase} {pid} {status.socket_path}",
-        ]
-    )
-
-
 def handle_daemon_start(args: argparse.Namespace) -> int:
     try:
         result = start_daemon_observed(
@@ -112,5 +102,7 @@ def handle_daemon_list(args: argparse.Namespace) -> int:
     result = observe_daemon_status(args.project_root)
     if result is None:
         return 1
-    print(format_daemon_list(result))
+    pid = result.pid if result.pid is not None else "-"
+    print("name status pid socket")
+    print(f"local {result.phase} {pid} {result.socket_path}")
     return 0

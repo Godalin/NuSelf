@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The daemon-list handler now owns its fixed two-line rendering directly,
+  removing a single-use public formatter.
 - CLI lifecycle failures now use the shared safe diagnostic formatter directly,
   removing a policy-free lifecycle-specific forwarding function.
 - Raw daemon request transport is now private to the typed client operations;
