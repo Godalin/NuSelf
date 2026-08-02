@@ -6,7 +6,7 @@
 |---|---|---|
 | 1 (highest) | Selected workspace `.nuself/config.yaml` | Recursively overrides user configuration in explicit workspace scope |
 | 2 | User authority `config.yaml` | Overrides built-in defaults in every scope |
-| 3 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
+| 3 (lowest) | Typed `SystemConfig` field defaults | Safe production values |
 
 The final merged mapping is validated once. Sequences and scalar values replace
 the lower layer; mappings merge recursively. Scope selection and the strict

@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Configuration loading now uses typed `SystemConfig` defaults directly and
+  inlines the single-use file-build path, removing two private forwarding
+  methods.
 - Effective config output now uses only `llm.endpoints.<index>.*`, removing the
   duplicate first-endpoint `llm.0.*` compatibility projection.
 - Removed the unused `ConfigSystem._test_config()` production-code branch and

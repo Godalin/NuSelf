@@ -322,11 +322,6 @@ def _is_sensitive_config_key(key: str) -> bool:
 class ConfigSystem:
     """Unified configuration loader."""
 
-    @staticmethod
-    def _default_config() -> SystemConfig:
-        """Return safe default configuration."""
-        return SystemConfig()
-
     @classmethod
     def load(cls, config_path: Path | None = None, project_root: Path | None = None) -> SystemConfig:
         """Load one configuration file with defaults."""
@@ -341,7 +336,16 @@ class ConfigSystem:
                     runtime_paths(project_root).authority_root
                 )
             harden_private_file(config_path)
-        return cls._build(config_path)
+        yaml_data = (
+            cls._read_mapping(config_path)
+            if config_path and config_path.exists()
+            else {}
+        )
+        cls._normalize_mapping(yaml_data)
+        defaults = SystemConfig().model_dump(mode="python")
+        return SystemConfig.model_validate(
+            _deep_merge(defaults, yaml_data)
+        )
 
     @classmethod
     def load_scope(cls, scope: NuSelfScope) -> SystemConfig:
@@ -366,22 +370,10 @@ class ConfigSystem:
             cls._normalize_mapping(layer)
             merged_layers = _deep_merge(merged_layers, layer)
 
-        defaults = cls._default_config().model_dump(mode="python")
+        defaults = SystemConfig().model_dump(mode="python")
         return SystemConfig.model_validate(
             _deep_merge(defaults, merged_layers)
         )
-
-    @classmethod
-    def _build(cls, config_path: Path | None) -> SystemConfig:
-        yaml_data = (
-            cls._read_mapping(config_path)
-            if config_path and config_path.exists()
-            else {}
-        )
-        cls._normalize_mapping(yaml_data)
-        defaults = cls._default_config().model_dump(mode="python")
-        merged = _deep_merge(defaults, yaml_data)
-        return SystemConfig.model_validate(merged)
 
     @staticmethod
     def _read_mapping(config_path: Path) -> dict[str, Any]:

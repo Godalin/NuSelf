@@ -9,21 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove duplicate first-endpoint aliases from flattened config output.
+Remove redundant private wrappers from `ConfigSystem`.
 
 ## Ordered Steps
 
-1. Specify `llm.endpoints.<index>.*` as the sole flattened endpoint namespace.
-2. Remove the hand-built `llm.0.*` mirror and make flat projection a static
-   config operation.
-3. Update CLI/config regressions, run focused/full gates, record evidence, and
-   commit without pushing.
+1. Specify typed `SystemConfig` field defaults as the authoritative built-in
+   defaults, without a forwarding factory.
+2. Inline the single-use `_build()` path into `load()` and remove
+   `_default_config()`.
+3. Run config/full gates, record evidence, and commit without pushing.
 
 ## Exclusions
 
-- Preserve recursive flattening, secret redaction, `llm.count`, deterministic
-  sorting, and `dev config` presentation.
-- Do not add a replacement compatibility namespace or projection facade.
+- Preserve single-file and layered loading, normalization, deep merge,
+  validation, hardening, and malformed-file behavior.
+- Do not introduce a loader strategy/factory abstraction.
 
 ## Constraints
 
@@ -35,6 +35,12 @@ Remove duplicate first-endpoint aliases from flattened config output.
 
 ## Phase Evidence
 
+- `ConfigSystem` now uses typed `SystemConfig` field defaults directly and
+  performs its single-file read/normalize/merge/validate sequence in `load()`.
+  Removed the forwarding `_default_config()` and single-use `_build()` methods;
+  source/test/script search finds neither remaining. Focused config/readiness
+  tests: 79 passed; full suite: 2446 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - Flattened config inspection now exposes endpoints only through the recursive
   `llm.endpoints.<index>.*` namespace plus `llm.count`. Removed the hand-built
   first-endpoint `llm.0.*` mirror and made the stateless projection a static
