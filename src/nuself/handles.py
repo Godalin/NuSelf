@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 import re
-from typing import TypeVar
-
-T = TypeVar("T")
-
 _INDEX_SELECTION_RE = re.compile(r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*")
 
 
@@ -63,7 +59,7 @@ def parse_visible_index_selection(value: str, *, count: int, label: str) -> list
     return indexes
 
 
-def resolve_visible_item(value: str, items: Sequence[T], *, label: str) -> T | None:
+def resolve_visible_item[T](value: str, items: Sequence[T], *, label: str) -> T | None:
     """Resolve a numeric visible index to an item; nonnumeric values return None."""
 
     if not looks_like_visible_index(value):
@@ -71,7 +67,7 @@ def resolve_visible_item(value: str, items: Sequence[T], *, label: str) -> T | N
     return items[parse_visible_index(value, count=len(items), label=label)]
 
 
-def resolve_visible_handle(
+def resolve_visible_handle[T](
     value: str,
     items: Sequence[T],
     *,
@@ -86,7 +82,7 @@ def resolve_visible_handle(
     return get_id(item)
 
 
-def resolve_visible_handle_selection(
+def resolve_visible_handle_selection[T](
     value: str,
     items: Sequence[T],
     *,

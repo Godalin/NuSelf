@@ -12,7 +12,7 @@ from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
 from nuself.trace.model import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
-TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
+type TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
 
 
 class TraceNotFound(ValueError):

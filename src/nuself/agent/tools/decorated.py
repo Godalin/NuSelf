@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import wraps
-from typing import ParamSpec, TypeVar, cast
+from typing import cast
 
 from langchain_core.tools import StructuredTool
 
@@ -14,11 +14,7 @@ from nuself.runtime.feature_execution import (
 )
 from nuself.runtime.features import require_tool_spec
 
-P = ParamSpec("P")
-R = TypeVar("R")
-
-
-def materialize_tool(
+def materialize_tool[**P, R](
     function: Callable[P, R],
     *,
     executor: FeatureExecutor,

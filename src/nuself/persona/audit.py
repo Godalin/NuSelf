@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import Literal
 
 from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
@@ -19,7 +19,7 @@ from nuself.runtime.observability import (
     write_observed_log_event,
 )
 
-PersonaAuditEvent = Literal[
+type PersonaAuditEvent = Literal[
     "persona_summary",
     "host_discussion_decision",
     "persona_discussion_step",
@@ -32,9 +32,6 @@ PersonaAuditEvent = Literal[
     "trace_recording_failed",
     "interactive_command_failed",
 ]
-
-T = TypeVar("T")
-
 
 def _string(metadata: Mapping[str, object], field: str) -> str:
     value = metadata[field]
@@ -267,7 +264,7 @@ def report_persona_failure(
     )
 
 
-def run_persona_observed(
+def run_persona_observed[T](
     operation: Callable[[], T],
     *,
     event: Literal["trace_recording_failed"],

@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 from uuid import uuid5, NAMESPACE_URL
 
 from nuself.clock import utc_now_iso
 from nuself.memory.model import PrivacyLevel
 
-SourceKind: TypeAlias = Literal["markdown", "text"]
+type SourceKind = Literal["markdown", "text"]
 
 
 def source_id_for_path(path: Path) -> str:

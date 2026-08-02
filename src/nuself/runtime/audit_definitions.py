@@ -16,9 +16,9 @@ from nuself.runtime.definitions import (
 )
 from nuself.runtime.identities import require_audit_event_name
 
-AuditErrorPolicy = Literal["forbidden", "required"]
-AuditDurationPolicy = Literal["forbidden", "required", "optional"]
-AuditMetadataValidator = Callable[[Mapping[str, object]], None]
+type AuditErrorPolicy = Literal["forbidden", "required"]
+type AuditDurationPolicy = Literal["forbidden", "required", "optional"]
+type AuditMetadataValidator = Callable[[Mapping[str, object]], None]
 
 
 class AuditSchemaError(ValueError):

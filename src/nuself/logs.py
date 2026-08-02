@@ -51,7 +51,7 @@ from nuself.runtime.warning_definitions import (
     emit_registered_terminal_warning,
 )
 
-LogPersistenceOutcome = Literal[
+type LogPersistenceOutcome = Literal[
     "not_persisted",
     "persisted",
     "uncertain",

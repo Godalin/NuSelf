@@ -15,7 +15,7 @@ from nuself.runtime.audit_definitions import (
 from nuself.runtime.context import runtime_context
 from nuself.runtime.observability import report_defined_failure
 
-DaemonTransportAuditEvent = Literal[
+type DaemonTransportAuditEvent = Literal[
     "request_transport_failed",
     "request_failed",
     "response_encode_failed",

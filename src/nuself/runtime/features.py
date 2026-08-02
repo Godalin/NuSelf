@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Literal, ParamSpec, TypeVar, overload
+from typing import Literal, overload
 
-P = ParamSpec("P")
-R = TypeVar("R")
-
-Effect = Literal["readonly", "mutating"]
-Risk = Literal["reversible", "destructive", "external"]
-SummaryBuilder = Callable[[tuple[object, ...], dict[str, object]], str]
+type Effect = Literal["readonly", "mutating"]
+type Risk = Literal["reversible", "destructive", "external"]
+type SummaryBuilder = Callable[[tuple[object, ...], dict[str, object]], str]
 
 _SPEC_ATTRIBUTE = "__nuself_feature_spec__"
 
@@ -72,7 +69,7 @@ class FeatureSpec:
     audit: AuditPolicy | None = None
 
 
-FeatureCallable = Callable[P, R]
+type FeatureCallable[**P, R] = Callable[P, R]
 
 
 def feature_spec(function: Callable[..., object]) -> FeatureSpec:
@@ -82,7 +79,7 @@ def feature_spec(function: Callable[..., object]) -> FeatureSpec:
     return value if isinstance(value, FeatureSpec) else FeatureSpec()
 
 
-def _attach(
+def _attach[**P, R](
     function: FeatureCallable[P, R],
     **changes: object,
 ) -> FeatureCallable[P, R]:
@@ -103,11 +100,11 @@ def _validate(spec: FeatureSpec) -> None:
 
 
 @overload
-def tool(function: FeatureCallable[P, R]) -> FeatureCallable[P, R]: ...
+def tool[**P, R](function: FeatureCallable[P, R]) -> FeatureCallable[P, R]: ...
 
 
 @overload
-def tool(
+def tool[**P, R](
     function: None = None,
     *,
     name: str | None = None,
@@ -115,7 +112,7 @@ def tool(
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]: ...
 
 
-def tool(
+def tool[**P, R](
     function: FeatureCallable[P, R] | None = None,
     *,
     name: str | None = None,
@@ -140,7 +137,7 @@ def tool(
     return decorate(function) if function is not None else decorate
 
 
-def component(
+def component[**P, R](
     name: str,
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]:
     """Declare feature ownership without changing execution."""
@@ -154,7 +151,7 @@ def component(
     return decorate
 
 
-def readonly(
+def readonly[**P, R](
     function: FeatureCallable[P, R],
 ) -> FeatureCallable[P, R]:
     """Declare a side-effect-free feature."""
@@ -167,7 +164,7 @@ def readonly(
     return _attach(function, effect="readonly")
 
 
-def mutating(
+def mutating[**P, R](
     function: FeatureCallable[P, R],
 ) -> FeatureCallable[P, R]:
     """Declare a state-changing feature."""
@@ -180,7 +177,7 @@ def mutating(
     return _attach(function, effect="mutating")
 
 
-def requires_confirmation(
+def requires_confirmation[**P, R](
     *,
     action: str,
     resource: str,
@@ -203,16 +200,16 @@ def requires_confirmation(
 
 
 @overload
-def observed(function: FeatureCallable[P, R]) -> FeatureCallable[P, R]: ...
+def observed[**P, R](function: FeatureCallable[P, R]) -> FeatureCallable[P, R]: ...
 
 
 @overload
-def observed(
+def observed[**P, R](
     function: None = None,
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]: ...
 
 
-def observed(
+def observed[**P, R](
     function: FeatureCallable[P, R] | None = None,
 ) -> (
     FeatureCallable[P, R]
@@ -229,7 +226,7 @@ def observed(
     return decorate(function) if function is not None else decorate
 
 
-def audited(
+def audited[**P, R](
     event: str,
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]:
     """Declare one stable audit identity."""

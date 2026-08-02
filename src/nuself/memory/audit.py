@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import Literal
 
 from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
@@ -19,7 +19,7 @@ from nuself.runtime.observability import (
     write_observed_log_event,
 )
 
-MemoryAuditEvent = Literal[
+type MemoryAuditEvent = Literal[
     "curator_contended",
     "curator_deferred",
     "curator_completed",
@@ -35,7 +35,7 @@ MemoryAuditEvent = Literal[
     "post_chat_curation_failed",
     "chat_trace_recording_failed",
 ]
-MemoryFailureEvent = Literal[
+type MemoryFailureEvent = Literal[
     "auto_accept_failed",
     "trace_recording_failed",
     "curator_failed",
@@ -50,9 +50,6 @@ _FAILURE_MESSAGES: dict[MemoryFailureEvent, str] = {
     "post_chat_curation_failed": "Post-chat memory curation failed",
     "chat_trace_recording_failed": "Chat trace recording failed",
 }
-
-T = TypeVar("T")
-
 
 def _string(metadata: Mapping[str, object], field: str) -> str:
     value = metadata[field]
@@ -288,7 +285,7 @@ def write_memory_audit(
     )
 
 
-def run_memory_observed(
+def run_memory_observed[T](
     operation: Callable[[], T],
     *,
     event: MemoryFailureEvent,

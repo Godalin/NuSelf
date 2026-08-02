@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Hashable
 from threading import Lock
-from typing import Generic, TypeVar
-
-DefinitionKey = TypeVar("DefinitionKey", bound=Hashable)
-Definition = TypeVar("Definition")
 
 
 class DuplicateDefinitionError(ValueError):
@@ -46,7 +42,7 @@ class UnknownDefinitionError(LookupError):
         self.key = key
 
 
-class DefinitionRegistry(Generic[DefinitionKey, Definition]):
+class DefinitionRegistry[DefinitionKey: Hashable, Definition]:
     """Ordered registry sealed explicitly after composition."""
 
     def __init__(

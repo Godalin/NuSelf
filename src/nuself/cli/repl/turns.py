@@ -26,9 +26,9 @@ from nuself.runtime.log_event import LogEvent
 from nuself.runtime.context import RuntimeContext, use_runtime_context
 from nuself.tui.render import TerminalTheme
 
-SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
-ActivityPrinter = Callable[[list[LogEvent]], None]
-ReplyPrinter = Callable[[str], None]
+type SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+type ActivityPrinter = Callable[[list[LogEvent]], None]
+type ReplyPrinter = Callable[[str], None]
 
 _theme = TerminalTheme()
 

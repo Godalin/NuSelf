@@ -9,13 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.conversation import CompletedTurn, ConversationMessage, ConversationState
 
-ConversationNodeName = Literal[
+type ConversationNodeName = Literal[
     "prepare_context",
     "respond",
     "state_update",
     "compression",
 ]
-EpistemicStatus = Literal[
+type EpistemicStatus = Literal[
     "grounded", "inferred", "uncertain", "unsupported"
 ]
 

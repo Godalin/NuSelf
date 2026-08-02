@@ -98,19 +98,19 @@ DEFAULT_DAEMON_STARTUP_POLICY = DaemonWaitPolicy()
 DEFAULT_DAEMON_SHUTDOWN_POLICY = DaemonWaitPolicy(timeout_seconds=30.0)
 DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS = 2.0
 
-DaemonStartFailureReason = Literal[
+type DaemonStartFailureReason = Literal[
     "spawn_failed",
     "status_failed",
     "owner_unready",
     "process_exited",
     "timeout",
 ]
-DaemonStopFailureReason = Literal[
+type DaemonStopFailureReason = Literal[
     "request_failed",
     "ownership_check_failed",
     "timeout",
 ]
-DaemonPhase = Literal[
+type DaemonPhase = Literal[
     "stopped",
     "owned_unready",
     "ready",
@@ -141,8 +141,8 @@ class DaemonStatus:
         return self.phase in {"owned_unready", "ready"}
 
 
-DaemonStartOutcome = Literal["started", "already_ready"]
-DaemonStopOutcome = Literal["stopped", "already_stopped"]
+type DaemonStartOutcome = Literal["started", "already_ready"]
+type DaemonStopOutcome = Literal["stopped", "already_stopped"]
 
 
 @dataclass(frozen=True)

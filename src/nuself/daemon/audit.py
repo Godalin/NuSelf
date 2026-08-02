@@ -14,7 +14,7 @@ from nuself.runtime.audit_definitions import (
 )
 from nuself.runtime.observability import write_observed_log_event
 
-DaemonLifecycleAuditEvent = Literal[
+type DaemonLifecycleAuditEvent = Literal[
     "instance_lock_contended",
     "started",
     "stopped",

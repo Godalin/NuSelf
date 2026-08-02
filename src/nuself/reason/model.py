@@ -5,16 +5,16 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
 from nuself.runtime.messages import freeze_json_value, thaw_json_value
 
-ReasonStatus: TypeAlias = Literal["active", "paused", "resolved", "archived"]
-StepKind: TypeAlias = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning"]
-ReasonPriority: TypeAlias = Literal["normal", "high"]
-TerminalStatus: TypeAlias = Literal["continue", "suggest_resolved", "suggest_paused"]
+type ReasonStatus = Literal["active", "paused", "resolved", "archived"]
+type StepKind = Literal["progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning"]
+type ReasonPriority = Literal["normal", "high"]
+type TerminalStatus = Literal["continue", "suggest_resolved", "suggest_paused"]
 
 REASON_STATUSES: tuple[ReasonStatus, ...] = ("active", "paused", "resolved", "archived")
 STEP_KINDS: tuple[StepKind, ...] = ("progress", "no_change", "question", "synthesis", "contradiction", "resolution", "planning")

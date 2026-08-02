@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,8 +19,8 @@ from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFo
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.contracts import ProfileRepositoryPort
 
-MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
-OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
+type MemoryOptimizeActionType = Literal["update", "delete", "ignore"]
+type OptimizeDecisionStatus = Literal["ready", "deferred"]
 
 
 @dataclass(frozen=True)

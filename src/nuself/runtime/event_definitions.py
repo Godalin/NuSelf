@@ -20,7 +20,7 @@ from nuself.runtime.identities import (
     require_runtime_event_name,
 )
 
-EventPayloadValidator = Callable[[Mapping[str, object]], None]
+type EventPayloadValidator = Callable[[Mapping[str, object]], None]
 
 
 class DuplicateEventDefinitionError(ValueError):

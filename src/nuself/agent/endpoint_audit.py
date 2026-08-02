@@ -15,14 +15,14 @@ from nuself.runtime.audit_definitions import (
 )
 from nuself.runtime.observability import report_defined_failure
 
-AgentEndpointComponent = Literal[
+type AgentEndpointComponent = Literal[
     "chat",
     "memory",
     "persona",
     "reasoning",
     "reflection",
 ]
-AgentEndpointAuditEvent = Literal[
+type AgentEndpointAuditEvent = Literal[
     "llm_endpoint_failed_over",
     "llm_endpoint_unavailable",
 ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, cast
 
-IdeaCandidateType = Literal[
+type IdeaCandidateType = Literal[
     "contradiction",
     "connection",
     "question",

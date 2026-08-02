@@ -18,7 +18,7 @@ from nuself.runtime.observability import (
     write_observed_log_event,
 )
 
-ReflectionAuditEvent = Literal[
+type ReflectionAuditEvent = Literal[
     "schedule_blocked",
     "cycle_started",
     "cycle_filtered",

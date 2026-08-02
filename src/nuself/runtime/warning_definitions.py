@@ -16,7 +16,7 @@ from nuself.runtime.diagnostics import (
     redact_sensitive_text,
 )
 
-WarningMetadataValidator = Callable[[Mapping[str, object]], None]
+type WarningMetadataValidator = Callable[[Mapping[str, object]], None]
 _WARNING_IDENTITY_RE = re.compile(
     r"^[a-z][a-z0-9_]*(?:/[a-z][a-z0-9_]*)$"
 )

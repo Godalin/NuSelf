@@ -23,7 +23,7 @@ from nuself.runtime.identities import (
 from nuself.runtime.context import current_runtime_context
 from nuself.runtime.messages import RuntimeEnvelope
 
-JobDataValidator = Callable[[str, Mapping[str, object]], None]
+type JobDataValidator = Callable[[str, Mapping[str, object]], None]
 
 
 class JobDefinitionInput(Protocol):

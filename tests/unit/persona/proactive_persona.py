@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Generic, Never, TypeVar
+from typing import Never
 
 import pytest
 from langchain_core.messages import BaseMessage
@@ -67,10 +67,7 @@ class _FakePersonaDriver:
         )
 
 
-OutputT = TypeVar("OutputT", bound=BaseModel)
-
-
-class _FixtureAgent(Generic[OutputT]):
+class _FixtureAgent[OutputT: BaseModel]:
     def __init__(
         self,
         fixture: _FakeLLM,

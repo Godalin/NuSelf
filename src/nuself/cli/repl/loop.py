@@ -14,12 +14,12 @@ from nuself.cli.repl.types import InteractiveChatResult
 from nuself.agent.chat.audit import report_chat_failure
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 
-SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
-HandleCommand = Callable[
+type SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+type HandleCommand = Callable[
     [str, Path | None, str, InteractiveSession],
     tuple[str, str],
 ]
-SendTurn = Callable[
+type SendTurn = Callable[
     [SendMessage, Path | None, str, str, InteractiveSession],
     int,
 ]

@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable
 from math import isfinite
 from pathlib import Path
-from typing import Literal, TypeAlias, TypeVar
+from typing import Literal
 
 from nuself.config import runtime_paths
 from nuself.daemon.payloads import (
@@ -31,8 +31,7 @@ from nuself.runtime.log_event import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 
-PayloadT = TypeVar("PayloadT")
-DaemonConnectionPhase: TypeAlias = Literal[
+type DaemonConnectionPhase = Literal[
     "connect",
     "request_encode",
     "send",
@@ -181,7 +180,7 @@ def _request(
         ) from exc
 
 
-def _decode_response(
+def _decode_response[PayloadT](
     response: DaemonResponse,
     decoder: Callable[[dict[str, JsonValue]], PayloadT],
     *,

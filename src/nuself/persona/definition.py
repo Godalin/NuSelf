@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Protocol, TypeAlias
+from typing import Annotated, Protocol
 
 from pydantic import (
     BaseModel,
@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-NonBlankText: TypeAlias = Annotated[
+type NonBlankText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1),
 ]

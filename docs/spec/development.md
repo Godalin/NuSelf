@@ -3,6 +3,15 @@
 ## Code Standard
 
 - Standard Python project managed by `uv`.
+- The declared minimum Python version is the language baseline. Prefer stable
+  language and standard-library features available across every supported
+  version instead of retaining compatibility syntax for older, unsupported
+  Python releases. In particular, generic functions/classes/type aliases use
+  PEP 695 type-parameter and `type` syntax rather than module-level `TypeVar`,
+  `ParamSpec`, `Generic`, or `TypeAlias` declarations unless production code
+  needs the typing object itself at runtime. Do not use a newer feature until
+  the minimum version, Pyright target, build matrix, and runtime tests all
+  support it.
 - Type-check with the lockfile-managed `uv run --locked pyright`.
 - Sub-components must be individually tested.
 - Packages imported directly by runtime modules must be declared as direct

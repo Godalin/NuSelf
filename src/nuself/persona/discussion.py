@@ -31,7 +31,7 @@ from nuself.persona.graph import (
 )
 from nuself.persona.audit import report_persona_failure
 
-DiscussionTraceSink = Callable[[str], None]
+type DiscussionTraceSink = Callable[[str], None]
 
 
 class PersonaScoreOutput(BaseModel):

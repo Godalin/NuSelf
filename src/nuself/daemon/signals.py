@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from types import FrameType
 
-SignalHandler = int | Callable[[int, FrameType | None], object]
+type SignalHandler = int | Callable[[int, FrameType | None], object]
 
 
 @dataclass(frozen=True)

@@ -45,12 +45,12 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.tui.render import render_log_event
 
-InteractiveCommandResult = tuple[str, str]
-ReplCommandHandler = Callable[
+type InteractiveCommandResult = tuple[str, str]
+type ReplCommandHandler = Callable[
     [str, "ReplCommandContext"],
     InteractiveCommandResult,
 ]
-ReplCommandRegistry = HandlerRegistry[
+type ReplCommandRegistry = HandlerRegistry[
     str,
     [str, "ReplCommandContext"],
     InteractiveCommandResult,

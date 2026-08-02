@@ -32,7 +32,7 @@ from nuself.cli.repl.types import InteractiveChatResult
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
 
-MemoryCuratorRunner = Callable[[Path | None, str], object]
+type MemoryCuratorRunner = Callable[[Path | None, str], object]
 
 
 def run_repl(

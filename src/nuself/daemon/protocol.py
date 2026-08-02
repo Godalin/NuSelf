@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 from nuself.runtime.diagnostics import (
@@ -16,10 +16,10 @@ from nuself.runtime.diagnostics import (
 PROTOCOL_VERSION = 1
 MAX_DAEMON_FRAME_BYTES = 1024 * 1024
 
-JsonValue: TypeAlias = (
+type JsonValue = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 )
-RequestType: TypeAlias = Literal[
+type RequestType = Literal[
     "ping",
     "health",
     "chat",
@@ -28,7 +28,7 @@ RequestType: TypeAlias = Literal[
     "activity_next",
     "activity_close",
 ]
-ResponseStatus: TypeAlias = Literal["ok", "error"]
+type ResponseStatus = Literal["ok", "error"]
 REQUEST_TYPES: tuple[RequestType, ...] = (
     "ping",
     "health",

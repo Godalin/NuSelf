@@ -90,7 +90,7 @@ class ToolOutcome:
             cast(Mapping[str, object], frozen),
         )
 
-ToolOutcomeLogger = Callable[[ToolOutcome], None]
+type ToolOutcomeLogger = Callable[[ToolOutcome], None]
 
 
 class ToolCaptureMiddleware(AgentMiddleware):

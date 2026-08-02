@@ -159,7 +159,7 @@ class SymbolicGraphSearchResult:
     edges: tuple[SymbolicGraphEdge, ...]
 
 
-GraphAdjacency = dict[str, list[tuple[str, SymbolicGraphEdge]]]
+type GraphAdjacency = dict[str, list[tuple[str, SymbolicGraphEdge]]]
 
 
 def _freeze_stats_mapping(

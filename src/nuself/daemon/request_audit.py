@@ -19,17 +19,17 @@ from nuself.runtime.observability import (
     write_observed_log_event,
 )
 
-DaemonRequestAuditEvent = Literal[
+type DaemonRequestAuditEvent = Literal[
     "request_rejected",
     "chat_turn_failed",
     "chat_turn_completed",
     "shutdown_requested",
 ]
-DaemonRequestFailureEvent = Literal[
+type DaemonRequestFailureEvent = Literal[
     "request_rejected",
     "chat_turn_failed",
 ]
-DaemonRequestSuccessEvent = Literal[
+type DaemonRequestSuccessEvent = Literal[
     "chat_turn_completed",
     "shutdown_requested",
 ]

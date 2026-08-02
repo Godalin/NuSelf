@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
 from nuself.runtime.messages import freeze_json_value, thaw_json_value
 
-TraceKind: TypeAlias = Literal[
+type TraceKind = Literal[
     "chat_turn",
     "memory_update",
     "reflection",
@@ -22,8 +22,8 @@ TraceKind: TypeAlias = Literal[
     "persona_disabled",
     "persona_enabled",
 ]
-TraceVisibility: TypeAlias = Literal["private", "shareable", "internal"]
-TraceRelation: TypeAlias = Literal[
+type TraceVisibility = Literal["private", "shareable", "internal"]
+type TraceRelation = Literal[
     "supports",
     "derived",
     "contradicts",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Protocol, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy
@@ -18,14 +18,7 @@ from nuself.llm import (
     LangChainLLMEndpoint,
 )
 
-StructuredOutputT = TypeVar(
-    "StructuredOutputT",
-    bound=BaseModel,
-    covariant=True,
-)
-
-
-class StructuredAgent(Protocol[StructuredOutputT]):
+class StructuredAgent[StructuredOutputT: BaseModel](Protocol):
     """Typed agent capability consumed by domain subsystems."""
 
     def invoke(
@@ -34,7 +27,7 @@ class StructuredAgent(Protocol[StructuredOutputT]):
     ) -> StructuredOutputT: ...
 
 
-class LangChainStructuredAgent(Generic[StructuredOutputT]):
+class LangChainStructuredAgent[StructuredOutputT: BaseModel]:
     """Invoke one strict schema through LangChain with endpoint failover."""
 
     def __init__(
@@ -79,7 +72,7 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
         )
 
 
-def require_structured_response(
+def require_structured_response[StructuredOutputT: BaseModel](
     result: object,
     schema: type[StructuredOutputT],
 ) -> StructuredOutputT:
@@ -103,7 +96,7 @@ def require_structured_response(
     return structured
 
 
-def default_structured_agent(
+def default_structured_agent[StructuredOutputT: BaseModel](
     schema: type[StructuredOutputT],
     *,
     project_root: Path | None = None,

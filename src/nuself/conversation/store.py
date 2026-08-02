@@ -6,7 +6,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import replace
 import time
-from typing import Generator, TypeVar
+from typing import Generator
 
 from nuself.config import RuntimePaths
 from nuself.conversation.model import (
@@ -17,8 +17,6 @@ from nuself.conversation.model import (
 )
 from nuself.private_fs import blocking_private_file_lock
 from nuself.storage import StorageBackend
-
-UpdateResult = TypeVar("UpdateResult")
 
 class ConversationStore:
     """SQLite-backed conversation store under the selected authority."""
@@ -45,7 +43,7 @@ class ConversationStore:
         with self._locked(state.conversation_id), self._backend.transaction():
             self._save_unlocked(state)
 
-    def update(
+    def update[UpdateResult](
         self,
         conversation_id: str,
         update: Callable[[ConversationState], tuple[ConversationState, UpdateResult]],

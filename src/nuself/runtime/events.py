@@ -14,7 +14,7 @@ from nuself.runtime.event_definitions import (
 )
 from nuself.runtime.messages import RuntimeEnvelope
 
-EventProjection = Callable[[RuntimeEnvelope], None]
+type EventProjection = Callable[[RuntimeEnvelope], None]
 
 
 @dataclass(frozen=True)

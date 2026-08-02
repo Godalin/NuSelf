@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 from typing import Literal, Mapping
 
-ScopeKind = Literal["user", "workspace"]
+type ScopeKind = Literal["user", "workspace"]
 
 _AUTHORITY_ID_VERSION = "v1"
 _DEFAULT_HOME_NAME = ".nuself"

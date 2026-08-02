@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import TypeVar
 
 from nuself.logs import (
     DEFAULT_LOG_RETENTION,
@@ -36,7 +35,6 @@ from nuself.runtime.warning_definitions import (
     emit_registered_terminal_warning,
 )
 
-T = TypeVar("T")
 DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
     ValueError,
     KeyError,
@@ -142,7 +140,7 @@ OBSERVABILITY_TERMINAL_WARNING_REGISTRY = (
 )
 
 
-def run_observed_best_effort(
+def run_observed_best_effort[T](
     operation: Callable[[], T],
     *,
     component: LogComponent,
@@ -336,7 +334,7 @@ def _report_internal_event_delivery_failure(
     )
 
 
-def decode_observed_record(
+def decode_observed_record[T](
     wire: Mapping[str, object],
     decoder: Callable[[dict[str, object]], T],
     *,

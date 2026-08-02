@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import cast
 
 from nuself.runtime.messages import RuntimeEnvelope
-JobSink = Callable[["JobMessage"], None]
+type JobSink = Callable[["JobMessage"], None]
 _JOB_PAYLOAD_FIELDS = frozenset({"resource_id", "data"})
 
 

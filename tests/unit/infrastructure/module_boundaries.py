@@ -16,6 +16,13 @@ _DOMAIN_PACKAGES = (
     "reflection",
     "trace",
 )
+_LEGACY_STATIC_TYPING_NAMES = {
+    "Generic",
+    "ParamSpec",
+    "TypeAlias",
+    "TypeVar",
+    "TypeVarTuple",
+}
 
 
 def _imports(path: Path) -> tuple[str, ...]:
@@ -42,6 +49,16 @@ def _from_imports(path: Path) -> tuple[tuple[str, str], ...]:
 
 def _package_files(package: str) -> tuple[Path, ...]:
     return tuple(sorted((_SOURCE_ROOT / package).rglob("*.py")))
+
+
+def test_source_uses_native_generic_and_alias_syntax() -> None:
+    violations: list[str] = []
+    for path in _SOURCE_ROOT.rglob("*.py"):
+        for module, name in _from_imports(path):
+            if module == "typing" and name in _LEGACY_STATIC_TYPING_NAMES:
+                violations.append(f"{path.relative_to(_SOURCE_ROOT)} -> {name}")
+
+    assert violations == []
 
 
 def _class_method(

@@ -11,15 +11,15 @@ from typing import Literal, cast
 from nuself.clock import utc_now_iso
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 
-OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
-TerminalOutboxStatus = Literal["sent", "failed", "dismissed"]
-NotificationClearStatus = Literal[
+type OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]
+type TerminalOutboxStatus = Literal["sent", "failed", "dismissed"]
+type NotificationClearStatus = Literal[
     "sent",
     "failed",
     "dismissed",
     "all-terminal",
 ]
-AdapterDeliveryStatus = Literal[
+type AdapterDeliveryStatus = Literal[
     "pending",
     "delivering",
     "sent",

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import hashlib
 from typing import Literal, cast
 
-ConversationRole = Literal["user", "assistant"]
+type ConversationRole = Literal["user", "assistant"]
 
 
 class ConversationTurnConflictError(RuntimeError):

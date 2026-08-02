@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, TypeVar
+from typing import Protocol
 
 from nuself.agent.chat.types import ChatResult
 from nuself.daemon.activity import (
@@ -42,9 +42,6 @@ from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
-RequestPayload = TypeVar("RequestPayload")
-
-
 class DaemonRequestPayloadError(ProtocolError):
     """A direct request-specific payload codec rejected its input."""
 
@@ -65,7 +62,7 @@ class DaemonRequestState(Protocol):
     ) -> ChatResult: ...
 
 
-DaemonRequestRegistry = HandlerRegistry[
+type DaemonRequestRegistry = HandlerRegistry[
     RequestType,
     [DaemonRequest, DaemonRequestState],
     DaemonResponse,
@@ -282,7 +279,7 @@ def _handle_activity_close(
     return DaemonResponse.ok(request, EmptyPayload().to_wire())
 
 
-def _decode_request_payload(
+def _decode_request_payload[RequestPayload](
     decoder: Callable[[dict[str, JsonValue]], RequestPayload],
     payload: dict[str, JsonValue],
 ) -> RequestPayload:

@@ -18,7 +18,7 @@ from nuself.runtime.observability import (
     report_defined_failure,
 )
 
-NotificationAuditEvent = Literal[
+type NotificationAuditEvent = Literal[
     "outbox_delivered",
     "email_dry_run",
     "email_no_config",
@@ -27,13 +27,13 @@ NotificationAuditEvent = Literal[
     "macos_unavailable",
     "macos_failed",
 ]
-NotificationSuccessEvent = Literal[
+type NotificationSuccessEvent = Literal[
     "outbox_delivered",
     "email_dry_run",
     "macos_dry_run",
     "macos_unavailable",
 ]
-NotificationFailureEvent = Literal[
+type NotificationFailureEvent = Literal[
     "email_no_config",
     "email_failed",
     "macos_failed",

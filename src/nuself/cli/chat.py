@@ -26,7 +26,7 @@ from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
 from nuself.tui.approval import TerminalApprovalPort
 
-ReplyPrinter = Callable[[str], None]
+type ReplyPrinter = Callable[[str], None]
 
 _theme = TerminalTheme()
 

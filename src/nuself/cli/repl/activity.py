@@ -19,8 +19,8 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall
 from nuself.tui.render import render_log_event
 
-SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
-ActivityTransportStage = Literal["open", "poll", "drain", "close"]
+type SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+type ActivityTransportStage = Literal["open", "poll", "drain", "close"]
 
 
 class ActivityReader(Protocol):

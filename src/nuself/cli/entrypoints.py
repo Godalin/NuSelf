@@ -21,7 +21,7 @@ from nuself.daemon import lifecycle
 from nuself.notification.deep_link import DeepLink
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
-InteractiveSender = Callable[
+type InteractiveSender = Callable[
     [str, str, str | None],
     InteractiveChatResult,
 ]

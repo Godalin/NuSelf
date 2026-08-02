@@ -10,8 +10,8 @@ from nuself.memory.model import MemoryEntry
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.storage import COLLECTION_NAMES, StorageBackend
 
-Record = dict[str, object]
-Decoder = Callable[[Record], object]
+type Record = dict[str, object]
+type Decoder = Callable[[Record], object]
 
 
 @dataclass(frozen=True)

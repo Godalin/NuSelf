@@ -6,7 +6,6 @@ from collections.abc import Callable
 from pathlib import Path
 import time
 from math import isfinite
-from typing import TypeVar
 
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.agent.endpoint_audit import (
@@ -21,9 +20,8 @@ from nuself.llm import (
 )
 
 
-ResultT = TypeVar("ResultT")
-FailurePredicate = Callable[[Exception], bool]
-RetryObserver = Callable[[LangChainLLMEndpoint, Exception], None]
+type FailurePredicate = Callable[[Exception], bool]
+type RetryObserver = Callable[[LangChainLLMEndpoint, Exception], None]
 _AGENT_IMPLEMENTATION_ERRORS = (
     AssertionError,
     AttributeError,
@@ -45,7 +43,7 @@ def is_recoverable_agent_failure(exc: Exception) -> bool:
     return not isinstance(exc, _AGENT_IMPLEMENTATION_ERRORS)
 
 
-def invoke_agent_endpoint(
+def invoke_agent_endpoint[ResultT](
     endpoints: tuple[LangChainLLMEndpoint, ...],
     operation: Callable[[LangChainLLMEndpoint], ResultT],
     *,

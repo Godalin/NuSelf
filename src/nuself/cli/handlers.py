@@ -17,8 +17,8 @@ from nuself.cli.readiness import (
 )
 from nuself.scope import NuSelfScope
 
-CliHandler = Callable[[argparse.Namespace], int]
-CliHandlerRegistry = HandlerRegistry[
+type CliHandler = Callable[[argparse.Namespace], int]
+type CliHandlerRegistry = HandlerRegistry[
     str,
     [argparse.Namespace],
     int,

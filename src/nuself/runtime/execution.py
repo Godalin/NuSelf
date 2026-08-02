@@ -8,11 +8,10 @@ from contextvars import Context, ContextVar, Token, copy_context
 from dataclasses import dataclass
 from math import isfinite
 import threading
-from typing import Generator, Generic, TypeVar, cast
+from typing import Generator, cast
 
-ResultT = TypeVar("ResultT")
 _MISSING = object()
-CancelCallback = Callable[[], None]
+type CancelCallback = Callable[[], None]
 
 
 def validate_timeout(
@@ -124,7 +123,7 @@ def use_cancellation(
 
 
 @dataclass(frozen=True, init=False)
-class CallOutcome(Generic[ResultT]):
+class CallOutcome[ResultT]:
     """Exactly one value or escaping control/error object."""
 
     value: ResultT | None
@@ -146,7 +145,7 @@ class CallOutcome(Generic[ResultT]):
         object.__setattr__(self, "error", error)
 
 
-class OwnedCall(Generic[ResultT]):
+class OwnedCall[ResultT]:
     """Own one result-producing thread from start through completion."""
 
     def __init__(

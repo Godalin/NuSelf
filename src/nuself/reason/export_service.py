@@ -46,9 +46,9 @@ from nuself.workspace import PrivateWorkspaceStore
 MAX_EXPORT_ATTEMPTS = 5
 EXPORT_RETRY_BASE_SECONDS = 10
 EXPORT_RETRY_MAX_SECONDS = 600
-ExportTaskSink = Callable[[JobMessage, float], None]
+type ExportTaskSink = Callable[[JobMessage, float], None]
 
-SectionPlanner = Callable[
+type SectionPlanner = Callable[
     [ReasoningThread, Sequence[ReasoningStep], str],
     tuple[ReasonOutputSection, ...],
 ]

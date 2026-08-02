@@ -20,8 +20,8 @@ from nuself.runtime.event_payloads import RuntimeLogEventPayload
 from nuself.runtime.events import EventPublisher
 from nuself.runtime.observability import publish_observed_event
 
-TaskHandler = Callable[["DaemonTask"], object]
-SchedulerPhase = Literal["created", "running", "stopping", "stopped"]
+type TaskHandler = Callable[["DaemonTask"], object]
+type SchedulerPhase = Literal["created", "running", "stopping", "stopped"]
 
 
 class DaemonSchedulerCapacityError(RuntimeError):

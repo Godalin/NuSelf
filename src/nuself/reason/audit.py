@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import Literal
 
 from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
@@ -19,7 +19,7 @@ from nuself.runtime.observability import (
     write_observed_log_event,
 )
 
-ReasonAuditEvent = Literal[
+type ReasonAuditEvent = Literal[
     "proposal_created",
     "thread_started",
     "thread_status_changed",
@@ -60,7 +60,7 @@ ReasonAuditEvent = Literal[
     "export_reconciliation_skip",
     "export_queue_reconciled",
 ]
-ReasonFailureEvent = Literal[
+type ReasonFailureEvent = Literal[
     "trace_recording_failed",
     "scheduler_advance_failed",
     "llm_failover_suppressed_after_tool_call",
@@ -167,9 +167,6 @@ _MESSAGES: dict[ReasonAuditEvent, str] = {
     "export_reconciliation_skip": "Reason export reconciliation skipped job",
     "export_queue_reconciled": "Reason export queue reconciled",
 }
-
-T = TypeVar("T")
-
 
 def _string(metadata: Mapping[str, object], field: str) -> str:
     value = metadata[field]
@@ -651,7 +648,7 @@ def report_reason_failure(
     )
 
 
-def run_reason_observed(
+def run_reason_observed[T](
     operation: Callable[[], T],
     *,
     event: ReasonFailureEvent,

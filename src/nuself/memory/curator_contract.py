@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,8 +14,8 @@ from nuself.memory.model import (
 )
 from nuself.memory.text import looks_like_raw_transcript
 
-MemoryActionType: TypeAlias = Literal["create", "update", "ignore"]
-DecisionStatus: TypeAlias = Literal["ready", "deferred"]
+type MemoryActionType = Literal["create", "update", "ignore"]
+type DecisionStatus = Literal["ready", "deferred"]
 
 
 @dataclass(frozen=True)

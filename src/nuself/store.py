@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable, TypeVar, cast
+from typing import Any, Callable, Iterable, cast
 
 from langgraph.store.base import (
     BaseStore,
@@ -34,9 +34,6 @@ __all__ = [
     "WorkspaceCollection",
 ]
 
-_T = TypeVar("_T")
-
-
 class SqliteStoreLifecycleError(RuntimeError):
     """Retain transaction and connection cleanup failures."""
 
@@ -57,7 +54,7 @@ class SqliteStoreLifecycleError(RuntimeError):
         self.close_error = close_error
 
 
-def _run_transaction(
+def _run_transaction[_T](
     db_path: Path,
     operation: Callable[[sqlite3.Connection], _T],
 ) -> _T:

@@ -10,7 +10,7 @@ from nuself.clock import utc_now_iso
 from nuself.storage import StorageBackend
 
 
-ObservationStatus = Literal["pending", "processed"]
+type ObservationStatus = Literal["pending", "processed"]
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import ParamSpec, Protocol, TypeVar
+from typing import Protocol
 
 from langchain_core.tools import ToolException
 
@@ -16,10 +16,6 @@ from nuself.runtime.frontend import (
     ApprovalRequest,
     RejectUnavailableApprovalPort,
 )
-
-P = ParamSpec("P")
-R = TypeVar("R")
-
 
 @dataclass(frozen=True)
 class FeatureAuditRecord:
@@ -56,7 +52,7 @@ class FeatureExecutor:
         self._events = events
         self._audits = audits
 
-    def invoke(
+    def invoke[**P, R](
         self,
         function: Callable[P, R],
         *args: P.args,

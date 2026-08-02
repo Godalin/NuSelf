@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any
 
 from prompt_toolkit import print_formatted_text
 from prompt_toolkit.formatted_text import ANSI
@@ -16,9 +16,6 @@ from nuself.handles import (
     resolve_visible_handle_selection,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-
-_HandleItem = TypeVar("_HandleItem")
-
 
 def print_ansi(text: str, **kwargs: Any) -> None:
     if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
@@ -34,7 +31,7 @@ def print_json_lines(*entities: object) -> None:
         print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
-def resolve_handle(
+def resolve_handle[_HandleItem](
     value: str,
     items: Sequence[_HandleItem],
     *,
@@ -48,7 +45,7 @@ def resolve_handle(
         return None
 
 
-def resolve_handle_selection(
+def resolve_handle_selection[_HandleItem](
     value: str,
     items: Sequence[_HandleItem],
     *,

@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, cast
 
-LiveProvider = Literal["openai", "anthropic"]
-LiveCapability = Literal[
+type LiveProvider = Literal["openai", "anthropic"]
+type LiveCapability = Literal[
     "transport",
     "structured",
     "chat",

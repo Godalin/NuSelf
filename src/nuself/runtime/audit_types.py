@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-LogLevel = Literal["debug", "info", "warning", "error"]
-LogComponent = Literal[
+type LogLevel = Literal["debug", "info", "warning", "error"]
+type LogComponent = Literal[
     "daemon",
     "chat",
     "memory",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Sequence, TypeVar, cast
+from typing import Callable, Sequence, cast
 
 from nuself.clock import utc_now_iso
 from nuself.reason.model import ReasoningStep, ReasoningThread
@@ -69,8 +69,6 @@ _PROGRESS_FIELDS = frozenset(
         "updated_at",
     }
 )
-_DecodedRecord = TypeVar("_DecodedRecord")
-
 @dataclass(frozen=True)
 class ReasonOutputSection:
     index: int
@@ -109,7 +107,7 @@ class ReasonOutputSection:
         )
 
 
-SectionPlanner = Callable[
+type SectionPlanner = Callable[
     [ReasoningThread, Sequence[ReasoningStep], str],
     tuple[ReasonOutputSection, ...],
 ]
@@ -431,7 +429,7 @@ def _expect_int_tuple(
     return tuple(result)
 
 
-def _expect_object_tuple(
+def _expect_object_tuple[_DecodedRecord](
     data: dict[str, object],
     field_name: str,
     decoder: Callable[[dict[str, object]], _DecodedRecord],

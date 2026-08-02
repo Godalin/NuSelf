@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal, cast
 
-RuntimeLogLevel = Literal["debug", "info", "warning", "error"]
+type RuntimeLogLevel = Literal["debug", "info", "warning", "error"]
 _RUNTIME_LOG_PAYLOAD_FIELDS = frozenset(
     {
         "message",

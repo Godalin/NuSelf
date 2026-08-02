@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, TypeAlias, cast
+from typing import Literal, Protocol, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now_iso
 from nuself.runtime.messages import freeze_json_value, thaw_json_value
 
-MemoryEntryType: TypeAlias = Literal[
+type MemoryEntryType = Literal[
     "source_note",
     "profile_fact",
     "belief",
@@ -24,11 +24,11 @@ MemoryEntryType: TypeAlias = Literal[
     "persona_instruction",
 ]
 
-ReviewState: TypeAlias = Literal["draft", "reviewed", "rejected", "quarantined", "archived"]
-PrivacyLevel: TypeAlias = Literal["private", "shareable"]
-MemoryCandidateAction: TypeAlias = Literal["create", "update", "merge", "delete"]
-MemoryCandidateReviewState: TypeAlias = Literal["pending", "accepted", "rejected"]
-MemoryEvidenceSourceType: TypeAlias = Literal["observation", "manual", "source", "optimizer"]
+type ReviewState = Literal["draft", "reviewed", "rejected", "quarantined", "archived"]
+type PrivacyLevel = Literal["private", "shareable"]
+type MemoryCandidateAction = Literal["create", "update", "merge", "delete"]
+type MemoryCandidateReviewState = Literal["pending", "accepted", "rejected"]
+type MemoryEvidenceSourceType = Literal["observation", "manual", "source", "optimizer"]
 
 
 def new_memory_entry_id() -> str:

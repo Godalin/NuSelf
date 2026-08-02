@@ -5,22 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable
 from threading import Lock
 from types import MappingProxyType
-from typing import Generic, ParamSpec, Protocol, TypeVar
-
-HandlerKey = TypeVar("HandlerKey", bound=Hashable)
-HandlerParams = ParamSpec("HandlerParams")
-HandlerResult = TypeVar("HandlerResult")
-MiddlewareKey = TypeVar(
-    "MiddlewareKey",
-    bound=Hashable,
-    contravariant=True,
-)
-MiddlewareResult = TypeVar("MiddlewareResult")
+from typing import Protocol
 
 
-class HandlerMiddleware(
-    Protocol[MiddlewareKey, HandlerParams, MiddlewareResult]
-):
+class HandlerMiddleware[
+    MiddlewareKey: Hashable,
+    **HandlerParams,
+    MiddlewareResult,
+](Protocol):
     """One typed synchronous wrapper around the next request handler."""
 
     def __call__(
@@ -66,9 +58,7 @@ class UnknownHandlerError(RuntimeError):
     """Raised when dispatch targets an unregistered key."""
 
 
-class HandlerRegistry(
-    Generic[HandlerKey, HandlerParams, HandlerResult]
-):
+class HandlerRegistry[HandlerKey: Hashable, **HandlerParams, HandlerResult]:
     """Maps one key to one callable and seals after composition."""
 
     def __init__(
@@ -217,7 +207,7 @@ class HandlerRegistry(
         return handler(*args, **kwargs)
 
 
-def _wrap_handler(
+def _wrap_handler[HandlerKey: Hashable, **HandlerParams, HandlerResult](
     key: HandlerKey,
     middleware: HandlerMiddleware[
         HandlerKey,

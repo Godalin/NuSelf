@@ -5,6 +5,8 @@ from typing import Literal, get_args
 from nuself.daemon.scheduler import DaemonTask
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 
+# This assignment intentionally remains an evaluated typing expression:
+# ``get_args`` below uses it as the runtime task catalog.
 DaemonTaskKind = Literal[
     "memory.scan",
     "memory.curate",
