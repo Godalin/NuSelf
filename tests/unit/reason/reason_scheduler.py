@@ -127,7 +127,7 @@ def test_run_once_advances_eligible_thread_when_audit_is_unavailable(
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.reason.scheduler.write_reason_audit",
+        "nuself.reason.scheduler.REASON_AUDIT.write",
         drop_audit,
     )
     service = _reason_service(project_root=tmp_path)

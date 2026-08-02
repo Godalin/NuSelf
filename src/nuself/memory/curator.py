@@ -19,8 +19,7 @@ from nuself.memory.model import (
     default_memory_type_registry,
 )
 from nuself.memory.audit import (
-    run_memory_observed,
-    write_memory_audit,
+    MEMORY_AUDIT,
 )
 from nuself.memory.curator_contract import (
     CuratorActionsOutput,
@@ -149,7 +148,7 @@ class MemoryCurator:
             with self._plan_store.exclusive(observation_id):
                 return self._run_once_locked(observation_id)
         except MemoryCuratorPlanLockContended:
-            write_memory_audit(
+            MEMORY_AUDIT.write(
                 "curator_contended",
                 "Memory curator found the source observation busy",
                 project_root=self._paths.authority_root,
@@ -195,7 +194,7 @@ class MemoryCurator:
                 observation,
             )
             if decision.status == "deferred":
-                write_memory_audit(
+                MEMORY_AUDIT.write(
                     "curator_deferred",
                     "Memory curator deferred the source range",
                     project_root=self._paths.authority_root,
@@ -256,7 +255,7 @@ class MemoryCurator:
                 ignored += 1
         self._observations.mark_processed(observation_id)
         self._plan_store.complete(observation_id)
-        write_memory_audit(
+        MEMORY_AUDIT.write(
             "curator_completed",
             "Memory curator processed a source range",
             project_root=self._paths.authority_root,
@@ -408,7 +407,7 @@ class MemoryCurator:
                     candidate,
                     source_trace_id=source_trace_id,
                 )
-                write_memory_audit(
+                MEMORY_AUDIT.write(
                     "candidate_merged",
                     "Memory curator created an update candidate by merging",
                     project_root=self._paths.authority_root,
@@ -444,7 +443,7 @@ class MemoryCurator:
             candidate,
             source_trace_id=source_trace_id,
         )
-        write_memory_audit(
+        MEMORY_AUDIT.write(
             "candidate_created",
             "Memory curator created a candidate",
             project_root=self._paths.authority_root,
@@ -507,7 +506,7 @@ class MemoryCurator:
             candidate,
             source_trace_id=source_trace_id,
         )
-        write_memory_audit(
+        MEMORY_AUDIT.write(
             "candidate_updated",
             "Memory curator created an explicit update candidate",
             project_root=self._paths.authority_root,
@@ -550,7 +549,7 @@ class MemoryCurator:
     ) -> None:
         if not self._settings.auto_accept:
             return
-        result = run_memory_observed(
+        result = MEMORY_AUDIT.observe(
             lambda: self._candidate_repository.accept(
                 candidate.id,
                 target_review_state="reviewed",
@@ -581,7 +580,7 @@ class MemoryCurator:
         action: str,
         source_trace_id: str | None,
     ) -> None:
-        run_memory_observed(
+        MEMORY_AUDIT.observe(
             lambda: self._trace_recorder.record_memory_update(
                 memory_id=entry.id,
                 title=entry.title,

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.clock import utc_now_iso
-from nuself.reason.audit import run_reason_observed, write_reason_audit
+from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.model import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.errors import (
     ReasonAdvanceError,
@@ -120,7 +120,7 @@ class ReasonService:
         )
         saved = self._repository.save_thread(thread)
         workspace = self._workspace_store.paths(thread.id)
-        run_reason_observed(
+        REASON_AUDIT.observe(
             lambda: self._trace_recorder.record_reason_thread_created(
                 thread=saved,
                 source_trace_ids=list(source_trace_ids),
@@ -138,7 +138,7 @@ class ReasonService:
             },
         )
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "thread_started",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
@@ -160,7 +160,7 @@ class ReasonService:
                 f"'{thread.status}', expected 'active'"
             )
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "advance_started",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
@@ -216,7 +216,7 @@ class ReasonService:
         with self._repository.batch_write():
             self._repository.save_step(step)
             self._repository.save_thread(updated)
-        run_reason_observed(
+        REASON_AUDIT.observe(
             lambda: self._trace_recorder.record_reason_step(
                 thread=updated,
                 step=step,
@@ -230,7 +230,7 @@ class ReasonService:
             },
         )
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "advance_completed",
             project_root=self._project_root,
             metadata={
@@ -244,7 +244,7 @@ class ReasonService:
             },
         )
         if final_status != thread.status:
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "terminal_recommendation_applied",
                 project_root=self._project_root,
                 metadata={
@@ -278,7 +278,7 @@ class ReasonService:
             shutil.rmtree(ws.root)
 
         self._repository.delete_thread(thread.id)
-        write_reason_audit(
+        REASON_AUDIT.write(
             "thread_deleted",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
@@ -320,7 +320,7 @@ class ReasonService:
         updated = thread.with_status(new_status)
         self._repository.save_thread(updated)
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "thread_status_changed",
             project_root=self._project_root,
             metadata={"thread_id": thread.id, "from_status": thread.status, "to_status": new_status},

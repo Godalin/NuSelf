@@ -13,16 +13,16 @@ from nuself.runtime.cleanup import (
     cleanup_failure_records,
 )
 from nuself.storage_audit import (
-    STORAGE_OPERATIONS_AUDIT_REGISTRY,
+    STORAGE_OPERATIONS_AUDIT,
     report_backend_close_failure,
     report_cli_cleanup_failure,
 )
 
 
 def test_storage_operations_registry_is_complete_and_sealed() -> None:
-    assert len(STORAGE_OPERATIONS_AUDIT_REGISTRY.definitions) == 2
+    assert len(STORAGE_OPERATIONS_AUDIT.registry.definitions) == 2
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        STORAGE_OPERATIONS_AUDIT_REGISTRY.register(
+        STORAGE_OPERATIONS_AUDIT.registry.register(
             AuditEventDefinition(
                 component="storage",
                 event="storage_extra",

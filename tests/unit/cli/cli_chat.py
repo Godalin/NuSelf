@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -422,7 +423,7 @@ def test_daemon_success_survives_uncertain_completion_audit(
     def drop_audit(*args: object, **kwargs: object) -> None:
         del args, kwargs
 
-    monkeypatch.setattr(chat, "write_chat_audit", drop_audit)
+    monkeypatch.setattr(chat, "CHAT_AUDIT", SimpleNamespace(write=drop_audit))
 
     result = chat.send_daemon_chat_interactive(
         "hello",
@@ -605,7 +606,7 @@ def test_one_shot_success_survives_uncertain_completion_audit(
     def drop_audit(*args: object, **kwargs: object) -> None:
         del args, kwargs
 
-    monkeypatch.setattr(chat, "write_chat_audit", drop_audit)
+    monkeypatch.setattr(chat, "CHAT_AUDIT", SimpleNamespace(write=drop_audit))
 
     result = chat.send_one_shot_chat_interactive(
         "hello",

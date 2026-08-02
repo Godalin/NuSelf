@@ -31,7 +31,7 @@ from nuself.reason.model import (
     StepKind,
     TerminalStatus,
 )
-from nuself.reason.audit import report_reason_failure
+from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.runtime.context import current_runtime_context, runtime_context
@@ -291,7 +291,7 @@ class ReasonAdvancer:
                         )
                     except Exception as exc:
                         if self._captured:
-                            report_reason_failure(
+                            REASON_AUDIT.failure(
                                 exc,
                                 event=(
                                     "llm_failover_suppressed_after_tool_call"
@@ -336,7 +336,7 @@ class ReasonAdvancer:
                     tool_logs=step_tool_logs,
                 )
             except Exception as exc:
-                report_reason_failure(
+                REASON_AUDIT.failure(
                     exc,
                     event="advance_failed",
                     project_root=self._project_root,

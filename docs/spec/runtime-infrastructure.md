@@ -718,8 +718,11 @@ duplicate rejection, explicit sealing, lookup, and immutable definition
 snapshots for any hashable key. `EventDefinitionRegistry` is a semantic adapter
 using `(producer, name)` keys; `AuditDefinitionRegistry` is the shared adapter
 for direct persisted audits using `(component, event)` keys. Domains retain
-their own identity taxonomies, metadata validators, messages, and delivery
-functions rather than defining parallel registry mechanics.
+their own identity taxonomies, metadata validators, and messages rather than
+defining parallel registry or delivery mechanics. A domain instantiates one
+sealed `AuditCatalog` from those declarations. The catalog owns definition
+lookup plus the shared write, caught-failure, and best-effort execution paths;
+it is not an event bus and never discovers handlers dynamically.
 
 `resolve()` is a runtime operation and rejects an unsealed
 `DefinitionRegistry`; composition code uses registration and immutable

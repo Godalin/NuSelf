@@ -7,16 +7,15 @@ from pathlib import Path
 from typing import cast
 
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
+from nuself.runtime.auditing import AuditCatalog
 from nuself.runtime.cleanup import (
     CleanupFailure,
     cleanup_failure_records,
 )
-from nuself.runtime.observability import report_defined_failure
 
 
 def _shutdown_cleanup(metadata: Mapping[str, object]) -> None:
@@ -53,9 +52,8 @@ def _shutdown_cleanup(metadata: Mapping[str, object]) -> None:
                 )
 
 
-def _build_registry() -> AuditDefinitionRegistry:
-    registry = AuditDefinitionRegistry()
-    registry.register(
+def _definitions() -> tuple[AuditEventDefinition, ...]:
+    return (
         AuditEventDefinition(
             component="daemon",
             event="shutdown_cleanup_failed",
@@ -63,12 +61,14 @@ def _build_registry() -> AuditDefinitionRegistry:
             status="error",
             error_policy="required",
             metadata_validator=_shutdown_cleanup,
-        )
+        ),
     )
-    return registry.seal()
 
 
-DAEMON_OPERATIONS_AUDIT_REGISTRY = _build_registry()
+DAEMON_OPERATIONS_AUDIT = AuditCatalog[str](
+    _definitions(),
+    {"shutdown_cleanup_failed": "Daemon lifecycle cleanup failed"},
+)
 
 
 def report_shutdown_cleanup_failure(
@@ -84,14 +84,9 @@ def report_shutdown_cleanup_failure(
         "failures": cleanup_failure_records(failures),
         "primary_failed": primary_failed,
     }
-    definition = DAEMON_OPERATIONS_AUDIT_REGISTRY.resolve(
-        "daemon",
-        "shutdown_cleanup_failed",
-    )
-    report_defined_failure(
+    DAEMON_OPERATIONS_AUDIT.failure(
         exc,
-        definition=definition,
-        message="Daemon lifecycle cleanup failed",
+        event="shutdown_cleanup_failed",
         project_root=project_root,
         metadata=metadata,
     )

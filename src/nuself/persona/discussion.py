@@ -29,7 +29,7 @@ from nuself.persona.graph import (
     AgentBackedSynthesizerNode,
     PersonaGraphDriver,
 )
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 
 type DiscussionTraceSink = Callable[[str], None]
 
@@ -168,7 +168,7 @@ class AgentBackedScoringPersonaNode:
         try:
             output = self._agent.invoke(messages)
         except AgentError as exc:
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_degraded",
                 project_root=self._project_root,
@@ -396,7 +396,7 @@ class ProactivePersonaDiscussion:
             output = self._agents.selection.invoke(messages)
             selected_ids = output.selected_persona_ids
         except AgentError as exc:
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_degraded",
                 project_root=self._project_root,
@@ -511,7 +511,7 @@ class ProactivePersonaDiscussion:
         try:
             return self._agents.moderator.invoke(messages)
         except AgentError as exc:
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_degraded",
                 project_root=self._project_root,

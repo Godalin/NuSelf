@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal, Protocol
 
 from nuself.cli.output import print_ansi
-from nuself.agent.chat.audit import report_chat_failure
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.cli.exit_codes import CliExitCode
 from nuself.daemon import client
@@ -72,7 +72,7 @@ def _report_activity_transport_degraded(
                 ),
             }
         )
-    report_chat_failure(
+    CHAT_AUDIT.failure(
         exc,
         event="activity_transport_degraded",
         project_root=project_root,
@@ -160,7 +160,7 @@ def run_live_activity_send(
             try:
                 send_call.cancel()
             except Exception as cancellation_error:
-                report_chat_failure(
+                CHAT_AUDIT.failure(
                     cancellation_error,
                     event="interactive_send_failed",
                     project_root=project_root,
@@ -205,7 +205,7 @@ def run_live_activity_send(
         )
     if isinstance(outcome.error, Exception):
         error = outcome.error
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             error,
             event="interactive_send_failed",
             project_root=project_root,

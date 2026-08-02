@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from pathlib import Path
+from collections.abc import Mapping
 from typing import Literal, cast
 
-from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata as _exact,
 )
-from nuself.runtime.observability import (
-    report_defined_failure,
-    run_observed_best_effort,
-    write_observed_log_event,
-)
+from nuself.runtime.auditing import AuditCatalog
 
 type ChatAuditEvent = Literal[
     "daemon_chat_completed",
@@ -155,7 +148,7 @@ def _cleanup(metadata: Mapping[str, object]) -> None:
     _bool(metadata, "primary_failed")
 
 
-def _build_registry() -> AuditDefinitionRegistry:
+def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition("chat", "daemon_chat_completed", "info", "ok"),
         AuditEventDefinition(
@@ -222,13 +215,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required", metadata_validator=_cleanup,
         ),
     )
-    registry = AuditDefinitionRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
-
-
-CHAT_AUDIT_REGISTRY = _build_registry()
+    return definitions
 
 _MESSAGES: dict[ChatAuditEvent, str] = {
     "daemon_chat_completed": "daemon chat request completed",
@@ -254,80 +241,4 @@ _MESSAGES: dict[ChatAuditEvent, str] = {
 }
 
 
-def write_chat_audit(
-    event: ChatAuditEvent,
-    *,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-    conversation_id: str | None = None,
-    request_id: str | None = None,
-) -> LogEvent | None:
-    definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
-    event_metadata = metadata or {}
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=None,
-        metadata=event_metadata,
-    )
-    return write_observed_log_event(
-        definition.component,
-        definition.event,
-        _MESSAGES[event],
-        project_root=project_root,
-        level=definition.level,
-        status=definition.status,
-        metadata=dict(event_metadata),
-        conversation_id=conversation_id,
-        request_id=request_id,
-    )
-
-
-def report_chat_failure(
-    exc: Exception,
-    *,
-    event: ChatAuditEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
-    event_metadata = metadata or {}
-    report_defined_failure(
-        exc,
-        definition=definition,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-    )
-
-
-def run_chat_observed[T](
-    operation: Callable[[], T],
-    *,
-    event: ChatAuditEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-    errors: tuple[type[Exception], ...] = (Exception,),
-) -> T | None:
-    definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
-    event_metadata = metadata or {}
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError("Chat failure audit requires status")
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error="caught failure",
-        metadata=event_metadata,
-    )
-    return run_observed_best_effort(
-        operation,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-        errors=errors,
-        level=definition.level,
-        status=status,
-    )
+CHAT_AUDIT = AuditCatalog[ChatAuditEvent](_definitions(), _MESSAGES)

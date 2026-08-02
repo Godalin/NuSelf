@@ -8,8 +8,7 @@ from pathlib import Path
 
 from nuself.notification.model import OutboxEntry
 from nuself.notification.audit import (
-    report_notification_failure,
-    write_notification_audit,
+    NOTIFICATION_AUDIT,
 )
 
 
@@ -28,7 +27,7 @@ class MacOSNotificationAdapter:
 
     def send(self, entry: OutboxEntry) -> bool:
         if self._dry_run or not self._has_osascript:
-            write_notification_audit(
+            NOTIFICATION_AUDIT.write_strict(
                 "macos_dry_run" if self._dry_run else "macos_unavailable",
                 project_root=self._project_root,
                 metadata={
@@ -52,7 +51,7 @@ class MacOSNotificationAdapter:
             )
         except subprocess.TimeoutExpired:
             # A hung osascript must not block the notification-delivery thread.
-            report_notification_failure(
+            NOTIFICATION_AUDIT.failure(
                 TimeoutError("osascript timed out"),
                 event="macos_failed",
                 project_root=self._project_root,
@@ -63,7 +62,7 @@ class MacOSNotificationAdapter:
             )
             return False
         if result.returncode != 0:
-            report_notification_failure(
+            NOTIFICATION_AUDIT.failure(
                 RuntimeError(
                     result.stderr.strip() or "osascript failed"
                 ),

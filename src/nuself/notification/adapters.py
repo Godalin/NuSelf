@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from nuself.notification.audit import write_notification_audit
+from nuself.notification.audit import NOTIFICATION_AUDIT
 from nuself.notification.model import OutboxEntry
 
 
@@ -28,7 +28,7 @@ class LogOnlyNotificationAdapter:
         self._project_root = project_root
 
     def send(self, entry: OutboxEntry) -> bool:
-        write_notification_audit(
+        NOTIFICATION_AUDIT.write_strict(
             "outbox_delivered",
             project_root=self._project_root,
             metadata={

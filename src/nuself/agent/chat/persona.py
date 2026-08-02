@@ -24,8 +24,7 @@ from nuself.persona.graph import (
     persona_graph_agents,
 )
 from nuself.persona.audit import (
-    report_persona_failure,
-    write_persona_audit,
+    PERSONA_AUDIT,
 )
 from nuself.runtime.context import current_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -124,7 +123,7 @@ class ConversationPersonaOrchestrator:
         )
         updated_turn_state = self._persona_driver.run(turn_state)
         trigger = activation.trigger or "selves_consult"
-        write_persona_audit(
+        PERSONA_AUDIT.write(
             "persona_summary",
             project_root=self._project_root,
             conversation_id=conversation_id,
@@ -141,7 +140,7 @@ class ConversationPersonaOrchestrator:
             "competitive",
         }
         should_escalate = activation.should_escalate or force_discussion
-        write_persona_audit(
+        PERSONA_AUDIT.write(
             "host_discussion_decision",
             project_root=self._project_root,
             conversation_id=conversation_id,
@@ -177,7 +176,7 @@ class ConversationPersonaOrchestrator:
             nonlocal step_number
             del entry
             step_number += 1
-            write_persona_audit(
+            PERSONA_AUDIT.write(
                 "persona_discussion_step",
                 project_root=self._project_root,
                 conversation_id=conversation_id,
@@ -203,7 +202,7 @@ class ConversationPersonaOrchestrator:
                 candidate,
                 on_trace_entry=record_step,
             )
-            write_persona_audit(
+            PERSONA_AUDIT.write(
                 "persona_discussion",
                 project_root=self._project_root,
                 conversation_id=conversation_id,
@@ -222,7 +221,7 @@ class ConversationPersonaOrchestrator:
             if not is_recoverable_agent_failure(exc):
                 raise
             error = diagnostic_exception_message(exc)
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_failure",
                 project_root=self._project_root,

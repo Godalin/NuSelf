@@ -61,7 +61,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
 def test_chat_registry_owns_complete_direct_taxonomy() -> None:
     assert {
         definition.event
-        for definition in audit.CHAT_AUDIT_REGISTRY.definitions
+        for definition in audit.CHAT_AUDIT.registry.definitions
     } == {event for event, _ in _CANONICAL}
 
 
@@ -70,7 +70,7 @@ def test_chat_definitions_accept_canonical_payloads(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.CHAT_AUDIT_REGISTRY.resolve("chat", event)
+    definition = audit.CHAT_AUDIT.registry.resolve("chat", event)
     definition.validate(
         level=definition.level,
         status=definition.status,
@@ -88,7 +88,7 @@ def test_chat_definitions_reject_private_or_unknown_metadata(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.CHAT_AUDIT_REGISTRY.resolve("chat", event)
+    definition = audit.CHAT_AUDIT.registry.resolve("chat", event)
     with pytest.raises(AuditSchemaError, match="metadata"):
         definition.validate(
             level=definition.level,
@@ -112,9 +112,12 @@ def test_chat_audit_rejects_unknown_event_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_observed_log_event",
+        unexpected_sink,
+    )
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_chat_audit(
+        audit.CHAT_AUDIT.write(
             cast(audit.ChatAuditEvent, "daemon_chat_compeleted"),
             project_root=tmp_path,
         )
@@ -137,7 +140,7 @@ def test_chat_retry_rejects_endpoint_url_before_sink(
         unexpected_sink,
     )
     with pytest.raises(AuditSchemaError, match="metadata"):
-        audit.report_chat_failure(
+        audit.CHAT_AUDIT.failure(
             RuntimeError("provider failed"),
             event="llm_endpoint_retry",
             project_root=tmp_path,

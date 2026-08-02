@@ -157,9 +157,9 @@ def _anthropic_sdk_base_url(base_url: str) -> str:
 
 def record_llm_endpoint_success(project_root: Path | None, endpoint_index: int) -> None:
     """Remember the last successful configured LLM endpoint."""
-    from nuself.agent.chat.audit import run_chat_observed
+    from nuself.agent.chat.audit import CHAT_AUDIT
 
-    run_chat_observed(
+    CHAT_AUDIT.observe(
         lambda: _save_llm_state(project_root, endpoint_index),
         event="llm_endpoint_state_write_failed",
         project_root=project_root,

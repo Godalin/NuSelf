@@ -13,7 +13,7 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate, RelevanceScore
 from nuself.llm import LangChainLLMEndpoint
-from nuself.reflection.audit import report_reflection_failure, write_reflection_audit
+from nuself.reflection.audit import REFLECTION_AUDIT
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -85,7 +85,7 @@ class LLMRelevanceGate:
         cooldown_ok: bool,
         error: AgentError | ValueError,
     ) -> RelevanceScore:
-        write_reflection_audit(
+        REFLECTION_AUDIT.write(
             "relevance_gate_fallback",
             "Relevance agent failed, using fallback: "
             f"{diagnostic_exception_message(error)}",
@@ -106,7 +106,7 @@ class LLMRelevanceGate:
         try:
             state = self._repository.schedule_state()
         except ReflectionScheduleStateError as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="schedule_state_corrupt",
                 message=(

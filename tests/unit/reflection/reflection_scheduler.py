@@ -399,7 +399,7 @@ def test_reflect_result_survives_unavailable_auxiliary_logs(
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_reflection_audit",
+        "nuself.reflection.scheduler.REFLECTION_AUDIT.write",
         drop_log,
     )
     assert scheduler.reflect(datetime(2024, 1, 1, 12, tzinfo=UTC)) is True
@@ -432,7 +432,7 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
         fail_log,
     )
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_reflection_audit",
+        "nuself.reflection.scheduler.REFLECTION_AUDIT.write",
         drop_cycle_log,
     )
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)

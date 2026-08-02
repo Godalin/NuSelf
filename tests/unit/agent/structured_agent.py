@@ -10,7 +10,6 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict
 
-from nuself.agent import endpoint_audit
 from nuself.agent import failover as failover_module
 from nuself.agent import structured as structured_module
 from nuself.agent.errors import (
@@ -189,8 +188,7 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         create_agent,
     )
     monkeypatch.setattr(
-        endpoint_audit,
-        "report_defined_failure",
+        "nuself.runtime.auditing.report_defined_failure",
         report_failure,
     )
     monkeypatch.setattr(

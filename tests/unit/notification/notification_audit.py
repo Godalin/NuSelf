@@ -25,7 +25,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
 def test_notification_registry_owns_complete_taxonomy() -> None:
     assert {
         definition.event
-        for definition in audit.NOTIFICATION_AUDIT_REGISTRY.definitions
+        for definition in audit.NOTIFICATION_AUDIT.registry.definitions
     } == {event for event, _ in _CANONICAL}
 
 
@@ -34,7 +34,7 @@ def test_notification_definitions_accept_canonical_payloads(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.NOTIFICATION_AUDIT_REGISTRY.resolve("outbox", event)
+    definition = audit.NOTIFICATION_AUDIT.registry.resolve("outbox", event)
 
     definition.validate(
         level=definition.level,
@@ -53,7 +53,7 @@ def test_notification_definitions_reject_private_or_unknown_metadata(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.NOTIFICATION_AUDIT_REGISTRY.resolve("outbox", event)
+    definition = audit.NOTIFICATION_AUDIT.registry.resolve("outbox", event)
 
     with pytest.raises(AuditSchemaError, match="metadata"):
         definition.validate(
@@ -78,11 +78,14 @@ def test_notification_audit_rejects_unknown_event_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_notification_audit(
-            cast(audit.NotificationSuccessEvent, "outbox_deliverd"),
+        audit.NOTIFICATION_AUDIT.write_strict(
+            cast(audit.NotificationAuditEvent, "outbox_deliverd"),
             project_root=tmp_path,
             metadata={"entry_id": "entry-1", "attempt": 0},
         )
@@ -100,10 +103,13 @@ def test_notification_audit_rejects_sensitive_metadata_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(AuditSchemaError, match="metadata"):
-        audit.write_notification_audit(
+        audit.NOTIFICATION_AUDIT.write_strict(
             "outbox_delivered",
             project_root=tmp_path,
             metadata={

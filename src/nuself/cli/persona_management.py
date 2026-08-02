@@ -12,7 +12,7 @@ from nuself.cli.output import (
 from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
-from nuself.persona.audit import run_persona_observed
+from nuself.persona.audit import PERSONA_AUDIT
 from nuself.persona.prompt_repo import PersonaPrompt, create_persona_prompt
 from nuself.trace.service import TraceRecorder
 from nuself.tui.render import TerminalTheme
@@ -205,7 +205,7 @@ def _record_lifecycle(
             participants=["cli"],
         )
 
-    run_persona_observed(
+    PERSONA_AUDIT.observe(
         record,
         event="trace_recording_failed",
         project_root=project_root,

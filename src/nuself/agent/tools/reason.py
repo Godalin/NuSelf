@@ -17,7 +17,7 @@ from nuself.decorators import (
     tool,
 )
 from nuself.handles import VisibleHandleError, parse_visible_index
-from nuself.reason.audit import write_reason_audit
+from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output import ReasonOutputService
@@ -265,7 +265,7 @@ def build_reason_tools(
         topic = topic.strip()
         if not topic:
             return "Error: topic must be a non-empty string"
-        write_reason_audit(
+        REASON_AUDIT.write(
             "proposal_created",
             project_root=project_root,
             metadata={

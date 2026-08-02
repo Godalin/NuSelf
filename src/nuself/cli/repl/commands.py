@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.chat.audit import report_chat_failure
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.cli.daemon_lifecycle import (
     restart_daemon_observed,
 )
@@ -27,7 +27,7 @@ from nuself.memory.repository import (
 from nuself.memory.source_repository import (
     SourceDocumentNotFound,
 )
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.runtime.diagnostics import (
@@ -329,7 +329,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
         return interactive_persona_help(command)
     except Exception as exc:
         action = command.split(maxsplit=1)[0] if command else "list"
-        report_persona_failure(
+        PERSONA_AUDIT.failure(
             exc,
             event="interactive_command_failed",
             project_root=project_root,
@@ -418,7 +418,7 @@ def handle_interactive_history_command(project_root: Path | None, conversation_i
             conversation_id
         )
     except Exception as exc:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             exc,
             event="interactive_history_load_failed",
             project_root=project_root,

@@ -6,7 +6,7 @@ import pytest
 
 from nuself.agent import endpoint_audit
 from nuself.agent.endpoint_audit import (
-    AGENT_ENDPOINT_AUDIT_REGISTRY,
+    AGENT_ENDPOINT_AUDIT,
     report_agent_endpoint_failure,
 )
 from nuself.runtime.audit_definitions import (
@@ -20,7 +20,7 @@ from nuself.runtime.audit_definitions import (
 def test_agent_endpoint_audit_registry_is_complete_and_sealed() -> None:
     identities = {
         (definition.component, definition.event)
-        for definition in AGENT_ENDPOINT_AUDIT_REGISTRY.definitions
+        for definition in AGENT_ENDPOINT_AUDIT.registry.definitions
     }
 
     assert len(identities) == 10
@@ -33,14 +33,14 @@ def test_agent_endpoint_audit_registry_is_complete_and_sealed() -> None:
         )
     }
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        AGENT_ENDPOINT_AUDIT_REGISTRY.register(
-            AGENT_ENDPOINT_AUDIT_REGISTRY.definitions[0]
+        AGENT_ENDPOINT_AUDIT.registry.register(
+            AGENT_ENDPOINT_AUDIT.registry.definitions[0]
         )
 
 
 def test_agent_endpoint_audit_rejects_unowned_component() -> None:
     with pytest.raises(UnknownAuditDefinitionError):
-        AGENT_ENDPOINT_AUDIT_REGISTRY.resolve(
+        AGENT_ENDPOINT_AUDIT.registry.resolve(
             "daemon",
             "llm_endpoint_failed_over",
         )
@@ -62,7 +62,7 @@ def test_agent_endpoint_audit_rejects_unowned_component() -> None:
 def test_agent_endpoint_audit_rejects_unsafe_metadata(
     metadata: dict[str, object],
 ) -> None:
-    definition = AGENT_ENDPOINT_AUDIT_REGISTRY.resolve(
+    definition = AGENT_ENDPOINT_AUDIT.registry.resolve(
         "memory",
         "llm_endpoint_failed_over",
     )
@@ -110,8 +110,7 @@ def test_agent_endpoint_failure_uses_fixed_safe_projection(
         calls.append((exc, kwargs))
 
     monkeypatch.setattr(
-        endpoint_audit,
-        "report_defined_failure",
+        "nuself.runtime.auditing.report_defined_failure",
         report_failure,
     )
 

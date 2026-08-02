@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -147,7 +148,11 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     def drop_audit(*args: object, **kwargs: object) -> None:
         del args, kwargs
 
-    monkeypatch.setattr(turns, "write_chat_audit", drop_audit)
+    monkeypatch.setattr(
+        turns,
+        "CHAT_AUDIT",
+        SimpleNamespace(write=drop_audit),
+    )
 
     result = send_interactive_chat_turn(
         send,

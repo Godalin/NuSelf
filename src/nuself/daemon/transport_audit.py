@@ -7,13 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
+from nuself.runtime.auditing import AuditCatalog
 from nuself.runtime.context import runtime_context
-from nuself.runtime.observability import report_defined_failure
 
 type DaemonTransportAuditEvent = Literal[
     "request_transport_failed",
@@ -59,27 +58,22 @@ def _response_delivery(metadata: Mapping[str, object]) -> None:
         )
 
 
-def _build_registry() -> AuditDefinitionRegistry:
-    registry = AuditDefinitionRegistry()
-    registry.register(
+def _definitions() -> tuple[AuditEventDefinition, ...]:
+    return (
         AuditEventDefinition(
             component="daemon",
             event="request_transport_failed",
             level="warning",
             status="error",
             error_policy="required",
-        )
-    )
-    registry.register(
+        ),
         AuditEventDefinition(
             component="daemon",
             event="request_failed",
             level="error",
             status="error",
             error_policy="required",
-        )
-    )
-    registry.register(
+        ),
         AuditEventDefinition(
             component="daemon",
             event="response_encode_failed",
@@ -87,9 +81,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             status="error",
             error_policy="required",
             metadata_validator=_response_encode,
-        )
-    )
-    registry.register(
+        ),
         AuditEventDefinition(
             component="daemon",
             event="response_delivery_failed",
@@ -97,12 +89,14 @@ def _build_registry() -> AuditDefinitionRegistry:
             status="error",
             error_policy="required",
             metadata_validator=_response_delivery,
-        )
+        ),
     )
-    return registry.seal()
 
 
-DAEMON_TRANSPORT_AUDIT_REGISTRY = _build_registry()
+DAEMON_TRANSPORT_AUDIT = AuditCatalog[DaemonTransportAuditEvent](
+    _definitions(),
+    _MESSAGES,
+)
 
 
 def report_daemon_transport_failure(
@@ -115,18 +109,15 @@ def report_daemon_transport_failure(
 ) -> None:
     """Validate and report one daemon socket transport failure."""
 
-    definition = DAEMON_TRANSPORT_AUDIT_REGISTRY.resolve("daemon", event)
-    event_metadata = metadata or {}
     context = (
         runtime_context(request_id=request_id, source="daemon")
         if request_id is not None
         else runtime_context(source="daemon")
     )
     with context:
-        report_defined_failure(
+        DAEMON_TRANSPORT_AUDIT.failure(
             exc,
-            definition=definition,
-            message=_MESSAGES[event],
+            event=event,
             project_root=project_root,
-            metadata=dict(event_metadata),
+            metadata=metadata,
         )

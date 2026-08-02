@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from nuself.daemon.request_audit import (
-    DAEMON_REQUEST_AUDIT_REGISTRY,
+    DAEMON_REQUEST_AUDIT,
     report_daemon_request_failure,
     write_daemon_request_audit,
 )
@@ -16,9 +16,9 @@ from nuself.runtime.audit_definitions import (
 
 
 def test_daemon_request_audit_registry_is_complete_and_sealed() -> None:
-    assert len(DAEMON_REQUEST_AUDIT_REGISTRY.definitions) == 4
+    assert len(DAEMON_REQUEST_AUDIT.registry.definitions) == 4
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        DAEMON_REQUEST_AUDIT_REGISTRY.register(
+        DAEMON_REQUEST_AUDIT.registry.register(
             AuditEventDefinition(
                 component="daemon",
                 event="request_extra",

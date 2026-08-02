@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from pathlib import Path
+from collections.abc import Mapping
 from typing import Literal
 
-from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata as _require_exact,
 )
-from nuself.runtime.observability import (
-    report_defined_failure,
-    run_observed_best_effort,
-    write_observed_log_event,
-)
+from nuself.runtime.auditing import AuditCatalog
 
 type MemoryAuditEvent = Literal[
     "curator_contended",
@@ -35,15 +28,7 @@ type MemoryAuditEvent = Literal[
     "post_chat_curation_failed",
     "chat_trace_recording_failed",
 ]
-type MemoryFailureEvent = Literal[
-    "auto_accept_failed",
-    "trace_recording_failed",
-    "curator_failed",
-    "post_chat_curation_failed",
-    "chat_trace_recording_failed",
-]
-
-_FAILURE_MESSAGES: dict[MemoryFailureEvent, str] = {
+_FAILURE_MESSAGES: dict[MemoryAuditEvent, str] = {
     "auto_accept_failed": "Memory candidate auto-accept failed",
     "trace_recording_failed": "Memory trace recording failed",
     "curator_failed": "Memory curator failed",
@@ -187,7 +172,7 @@ def _trace_failed(metadata: Mapping[str, object]) -> None:
         raise AuditSchemaError("memory trace action is invalid")
 
 
-def _build_registry() -> AuditDefinitionRegistry:
+def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition(
             "memory", "curator_contended", "info", "deferred",
@@ -248,93 +233,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required",
         ),
     )
-    registry = AuditDefinitionRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
+    return definitions
 
 
-MEMORY_AUDIT_REGISTRY = _build_registry()
-
-
-def write_memory_audit(
-    event: MemoryAuditEvent,
-    message: str,
-    *,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> LogEvent | None:
-    """Validate and project one memory-domain audit."""
-
-    definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
-    event_metadata = metadata or {}
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=None,
-        metadata=event_metadata,
-    )
-    return write_observed_log_event(
-        definition.component,
-        definition.event,
-        message,
-        project_root=project_root,
-        level=definition.level,
-        status=definition.status,
-        metadata=dict(event_metadata),
-    )
-
-
-def run_memory_observed[T](
-    operation: Callable[[], T],
-    *,
-    event: MemoryFailureEvent,
-    project_root: Path | None,
-    metadata: dict[str, object],
-    errors: tuple[type[Exception], ...] = (Exception,),
-) -> T | None:
-    """Run one secondary curation effect under a registered failure schema."""
-
-    definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error="caught failure",
-        metadata=metadata,
-    )
-    return run_observed_best_effort(
-        operation,
-        component=definition.component,
-        event=definition.event,
-        message=_FAILURE_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(metadata),
-        errors=errors,
-        level=definition.level,
-        status=status,
-    )
-
-
-def report_memory_failure(
-    exc: Exception,
-    *,
-    event: MemoryFailureEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Validate and report one caught Memory-owned failure."""
-
-    definition = MEMORY_AUDIT_REGISTRY.resolve("memory", event)
-    event_metadata = metadata or {}
-    report_defined_failure(
-        exc,
-        definition=definition,
-        message=_FAILURE_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-    )
+MEMORY_AUDIT = AuditCatalog[MemoryAuditEvent](_definitions(), _FAILURE_MESSAGES)

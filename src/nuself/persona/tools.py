@@ -16,7 +16,7 @@ from nuself.config import RuntimePaths
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature_execution import FeatureExecutor
-from nuself.persona.audit import run_persona_observed
+from nuself.persona.audit import PERSONA_AUDIT
 from nuself.store import ScopedWorkspace, WorkspaceCollection
 from nuself.trace.service import TraceRecorder
 
@@ -218,7 +218,7 @@ def _record_prompt_trace(
             name=prompt.name,
         )
 
-    run_persona_observed(
+    PERSONA_AUDIT.observe(
         record,
         event="trace_recording_failed",
         project_root=project_root,
@@ -239,7 +239,7 @@ def _record_prompt_disabled_trace(
             participants=["agent"],
         )
 
-    run_persona_observed(
+    PERSONA_AUDIT.observe(
         record,
         event="trace_recording_failed",
         project_root=project_root,
@@ -260,7 +260,7 @@ def _record_prompt_enabled_trace(
             participants=["agent"],
         )
 
-    run_persona_observed(
+    PERSONA_AUDIT.observe(
         record,
         event="trace_recording_failed",
         project_root=project_root,

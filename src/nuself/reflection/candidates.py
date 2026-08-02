@@ -19,7 +19,7 @@ from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.reflection.audit import report_reflection_failure, write_reflection_audit
+from nuself.reflection.audit import REFLECTION_AUDIT
 
 
 class CandidateItemOutput(BaseModel):
@@ -80,7 +80,7 @@ class IdeaCandidateGenerator:
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
         context = self._collect_context()
         if context.is_empty():
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "candidate_generation_skipped",
                 "no context available for idea generation",
                 project_root=self._project_root,
@@ -90,7 +90,7 @@ class IdeaCandidateGenerator:
         try:
             output = self._agent.invoke(self._messages(context))
         except AgentError as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="candidate_generation_failed",
                 message=f"failed to generate candidates: {type(exc).__name__}",
@@ -101,7 +101,7 @@ class IdeaCandidateGenerator:
         try:
             candidates = self._convert(output, max_candidates)
         except ValueError as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="candidate_generation_failed",
                 message=f"failed to generate candidates: {type(exc).__name__}",
@@ -110,7 +110,7 @@ class IdeaCandidateGenerator:
             )
             return []
         if not candidates:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "cycle_no_candidates",
                 "reflection cycle generated no candidates",
                 project_root=self._project_root,

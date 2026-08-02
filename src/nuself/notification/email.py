@@ -10,8 +10,7 @@ from pathlib import Path
 from nuself.config import EmailConfig
 from nuself.notification.model import OutboxEntry
 from nuself.notification.audit import (
-    report_notification_failure,
-    write_notification_audit,
+    NOTIFICATION_AUDIT,
 )
 from nuself.notification.deep_link import DeepLink
 
@@ -34,7 +33,7 @@ class EmailNotificationAdapter:
 
     def send(self, entry: OutboxEntry) -> bool:
         if self._dry_run:
-            write_notification_audit(
+            NOTIFICATION_AUDIT.write_strict(
                 "email_dry_run",
                 project_root=self._project_root,
                 metadata={
@@ -45,7 +44,7 @@ class EmailNotificationAdapter:
             return True
 
         if not self._config.enabled:
-            report_notification_failure(
+            NOTIFICATION_AUDIT.failure(
                 RuntimeError("email notification is disabled"),
                 event="email_no_config",
                 project_root=self._project_root,
@@ -66,7 +65,7 @@ class EmailNotificationAdapter:
                     server.login(smtp.username, smtp.password)
                 server.send_message(msg)
         except (OSError, ValueError, smtplib.SMTPException) as exc:
-            report_notification_failure(
+            NOTIFICATION_AUDIT.failure(
                 exc,
                 event="email_failed",
                 project_root=self._project_root,

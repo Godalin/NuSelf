@@ -10,8 +10,7 @@ from nuself.config import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate, RelevanceScore
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.audit import (
-    report_reflection_failure,
-    write_reflection_audit,
+    REFLECTION_AUDIT,
 )
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.schedule_state import (
@@ -118,7 +117,7 @@ class ReflectionScheduler:
         
         block_reason = self._schedule_block_reason(now)
         if block_reason is not None:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "schedule_blocked",
                 "reflection cycle skipped by schedule limits",
                 project_root=self._project_root,
@@ -126,7 +125,7 @@ class ReflectionScheduler:
             )
             return False
         
-        write_reflection_audit(
+        REFLECTION_AUDIT.write(
             "cycle_started",
             "reflection cycle triggered",
             project_root=self._project_root,
@@ -141,7 +140,7 @@ class ReflectionScheduler:
         best = candidates[0]
         score = self._relevance_gate.score(best)
         if not score.passes:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "cycle_filtered",
                 f"best candidate filtered by relevance gate: {best.title}",
                 project_root=self._project_root,
@@ -159,7 +158,7 @@ class ReflectionScheduler:
             discussion_approved = result.approved
             discussion_trace = result.discussion_trace
             if not result.approved:
-                write_reflection_audit(
+                REFLECTION_AUDIT.write(
                     "cycle_discussion_rejected",
                     f"persona discussion rejected candidate: {best.title}",
                     project_root=self._project_root,
@@ -202,7 +201,7 @@ class ReflectionScheduler:
                 decision_points=decision_points,
             )
         except Exception as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="trace_recording_failed",
                 message="Failed to record trace for persisted reflection",
@@ -215,7 +214,7 @@ class ReflectionScheduler:
         if self._config.auto_notify:
             self._publish_notification(entry)
 
-        write_reflection_audit(
+        REFLECTION_AUDIT.write(
             "cycle_completed",
             f"reflection cycle published: {title}",
             project_root=self._project_root,
@@ -228,7 +227,7 @@ class ReflectionScheduler:
         try:
             self._organizer.organize_pending()
         except Exception as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="organizer_failed",
                 message="Reflection organizer failed",
@@ -329,7 +328,7 @@ class ReflectionScheduler:
         self,
         exc: ReflectionScheduleStateError,
     ) -> None:
-        report_reflection_failure(
+        REFLECTION_AUDIT.failure(
             exc,
             event="schedule_state_corrupt",
             message="Reflection schedule state is invalid; scheduling is blocked",

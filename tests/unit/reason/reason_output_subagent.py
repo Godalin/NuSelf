@@ -128,7 +128,7 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
         fail_log,
     )
     monkeypatch.setattr(
-        "nuself.reason.output.write_reason_audit",
+        "nuself.reason.output.REASON_AUDIT.write",
         drop_lifecycle_audit,
     )
 

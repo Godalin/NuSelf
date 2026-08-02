@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 
-from nuself.reflection.audit import write_reflection_audit
+from nuself.reflection.audit import REFLECTION_AUDIT
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
 SIMILARITY_THRESHOLD = 0.48
@@ -52,7 +52,7 @@ class ReflectionOrganizer:
             archived_entries=archived_count,
         )
         if result.archived_entries:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "organizer_completed",
                 "reflection organizer merged similar pending entries",
                 project_root=self._project_root,

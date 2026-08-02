@@ -9,7 +9,7 @@ from uuid import NAMESPACE_URL, uuid5
 from nuself.conversation import CompletedTurn
 from nuself.memory.observation import MemoryObservation
 from nuself.memory.repository import MemoryEntryRepository, MemorySearchFilters
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 from nuself.persona.definition import BUILTIN_PERSONAS, PersonaDefinition
 
 
@@ -54,7 +54,7 @@ def load_personas_from_memory(
             filters=MemorySearchFilters(type="persona_instruction"),
         )
     except RuntimeError as exc:
-        report_persona_failure(
+        PERSONA_AUDIT.failure(
             exc,
             event="persona_definition_load_failed",
             project_root=project_root,

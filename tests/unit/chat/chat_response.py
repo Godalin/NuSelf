@@ -260,7 +260,7 @@ def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
         fail_endpoint,
     )
     monkeypatch.setattr(
-        "nuself.agent.chat.response.report_chat_failure",
+        "nuself.agent.chat.response.CHAT_AUDIT.failure",
         capture_diagnostic,
     )
     endpoint = LangChainLLMEndpoint(
@@ -385,7 +385,7 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         property(has_mutating_tool_outcomes),
     )
     monkeypatch.setattr(
-        "nuself.agent.chat.response.report_chat_failure",
+        "nuself.agent.chat.response.CHAT_AUDIT.failure",
         report_failure,
     )
 

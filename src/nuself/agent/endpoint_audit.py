@@ -8,12 +8,11 @@ from typing import Literal
 
 from nuself.llm import redacted_llm_diagnostic
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.observability import report_defined_failure
+from nuself.runtime.auditing import AuditCatalog
 
 type AgentEndpointComponent = Literal[
     "chat",
@@ -64,10 +63,10 @@ def _validate_endpoint_metadata(metadata: Mapping[str, object]) -> None:
         )
 
 
-def _build_registry() -> AuditDefinitionRegistry:
-    registry = AuditDefinitionRegistry()
+def _definitions() -> tuple[AuditEventDefinition, ...]:
+    definitions: list[AuditEventDefinition] = []
     for component in AGENT_ENDPOINT_COMPONENTS:
-        registry.register(
+        definitions.append(
             AuditEventDefinition(
                 component=component,
                 event="llm_endpoint_failed_over",
@@ -77,7 +76,7 @@ def _build_registry() -> AuditDefinitionRegistry:
                 metadata_validator=_validate_endpoint_metadata,
             )
         )
-        registry.register(
+        definitions.append(
             AuditEventDefinition(
                 component=component,
                 event="llm_endpoint_unavailable",
@@ -87,10 +86,13 @@ def _build_registry() -> AuditDefinitionRegistry:
                 metadata_validator=_validate_endpoint_metadata,
             )
         )
-    return registry.seal()
+    return tuple(definitions)
 
 
-AGENT_ENDPOINT_AUDIT_REGISTRY = _build_registry()
+AGENT_ENDPOINT_AUDIT = AuditCatalog[AgentEndpointAuditEvent](
+    _definitions(),
+    _MESSAGES,
+)
 
 
 def report_agent_endpoint_failure(
@@ -109,16 +111,15 @@ def report_agent_endpoint_failure(
         if has_next
         else "llm_endpoint_unavailable"
     )
-    definition = AGENT_ENDPOINT_AUDIT_REGISTRY.resolve(component, event)
     metadata: dict[str, object] = {
         "endpoint_index": endpoint_index,
         "model": model,
     }
     diagnostic = redacted_llm_diagnostic(exc)
-    report_defined_failure(
+    AGENT_ENDPOINT_AUDIT.failure(
         diagnostic,
-        definition=definition,
-        message=_MESSAGES[event],
+        event=event,
+        component=component,
         project_root=project_root,
         metadata=metadata,
     )

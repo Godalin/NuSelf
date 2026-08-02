@@ -13,7 +13,7 @@ from langchain_core.messages import (
     SystemMessage,
 )
 from langchain_core.tools import BaseTool
-from nuself.agent.chat.audit import report_chat_failure
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
@@ -42,7 +42,7 @@ from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.llm import (
     LangChainLLMEndpoint,
 )
-from nuself.memory.audit import run_memory_observed
+from nuself.memory.audit import MEMORY_AUDIT
 from nuself.runtime.context import runtime_context
 from nuself.runtime.event_payloads import (
     RuntimeLogEventPayload,
@@ -119,7 +119,7 @@ class ConversationGraphRuntime:
                 )
             ),
             settings=self._settings,
-            report_compression_fallback=lambda exc: report_chat_failure(
+            report_compression_fallback=lambda exc: CHAT_AUDIT.failure(
                 exc,
                 event="compression_fallback",
                 project_root=self._project_root,
@@ -390,7 +390,7 @@ class ConversationGraphRuntime:
         if not result.evidence_references:
             return None
         evidence_refs = list(result.evidence_references)
-        trace = run_memory_observed(
+        trace = MEMORY_AUDIT.observe(
             lambda: self._trace_recorder.record_chat_turn(
                 title=f"Chat turn cited {evidence_refs[0]}",
                 summary="Assistant reply used retrieved context cited by the final response.",

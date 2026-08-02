@@ -7,12 +7,11 @@ from pathlib import Path
 from typing import Literal
 
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
-from nuself.runtime.observability import write_observed_log_event
+from nuself.runtime.auditing import AuditCatalog
 
 type DaemonLifecycleAuditEvent = Literal[
     "instance_lock_contended",
@@ -316,9 +315,8 @@ def _require_optional_pid(
     return value
 
 
-def _build_registry() -> AuditDefinitionRegistry:
-    registry = AuditDefinitionRegistry()
-    for definition in (
+def _definitions() -> tuple[AuditEventDefinition, ...]:
+    return (
         AuditEventDefinition(
             component="daemon",
             event="instance_lock_contended",
@@ -408,12 +406,13 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required",
             metadata_validator=_validate_restart_failed_metadata,
         ),
-    ):
-        registry.register(definition)
-    return registry.seal()
+    )
 
 
-DAEMON_LIFECYCLE_AUDIT_REGISTRY = _build_registry()
+DAEMON_LIFECYCLE_AUDIT = AuditCatalog[DaemonLifecycleAuditEvent](
+    _definitions(),
+    _MESSAGES,
+)
 
 
 def write_lifecycle_audit(
@@ -425,21 +424,10 @@ def write_lifecycle_audit(
 ) -> None:
     """Validate and project one non-authoritative lifecycle decision."""
 
-    definition = DAEMON_LIFECYCLE_AUDIT_REGISTRY.resolve("daemon", event)
     audit_metadata: Mapping[str, object] = {} if metadata is None else metadata
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=audit_metadata,
-    )
-    write_observed_log_event(
-        definition.component,
-        definition.event,
-        _MESSAGES[event],
+    DAEMON_LIFECYCLE_AUDIT.write(
+        event,
         project_root=project_root,
-        level=definition.level,
-        status=definition.status,
         error=error,
         metadata=dict(audit_metadata) or None,
     )

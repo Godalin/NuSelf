@@ -12,6 +12,7 @@ from chat_fixtures import ConversationGraphRuntime
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -1600,8 +1601,8 @@ def test_reason_propose_creates_conversation_when_proposal_audit_is_unavailable(
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.agent.tools.reason.write_reason_audit",
-        drop_audit,
+        "nuself.agent.tools.reason.REASON_AUDIT",
+        SimpleNamespace(write=drop_audit),
     )
 
     result = _invoke_chat_tool(

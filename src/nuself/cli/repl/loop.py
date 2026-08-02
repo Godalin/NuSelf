@@ -11,7 +11,7 @@ from nuself.cli.repl.input import InteractiveInput
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.agent.chat.audit import report_chat_failure
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 
 type SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
@@ -81,7 +81,7 @@ def _finish_interactive_lifecycle(
             cleanup_failures,
             primary_error=primary_error,
         )
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             lifecycle_error,
             event="interactive_cleanup_failed",
             project_root=project_root,

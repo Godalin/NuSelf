@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from nuself.clock import utc_now
-from nuself.reason.audit import report_reason_failure, write_reason_audit
+from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.model import ReasoningThread
 from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
 from nuself.runtime.context import runtime_context
@@ -57,7 +57,7 @@ class ReasonScheduler:
                 step = self._advancer.advance(candidate)
             except Exception as exc:
                 self._apply_cooldown(candidate)
-                report_reason_failure(
+                REASON_AUDIT.failure(
                     exc,
                     event="scheduler_advance_failed",
                     project_root=self._project_root,
@@ -69,7 +69,7 @@ class ReasonScheduler:
                 return
             updated = self._service.advance_thread(candidate.id, step=step)
             self._apply_cooldown(updated)
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "scheduler_advance_completed",
                 project_root=self._project_root,
                 metadata={"step_kind": step.kind, "step_id": step.id},

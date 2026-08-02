@@ -9,8 +9,8 @@ Idle — no active implementation goal.
 
 ## Objective
 
-No active objective. Architecture tests now express the current dependency
-matrix declaratively instead of preserving individual refactor-history checks.
+No active objective. Domain audit modules now instantiate one shared sealed
+catalog while retaining ownership of event names and metadata validation.
 
 ## Next Steps
 
@@ -25,6 +25,6 @@ None while idle.
 - Pyright: 0 errors, 0 warnings.
 - Pytest: 2394 passed.
 - Package build: source distribution and wheel succeeded for `0.3.1`.
-- Test cleanup: 637 net test lines and 61 historical/duplicated cases removed;
-  migration, durable-data compatibility, security, concurrency, lifecycle,
-  interrupt cleanup, and provider-contract coverage remain intact.
+- Audit convergence: 390 net lines removed; primary domain audit modules have
+  no delivery wrappers, and specialized endpoint, request, transport, and
+  cleanup helpers remain only where they add redaction, context, or metadata.

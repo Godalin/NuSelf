@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from nuself.daemon.operations_audit import (
-    DAEMON_OPERATIONS_AUDIT_REGISTRY,
+    DAEMON_OPERATIONS_AUDIT,
     report_shutdown_cleanup_failure,
 )
 from nuself.logs import read_log_events
@@ -15,9 +15,9 @@ from nuself.runtime.cleanup import CleanupFailure
 
 
 def test_daemon_operations_registry_is_complete_and_sealed() -> None:
-    assert len(DAEMON_OPERATIONS_AUDIT_REGISTRY.definitions) == 1
+    assert len(DAEMON_OPERATIONS_AUDIT.registry.definitions) == 1
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        DAEMON_OPERATIONS_AUDIT_REGISTRY.register(
+        DAEMON_OPERATIONS_AUDIT.registry.register(
             AuditEventDefinition(
                 component="daemon",
                 event="operation_extra",

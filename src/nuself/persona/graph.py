@@ -32,7 +32,7 @@ from nuself.persona.definition import (
     PersonaTurnState,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 
 class PersonaGraphState(TypedDict):
     """LangGraph state wrapper for a persona turn."""
@@ -184,7 +184,7 @@ class AgentBackedPersonaNode:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_completion_failed",
                 project_root=self._project_root,
@@ -241,7 +241,7 @@ class AgentBackedSynthesizerNode:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_completion_failed",
                 project_root=self._project_root,
@@ -277,7 +277,7 @@ class AgentBackedActivationPolicy:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_activation_failed",
                 project_root=self._project_root,

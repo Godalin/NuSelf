@@ -12,14 +12,13 @@ from nuself.memory.composition import compose_memory_curator
 from nuself.application.projection import publish_chat_observation
 from nuself.cli.application import cli_application
 from nuself.agent.chat.audit import (
-    report_chat_failure,
-    write_chat_audit,
+    CHAT_AUDIT,
 )
 from nuself.cli.output import print_ansi
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
-from nuself.memory.audit import report_memory_failure
+from nuself.memory.audit import MEMORY_AUDIT
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
@@ -104,7 +103,7 @@ def send_daemon_chat_interactive(
             )
         except client.DaemonApplicationError as exc:
             error = diagnostic_exception_message(exc)
-            report_chat_failure(
+            CHAT_AUDIT.failure(
                 exc,
                 event="daemon_chat_failed",
                 project_root=project_root,
@@ -114,7 +113,7 @@ def send_daemon_chat_interactive(
                 error=error,
             )
         with runtime_context(conversation_id=response.conversation_id):
-            write_chat_audit(
+            CHAT_AUDIT.write(
                 "daemon_chat_completed",
                 project_root=project_root,
             )
@@ -184,7 +183,7 @@ def send_one_shot_chat_interactive(
                 turn=result.require_completed_turn(),
                 source_trace_id=result.trace_id,
             )
-            write_chat_audit(
+            CHAT_AUDIT.write(
                 "one_shot_chat_completed",
                 project_root=project_root,
             )
@@ -200,7 +199,7 @@ def send_one_shot_chat_interactive(
             )
         except RuntimeError as exc:
             error = diagnostic_exception_message(exc)
-            report_chat_failure(
+            CHAT_AUDIT.failure(
                 exc,
                 event="one_shot_chat_failed",
                 project_root=project_root,
@@ -225,7 +224,7 @@ def run_memory_curator(
         ).run_once(observation_id)
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)
-        report_memory_failure(
+        MEMORY_AUDIT.failure(
             exc,
             event="curator_failed",
             project_root=project_root,
@@ -249,7 +248,7 @@ def _compress_after_reply(
     try:
         conversation_runtime.compress_conversation(conversation_id)
     except Exception as exc:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             exc,
             event="compression_fallback",
             project_root=project_root,

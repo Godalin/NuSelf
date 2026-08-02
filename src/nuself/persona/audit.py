@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from pathlib import Path
+from collections.abc import Mapping
 from typing import Literal
 
-from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata as _exact,
 )
-from nuself.runtime.observability import (
-    report_defined_failure,
-    run_observed_best_effort,
-    write_observed_log_event,
-)
+from nuself.runtime.auditing import AuditCatalog
 
 type PersonaAuditEvent = Literal[
     "persona_summary",
@@ -136,7 +129,7 @@ def _interactive_command_failed(metadata: Mapping[str, object]) -> None:
     _string(metadata, "action")
 
 
-def _build_registry() -> AuditDefinitionRegistry:
+def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition(
             "persona", "persona_summary", "info", "completed",
@@ -190,13 +183,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             metadata_validator=_interactive_command_failed,
         ),
     )
-    registry = AuditDefinitionRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
-
-
-PERSONA_AUDIT_REGISTRY = _build_registry()
+    return definitions
 
 _MESSAGES: dict[PersonaAuditEvent, str] = {
     "persona_summary": "Persona consultation completed",
@@ -215,85 +202,4 @@ _MESSAGES: dict[PersonaAuditEvent, str] = {
 }
 
 
-def write_persona_audit(
-    event: PersonaAuditEvent,
-    *,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-    conversation_id: str | None = None,
-) -> LogEvent | None:
-    """Validate and project one successful Persona audit."""
-
-    definition = PERSONA_AUDIT_REGISTRY.resolve("persona", event)
-    event_metadata = metadata or {}
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=None,
-        metadata=event_metadata,
-    )
-    return write_observed_log_event(
-        definition.component,
-        definition.event,
-        _MESSAGES[event],
-        project_root=project_root,
-        conversation_id=conversation_id,
-        level=definition.level,
-        status=definition.status,
-        metadata=dict(event_metadata),
-    )
-
-
-def report_persona_failure(
-    exc: Exception,
-    *,
-    event: PersonaAuditEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Validate and report one caught Persona failure."""
-
-    definition = PERSONA_AUDIT_REGISTRY.resolve("persona", event)
-    event_metadata = metadata or {}
-    report_defined_failure(
-        exc,
-        definition=definition,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-    )
-
-
-def run_persona_observed[T](
-    operation: Callable[[], T],
-    *,
-    event: Literal["trace_recording_failed"],
-    project_root: Path | None,
-    metadata: dict[str, object],
-    errors: tuple[type[Exception], ...] = (Exception,),
-) -> T | None:
-    """Run one secondary Persona effect under its registered failure schema."""
-
-    definition = PERSONA_AUDIT_REGISTRY.resolve("persona", event)
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error="caught failure",
-        metadata=metadata,
-    )
-    return run_observed_best_effort(
-        operation,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(metadata),
-        errors=errors,
-        level=definition.level,
-        status=status,
-    )
+PERSONA_AUDIT = AuditCatalog[PersonaAuditEvent](_definitions(), _MESSAGES)

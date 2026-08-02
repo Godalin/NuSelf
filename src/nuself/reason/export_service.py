@@ -34,8 +34,7 @@ from nuself.reason.output_contracts import (
 from nuself.reason.output import ReasonOutputService
 from nuself.reason.service import ReasonService
 from nuself.reason.audit import (
-    report_reason_failure,
-    write_reason_audit,
+    REASON_AUDIT,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.jobs import JobMessage
@@ -213,7 +212,7 @@ def build_reason_export_section_planner(
             )
             sections = _materialize_section_plan(output, steps)
         except ValueError as exc:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 exc,
                 event="reason_output_section_plan_fallback",
                 project_root=project_root,
@@ -284,7 +283,7 @@ class ReasonExportService:
         self._job_definitions.validate(message)
         thread_id = message.resource_id
         job_id = message.job_id
-        write_reason_audit(
+        REASON_AUDIT.write(
             "export_job_dequeued",
             project_root=self._project_root,
             metadata={},
@@ -303,7 +302,7 @@ class ReasonExportService:
             ValueError,
             KeyError,
         ) as exc:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 exc,
                 event="export_job_manifest_invalid",
                 project_root=self._project_root,
@@ -313,13 +312,13 @@ class ReasonExportService:
         if inspection is None:
             return
         if inspection.progress_error is not None:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 inspection.progress_error,
                 event="export_job_progress_invalid",
                 project_root=self._project_root,
                 metadata={},
             )
-        write_reason_audit(
+        REASON_AUDIT.write(
             "export_job_composition_started",
             project_root=self._project_root,
             metadata={
@@ -354,7 +353,7 @@ class ReasonExportService:
                 max_attempts=MAX_EXPORT_ATTEMPTS,
             )
         except Exception as state_error:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 state_error,
                 event="export_job_state_persist_failed",
                 project_root=self._project_root,
@@ -363,7 +362,7 @@ class ReasonExportService:
             self._schedule_delayed_reconciliation(thread_id, job_id)
             return
         if attempts >= MAX_EXPORT_ATTEMPTS:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 operation_error,
                 event="export_job_failed",
                 project_root=self._project_root,
@@ -385,7 +384,7 @@ class ReasonExportService:
         try:
             self._task_sink(retry_message, float(backoff))
         except Exception as schedule_error:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 schedule_error,
                 event="export_retry_schedule_failed",
                 project_root=self._project_root,
@@ -393,7 +392,7 @@ class ReasonExportService:
             )
             self._schedule_delayed_reconciliation(thread_id, job_id)
             return
-        write_reason_audit(
+        REASON_AUDIT.write(
             "export_job_retry",
             project_root=self._project_root,
             metadata=retry_metadata,
@@ -437,7 +436,7 @@ class ReasonExportService:
                     ValueError,
                     KeyError,
                 ) as exc:
-                    report_reason_failure(
+                    REASON_AUDIT.failure(
                         exc,
                         event="export_reconciliation_skip",
                         project_root=self._project_root,
@@ -459,7 +458,7 @@ class ReasonExportService:
                         )
                     )
                 except Exception as exc:
-                    report_reason_failure(
+                    REASON_AUDIT.failure(
                         exc,
                         event="export_reconciliation_skip",
                         project_root=self._project_root,
@@ -470,7 +469,7 @@ class ReasonExportService:
                     )
                 else:
                     reconciled += 1
-        write_reason_audit(
+        REASON_AUDIT.write(
             "export_queue_reconciled",
             project_root=self._project_root,
             metadata={"replayed_jobs": reconciled},

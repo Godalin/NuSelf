@@ -3,20 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Literal
 
-from nuself.runtime.log_event import LogEvent
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata as _require_exact_fields,
 )
-from nuself.runtime.observability import (
-    report_defined_failure,
-    write_observed_log_event,
-)
+from nuself.runtime.auditing import AuditCatalog
 
 type ReflectionAuditEvent = Literal[
     "schedule_blocked",
@@ -106,7 +100,7 @@ def _validate_organization(metadata: Mapping[str, object]) -> None:
             )
 
 
-def _build_registry() -> AuditDefinitionRegistry:
+def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition(
             "reflection", "schedule_blocked", "info", "skipped",
@@ -161,59 +155,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             metadata_validator=_validate_organization,
         ),
     )
-    registry = AuditDefinitionRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
+    return definitions
 
 
-REFLECTION_AUDIT_REGISTRY = _build_registry()
-
-
-def write_reflection_audit(
-    event: ReflectionAuditEvent,
-    message: str,
-    *,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> LogEvent | None:
-    """Validate and project one auxiliary Reflection audit."""
-
-    definition = REFLECTION_AUDIT_REGISTRY.resolve("reflection", event)
-    event_metadata = metadata or {}
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=None,
-        metadata=event_metadata,
-    )
-    return write_observed_log_event(
-        definition.component,
-        definition.event,
-        message,
-        project_root=project_root,
-        level=definition.level,
-        status=definition.status,
-        metadata=dict(event_metadata),
-    )
-
-
-def report_reflection_failure(
-    exc: Exception,
-    *,
-    event: ReflectionAuditEvent,
-    message: str,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Validate and report one caught Reflection failure."""
-
-    definition = REFLECTION_AUDIT_REGISTRY.resolve("reflection", event)
-    event_metadata = metadata or {}
-    report_defined_failure(
-        exc,
-        definition=definition,
-        message=message,
-        project_root=project_root,
-        metadata=dict(event_metadata),
-    )
+REFLECTION_AUDIT = AuditCatalog[ReflectionAuditEvent](_definitions())

@@ -22,8 +22,7 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.agent.chat.audit import (
-    report_chat_failure,
-    write_chat_audit,
+    CHAT_AUDIT,
 )
 from nuself.agent.failover import (
     invoke_agent_endpoint,
@@ -86,7 +85,7 @@ class ConversationResponseSynthesizer:
         state: ConversationTurnState,
         draft: ChatStructuredOutput,
     ) -> ChatStructuredOutput:
-        write_chat_audit(
+        CHAT_AUDIT.write(
             "final_response_completed",
             project_root=self._project_root,
             conversation_id=state.conversation_id,
@@ -149,7 +148,7 @@ class ConversationResponseSynthesizer:
                 return _configured_failure_response_output(prompt)
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_chat_failure(
+            CHAT_AUDIT.failure(
                 redacted_llm_diagnostic(exc),
                 event="llm_endpoints_exhausted",
                 project_root=self._project_root,
@@ -161,7 +160,7 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             redacted_llm_diagnostic(error),
             event="llm_retry_suppressed_after_tool_call",
             project_root=self._project_root,
@@ -173,7 +172,7 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             redacted_llm_diagnostic(error),
             event="llm_endpoint_retry",
             project_root=self._project_root,

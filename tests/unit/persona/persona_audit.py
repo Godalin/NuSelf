@@ -46,7 +46,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
 def test_persona_registry_owns_complete_taxonomy() -> None:
     assert {
         definition.event
-        for definition in audit.PERSONA_AUDIT_REGISTRY.definitions
+        for definition in audit.PERSONA_AUDIT.registry.definitions
     } == {event for event, _ in _CANONICAL}
 
 
@@ -55,7 +55,7 @@ def test_persona_definitions_accept_canonical_payloads(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.PERSONA_AUDIT_REGISTRY.resolve("persona", event)
+    definition = audit.PERSONA_AUDIT.registry.resolve("persona", event)
 
     definition.validate(
         level=definition.level,
@@ -74,7 +74,7 @@ def test_persona_definitions_reject_private_or_unknown_metadata(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.PERSONA_AUDIT_REGISTRY.resolve("persona", event)
+    definition = audit.PERSONA_AUDIT.registry.resolve("persona", event)
 
     with pytest.raises(AuditSchemaError, match="metadata"):
         definition.validate(
@@ -99,10 +99,13 @@ def test_persona_audit_rejects_unknown_event_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_persona_audit(
+        audit.PERSONA_AUDIT.write(
             cast(audit.PersonaAuditEvent, "persona_summmary"),
             project_root=tmp_path,
         )
@@ -120,10 +123,13 @@ def test_persona_audit_rejects_sensitive_metadata_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(AuditSchemaError, match="metadata"):
-        audit.write_persona_audit(
+        audit.PERSONA_AUDIT.write(
             "persona_summary",
             project_root=tmp_path,
             metadata={

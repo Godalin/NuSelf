@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from nuself.memory.audit import run_memory_observed
+from nuself.memory.audit import MEMORY_AUDIT
 from nuself.trace.service import TraceRecorder
 
 
@@ -32,7 +32,7 @@ def record_memory_trace(
     entry: TraceableMemory,
     action: str,
 ) -> None:
-    run_memory_observed(
+    MEMORY_AUDIT.observe(
         lambda: recorder.record_memory_update(
             memory_id=entry.id,
             title=entry.title,

@@ -7,16 +7,15 @@ from pathlib import Path
 from typing import cast
 
 from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
     require_exact_metadata,
 )
+from nuself.runtime.auditing import AuditCatalog
 from nuself.runtime.cleanup import (
     CleanupFailure,
     cleanup_failure_records,
 )
-from nuself.runtime.observability import report_defined_failure
 
 
 def _backend_close(metadata: Mapping[str, object]) -> None:
@@ -66,9 +65,8 @@ def _cleanup_failure_records(metadata: Mapping[str, object]) -> None:
                 )
 
 
-def _build_registry() -> AuditDefinitionRegistry:
-    registry = AuditDefinitionRegistry()
-    registry.register(
+def _definitions() -> tuple[AuditEventDefinition, ...]:
+    return (
         AuditEventDefinition(
             component="storage",
             event="backend_close_failed",
@@ -76,9 +74,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             status="degraded",
             error_policy="required",
             metadata_validator=_backend_close,
-        )
-    )
-    registry.register(
+        ),
         AuditEventDefinition(
             component="storage",
             event="cli_cleanup_failed",
@@ -86,12 +82,17 @@ def _build_registry() -> AuditDefinitionRegistry:
             status="error",
             error_policy="required",
             metadata_validator=_cleanup_failure_records,
-        )
+        ),
     )
-    return registry.seal()
 
 
-STORAGE_OPERATIONS_AUDIT_REGISTRY = _build_registry()
+STORAGE_OPERATIONS_AUDIT = AuditCatalog[str](
+    _definitions(),
+    {
+        "backend_close_failed": "Application storage backend could not be closed",
+        "cli_cleanup_failed": "CLI storage cleanup failed",
+    },
+)
 
 
 def report_backend_close_failure(
@@ -103,14 +104,9 @@ def report_backend_close_failure(
     """Report one application-owned backend close failure."""
 
     metadata: dict[str, object] = {"backend_type": backend_type}
-    definition = STORAGE_OPERATIONS_AUDIT_REGISTRY.resolve(
-        "storage",
-        "backend_close_failed",
-    )
-    report_defined_failure(
+    STORAGE_OPERATIONS_AUDIT.failure(
         exc,
-        definition=definition,
-        message="Application storage backend could not be closed",
+        event="backend_close_failed",
         project_root=project_root,
         metadata=metadata,
     )
@@ -129,14 +125,9 @@ def report_cli_cleanup_failure(
         "failures": cleanup_failure_records(failures),
         "primary_failed": primary_failed,
     }
-    definition = STORAGE_OPERATIONS_AUDIT_REGISTRY.resolve(
-        "storage",
-        "cli_cleanup_failed",
-    )
-    report_defined_failure(
+    STORAGE_OPERATIONS_AUDIT.failure(
         exc,
-        definition=definition,
-        message="CLI storage cleanup failed",
+        event="cli_cleanup_failed",
         project_root=project_root,
         metadata=metadata,
     )

@@ -13,7 +13,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
-from nuself.agent.chat.audit import run_chat_observed
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.cli.application import cli_application
 from nuself.cli.repl.registry import (
     command_tokens,
@@ -21,7 +21,7 @@ from nuself.cli.repl.registry import (
     tokens_for,
 )
 from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.reason.audit import run_reason_observed
+from nuself.reason.audit import REASON_AUDIT
 
 
 class DedupFileHistory(FileHistory):
@@ -37,7 +37,7 @@ class DedupFileHistory(FileHistory):
         self._project_root = project_root
 
     def append_string(self, string: str) -> None:
-        run_chat_observed(
+        CHAT_AUDIT.observe(
             lambda: self._append_string(string),
             event="interactive_history_write_failed",
             project_root=self._project_root,
@@ -130,7 +130,7 @@ class InteractiveCompleter(Completer):
             ]
 
         return (
-            run_reason_observed(
+            REASON_AUDIT.observe(
                 load,
                 event="completion_load_failed",
                 project_root=self._project_root,
@@ -140,7 +140,7 @@ class InteractiveCompleter(Completer):
 
     def _conversation_completions(self, word: str) -> Iterable[Completion]:
         conversations = (
-            run_chat_observed(
+            CHAT_AUDIT.observe(
                 lambda: cli_application().conversations.list(),
                 event="completion_load_failed",
                 project_root=self._project_root,
@@ -154,7 +154,7 @@ class InteractiveCompleter(Completer):
 
     def _archived_conversation_completions(self, word: str) -> Iterable[Completion]:
         conversations = (
-            run_chat_observed(
+            CHAT_AUDIT.observe(
                 lambda: cli_application().conversations.list_archived(),
                 event="completion_load_failed",
                 project_root=self._project_root,
@@ -184,7 +184,7 @@ class InteractiveInput:
     def read(self) -> str:
         """Read styled input, falling back to built-in input."""
 
-        styled = run_chat_observed(
+        styled = CHAT_AUDIT.observe(
             self._read_styled,
             event="interactive_prompt_failed",
             project_root=self._project_root,

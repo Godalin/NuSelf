@@ -29,7 +29,7 @@ def _start_completed_metadata() -> dict[str, object]:
 def test_lifecycle_audit_registry_is_closed_and_immutable() -> None:
     assert {
         definition.event
-        for definition in audit.DAEMON_LIFECYCLE_AUDIT_REGISTRY.definitions
+        for definition in audit.DAEMON_LIFECYCLE_AUDIT.registry.definitions
     } == {
         "instance_lock_contended",
         "started",
@@ -47,7 +47,7 @@ def test_lifecycle_audit_registry_is_closed_and_immutable() -> None:
     }
 
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        audit.DAEMON_LIFECYCLE_AUDIT_REGISTRY.register(
+        audit.DAEMON_LIFECYCLE_AUDIT.registry.register(
             AuditEventDefinition(
                 component="daemon",
                 event="started",
@@ -83,7 +83,10 @@ def test_lifecycle_audit_rejects_unknown_event_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(
         UnknownAuditDefinitionError,
@@ -143,7 +146,10 @@ def test_lifecycle_audit_rejects_invalid_transition_metadata_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(
         AuditSchemaError,
@@ -168,7 +174,10 @@ def test_lifecycle_audit_enforces_error_policy_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.auditing.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(
         AuditSchemaError,

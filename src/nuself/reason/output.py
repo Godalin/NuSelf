@@ -30,8 +30,7 @@ from nuself.reason.job_contracts import (
     build_reason_job_definition_registry,
 )
 from nuself.reason.audit import (
-    report_reason_failure,
-    write_reason_audit,
+    REASON_AUDIT,
 )
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import (
@@ -135,7 +134,7 @@ class ReasonOutputService:
                 updated_at=manifest.updated_at,
             ).to_wire(),
         )
-        write_reason_audit(
+        REASON_AUDIT.write(
             "reason_output_planned",
             project_root=self._project_root,
             metadata={
@@ -160,14 +159,14 @@ class ReasonOutputService:
         try:
             job_sink(job_message)
         except Exception as exc:
-            report_reason_failure(
+            REASON_AUDIT.failure(
                 exc,
                 event="export_job_enqueue_failed",
                 project_root=self._project_root,
                 metadata={"thread_id": thread.id, "job_id": job_id},
             )
         else:
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "export_job_enqueued",
                 project_root=self._project_root,
                 metadata={
@@ -215,7 +214,7 @@ class ReasonOutputService:
             if chunk_path.exists():
                 chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
                 chunks.append(chunk)
-                write_reason_audit(
+                REASON_AUDIT.write(
                     "reason_output_chunk_skipped",
                     project_root=self._project_root,
                     metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
@@ -223,7 +222,7 @@ class ReasonOutputService:
                 continue
 
             # Emit chunk-level start event
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_chunk_started",
                 project_root=self._project_root,
                 metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
@@ -235,7 +234,7 @@ class ReasonOutputService:
                 composed_text = runner(thread, manifest, batch, section=section, section_plan=section_plan, index=index, total=total)
                 duration_ms = int((utc_now().timestamp() - start_ts) * 1000)
             except Exception as exc:
-                report_reason_failure(
+                REASON_AUDIT.failure(
                     exc,
                     event="reason_output_chunk_failed",
                     project_root=self._project_root,
@@ -256,7 +255,7 @@ class ReasonOutputService:
             )
 
             # Emit chunk completed event
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_chunk_completed",
                 project_root=self._project_root,
                 duration_ms=duration_ms,
@@ -310,7 +309,7 @@ class ReasonOutputService:
                 updated_at=updated.updated_at,
             ).to_wire(),
         )
-        write_reason_audit(
+        REASON_AUDIT.write(
             "reason_output_composed",
             project_root=self._project_root,
             metadata={
@@ -321,7 +320,7 @@ class ReasonOutputService:
         )
 
         # Generate PDF with timeout — combined.md is already written.
-        write_reason_audit(
+        REASON_AUDIT.write(
             "reason_output_pdf_started",
             project_root=self._project_root,
             metadata={
@@ -381,7 +380,7 @@ class ReasonOutputService:
                 timeout=120,
             )
         except subprocess.TimeoutExpired:
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_pdf_timeout",
                 project_root=self._project_root,
                 metadata={"thread_id": thread_id, "job_id": job_id},
@@ -401,7 +400,7 @@ class ReasonOutputService:
                 if process_error
                 else diagnostic_exception_message(exc)
             )
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_pdf_failed",
                 project_root=self._project_root,
                 error=error,
@@ -409,7 +408,7 @@ class ReasonOutputService:
             )
             return None
         if paths.pdf.is_file():
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_pdf_created",
                 project_root=self._project_root,
                 metadata={"thread_id": thread_id, "job_id": job_id},
