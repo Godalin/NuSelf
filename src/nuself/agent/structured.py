@@ -16,7 +16,6 @@ from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.llm import (
     LangChainLLMEndpoint,
-    configured_langchain_chat_models,
 )
 
 StructuredOutputT = TypeVar(
@@ -111,14 +110,10 @@ def default_structured_agent(
     component: AgentEndpointComponent,
     endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> StructuredAgent[StructuredOutputT]:
-    """Build the configured framework-native runner for one schema."""
+    """Build the framework-native runner from an explicit endpoint set."""
     return LangChainStructuredAgent(
         schema,
-        endpoints=(
-            endpoints
-            if endpoints is not None
-            else configured_langchain_chat_models(project_root)
-        ),
+        endpoints=endpoints or (),
         project_root=project_root,
         component=component,
     )

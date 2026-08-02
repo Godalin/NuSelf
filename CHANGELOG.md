@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Structured-agent composition no longer reloads model configuration from a
+  project path; application composition supplies endpoints explicitly, while
+  omitted endpoints form an explicit empty set.
 - Configuration loading now uses typed `SystemConfig` defaults directly and
   inlines the single-use file-build path, removing two private forwarding
   methods.

@@ -9,21 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove redundant private wrappers from `ConfigSystem`.
+Remove implicit configuration loading from structured-agent composition.
 
 ## Ordered Steps
 
-1. Specify typed `SystemConfig` field defaults as the authoritative built-in
-   defaults, without a forwarding factory.
-2. Inline the single-use `_build()` path into `load()` and remove
-   `_default_config()`.
-3. Run config/full gates, record evidence, and commit without pushing.
+1. Specify application composition as the owner of endpoint resolution; domain
+   structured-agent factories receive endpoints and never reload config.
+2. Require explicit config at the configured model factory and make omitted
+   structured-agent endpoints an explicit empty set.
+3. Update live/test callers, run focused/full gates, record evidence, and
+   commit without pushing.
 
 ## Exclusions
 
-- Preserve single-file and layered loading, normalization, deep merge,
-  validation, hardening, and malformed-file behavior.
-- Do not introduce a loader strategy/factory abstraction.
+- Preserve endpoint ordering/state, failover, no-model typed errors, application
+  model reuse, and local live-test configuration.
+- Do not introduce a model registry, service locator, or path-based fallback.
 
 ## Constraints
 
@@ -35,6 +36,14 @@ Remove redundant private wrappers from `ConfigSystem`.
 
 ## Phase Evidence
 
+- Structured-agent composition no longer imports or calls `ConfigSystem`.
+  `configured_langchain_chat_models()` requires the application-owned config,
+  while `default_structured_agent()` consumes only its supplied endpoint tuple;
+  omission is an explicit empty set that raises the normal typed no-model error
+  on invocation. All production call sites pass config, and the live test loads
+  its file explicitly. Focused agent/LLM/reflection/reason/daemon tests: 163
+  passed; full suite: 2447 passed; Pyright: 0 errors, 0 warnings; sdist and wheel
+  build succeeded.
 - `ConfigSystem` now uses typed `SystemConfig` field defaults directly and
   performs its single-file read/normalize/merge/validate sequence in `load()`.
   Removed the forwarding `_default_config()` and single-use `_build()` methods;

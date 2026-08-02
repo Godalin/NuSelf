@@ -309,6 +309,19 @@ def test_shared_endpoint_runner_uses_model_unavailable_error() -> None:
         )
 
 
+def test_default_structured_agent_does_not_resolve_hidden_endpoints() -> None:
+    runner = structured_module.default_structured_agent(
+        ExampleOutput,
+        component="memory",
+    )
+
+    with pytest.raises(
+        AgentModelUnavailableError,
+        match="no configured LangChain model",
+    ):
+        runner.invoke([HumanMessage(content="hello")])
+
+
 def test_shared_endpoint_runner_rejects_invalid_attempt_count() -> None:
     with pytest.raises(
         ValueError,

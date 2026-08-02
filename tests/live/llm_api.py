@@ -15,6 +15,7 @@ from nuself.agent.chat.response import ConversationResponseSynthesizer
 from nuself.agent.chat.types import ChatStructuredOutput
 from nuself.agent.middleware import ToolOutcome
 from nuself.agent.structured import LangChainStructuredAgent
+from nuself.config import ConfigSystem
 from nuself.llm import (
     LangChainLLMEndpoint,
     build_langchain_endpoint,
@@ -38,7 +39,10 @@ class _LiveStructuredOutput(BaseModel):
 def live_endpoint(
     live_model_case: LiveModelCase | None,
 ) -> LangChainLLMEndpoint:
-    endpoints = configured_langchain_chat_models(PROJECT_ROOT)
+    endpoints = configured_langchain_chat_models(
+        PROJECT_ROOT,
+        config=ConfigSystem.load(project_root=PROJECT_ROOT),
+    )
     if not endpoints:
         pytest.fail(
             "no configured LLM endpoint with a non-empty API key",

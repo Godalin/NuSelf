@@ -194,6 +194,9 @@ One daemon startup resolves and orders its configured LLM endpoints once.
 Chat, reflection, reasoning, persona discussion, and export receive that tuple
 while retaining separate component-tagged agent wrappers; endpoint reuse does
 not imply shared conversation state or a process-global model registry.
+Structured-agent factories consume the supplied endpoint tuple and do not load
+configuration from a project path. Omitted endpoints mean an explicit empty
+set and produce the normal typed model-unavailable outcome on invocation.
 `nuself.agent.tools` package initialization imports no domain tool modules.
 Chat-only aggregation lives in `agent.tools.composition`; domain code imports
 its concrete tool module directly so importing decorators or one tool cannot
