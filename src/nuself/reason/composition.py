@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
 
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )

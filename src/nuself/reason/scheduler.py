@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from nuself.clock import utc_now
+from nuself.runtime.clock import utc_now
 from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.model import ReasoningThread
 from nuself.reason.service import ReasonAdvancerProtocol, ReasonService

@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from dataclasses import replace
 
-from nuself.clock import utc_now, utc_now_iso
+from nuself.runtime.clock import utc_now, utc_now_iso
 from nuself.config.settings import RuntimePaths
 from nuself.notification.model import (
     AdapterDelivery,
@@ -16,7 +16,7 @@ from nuself.notification.model import (
     parse_aware_timestamp,
 )
 from nuself.runtime.observability import decode_observed_record
-from nuself.private_fs import blocking_private_file_lock
+from nuself.storage.filesystem import blocking_private_file_lock
 from nuself.storage.contract import (
     StorageBackend,
     validate_storage_key,

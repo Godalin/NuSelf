@@ -21,7 +21,7 @@ from langgraph.store.base import (
 )
 
 from nuself.config.settings import RuntimePaths
-from nuself.private_fs import require_private_file
+from nuself.storage.filesystem import require_private_file
 from nuself.runtime.messages import decode_json_value, encode_json_value
 
 __all__ = [

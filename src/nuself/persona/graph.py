@@ -14,7 +14,7 @@ from nuself.agent.structured import (
     LangChainStructuredAgent,
     StructuredAgent,
 )
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
 )
 from nuself.persona.definition import (

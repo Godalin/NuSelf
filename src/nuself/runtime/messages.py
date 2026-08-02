@@ -11,7 +11,7 @@ from types import MappingProxyType
 from typing import Literal, cast
 from uuid import uuid4
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 
 type MessageKind = Literal["event", "job", "audit"]

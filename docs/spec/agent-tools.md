@@ -298,7 +298,7 @@ No-model behavior is a deterministic local response policy, not a second
 guidance plus the last user message and is converted directly into
 `ChatStructuredOutput`.
 
-`nuself.llm` owns LangChain endpoint construction, endpoint preference state,
+`nuself.agent.endpoint` owns LangChain endpoint construction, endpoint preference state,
 error redaction, and availability classification. It must not expose a raw
 text-completion protocol, a default model selector, or a private text failover
 adapter. Generated text and structured behavior belong behind the shared agent

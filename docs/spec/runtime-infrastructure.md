@@ -349,7 +349,7 @@ scheduler condition. Repository transactions, cross-process locks needed for
 direct CLI coexistence, and the activity broker condition remain independent.
 
 Behavior-identical blocking locks over NuSelf-managed resource files share the
-dependency-neutral context primitive in `nuself.private_fs`. Conversation and
+dependency-neutral context primitive in `nuself.storage.filesystem`. Conversation and
 notification domains choose their own stable lock identity and mutation scope;
 the shared primitive only hardens the lock file and owns blocking `flock`
 acquisition and release. Non-blocking daemon ownership, schema migration,

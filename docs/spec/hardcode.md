@@ -88,10 +88,10 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `timeout_seconds` | `llm.py:64` | 60 s | Default LLM endpoint timeout |
-| `max_retries: 0` | `llm.py:246` | 0 | LangChain model retries (NuSelf handles retries) |
-| `temperature: 0.1` | `llm.py:248` | 0.1 | Structured output temperature |
-| error truncation | `llm.py:299` | 500 | LLM error message truncation |
+| `timeout_seconds` | `agent/endpoint.py` | 60 s | Default LLM endpoint timeout |
+| `max_retries: 0` | `agent/endpoint.py` | 0 | LangChain model retries (NuSelf handles retries) |
+| `temperature: 0.1` | `agent/endpoint.py` | 0.1 | Structured output temperature |
+| error truncation | `agent/endpoint.py` | 500 | LLM error message truncation |
 
 ## Store / Workspace
 

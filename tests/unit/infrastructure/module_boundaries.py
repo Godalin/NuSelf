@@ -294,7 +294,7 @@ def test_log_model_is_independent_from_persistence() -> None:
     assert not {
         "nuself.config",
         "nuself.log.store",
-        "nuself.private_fs",
+        "nuself.storage.filesystem",
     }.intersection(_imports(model))
 
     consumers = [

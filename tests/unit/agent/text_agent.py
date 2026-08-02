@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from nuself.agent import failover as failover_module
 from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.text import LangChainTextAgent
-from nuself.llm import LLMSettings, LangChainLLMEndpoint
+from nuself.agent.endpoint import LLMSettings, LangChainLLMEndpoint
 from nuself.runtime.audit.definition import AuditEventDefinition
 
 

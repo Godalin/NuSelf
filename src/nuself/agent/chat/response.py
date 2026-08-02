@@ -34,7 +34,7 @@ from nuself.agent.middleware import (
     ToolOutcomeLogger,
 )
 from nuself.agent.structured import require_structured_response
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     redacted_llm_diagnostic,

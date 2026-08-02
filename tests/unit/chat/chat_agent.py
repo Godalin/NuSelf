@@ -39,7 +39,7 @@ from nuself.trace.composition import compose_trace_services
 from nuself.config.settings import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.log.reader import read_log_events
 from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService

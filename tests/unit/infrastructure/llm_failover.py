@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from nuself.log.reader import read_log_events
-from nuself.llm import LLMSettings, build_langchain_endpoint
+from nuself.agent.endpoint import LLMSettings, build_langchain_endpoint
 
 
 def test_llm_settings_repr_excludes_api_key() -> None:
@@ -40,7 +40,7 @@ def test_anthropic_sdk_base_url_uses_api_root(
     configured: str,
     expected: str,
 ) -> None:
-    from nuself.llm import _anthropic_sdk_base_url  # pyright: ignore[reportPrivateUsage]
+    from nuself.agent.endpoint import _anthropic_sdk_base_url  # pyright: ignore[reportPrivateUsage]
 
     assert _anthropic_sdk_base_url(configured) == expected
 
@@ -116,7 +116,7 @@ def test_llm_error_redaction_removes_credentials(
     secret: str,
     expected_fragment: str,
 ) -> None:
-    from nuself.llm import redact_llm_error
+    from nuself.agent.endpoint import redact_llm_error
 
     redacted = redact_llm_error(message)
 
@@ -125,7 +125,7 @@ def test_llm_error_redaction_removes_credentials(
 
 
 def test_llm_error_redaction_happens_before_length_bound() -> None:
-    from nuself.llm import redact_llm_error
+    from nuself.agent.endpoint import redact_llm_error
 
     secret = "provider-secret-value"
     message = f"{'x' * 480} api_key={secret} {'tail' * 40}"
@@ -139,7 +139,7 @@ def test_llm_error_redaction_happens_before_length_bound() -> None:
 
 
 def test_llm_error_redaction_survives_broken_exception_renderer() -> None:
-    from nuself.llm import redact_llm_error
+    from nuself.agent.endpoint import redact_llm_error
 
     class BrokenMessageError(RuntimeError):
         def __str__(self) -> str:
@@ -163,7 +163,7 @@ def test_invalid_endpoint_state_is_observable_and_uses_config_order(
     tmp_path: Path,
     raw: str,
 ) -> None:
-    from nuself.llm import _load_llm_state  # pyright: ignore[reportPrivateUsage]
+    from nuself.agent.endpoint import _load_llm_state  # pyright: ignore[reportPrivateUsage]
 
     state_path = tmp_path / "runtime" / "llm_state.json"
     state_path.parent.mkdir(parents=True)
@@ -187,7 +187,7 @@ def test_invalid_endpoint_state_is_observable_and_uses_config_order(
 def test_stale_endpoint_state_is_observable_and_uses_config_order(
     tmp_path: Path,
 ) -> None:
-    from nuself.llm import _load_llm_state  # pyright: ignore[reportPrivateUsage]
+    from nuself.agent.endpoint import _load_llm_state  # pyright: ignore[reportPrivateUsage]
 
     state_path = tmp_path / "runtime" / "llm_state.json"
     state_path.parent.mkdir(parents=True)
@@ -209,7 +209,7 @@ def test_invalid_endpoint_state_is_not_written(
     tmp_path: Path,
     index: int,
 ) -> None:
-    from nuself.llm import _save_llm_state  # pyright: ignore[reportPrivateUsage]
+    from nuself.agent.endpoint import _save_llm_state  # pyright: ignore[reportPrivateUsage]
 
     with pytest.raises(ValueError, match="non-negative integer"):
         _save_llm_state(tmp_path, index)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from nuself.config.settings import runtime_paths
 from nuself.cli.application import cli_backend
-from nuself.private_fs import ensure_private_directory
+from nuself.storage.filesystem import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage.pack import (
     ThoughtPackValidationError,

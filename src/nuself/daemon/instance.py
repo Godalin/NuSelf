@@ -6,7 +6,7 @@ from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
 from pathlib import Path
 from typing import IO, Literal
 
-from nuself.private_fs import ensure_private_file
+from nuself.storage.filesystem import ensure_private_file
 
 
 class DaemonInstanceLockContended(RuntimeError):

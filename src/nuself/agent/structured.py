@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
 )
 

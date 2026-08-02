@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Protocol, cast
 
 from nuself.runtime.audit.types import LogComponent
-from nuself.private_fs import (
+from nuself.storage.filesystem import (
     PRIVATE_FILE_MODE,
     ensure_private_directory,
     ensure_private_file,

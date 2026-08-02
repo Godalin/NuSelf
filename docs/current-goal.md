@@ -16,11 +16,9 @@ source root.
 
 ## Next Steps
 
-1. Move LLM endpoints into `agent`, clock/handles into `runtime`, and private
-   filesystem primitives into `storage`.
-3. Move evaluation into `evaluation` and release gates into testable `scripts`
+1. Move evaluation into `evaluation` and release gates into testable `scripts`
    tooling rather than the production wheel.
-4. Audit imports and built contents, run full gates, commit coherent batches,
+2. Audit imports and built contents, run full gates, commit coherent batches,
    return this file to Idle, and stop.
 
 ## Exclusions
@@ -40,3 +38,7 @@ source root.
 - Config/Scope batch: settings and scope resolution now live in the empty-root
   `config` package. Full Pyright reports 0 errors and 0 warnings; 145 focused
   configuration, readiness, lifecycle, and composition tests pass.
+- Infrastructure batch: LLM endpoint construction lives in `agent.endpoint`,
+  clock and visible handles in `runtime`, and private filesystem primitives in
+  `storage.filesystem`. Full Pyright reports 0 errors and 0 warnings; 127
+  focused endpoint, agent, clock, handle, filesystem, and boundary tests pass.

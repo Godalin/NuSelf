@@ -12,7 +12,7 @@ import stat
 from collections.abc import Generator
 from uuid import uuid4
 
-from nuself.private_fs import (
+from nuself.storage.filesystem import (
     PRIVATE_DIRECTORY_MODE,
     PRIVATE_FILE_MODE,
     ensure_managed_directory,

@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from nuself.config.settings import runtime_paths
-from nuself.private_fs import create_private_file, ensure_private_directory
+from nuself.storage.filesystem import create_private_file, ensure_private_directory
 from nuself.storage.atomic import (
     AtomicWriteCleanupError,
     sync_path,

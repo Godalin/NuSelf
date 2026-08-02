@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.config.settings import RuntimePaths, SystemConfig
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
 )

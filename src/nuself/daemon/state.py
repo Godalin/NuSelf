@@ -30,7 +30,7 @@ from nuself.daemon.tasks import (
     daemon_task,
 )
 from nuself.log.store import runtime_event_log_sink
-from nuself.llm import configured_langchain_chat_models
+from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.notification.delivery import NotificationDeliveryLoop
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason.scheduler import ReasonScheduler

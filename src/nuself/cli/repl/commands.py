@@ -19,7 +19,7 @@ from nuself.cli.persona_management import (
     set_persona_enabled,
 )
 from nuself.daemon import lifecycle
-from nuself.handles import VisibleHandleError, resolve_visible_handle
+from nuself.runtime.handles import VisibleHandleError, resolve_visible_handle
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryEntryNotFound,

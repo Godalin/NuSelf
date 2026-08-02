@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.handles import VisibleHandleError, resolve_visible_item
+from nuself.runtime.handles import VisibleHandleError, resolve_visible_item
 from nuself.reason.model import ReasoningThread
 from nuself.reflection.contracts import (
     ReasonThreadStarter,

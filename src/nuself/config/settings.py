@@ -18,7 +18,7 @@ from pydantic import (
     model_validator,
 )
 
-from nuself.private_fs import (
+from nuself.storage.filesystem import (
     ensure_private_directory,
     harden_managed_file,
 )

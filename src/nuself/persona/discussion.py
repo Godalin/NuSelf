@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config.settings import ReflectionSettings
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.reflection.model import IdeaCandidate
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,

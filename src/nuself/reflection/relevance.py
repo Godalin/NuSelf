@@ -12,7 +12,7 @@ from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config.settings import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate, RelevanceScore
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.reflection.audit import REFLECTION_AUDIT
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from nuself.reflection.schedule_state import ReflectionScheduleStateError

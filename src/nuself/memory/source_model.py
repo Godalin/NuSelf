@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid5, NAMESPACE_URL
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.memory.model import PrivacyLevel
 
 type SourceKind = Literal["markdown", "text"]

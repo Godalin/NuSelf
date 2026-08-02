@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.config.settings import RuntimePaths
 from nuself.memory.model import MemoryCandidate, merge_relations
 from nuself.profile.model import ProfileItem

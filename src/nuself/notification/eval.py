@@ -18,7 +18,7 @@ from nuself.config.settings import (
 from nuself.application.composition import compose_application
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.eval import EvalResult
-from nuself.llm import configured_langchain_chat_models
+from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.notification.model import OutboxEntry
 from nuself.notification.outbox import NotificationOutbox
 from nuself.notification.deep_link import DeepLink

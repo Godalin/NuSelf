@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
-from nuself.llm import redacted_llm_diagnostic
+from nuself.agent.endpoint import redacted_llm_diagnostic
 from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,

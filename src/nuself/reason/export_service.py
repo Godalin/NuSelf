@@ -19,8 +19,8 @@ from pydantic import (
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.agent.text import TextAgent
-from nuself.clock import utc_now_iso
-from nuself.llm import LangChainLLMEndpoint
+from nuself.runtime.clock import utc_now_iso
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,

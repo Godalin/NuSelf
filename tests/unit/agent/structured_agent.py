@@ -19,7 +19,7 @@ from nuself.agent.errors import (
 )
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.runtime.audit.definition import AuditEventDefinition
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LLMSettings,
     LangChainLLMEndpoint,
     is_endpoint_availability_error,

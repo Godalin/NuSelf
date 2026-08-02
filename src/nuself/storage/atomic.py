@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-from nuself.private_fs import create_private_file, ensure_private_directory
+from nuself.storage.filesystem import create_private_file, ensure_private_directory
 from nuself.runtime.messages import encode_json_value
 
 

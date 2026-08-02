@@ -24,7 +24,7 @@ from nuself.agent.tool_utils import (
 )
 from nuself.config.settings import RuntimePaths
 
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.reason.model import (
     ReasoningStep,
     ReasoningThread,

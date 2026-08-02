@@ -66,7 +66,7 @@ def test_daemon_resolves_configured_endpoints_once(
         return ()
 
     monkeypatch.setattr(
-        "nuself.llm._configured_llm_endpoints",
+        "nuself.agent.endpoint._configured_llm_endpoints",
         empty_endpoints,
     )
 

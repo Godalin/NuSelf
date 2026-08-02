@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
 from nuself.config.settings import ensure_runtime_dirs, runtime_paths
-from nuself.private_fs import ensure_private_file
+from nuself.storage.filesystem import ensure_private_file
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,

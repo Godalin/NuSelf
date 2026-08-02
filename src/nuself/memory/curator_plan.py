@@ -18,7 +18,7 @@ from nuself.memory.curator_contract import (
     MemoryAction,
     action_from_item,
 )
-from nuself.private_fs import ensure_private_file
+from nuself.storage.filesystem import ensure_private_file
 from nuself.runtime.observability import report_corrupt_record
 from nuself.storage.contract import StorageBackend
 

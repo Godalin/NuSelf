@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Literal, cast
 from uuid import uuid4
 
-from nuself.clock import utc_now, utc_now_iso
+from nuself.runtime.clock import utc_now, utc_now_iso
 from nuself.runtime.messages import freeze_json_value, thaw_json_value
 
 type ReasonStatus = Literal["active", "paused", "resolved", "archived"]

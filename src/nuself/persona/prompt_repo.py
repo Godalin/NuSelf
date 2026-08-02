@@ -139,4 +139,4 @@ def create_persona_prompt(name: str, prompt_text: str) -> PersonaPrompt:
         created_at=now,
         updated_at=now,
     )
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso

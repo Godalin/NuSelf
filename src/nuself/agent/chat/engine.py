@@ -39,7 +39,7 @@ from nuself.conversation import (
     ConversationState,
 )
 from nuself.agent.text import LangChainTextAgent, TextAgent
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
 )
 from nuself.memory.audit import MEMORY_AUDIT

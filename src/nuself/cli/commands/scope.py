@@ -6,7 +6,7 @@ import argparse
 
 from nuself.config.settings import ConfigSystem
 from nuself.cli.application import cli_backend
-from nuself.private_fs import ensure_managed_directory
+from nuself.storage.filesystem import ensure_managed_directory
 from nuself.config.scope import NuSelfScope, resolve_runtime_paths
 
 

@@ -15,7 +15,7 @@ from nuself.conversation.model import (
     ConversationTurnIncompleteError,
     PendingTurn,
 )
-from nuself.private_fs import blocking_private_file_lock
+from nuself.storage.filesystem import blocking_private_file_lock
 from nuself.storage.contract import StorageBackend
 
 class ConversationStore:

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from nuself.private_fs import (
+from nuself.storage.filesystem import (
     ensure_private_directory,
     ensure_private_file,
     require_private_file,

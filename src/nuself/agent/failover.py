@@ -12,7 +12,7 @@ from nuself.agent.endpoint_audit import (
     AgentEndpointComponent,
     report_agent_endpoint_failure,
 )
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     record_llm_endpoint_success,

@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Literal, cast
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.storage.contract import StorageBackend
 
 

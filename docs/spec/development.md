@@ -134,7 +134,7 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 
 ### Shared Time Boundary
 
-- Generic UTC clock helpers live in `nuself.clock`, never in a domain module.
+- Generic UTC clock helpers live in `nuself.runtime.clock`, never in a domain module.
   `utc_now()` returns an aware UTC `datetime`; `utc_now_iso()` is the shared
   producer for persisted ISO-8601 timestamps. Domains may keep specialized ID
   or scheduling helpers, but must compose them from the neutral clock.
@@ -149,7 +149,7 @@ content and the replacement directory entry reached the operating system's
 stable-storage boundary.
 
 NuSelf-owned runtime state is private by default. Dependency-neutral helpers
-in `nuself.private_fs` create or harden owned directories to owner-only `0700`
+in `nuself.storage.filesystem` create or harden owned directories to owner-only `0700`
 and owned files to `0600`. Atomic writers, SQLite databases and internal
 snapshots, append-only logs, lock files, and other internal append streams all
 use that boundary. Sensitive content must never exist in a

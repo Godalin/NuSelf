@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from nuself.config.settings import ReflectionSettings, RuntimePaths
 from nuself.conversation import ConversationHistoryService
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.memory.composition import MemoryRepositories
 from nuself.notification.outbox import NotificationOutbox
 from nuself.reflection.candidates import IdeaCandidateGenerator

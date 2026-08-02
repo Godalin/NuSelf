@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.model import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.errors import (

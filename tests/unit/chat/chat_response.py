@@ -22,7 +22,7 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LLMSettings,
     LangChainLLMEndpoint,
 )

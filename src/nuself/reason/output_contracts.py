@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Sequence, cast
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.reason.model import ReasoningStep, ReasoningThread
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"

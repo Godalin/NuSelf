@@ -8,7 +8,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Literal, cast
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 
 type OutboxStatus = Literal["pending", "sent", "failed", "dismissed"]

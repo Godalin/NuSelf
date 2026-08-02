@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.memory.model import (
     MemoryCandidate,
     MemoryEvidence,

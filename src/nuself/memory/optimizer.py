@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent
 from nuself.config.settings import RuntimePaths
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.memory.audit import MEMORY_AUDIT
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository

@@ -21,7 +21,7 @@ from nuself.memory.model import (
     MemoryEntry,
     default_memory_type_registry,
 )
-from nuself.llm import configured_langchain_chat_models
+from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.memory.service import MemoryQuery
 from nuself.memory.repository import (

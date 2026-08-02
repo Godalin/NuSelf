@@ -6,7 +6,7 @@ import threading
 from contextlib import contextmanager
 from typing import Generator
 
-from nuself.handles import VisibleHandleError, resolve_visible_item
+from nuself.runtime.handles import VisibleHandleError, resolve_visible_item
 from nuself.config.settings import RuntimePaths
 from nuself.reason.model import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound

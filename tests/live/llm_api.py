@@ -17,7 +17,7 @@ from nuself.agent.middleware import ToolOutcome
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.config.settings import ConfigSystem
 from nuself.config.scope import scope_from_authority_root
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     build_langchain_endpoint,
     configured_langchain_chat_models,

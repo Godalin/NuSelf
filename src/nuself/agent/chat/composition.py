@@ -24,8 +24,8 @@ from nuself.reflection.service import ReflectionService
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
 from nuself.runtime.job.message import JobSink
-from nuself.llm import configured_langchain_chat_models
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import configured_langchain_chat_models
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.log.store import runtime_event_log_sink
 from nuself.trace.composition import TraceServices
 from nuself.storage.workspace import PrivateWorkspaceStore

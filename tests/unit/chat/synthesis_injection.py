@@ -23,7 +23,7 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.conversation import ConversationState
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.discussion import PersonaDiscussionAgents

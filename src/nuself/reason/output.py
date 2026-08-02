@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable, Sequence, cast
 from uuid import uuid4
 
-from nuself.clock import utc_now, utc_now_iso
+from nuself.runtime.clock import utc_now, utc_now_iso
 from nuself.reason.model import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output_contracts import (
@@ -39,7 +39,7 @@ from nuself.runtime.diagnostics import (
 )
 from nuself.runtime.job.message import JobSink
 from nuself.storage.atomic import write_json_atomic, write_text_atomic
-from nuself.private_fs import ensure_private_directory
+from nuself.storage.filesystem import ensure_private_directory
 from nuself.storage.workspace import PrivateWorkspaceStore
 
 class ReasonOutputService:

@@ -16,7 +16,7 @@ from nuself.decorators import (
     requires_confirmation,
     tool,
 )
-from nuself.handles import VisibleHandleError, parse_visible_index
+from nuself.runtime.handles import VisibleHandleError, parse_visible_index
 from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound

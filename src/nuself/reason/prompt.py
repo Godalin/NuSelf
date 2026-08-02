@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.llm import LangChainLLMEndpoint
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.reason.errors import ReasonPromptError
 from nuself.runtime.diagnostics import diagnostic_exception_message
 

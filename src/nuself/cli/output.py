@@ -10,7 +10,7 @@ from typing import Any
 from prompt_toolkit import print_formatted_text
 from prompt_toolkit.formatted_text import ANSI
 
-from nuself.handles import (
+from nuself.runtime.handles import (
     VisibleHandleError,
     resolve_visible_handle,
     resolve_visible_handle_selection,

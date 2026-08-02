@@ -16,7 +16,7 @@ from typing import cast
 from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
-from nuself.private_fs import ensure_private_directory
+from nuself.storage.filesystem import ensure_private_directory
 from nuself.runtime.messages import decode_json_value, encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.config.settings import runtime_paths

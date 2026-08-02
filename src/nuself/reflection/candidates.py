@@ -12,8 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.clock import utc_now_iso
-from nuself.llm import LangChainLLMEndpoint
+from nuself.runtime.clock import utc_now_iso
+from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
 from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository

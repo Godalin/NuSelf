@@ -171,7 +171,7 @@ def _initialize_cli_test_authority(  # pyright: ignore[reportUnusedFunction]
             return ()
 
         monkeypatch.setattr(
-            "nuself.llm._configured_llm_endpoints",
+            "nuself.agent.endpoint._configured_llm_endpoints",
             no_configured_endpoints,
         )
 

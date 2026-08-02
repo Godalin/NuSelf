@@ -13,7 +13,7 @@ from nuself.decorators import (
     requires_confirmation,
     tool,
 )
-from nuself.handles import VisibleHandleError, parse_visible_index
+from nuself.runtime.handles import VisibleHandleError, parse_visible_index
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.execution import FeatureExecutor
