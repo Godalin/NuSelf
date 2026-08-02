@@ -11,6 +11,7 @@ from pytest import MonkeyPatch
 from nuself.application.composition import compose_application
 from nuself.config import ConfigSystem
 from nuself.config import runtime_paths
+from nuself.scope import resolve_runtime_paths, resolve_scope
 from nuself.storage import auto_backend
 
 
@@ -43,6 +44,36 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert graph.reflection_service._reason_service is graph.reason_service
     assert not hasattr(graph.trace, "repository")
     assert graph.trace.recorder._repository is graph.trace.query._repository
+
+
+def test_application_graph_uses_resolved_workspace_config_layers(
+    tmp_path: Path,
+) -> None:
+    user_root = (tmp_path / "user").resolve()
+    workspace = (tmp_path / "workspace").resolve()
+    user_root.mkdir()
+    (workspace / ".nuself").mkdir(parents=True)
+    (user_root / "config.yaml").write_text(
+        "chat:\n  language_preference: zh-CN\n",
+        encoding="utf-8",
+    )
+    (workspace / ".nuself" / "config.yaml").write_text(
+        "chat:\n  context:\n    recent_messages: 7\n",
+        encoding="utf-8",
+    )
+    scope = resolve_scope(
+        workspace=workspace,
+        environ={"NUSELF_HOME": str(user_root)},
+    )
+    paths = resolve_runtime_paths(scope)
+
+    graph = compose_application(
+        paths,
+        auto_backend(paths.authority_root),
+    )
+
+    assert graph.config.chat.language_preference == "zh-CN"
+    assert graph.config.chat.context.recent_messages == 7
 
 
 def test_reason_prompt_models_are_composed_lazily(

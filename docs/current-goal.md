@@ -9,16 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Use authority terminology at the daemon request-state boundary.
+Compose application configuration from the already-resolved scope.
 
 ## Ordered Steps
 
-1. Specify `DaemonRequestState.authority_root` as the socket/request adapter
-   capability; keep lower-level diagnostic keyword compatibility out of scope.
-2. Rename the concrete daemon state field, request handlers, socket helper, and
-   structural test doubles without adding an adapter property.
-3. Prove no daemon request-state `project_root` remains; run focused daemon
-   tests and full gates, then commit without pushing.
+1. Add an application-composition regression proving workspace config inherits
+   user defaults and applies workspace overrides.
+2. Replace path-only `ConfigSystem.load()` with `load_scope(paths.scope)`;
+   perform no second authority resolution inside the graph composer.
+3. Run focused config/application tests and full gates, then commit without
+   pushing.
 
 ## Exclusions
 
@@ -27,8 +27,8 @@ Use authority terminology at the daemon request-state boundary.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve every path value, request/response behavior, audit destination,
-  authority identity, and socket error boundary.
+- Preserve strict configuration validation, layer order, immutable graph
+  configuration, lazy model construction, and storage ownership.
 
 ## Constraints
 
@@ -40,6 +40,11 @@ Use authority terminology at the daemon request-state boundary.
 
 ## Phase Evidence
 
+- `compose_application()` now loads configuration from `paths.scope` instead of
+  reconstructing a path-only authority. A new composition regression proves
+  workspace graphs inherit user language defaults and apply workspace context
+  overrides. Focused configuration/application tests: 23 passed; full suite:
+  2441 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `DaemonState`, structural `DaemonRequestState`, request handlers, and the Unix
   socket adapter now expose the selected `authority_root` explicitly. Removed
   the request-state `project_root` name without adding a compatibility property;

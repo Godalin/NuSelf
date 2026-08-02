@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Application composition now loads configuration from its already-resolved
+  scope, preserving user defaults beneath workspace overrides.
 - Daemon request state and its socket adapter now expose the selected
   `authority_root` explicitly instead of calling it a project root.
 - `RuntimePaths` now exposes only the canonical `authority_root`; removed its

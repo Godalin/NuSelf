@@ -52,6 +52,9 @@ opened once for that authority. Domain repositories receive both the selected
 dependencies; accepting a project root and resolving either dependency inside
 the repository is forbidden. Services receive repositories, clocks, sinks,
 and cross-domain capabilities explicitly.
+`compose_application()` loads configuration from the `NuSelfScope` already
+carried by those paths; it must not discard workspace/user-layer metadata and
+reconstruct scope from the authority root.
 Authority-scoped workspace storage follows the same rule: it receives resolved
 `RuntimePaths`. Daemon workers borrow that store from process composition and
 must not create it lazily during worker startup. The low-level workspace store
