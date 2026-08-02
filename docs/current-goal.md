@@ -9,15 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Inline the daemon-list command's single-use formatter.
+Remove duplicated daemon-unavailable state from system health.
 
 ## Ordered Steps
 
-1. Confirm `format_daemon_list()` has one production caller and no direct API
-   consumer.
-2. Render its fixed two-line table in `handle_daemon_list()` and remove the
-   standalone function.
-3. Run focused daemon CLI tests and full gates, then commit without pushing.
+1. Confirm `status_unavailable` exactly mirrors `daemon is None` within one
+   health command invocation.
+2. Branch on the authoritative observation result directly while preserving
+   accumulated authority-root issue output.
+3. Run focused system CLI tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -26,7 +26,7 @@ Inline the daemon-list command's single-use formatter.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve exact daemon-list text, status observation, and exit codes.
+- Preserve health issue ordering, safe status diagnostics, and exit codes.
 
 ## Constraints
 
@@ -38,6 +38,11 @@ Inline the daemon-list command's single-use formatter.
 
 ## Phase Evidence
 
+- System health now uses the observed daemon status directly instead of
+  retaining a second `status_unavailable` boolean. Missing authority issues are
+  still aggregated before the unavailable status exit. Focused system/CLI/error
+  boundary tests: 327 passed; full suite: 2440 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - The daemon-list command now renders its fixed header and row directly.
   Removed the single-use `format_daemon_list()` public function while preserving
   exact output, status observation, and exit behavior. Focused daemon

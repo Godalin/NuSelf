@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- System health now branches directly on the daemon status observation instead
+  of maintaining a duplicate unavailable flag.
 - The daemon-list handler now owns its fixed two-line rendering directly,
   removing a single-use public formatter.
 - CLI lifecycle failures now use the shared safe diagnostic formatter directly,

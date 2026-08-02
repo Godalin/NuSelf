@@ -38,19 +38,15 @@ def handle_health(args: argparse.Namespace) -> int:
         issues.append(
             f"authority root missing: {paths.authority_root}"
         )
-    status_unavailable = False
     daemon = observe_daemon_status(args.project_root)
-    if daemon is None:
-        status_unavailable = True
-    else:
-        if not daemon.running:
-            issues.append(f"daemon is not ready: {daemon.phase}")
+    if daemon is not None and not daemon.running:
+        issues.append(f"daemon is not ready: {daemon.phase}")
     if issues:
         print("Health issues:")
         for issue in issues:
             print(f"  - {issue}")
         return 1
-    if status_unavailable:
+    if daemon is None:
         return 1
     print("All checks passed.")
     return 0
