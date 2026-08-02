@@ -377,6 +377,18 @@ def test_should_reflect_respects_daily_cap(scheduler: ReflectionScheduler) -> No
     assert scheduler.should_reflect(now.replace(hour=13)) is False
 
 
+def test_schedule_status_explains_current_gate(scheduler: ReflectionScheduler) -> None:
+    now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    scheduler._write_last_reflection(now)
+
+    status = scheduler.schedule_status(now)
+
+    assert status.ready is False
+    assert status.blocked_by == "interval"
+    assert status.last_run_at == now
+    assert status.daily_count == 1
+
+
 # --- reflection pipeline tests ---
 
 def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> None:
@@ -552,6 +564,26 @@ def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionSchedu
     assert events[-1].event == "schedule_blocked"
     assert events[-1].status == "skipped"
     assert events[-1].metadata == {"reason": "quiet_hours"}
+
+
+def test_forced_reflection_bypasses_temporal_schedule_gates(
+    scheduler: ReflectionScheduler,
+) -> None:
+    scheduler._config = _reflection_settings(
+        interval_seconds=10,
+        cooldown_seconds=0,
+        quiet_start_hour=22,
+        quiet_end_hour=7,
+        daily_cap=100,
+        jitter_percent=0,
+        relevance_threshold=0.0,
+        persona_discussion_threshold=1.0,
+        max_discussion_rounds=2,
+        moderator_convergence_patience=1,
+    )
+
+    assert scheduler.reflect(_local_datetime(2024, 1, 1, 23), force=True) is True
+    assert len(scheduler._reflection_repo.list()) == 1
 
 
 def test_write_last_reflection_persists_schedule_state(

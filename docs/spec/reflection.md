@@ -42,8 +42,8 @@ Stored as one JSON file per entry in `<authority-root>/reflections/{id}.json`.
 | Status | Meaning |
 |---|---|
 | `pending` | Produced by scheduler; user has not acted on it |
-| `dismissed` | User explicitly dismissed (`nuself inbox reflection dismiss`) |
-| `archived` | User explicitly archived (`nuself inbox reflection archive`) |
+| `dismissed` | User explicitly dismissed (`nuself reflection dismiss`) |
+| `archived` | User explicitly archived (`nuself reflection archive`) |
 
 ## Pipeline Flow
 
@@ -221,7 +221,7 @@ failure cannot replace the returned organization result or undo those writes.
 If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
 
 - `title`: `"New reflection: {reflection.title}"`
-- `body`: `"A new reflection idea is available. View it with: nuself inbox reflection show {id}"`
+- `body`: `"A new reflection idea is available. View it with: nuself reflection show {id}"`
 - `idempotency_key`: `"notify-{reflection.id}"`
 
 Default is `false` — no outbox entry created.
@@ -263,12 +263,14 @@ aliases.
 ## CLI Contracts
 
 ```
-nuself inbox reflection list [--status pending|dismissed|archived] [--json]
-nuself inbox reflection show <id_or_index> [--json]
-nuself inbox reflection dismiss <id_or_index>
-nuself inbox reflection archive <id_or_index>
-nuself inbox reflection promote <id_or_index>
-nuself inbox reflection organize
+nuself reflection run
+nuself reflection status
+nuself reflection list [--status pending|dismissed|archived] [--json]
+nuself reflection show <id_or_index> [--json]
+nuself reflection dismiss <id_or_index>
+nuself reflection archive <id_or_index>
+nuself reflection promote <id_or_index>
+nuself reflection organize
 ```
 
 - `list` default: shows **all** statuses.
@@ -278,5 +280,11 @@ nuself inbox reflection organize
 - `show` / `dismiss` / `archive` / `promote` accept either an entry ID or the 0-based visible index from `list`.
 - `promote`: creates a reason thread from the selected pending reflection, writes reason and promotion trace records, and leaves the source reflection pending.
 - `organize`: runs pending reflection organization once and prints how many groups and entries were merged.
+- `run`: executes one explicitly requested cycle and bypasses temporal
+  background scheduling gates; corrupt schedule state remains blocking.
+- `status`: inspects readiness, block reason, last-run timestamp, and current
+  daily count without invoking a model.
 
-REPL `:inbox reflection` lists **only pending** entries. `:inbox reflection list` lists **all** entries.
+REPL `:reflection` lists **only pending** entries. `:reflection list` lists
+**all** entries. `:inbox` composes pending Reflection and Notification items
+but owns no Reflection mutation command.

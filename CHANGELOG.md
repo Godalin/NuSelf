@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection now owns a top-level `nuself reflection` command family with
+  explicit `run` and `status` operations plus entry management. `nuself inbox`
+  is now the mixed pending-item view and no longer owns Reflection commands.
+
 - Observed agent-tool logs once again show structured arguments and
   result/error details by default. Tool authors may apply the orthogonal
   `@compact` decorator when operation/status-only output is intentional.

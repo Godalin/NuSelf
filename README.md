@@ -33,9 +33,9 @@ locks and Unix-domain sockets.
 - Memory-aware one-shot and daemon-backed chat
 - Persisted, resumable, branchable conversations
 - Durable memory with review, search, relations, and symbolic graph views
-- Markdown and plain-text source ingestion with cited profile extraction
+- Independent Markdown and plain-text external knowledge library
 - Long-run reasoning threads and traceable thought provenance
-- API-separated conversation history, durable memory observations, and proactive reflection
+- API-separated conversation history, memory observations, and top-level reflection controls
 - Durable notification outbox with log, email, and macOS adapters
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover

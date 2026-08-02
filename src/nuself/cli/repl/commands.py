@@ -521,7 +521,37 @@ def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: 
         except RuntimeError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"
-    return f"Unknown :inbox reflection subcommand: {subcmd}"
+    return f"Unknown :reflection subcommand: {subcmd}"
+
+
+def handle_interactive_reflection_run_command(project_root: Path | None) -> str:
+    del project_root
+    from nuself.cli.commands.reflections import reflection_scheduler
+
+    scheduler = reflection_scheduler()
+    status = scheduler.schedule_status()
+    if status.blocked_by == "state_corrupt":
+        return "Reflection cannot run: schedule state is corrupt."
+    return (
+        "Reflection cycle published one entry."
+        if scheduler.reflect(force=True)
+        else "Reflection cycle completed without a new entry."
+    )
+
+
+def handle_interactive_reflection_status_command(project_root: Path | None) -> str:
+    del project_root
+    from nuself.cli.commands.reflections import reflection_scheduler
+
+    status = reflection_scheduler().schedule_status()
+    return "\n".join(
+        (
+            f"ready: {str(status.ready).lower()}",
+            f"blocked_by: {status.blocked_by or '-'}",
+            f"last_run_at: {status.last_run_at.isoformat() if status.last_run_at else '-'}",
+            f"daily_count: {status.daily_count}",
+        )
+    )
 
 
 def handle_interactive_notify_command(

@@ -127,9 +127,11 @@ and add `--apply` explicitly to commit. Unknown legacy data stays untouched.
 ## Reflections And Notifications
 
 ```bash
-uv run nuself inbox reflection list
-uv run nuself inbox reflection show <reflection-id>
-uv run nuself inbox reflection dismiss <reflection-id>
+uv run nuself reflection status
+uv run nuself reflection run
+uv run nuself reflection list
+uv run nuself reflection show <reflection-id>
+uv run nuself reflection dismiss <reflection-id>
 
 uv run nuself inbox notify list
 uv run nuself inbox notify show <notification-id>

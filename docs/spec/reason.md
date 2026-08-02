@@ -421,7 +421,7 @@ Trace is the audit layer for Reason. Reason may be dynamic, revisable, branching
 ### Reflection Bridge
 
 ```
-nuself inbox reflection promote <id_or_index>
+nuself reflection promote <id_or_index>
 ```
 
 Promotion creates a reasoning thread from the reflection title/body and records the reflection id in `evidence_refs`. The original reflection must remain pending — promotion does not automatically archive or dismiss the source reflection.

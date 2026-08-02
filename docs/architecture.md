@@ -117,6 +117,10 @@ organization, discussion, publication, and trace capabilities from its
 domain-owned composition. Persona owns its read-only projection from Memory's
 public repository contract; neither domain opens the other's persistence or
 selects authority resources.
+Reflection also owns its CLI and REPL operations, including manual runs,
+schedule status, and entry management. Inbox is only a composite read view of
+pending items from Reflection and Notification; it does not own either
+domain's service API.
 The daemon keeps one scheduler and one resource-serialization mechanism; a
 small closed task catalog prevents producer/handler name drift without adding
 per-domain schedulers or locks.

@@ -33,3 +33,11 @@ def test_registry_resolves_alias_to_canonical_name_and_body() -> None:
     assert resolved.body == "search durable context"
     assert resolve_command(":memory search durable context") is None
     assert "mem" in command_names()
+
+
+def test_reflection_is_an_independent_repl_command() -> None:
+    resolved = resolve_command(":reflection status")
+
+    assert resolved is not None
+    assert resolved.name == "reflection"
+    assert resolved.body == "status"

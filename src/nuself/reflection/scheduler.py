@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -78,6 +79,16 @@ class ReflectionTraceRecorder(Protocol):
     ) -> object: ...
 
 
+@dataclass(frozen=True)
+class ReflectionScheduleStatus:
+    """User-facing snapshot of deterministic Reflection scheduling gates."""
+
+    ready: bool
+    blocked_by: str | None
+    last_run_at: datetime | None
+    daily_count: int
+
+
 class ReflectionScheduler:
     """Decides when the daemon should run a self-reflection cycle."""
 
@@ -109,14 +120,31 @@ class ReflectionScheduler:
             now = datetime.now(UTC)
         return self._schedule_block_reason(now) is None
 
-    def reflect(self, now: datetime | None = None) -> bool:
+    def schedule_status(self, now: datetime | None = None) -> ReflectionScheduleStatus:
+        """Inspect scheduling gates without invoking the candidate pipeline."""
+
+        if now is None:
+            now = datetime.now(UTC)
+        block_reason = self._schedule_block_reason(now)
+        try:
+            state = self._reflection_repo.schedule_state()
+        except ReflectionScheduleStateError:
+            state = None
+        return ReflectionScheduleStatus(
+            ready=block_reason is None,
+            blocked_by=block_reason,
+            last_run_at=state.timestamp if state is not None else None,
+            daily_count=self._reflection_count_today(now, state),
+        )
+
+    def reflect(self, now: datetime | None = None, *, force: bool = False) -> bool:
         """Run one reflection cycle if conditions pass."""
         
         if now is None:
             now = datetime.now(UTC)
         
         block_reason = self._schedule_block_reason(now)
-        if block_reason is not None:
+        if block_reason is not None and (not force or block_reason == "state_corrupt"):
             REFLECTION_AUDIT.write(
                 "schedule_blocked",
                 "reflection cycle skipped by schedule limits",

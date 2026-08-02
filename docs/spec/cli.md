@@ -455,7 +455,8 @@ Top-level commands:
 | `nuself conversation` | Persistent conversation management                    |
 | `nuself memory` | Personal memory, profile, review queue, graph              |
 | `nuself source` | Imported external knowledge                                |
-| `nuself inbox`  | User-facing proactive items: reflection and notifications |
+| `nuself reflection` | Generate and manage proactive reflections             |
+| `nuself inbox`  | Mixed pending items across proactive domains                |
 | `nuself reason` | Long-run reasoning threads                                |
 | `nuself trace`  | Thought provenance records                                |
 | `nuself dev`    | Diagnostics, logs, config, health, eval, status           |
@@ -464,7 +465,6 @@ Breaking moves:
 
 | Removed path                  | New path                                      |
 | ----------------------------- | --------------------------------------------- |
-| `nuself reflection ...`       | `nuself inbox reflection ...`                 |
 | `nuself notify ...`           | `nuself inbox notify ...`                     |
 | `nuself logs ...`             | `nuself dev logs ...`                         |
 | `nuself status`               | `nuself dev status` or `nuself daemon status` |
@@ -481,15 +481,16 @@ Top-level help should group commands as:
 - System: `daemon`, `dev`
 
 Top-level help and command group help must show one-line descriptions for each listed command. Multi-layer groups must
-do the same at every level, including `memory review`, `memory profile`, `memory graph`, and `source`,
-`inbox reflection`, and `inbox notify`, so users can choose commands without already knowing the subsystem vocabulary.
+do the same at every level, including `memory review`, `memory profile`,
+`memory graph`, `source`, `reflection`, and `inbox notify`, so users can choose
+commands without already knowing the subsystem vocabulary.
 
 REPL commands mirror the same model:
 
 | Command                 | Purpose                      |
 | ----------------------- | ---------------------------- |
 | `:inbox`, `:i`          | List pending proactive items |
-| `:inbox reflection ...` | Reflection commands          |
+| `:reflection`           | Reflection commands          |
 | `:inbox notify ...`     | Notification commands        |
 | `:mem`, `:m`            | Memory preview               |
 | `:conversation`, `:c`   | Conversation switching/listing |
@@ -499,9 +500,9 @@ REPL commands mirror the same model:
 | `:restart`, `:r`        | Restart daemon and reconnect |
 | `:export`, `:e`         | Transcript export            |
 
-Interactive inbox reflection and notification handlers each own one rendering
-path parameterized by pending versus all entries; command dispatch selects the
-view without maintaining duplicate list handlers.
+Interactive Reflection and notification handlers each own one rendering path
+parameterized by pending versus all entries. Inbox composes their pending
+views without owning their mutations.
 REPL command-local formatting and one-branch queries stay at their owning
 branch rather than being exposed as single-use command APIs.
 
@@ -510,7 +511,20 @@ branch rather than being exposed as single-use command APIs.
 ### Reflection
 
 ```
-nuself inbox reflection list [--status pending|dismissed|archived] [--json]
+nuself reflection run
+nuself reflection status
+```
+
+- `run` explicitly executes one cycle now. Manual intent bypasses quiet-hour,
+  interval, cooldown, and daily-cap scheduling gates, but malformed persisted
+  schedule state still fails closed. It reports whether a new entry was
+  published or the candidate/relevance pipeline produced no entry.
+- `status` reports readiness, the current scheduling block reason, last cycle
+  timestamp, and current daily count without running the model pipeline.
+- Background daemon cycles continue to respect every scheduling gate.
+
+```
+nuself reflection list [--status pending|dismissed|archived] [--json]
 ```
 
 - **Default view**: All reflection entries.
@@ -520,14 +534,14 @@ nuself inbox reflection list [--status pending|dismissed|archived] [--json]
 - **Empty**: `No reflection entries.`
 
 ```
-nuself inbox reflection show <id_or_index> [--json]
+nuself reflection show <id_or_index> [--json]
 ```
 
 - Indexes into the same filtered list used by `reflection list`.
 - **Detail view**: One record header containing ID, status, candidate metadata, deep link, and timestamps; body text starts on the next indented line; discussion trace uses the indented discussion trace block.
 
 ```
-nuself inbox reflection promote <id_or_index>
+nuself reflection promote <id_or_index>
 ```
 
 - Creates a reason thread from the selected reflection without dismissing or archiving the reflection.

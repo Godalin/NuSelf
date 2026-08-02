@@ -23,6 +23,8 @@ from nuself.cli.repl.commands import (
     handle_interactive_reflection_command,
     handle_interactive_reflection_show_command,
     handle_interactive_reflection_subcommand,
+    handle_interactive_reflection_run_command,
+    handle_interactive_reflection_status_command,
     handle_interactive_restart_command,
     handle_interactive_conversations_command,
     handle_interactive_trace_command,
@@ -101,6 +103,7 @@ def _build_repl_command_registry() -> ReplCommandRegistry:
         ("history", _handle_history),
         ("whoami", _handle_whoami),
         ("inbox", _handle_inbox),
+        ("reflection", _handle_reflection),
         ("help", _handle_help),
         ("retry", _handle_retry),
         ("dev", _handle_dev),
@@ -416,34 +419,6 @@ def _handle_inbox_command(
     print()
     if body == "":
         print_ansi(handle_interactive_inbox_command(project_root))
-    elif body == "reflection":
-        print_ansi(handle_interactive_reflection_command(project_root))
-    elif body.startswith("reflection "):
-        parts = body.removeprefix("reflection ").split(maxsplit=1)
-        if parts[0] == "list":
-            print_ansi(
-                handle_interactive_reflection_command(
-                    project_root,
-                    include_all=True,
-                )
-            )
-        elif parts[0] == "show" and len(parts) == 2:
-            print_ansi(
-                handle_interactive_reflection_show_command(
-                    project_root,
-                    parts[1],
-                )
-            )
-        elif len(parts) == 2:
-            print_ansi(
-                handle_interactive_reflection_subcommand(
-                    project_root,
-                    parts[0],
-                    parts[1],
-                )
-            )
-        else:
-            print(interactive_help(":inbox reflection"))
     elif body == "notify":
         print_ansi(handle_interactive_notify_command(project_root))
     elif body.startswith("notify "):
@@ -476,6 +451,46 @@ def _handle_inbox_command(
             print(interactive_help(":inbox notify"))
     else:
         print(interactive_help(original_command))
+
+
+def _handle_reflection(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    if body == "":
+        print_ansi(handle_interactive_reflection_command(context.project_root))
+    elif body == "list":
+        print_ansi(
+            handle_interactive_reflection_command(
+                context.project_root,
+                include_all=True,
+            )
+        )
+    elif body == "run":
+        print_ansi(handle_interactive_reflection_run_command(context.project_root))
+    elif body == "status":
+        print_ansi(handle_interactive_reflection_status_command(context.project_root))
+    else:
+        parts = body.split(maxsplit=1)
+        if parts[0] == "show" and len(parts) == 2:
+            print_ansi(
+                handle_interactive_reflection_show_command(
+                    context.project_root,
+                    parts[1],
+                )
+            )
+        elif len(parts) == 2:
+            print_ansi(
+                handle_interactive_reflection_subcommand(
+                    context.project_root,
+                    parts[0],
+                    parts[1],
+                )
+            )
+        else:
+            print(interactive_help(":reflection"))
+    return ("", context.current_conversation_id)
 
 
 def _handle_dev_command(body: str, project_root: Path | None) -> None:

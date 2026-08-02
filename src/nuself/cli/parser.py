@@ -75,7 +75,10 @@ from nuself.cli.commands.reflections import (
     handle_reflection_organize,
     handle_reflection_promote,
     handle_reflection_show,
+    handle_reflection_run,
+    handle_reflection_status,
 )
+from nuself.cli.commands.inbox import handle_inbox
 from nuself.cli.commands.system import (
     handle_health,
     handle_logs,
@@ -374,21 +377,33 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
 
     inbox_parser = subparsers.add_parser(
         "inbox",
-        help="Manage proactive reflection and notification items.",
-        description="Manage proactive reflection and notification items.",
+        help="Show pending items across proactive domains.",
+        description="Show pending items across proactive domains.",
     )
-    bind_help(inbox_parser)
+    bind_handler(inbox_parser, handle_inbox)
     inbox_subparsers = inbox_parser.add_subparsers(
         dest="inbox_command", metavar="<command>"
     )
-    reflection_parser = inbox_subparsers.add_parser(
+    reflection_parser = subparsers.add_parser(
         "reflection",
-        help="Review reflection candidates.",
-        description="Review reflection candidates.",
+        help="Generate and manage proactive reflections.",
+        description="Generate and manage proactive reflections.",
     )
     bind_help(reflection_parser)
     reflection_subparsers = reflection_parser.add_subparsers(
         dest="reflection_command", metavar="<command>"
+    )
+    bind_handler(
+        reflection_subparsers.add_parser(
+            "run", help="Run one reflection cycle now."
+        ),
+        handle_reflection_run,
+    )
+    bind_handler(
+        reflection_subparsers.add_parser(
+            "status", help="Show reflection scheduling status."
+        ),
+        handle_reflection_status,
     )
     reflection_list_parser = reflection_subparsers.add_parser(
         "list", help="List reflection entries."

@@ -2135,15 +2135,11 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
             "archived",
                 "List archived conversations.",
         ],
-        ("inbox",): [
-            "reflection",
-            "Review reflection candidates.",
-            "notify",
-            "Manage notification outbox entries.",
-        ],
-        ("inbox", "reflection"): [
+        ("reflection",): [
+            "run",
+            "Run one reflection cycle now.",
             "promote",
-                "Promote one reflection into a reason thread.",
+            "Promote one reflection into a reason thread.",
             "organize",
             "Merge similar pending reflection entries.",
         ],
@@ -5649,7 +5645,7 @@ def test_reflection_cli_promote_creates_reason_and_trace(
     ).save(entry)
 
     result = main(
-        ["--workspace", str(tmp_path), "inbox", "reflection", "promote", entry.id]
+        ["--workspace", str(tmp_path), "reflection", "promote", entry.id]
     )
     output = capsys.readouterr().out
 
@@ -5661,6 +5657,67 @@ def test_reflection_cli_promote_creates_reason_and_trace(
             kind="promotion"
         )
     ) == 1
+
+
+def test_reflection_cli_status_reports_scheduler_state(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    class Scheduler:
+        def schedule_status(self) -> object:
+            from nuself.reflection.scheduler import ReflectionScheduleStatus
+
+            return ReflectionScheduleStatus(True, None, None, 0)
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.reflections.reflection_scheduler",
+        Scheduler,
+    )
+    result = main(["--workspace", str(tmp_path), "reflection", "status"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "ready: true" in output
+    assert "blocked_by: -" in output
+    assert "last_run_at: -" in output
+    assert "daily_count: 0" in output
+
+
+def test_reflection_cli_run_forces_one_cycle(
+    tmp_path: Path,
+    capsys: CaptureFixture,
+    monkeypatch: MonkeyPatchFixture,
+) -> None:
+    class Scheduler:
+        def schedule_status(self) -> object:
+            from nuself.reflection.scheduler import ReflectionScheduleStatus
+
+            return ReflectionScheduleStatus(True, None, None, 0)
+
+        def reflect(self, *, force: bool = False) -> bool:
+            assert force is True
+            return True
+
+    monkeypatch.setattr(
+        "nuself.cli.commands.reflections.reflection_scheduler",
+        Scheduler,
+    )
+
+    result = main(["--workspace", str(tmp_path), "reflection", "run"])
+    output = capsys.readouterr().out
+
+    assert result == 0
+    assert "published one entry" in output
+
+
+def test_inbox_default_is_a_mixed_pending_view(
+    tmp_path: Path, capsys: CaptureFixture
+) -> None:
+    result = main(["--workspace", str(tmp_path), "inbox"])
+
+    assert result == 0
+    assert capsys.readouterr().out.strip() == "Inbox is empty."
 
 
 def test_interactive_reason_without_args_shows_help(
@@ -5715,13 +5772,13 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
         ["daemon", "list", "--help"],
         ["daemon", "logs", "--help"],
         ["daemon", "attach", "--help"],
-        ["inbox", "reflection", "--help"],
-        ["inbox", "reflection", "list", "--help"],
-        ["inbox", "reflection", "show", "--help"],
-        ["inbox", "reflection", "dismiss", "--help"],
-        ["inbox", "reflection", "archive", "--help"],
-        ["inbox", "reflection", "promote", "--help"],
-        ["inbox", "reflection", "organize", "--help"],
+        ["reflection", "--help"],
+        ["reflection", "list", "--help"],
+        ["reflection", "show", "--help"],
+        ["reflection", "dismiss", "--help"],
+        ["reflection", "archive", "--help"],
+        ["reflection", "promote", "--help"],
+        ["reflection", "organize", "--help"],
         ["inbox", "notify", "--help"],
         ["inbox", "notify", "list", "--help"],
         ["inbox", "notify", "show", "--help"],
