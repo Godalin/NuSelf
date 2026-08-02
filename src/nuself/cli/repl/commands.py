@@ -30,7 +30,6 @@ from nuself.memory.source_repository import (
 from nuself.persona.audit import report_persona_failure
 from nuself.reason.errors import ReasonError, ReasonNotFound
 from nuself.reflection.repository import ReflectionEntryNotFound
-from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
@@ -50,12 +49,6 @@ from nuself.tui.render import TerminalTheme
 from nuself.tui.trace import render_trace_detail, render_trace_row
 
 theme = TerminalTheme()
-
-
-def _reflection_service(
-    project_root: Path | None,
-) -> ReflectionService:
-    return cli_application().reflection_service
 
 
 def handle_interactive_memory_command(command: str, project_root: Path | None) -> str:
@@ -467,7 +460,7 @@ def handle_interactive_reflection_command(
 ) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = _reflection_service(project_root).list_entries(
+    entries = cli_application().reflection_service.list_entries(
         status=None if include_all else "pending"
     )
     if not entries:
@@ -504,14 +497,14 @@ def handle_interactive_reflection_show_command(project_root: Path | None, entry_
     from nuself.tui.render import render_reflection_entry_detail
 
     try:
-        entry = _reflection_service(project_root).show_entry(entry_id)
+        entry = cli_application().reflection_service.show_entry(entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         return diagnostic_exception_message(exc)
     return render_reflection_entry_detail(entry)
 
 
 def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    service = _reflection_service(project_root)
+    service = cli_application().reflection_service
     try:
         service.show_entry(entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:

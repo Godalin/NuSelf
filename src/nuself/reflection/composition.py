@@ -12,8 +12,34 @@ from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.service import ReflectionService
+from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.persona.discussion import SharedPersonaDiscussionService
+from nuself.reason.service import ReasonService
+from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
+
+
+def compose_reflection_service(
+    paths: RuntimePaths,
+    backend: StorageBackend,
+    reason_service: ReasonService,
+    trace_recorder: TraceRecorder,
+) -> tuple[ReflectionRepository, ReflectionService]:
+    """Compose Reflection's authority-scoped repository and service."""
+
+    repository = ReflectionRepository(paths, backend=backend)
+    return (
+        repository,
+        ReflectionService(
+            repository,
+            reason_service,
+            trace_recorder,
+            ReflectionOrganizer(
+                paths.authority_root,
+                repository=repository,
+            ),
+        ),
+    )
 
 
 def compose_reflection_scheduler(

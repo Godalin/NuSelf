@@ -8,7 +8,7 @@ from nuself.memory.composition import (
     MemoryRepositories,
     compose_memory_repositories,
 )
-from nuself.reason.composition import compose_reason_prompt_generator
+from nuself.reason.composition import compose_reason_service
 from nuself.application.data_admin import DataAdminService
 from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
@@ -16,11 +16,10 @@ from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification.outbox import NotificationOutbox
 from nuself.memory.query import MemoryService
 from nuself.persona.prompt_repo import PersonaPromptRepository
-from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
-from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
+from nuself.reflection.composition import compose_reflection_service
 from nuself.storage import StorageBackend
 from nuself.workspace import PrivateWorkspaceStore
 
@@ -54,16 +53,18 @@ def compose_application(
     conversations = ConversationStore(paths, backend=backend)
     memory = compose_memory_repositories(paths, backend)
     trace = compose_trace_services(paths, backend)
-    reason = ReasonRepository(paths, backend=backend)
-    reflection = ReflectionRepository(paths, backend=backend)
-    reason_workspace = PrivateWorkspaceStore(paths, scope="reason")
     config = ConfigSystem.load_scope(paths.scope)
-    reason_service = ReasonService(
-        paths.authority_root,
-        repository=reason,
-        workspace_store=reason_workspace,
-        trace_recorder=trace.recorder,
-        prompt_generator=compose_reason_prompt_generator(paths, config),
+    reason_service, reason_workspace = compose_reason_service(
+        paths,
+        backend,
+        trace.recorder,
+        config,
+    )
+    reflection, reflection_service = compose_reflection_service(
+        paths,
+        backend,
+        reason_service,
+        trace.recorder,
     )
     return ApplicationGraph(
         paths=paths,
@@ -84,15 +85,7 @@ def compose_application(
         reason_workspace=reason_workspace,
         reason_service=reason_service,
         reflection=reflection,
-        reflection_service=ReflectionService(
-            reflection,
-            reason_service,
-            trace.recorder,
-            ReflectionOrganizer(
-                paths.authority_root,
-                repository=reflection,
-            ),
-        ),
+        reflection_service=reflection_service,
         trace=trace,
         data=DataAdminService(
             backend,

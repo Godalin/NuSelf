@@ -12,7 +12,6 @@ from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail, render_reason_row
 
@@ -25,14 +24,8 @@ REASON_VERBS: dict[str, tuple[str, str]] = {
 }
 
 
-def _service(
-    args: argparse.Namespace,
-) -> ReasonService:
-    return cli_application().reason_service
-
-
 def handle_reason_list(args: argparse.Namespace) -> int:
-    threads = _service(args).list_threads(
+    threads = cli_application().reason_service.list_threads(
         status=args.status
     )
     if not threads:
@@ -47,7 +40,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
 
 
 def handle_reason_show(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().reason_service
     try:
         thread = service.show_thread(args.thread_id)
     except ReasonNotFound:
@@ -71,7 +64,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
 
 
 def handle_reason_start(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().reason_service
     mandates = tuple(getattr(args, "mandate", None) or [])
     try:
         thread = service.start_thread(
@@ -136,7 +129,7 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         print("Use --yes to confirm deletion.", file=sys.stderr)
         return 1
     try:
-        thread_id = _service(args).delete_thread(
+        thread_id = cli_application().reason_service.delete_thread(
             args.thread_id
         )
     except ReasonError as exc:

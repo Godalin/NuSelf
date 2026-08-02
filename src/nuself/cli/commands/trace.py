@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
 from typing import cast
 
@@ -11,7 +10,6 @@ from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
-from nuself.trace.service import TraceQueryService
 from nuself.tui.trace import render_trace_detail, render_trace_row
 
 
@@ -29,12 +27,8 @@ def _trace_visibility_filter(
     return "default"
 
 
-def _trace_query(project_root: Path | None) -> TraceQueryService:
-    return cli_application().trace.query
-
-
 def handle_trace_list(args: argparse.Namespace) -> int:
-    traces = _trace_query(args.project_root).list_traces(
+    traces = cli_application().trace.query.list_traces(
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
     )
@@ -50,7 +44,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 
 
 def handle_trace_show(args: argparse.Namespace) -> int:
-    service = _trace_query(args.project_root)
+    service = cli_application().trace.query
     try:
         trace = service.show_trace(args.trace_id)
     except TraceNotFound:
@@ -67,7 +61,7 @@ def handle_trace_show(args: argparse.Namespace) -> int:
 
 
 def handle_trace_search(args: argparse.Namespace) -> int:
-    traces = _trace_query(args.project_root).search_traces(
+    traces = cli_application().trace.query.search_traces(
         args.query,
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
@@ -84,7 +78,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
 
 
 def handle_trace_related(args: argparse.Namespace) -> int:
-    service = _trace_query(args.project_root)
+    service = cli_application().trace.query
     traces = service.traces_for_artifact(
         args.artifact_ref,
         visibility=_trace_visibility_filter(args.visibility),

@@ -96,6 +96,12 @@ dependencies for a real consumer; one-line repository constructors and
 pass-through accessors are not service APIs. Domain composition receives
 already-resolved paths, storage, config, or graph capabilities and must never
 reselect authority resources.
+Application selects lifecycle and delegates internal repository/service
+assembly to each owning domain. A process root may explicitly connect finished
+public components when that wiring exists in only one place; hiding unique
+wiring behind another factory merely relocates code. CLI handlers borrow graph
+capabilities directly instead of hiding them behind argument-discarding helper
+functions.
 
 Reflection orchestration receives candidate generation, relevance,
 organization, discussion, publication, and trace capabilities from its

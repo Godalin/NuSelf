@@ -9,8 +9,9 @@ Idle — no active implementation goal.
 
 ## Objective
 
-No active objective. The cross-domain projection module now follows the
-single-word filename convention as `application.projection`.
+No active objective. Application composition now delegates Reason and
+Reflection internals to their domains, and shallow CLI graph-field wrappers
+have been removed.
 
 ## Next Steps
 
@@ -23,5 +24,5 @@ None while idle.
 ## Last Verification
 
 - Pyright: 0 errors, 0 warnings.
-- Focused projection, boundary, Chat, CLI, Persona, and daemon tests: 411
-  passed.
+- Pytest: 2452 passed.
+- Package build: source distribution and wheel succeeded for `0.3.1`.

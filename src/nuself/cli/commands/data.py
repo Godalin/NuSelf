@@ -13,7 +13,6 @@ import sys
 import tempfile
 from typing import cast
 
-from nuself.application.data_admin import DataAdminService, DataResource
 from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
@@ -51,17 +50,6 @@ def _write_change_audit(
         )
 
 
-def _service(args: argparse.Namespace) -> DataAdminService:
-    return cli_application().data
-
-
-def _resource(
-    service: DataAdminService,
-    args: argparse.Namespace,
-) -> DataResource:
-    return service.resolve(args.collection, internal=args.internal)
-
-
 def _record_id(record: dict[str, object]) -> str:
     value = record.get("id", record.get("conversation_id"))
     return value if isinstance(value, str) else "<invalid-id>"
@@ -79,16 +67,16 @@ def _json_text(value: object, *, pretty: bool = False) -> str:
 
 
 def handle_data_collections(args: argparse.Namespace) -> int:
-    for resource in _service(args).resources(include_internal=args.internal):
+    for resource in cli_application().data.resources(include_internal=args.internal):
         mode = "editable" if resource.editable else "read-only"
         print(f"{resource.name}\t{resource.collection}\t{mode}")
     return 0
 
 
 def handle_data_list(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().data
     try:
-        resource = _resource(service, args)
+        resource = service.resolve(args.collection, internal=args.internal)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
@@ -110,9 +98,9 @@ def handle_data_list(args: argparse.Namespace) -> int:
 
 
 def handle_data_show(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().data
     try:
-        resource = _resource(service, args)
+        resource = service.resolve(args.collection, internal=args.internal)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
@@ -130,9 +118,9 @@ def handle_data_show(args: argparse.Namespace) -> int:
 def handle_data_check(args: argparse.Namespace) -> int:
     """Validate raw records and point to explicit repair operations."""
 
-    service = _service(args)
+    service = cli_application().data
     try:
-        resource = _resource(service, args)
+        resource = service.resolve(args.collection, internal=args.internal)
         if not resource.editable:
             raise ValueError(
                 "data resource has no generic validation contract: "
@@ -202,9 +190,9 @@ def _load_edited_record(args: argparse.Namespace, current: str) -> str:
 
 
 def handle_data_edit(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().data
     try:
-        resource = _resource(service, args)
+        resource = service.resolve(args.collection, internal=args.internal)
         if not resource.editable:
             raise ValueError(
                 f"data resource is read-only through generic editing: "
@@ -270,9 +258,9 @@ def handle_data_edit(args: argparse.Namespace) -> int:
 
 
 def handle_data_delete(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().data
     try:
-        resource = _resource(service, args)
+        resource = service.resolve(args.collection, internal=args.internal)
         if not resource.editable:
             raise ValueError(
                 f"data resource is read-only through generic deletion: "
@@ -308,9 +296,9 @@ def handle_data_delete(args: argparse.Namespace) -> int:
 
 
 def handle_data_export(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().data
     try:
-        resource = _resource(service, args)
+        resource = service.resolve(args.collection, internal=args.internal)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1

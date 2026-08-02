@@ -314,6 +314,53 @@ def test_process_surfaces_use_application_chat_factory() -> None:
     )
 
 
+def test_application_composition_does_not_construct_domain_internals() -> None:
+    application_tree = ast.parse(
+        (_SOURCE_ROOT / "application" / "composition.py").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    def constructed_names(tree: ast.Module) -> set[str]:
+        return {
+            node.func.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+        }
+
+    assert constructed_names(application_tree).isdisjoint(
+        {
+            "ReasonRepository",
+            "ReasonService",
+            "ReflectionRepository",
+            "ReflectionOrganizer",
+            "ReflectionService",
+        }
+    )
+
+
+def test_cli_commands_do_not_hide_graph_fields_behind_shallow_helpers() -> None:
+    forbidden_helpers = {
+        "commands/data.py": {"_service", "_resource"},
+        "commands/notifications.py": {"_outbox"},
+        "commands/reason.py": {"_service"},
+        "commands/reflections.py": {"_service"},
+        "commands/trace.py": {"_trace_query"},
+        "repl/commands.py": {"_reflection_service"},
+    }
+    for relative, forbidden in forbidden_helpers.items():
+        tree = ast.parse(
+            (_SOURCE_ROOT / "cli" / relative).read_text(encoding="utf-8")
+        )
+        declared = {
+            node.name
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        assert declared.isdisjoint(forbidden)
+
+
 def test_cli_and_repl_do_not_call_each_others_adapters() -> None:
     parser = _SOURCE_ROOT / "cli" / "parser.py"
     repl_commands = _SOURCE_ROOT / "cli" / "repl" / "commands.py"

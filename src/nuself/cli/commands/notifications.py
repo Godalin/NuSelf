@@ -35,7 +35,7 @@ def _resolve_entry_id(
 
 def handle_notify_list(args: argparse.Namespace) -> int:
     status = args.status
-    entries = _outbox(args).list(status=status)
+    entries = cli_application().notifications.list(status=status)
     if not entries:
         filter_msg = f" with status '{status}'" if status else ""
         print(f"No outbox entries{filter_msg}.")
@@ -46,7 +46,7 @@ def handle_notify_list(args: argparse.Namespace) -> int:
 
 
 def handle_notify_show(args: argparse.Namespace) -> int:
-    outbox = _outbox(args)
+    outbox = cli_application().notifications
     entry_id = _resolve_entry_id(args, outbox)
     if entry_id is None:
         return 1
@@ -60,7 +60,7 @@ def handle_notify_show(args: argparse.Namespace) -> int:
 
 
 def handle_notify_stats(args: argparse.Namespace) -> int:
-    entries = _outbox(args).list()
+    entries = cli_application().notifications.list()
     counts: dict[str, int] = {
         "pending": 0,
         "sent": 0,
@@ -78,7 +78,7 @@ def handle_notify_stats(args: argparse.Namespace) -> int:
 
 
 def handle_notify_watch(args: argparse.Namespace) -> int:
-    outbox = _outbox(args)
+    outbox = cli_application().notifications
     interval: float = max(1, args.interval)
     print(
         f"Watching outbox every {int(interval)}s. "
@@ -141,7 +141,7 @@ def handle_notify_send(args: argparse.Namespace) -> int:
 
 
 def handle_notify_dismiss(args: argparse.Namespace) -> int:
-    outbox = _outbox(args)
+    outbox = cli_application().notifications
     entry_id = _resolve_entry_id(args, outbox)
     if entry_id is None:
         return 1
@@ -156,10 +156,6 @@ def handle_notify_dismiss(args: argparse.Namespace) -> int:
 
 def handle_notify_clear(args: argparse.Namespace) -> int:
     selection = cast(NotificationClearStatus, args.status)
-    count = _outbox(args).clear(selection)
+    count = cli_application().notifications.clear(selection)
     print(f"Cleared {count} {selection} notification(s).")
     return 0
-
-
-def _outbox(args: argparse.Namespace) -> NotificationOutbox:
-    return cli_application().notifications

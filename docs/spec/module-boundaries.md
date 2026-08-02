@@ -316,6 +316,16 @@ the graph alongside their repositories. Chat, daemon, CLI, and cross-domain
 services borrow those instances rather than reconstructing services and their
 internal caches. One-operation strategies such as a model-backed reason
 advancer are method inputs, not a reason to create a parallel service graph.
+Application composition may select authority and lifecycle, but must not spell
+out a domain's internal repository, organizer, or service construction. Those
+details belong to the existing domain composition module. A process root may
+explicitly connect finished public components when the construction occurs in
+only one place; moving unique wiring behind another factory is not
+simplification. Neither case justifies a facade, provider registry, or plugin
+mechanism. Adapter-local helpers that merely discard arguments and return one
+`ApplicationGraph` field are forbidden; adapters borrow that field directly.
+Resource snapshots remain valid when they preserve shared repository identity
+or form a real consumer-specific capability boundary.
 Initialized CLI and REPL commands always run inside one `ApplicationRuntime`;
 helper functions must not create a fallback graph when that scope is absent.
 The daemon server likewise owns its `ApplicationRuntime` and injects the

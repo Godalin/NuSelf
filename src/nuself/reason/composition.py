@@ -13,12 +13,37 @@ from nuself.llm import (
 )
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
 from nuself.reason.prompt import generate_reasoning_prompt
+from nuself.reason.repository import ReasonRepository
+from nuself.reason.service import ReasonService
 from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 from nuself.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
     from nuself.config import RuntimePaths, SystemConfig
+
+
+def compose_reason_service(
+    paths: "RuntimePaths",
+    backend: StorageBackend,
+    trace_recorder: TraceRecorder,
+    config: "SystemConfig",
+) -> tuple[ReasonService, PrivateWorkspaceStore]:
+    """Compose Reason's authority-scoped service and workspace."""
+
+    repository = ReasonRepository(paths, backend=backend)
+    workspace = PrivateWorkspaceStore(paths, scope="reason")
+    return (
+        ReasonService(
+            paths.authority_root,
+            repository=repository,
+            workspace_store=workspace,
+            trace_recorder=trace_recorder,
+            prompt_generator=compose_reason_prompt_generator(paths, config),
+        ),
+        workspace,
+    )
 
 
 def compose_reason_prompt_generator(

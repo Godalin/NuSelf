@@ -8,7 +8,6 @@ import sys
 from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.reflection.repository import ReflectionEntryNotFound
-from nuself.reflection.service import ReflectionService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail
 from nuself.tui.render import (
@@ -17,12 +16,8 @@ from nuself.tui.render import (
 )
 
 
-def _service(args: argparse.Namespace) -> ReflectionService:
-    return cli_application().reflection_service
-
-
 def handle_reflection_list(args: argparse.Namespace) -> int:
-    entries = _service(args).list_entries(
+    entries = cli_application().reflection_service.list_entries(
         status=args.status
     )
     if not entries:
@@ -41,7 +36,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
 
 def handle_reflection_show(args: argparse.Namespace) -> int:
     try:
-        entry = _service(args).show_entry(args.entry_id)
+        entry = cli_application().reflection_service.show_entry(args.entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
@@ -56,7 +51,7 @@ def _change_status(
     args: argparse.Namespace, *, action: str, past_tense: str
 ) -> int:
     try:
-        entry = getattr(_service(args), action)(args.entry_id)
+        entry = getattr(cli_application().reflection_service, action)(args.entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
@@ -78,7 +73,7 @@ def handle_reflection_archive(args: argparse.Namespace) -> int:
 
 def handle_reflection_promote(args: argparse.Namespace) -> int:
     try:
-        thread = _service(args).promote_to_reason(args.entry_id)
+        thread = cli_application().reflection_service.promote_to_reason(args.entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
         print(
             f"Error: {diagnostic_exception_message(exc)}",
@@ -91,7 +86,7 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_organize(args: argparse.Namespace) -> int:
-    result = _service(args).organize_pending()
+    result = cli_application().reflection_service.organize_pending()
     print(
         "Organized reflections: "
         f"merged_groups={result.merged_groups} "
