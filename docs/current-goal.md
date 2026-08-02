@@ -9,21 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the daemon client's socket-existence preflight.
+Remove the duplicate periodic daemon task-kind type.
 
 ## Ordered Steps
 
-1. Specify that connection classification comes from the socket operation,
-   without a racy filesystem existence probe.
-2. Remove the preflight and require missing-socket failures to retain their
-   original `OSError` like every other connection failure.
+1. Specify the closed task-kind type as the sole type catalog, while periodic
+   membership is expressed only by the recurring registration sequence.
+2. Remove `PeriodicTaskKind` and let the immutable registration data infer its
+   closed literal members.
 3. Run focused and full gates, then commit without pushing.
 
 ## Exclusions
 
-- Preserve connection phase, request identity, retry/completion classification,
-  timeout validation, cancellation, and concise diagnostics.
-- Do not add a transport facade or provider-specific error classifier.
+- Preserve the complete task-kind catalog, handler coverage assertion,
+  recurring intervals, task identities, scheduling, and health behavior.
+- Do not replace the closed task kinds with untyped strings or add a registry
+  abstraction.
 
 ## Constraints
 
@@ -35,6 +36,12 @@ Remove the daemon client's socket-existence preflight.
 
 ## Phase Evidence
 
+- Removed the handwritten `PeriodicTaskKind` subset. The immutable recurring
+  registration sequence is now bounded by the sole closed `DaemonTaskKind`, so
+  adding or removing periodic membership requires one data edit rather than a
+  parallel type-catalog edit. Handler coverage and runtime task validation are
+  unchanged. Focused scheduler/state tests: 63 passed; full suite: 2444 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Daemon client requests now call the Unix socket `connect()` operation
   directly instead of first checking path existence. This removes a TOCTOU
   branch and makes missing sockets retain the same connect-phase `OSError`

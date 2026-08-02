@@ -267,7 +267,8 @@ for the runtime task catalog; a second handwritten catalog is prohibited.
 Recurring responsibilities are declared once as an immutable sequence of task
 kind and interval pairs. Startup iterates that sequence; it must not mirror
 individual intervals as mutable daemon-state attributes or repeat one submit
-branch per task.
+branch per task. Membership in this sequence is the sole periodic subset
+catalog; it must not be repeated as another handwritten literal type.
 
 Each in-memory task has a registered kind, stable identity, one primary
 resource key, fixed priority, optional monotonic `run_at`, immutable runtime

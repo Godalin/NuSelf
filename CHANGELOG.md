@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon recurring-task registration is now the sole periodic task subset,
+  removing a second handwritten task-kind type catalog.
 - Daemon clients now connect directly instead of racing a socket-path
   existence preflight; missing sockets retain their structural connect failure
   and original OS error like other transport failures.

@@ -26,7 +26,7 @@ from nuself.daemon.scheduler import (
 )
 from nuself.daemon.tasks import (
     DAEMON_TASK_KINDS,
-    PeriodicTaskKind,
+    DaemonTaskKind,
     daemon_task,
 )
 from nuself.logs import runtime_event_log_sink
@@ -130,7 +130,7 @@ class DaemonState:
         )
         self._memory_observations = application.memory.observations
         memory_interval = config.daemon.memory_curator.interval_seconds
-        self._periodic_tasks: tuple[tuple[PeriodicTaskKind, float], ...] = (
+        self._periodic_tasks: tuple[tuple[DaemonTaskKind, float], ...] = (
             ("memory.scan", memory_interval),
             ("conversation.scan", memory_interval),
             (

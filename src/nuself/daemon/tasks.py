@@ -16,14 +16,6 @@ DaemonTaskKind = Literal[
     "notification.deliver",
     "reason.export",
 ]
-PeriodicTaskKind = Literal[
-    "memory.scan",
-    "conversation.scan",
-    "reflection.check",
-    "reason.check",
-    "notification.deliver",
-]
-
 DAEMON_TASK_KINDS: tuple[str, ...] = get_args(DaemonTaskKind)
 
 
