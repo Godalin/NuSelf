@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,43 @@ def _chat_result(
             turn_id=turn_id,
         ),
     )
+
+
+class _StubConversationRuntime:
+    def __init__(
+        self,
+        respond: Callable[[str, str, str | None], ChatResult],
+        compress: Callable[[str], None] | None = None,
+    ) -> None:
+        self._respond = respond
+        self._compress = compress or self._ignore_compression
+
+    @staticmethod
+    def _ignore_compression(_conversation_id: str) -> None:
+        return None
+
+    def respond(
+        self,
+        message: str,
+        *,
+        conversation_id: str,
+        turn_id: str | None,
+    ) -> ChatResult:
+        return self._respond(message, conversation_id, turn_id)
+
+    def compress_conversation(self, conversation_id: str) -> None:
+        self._compress(conversation_id)
+
+
+def _use_stub_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: _StubConversationRuntime,
+) -> None:
+    def compose(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        return runtime
+
+    monkeypatch.setattr(chat, "compose_conversation_runtime", compose)
 
 
 def test_daemon_chat_preserves_user_timeout_in_workspace_scope(
@@ -272,7 +310,7 @@ def test_one_shot_failure_is_safely_presented_and_audited(
             f"one-shot failed password={runtime_secret}"
         )
 
-    monkeypatch.setattr(chat, "run_one_shot_chat", fail_reply)
+    monkeypatch.setattr(chat, "compose_conversation_runtime", fail_reply)
 
     result = chat.send_one_shot_chat_interactive(
         "hello",
@@ -299,7 +337,7 @@ def test_one_shot_failure_survives_broken_exception_renderer(
         del args, kwargs
         raise BrokenMessageError
 
-    monkeypatch.setattr(chat, "run_one_shot_chat", fail_reply)
+    monkeypatch.setattr(chat, "compose_conversation_runtime", fail_reply)
 
     result = chat.send_one_shot_chat_interactive(
         "hello",
@@ -406,12 +444,9 @@ def test_one_shot_success_runs_curator_after_reply(
 
     def reply(
         message: str,
-        project_root: Path | None,
-        conversation_id: str = "default",
-        *,
-        turn_id: str | None = None,
+        conversation_id: str,
+        turn_id: str | None,
     ) -> ChatResult:
-        assert project_root == tmp_path
         contexts.append(current_runtime_context())
         calls.append(f"reply:{message}:{conversation_id}:{turn_id}")
         return _chat_result(conversation_id=conversation_id, turn_id=turn_id)
@@ -428,7 +463,7 @@ def test_one_shot_success_runs_curator_after_reply(
             project_root=project_root,
         )
 
-    monkeypatch.setattr(chat, "run_one_shot_chat", reply)
+    _use_stub_runtime(monkeypatch, _StubConversationRuntime(reply))
     monkeypatch.setattr(chat, "run_memory_curator", curate)
 
     with runtime_context(trace_id="trace-1", source="outer"):
@@ -468,6 +503,44 @@ def test_one_shot_success_runs_curator_after_reply(
     assert event.turn_id == "turn-1"
     assert event.trace_id == "trace-1"
     assert event.source == "client"
+
+
+def test_one_shot_reuses_runtime_for_after_reply_compression(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    compositions = 0
+    compressed: list[str] = []
+
+    runtime = _StubConversationRuntime(
+        lambda message, conversation_id, turn_id: _chat_result(),
+        compressed.append,
+    )
+
+    def compose(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        nonlocal compositions
+        compositions += 1
+        return runtime
+
+    monkeypatch.setattr(chat, "compose_conversation_runtime", compose)
+
+    def skip_curator(
+        project_root: Path | None,
+        observation_id: str,
+    ) -> None:
+        del project_root, observation_id
+
+    monkeypatch.setattr(chat, "run_memory_curator", skip_curator)
+
+    result = chat.send_one_shot_chat_interactive("hello", tmp_path)
+
+    assert compositions == 1
+    assert compressed == []
+    assert result.after_reply is not None
+    result.after_reply()
+    assert compositions == 1
+    assert compressed == ["default"]
 
 
 def test_one_shot_compresses_only_after_reply_is_presented(
@@ -512,18 +585,18 @@ def test_one_shot_success_survives_uncertain_completion_audit(
 ) -> None:
     calls: list[str] = []
 
-    def reply(*args: object, **kwargs: object) -> ChatResult:
-        del args, kwargs
+    def reply(
+        message: str,
+        conversation_id: str,
+        turn_id: str | None,
+    ) -> ChatResult:
+        del message, conversation_id, turn_id
         return _chat_result()
 
     def curate(_project_root: Path | None, _conversation_id: str) -> None:
         calls.append("curator")
 
-    monkeypatch.setattr(
-        chat,
-        "run_one_shot_chat",
-        reply,
-    )
+    _use_stub_runtime(monkeypatch, _StubConversationRuntime(reply))
     monkeypatch.setattr(
         chat,
         "run_memory_curator",

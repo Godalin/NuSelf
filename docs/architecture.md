@@ -57,7 +57,10 @@ conversation persistence.
 A persistent conversation is distinct from a transient interactive session
 and contains ordered turns, a bounded summary, and branch/archive state. A
 direct typed NuSelf pipeline coordinates context, response, and state update;
-compression is follow-up work after the reply commits and is presented.
+compression is follow-up work after the reply commits and is presented. A
+one-shot turn composes one conversation runtime and reuses it for that delayed
+compression; it does not rebuild the model/tool/persona resource graph after
+presenting the reply.
 LangChain supplies the single framework-native model/tool graph. NuSelf-owned
 code adds domain semantics such as personal-memory retrieval, evidence
 handling, persona discussion, and response presentation.

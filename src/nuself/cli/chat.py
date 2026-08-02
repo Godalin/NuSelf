@@ -6,7 +6,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.application.chat import ChatResult, compose_conversation_runtime
+from nuself.application.chat import compose_conversation_runtime
+from nuself.agent.chat.runtime import ConversationGraphRuntime
 from nuself.application.curator import compose_memory_curator
 from nuself.application.knowledge_projection import publish_chat_observation
 from nuself.cli.composition import cli_application
@@ -158,10 +159,13 @@ def send_one_shot_chat_interactive(
         source="client",
     ):
         try:
-            result = run_one_shot_chat(
+            conversation_runtime = compose_conversation_runtime(
+                cli_application(),
+                approval_port=TerminalApprovalPort(),
+            )
+            result = conversation_runtime.respond(
                 message,
-                project_root,
-                conversation_id,
+                conversation_id=conversation_id,
                 turn_id=turn_id,
             )
             application = cli_application()
@@ -179,6 +183,7 @@ def send_one_shot_chat_interactive(
                 code=CliExitCode.SUCCESS,
                 reply=result.answer,
                 after_reply=lambda: _compress_after_reply(
+                    conversation_runtime,
                     conversation_id,
                     project_root,
                 ),
@@ -222,34 +227,13 @@ def run_memory_curator(
         )
 
 
-def run_one_shot_chat(
-    message: str,
-    project_root: Path | None,
-    conversation_id: str = "default",
-    *,
-    turn_id: str | None = None,
-) -> ChatResult:
-    """Invoke the local conversation runtime and return its committed result."""
-
-    return compose_conversation_runtime(
-        cli_application(),
-        approval_port=TerminalApprovalPort(),
-    ).respond(
-        message,
-        conversation_id=conversation_id,
-        turn_id=turn_id,
-    )
-
-
 def _compress_after_reply(
+    conversation_runtime: ConversationGraphRuntime,
     conversation_id: str,
     project_root: Path | None,
 ) -> None:
     try:
-        compose_conversation_runtime(
-            cli_application(),
-            approval_port=TerminalApprovalPort(),
-        ).compress_conversation(conversation_id)
+        conversation_runtime.compress_conversation(conversation_id)
     except Exception as exc:
         report_chat_failure(
             exc,

@@ -5,44 +5,20 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-In progress — continuously audit and simplify while preserving composability.
+Idle — the v0.3.1 architecture simplification review is closed.
 
-## Current Phase
+## Objective
 
-Remove redundant authority arguments from CLI application borrowing.
+No active implementation objective.
 
-## Ordered Steps
+## Next Steps
 
-1. Specify the CLI root as the sole scope-selection and runtime-lifecycle owner.
-2. Rename the misleading composition helpers to parameter-free graph/backend
-   borrowing operations and migrate every CLI/test caller without aliases.
-3. Run focused/full gates, record the current evidence, and commit without
-   pushing.
+1. Wait for an explicitly scoped bug fix, feature, or review request.
+2. Define its objective, exclusions, and completion evidence before changing
+   implementation.
 
-## Exclusions
+## Last Verification
 
-- Preserve one runtime/backend/graph per CLI process and explicit infrastructure
-  access to the backend.
-- Do not change command syntax, selected authority, or domain service APIs.
-- Do not declare the persistent simplification goal complete.
-
-## Constraints
-
-- Preserve domain-owned registries, semantic validators, service APIs, durable
-  recovery, and the single-scheduler daemon.
-- Add no generic bus, facade hierarchy, compatibility shim, worker, or lock.
-- Prefer deletion and direct composition over new indirection.
-- Keep each reduction independently tested and committed; do not return this
-  board to Idle while the persistent review goal remains active.
-
-## Completion Evidence
-
-- CLI application access now consists of parameter-free `cli_application()` and
-  `cli_backend()` borrowing operations. The CLI root remains the sole authority
-  selector and runtime lifecycle owner; source/test/spec search finds no old
-  composition names or path-bearing calls. Focused runtime/CLI/REPL tests: 579
-  passed; full suite: 2446 passed; Pyright: 0 errors, 0 warnings; sdist and wheel
-  build succeeded.
-- The active board was restored from 1634 stale/history-heavy lines to 44 lines
-  in commit `d2cd6c92`; completed detail remains available through Git and
-  `CHANGELOG.md`.
+- Full suite: 2447 passed.
+- Pyright: 0 errors, 0 warnings.
+- `nuself-0.3.1` sdist and wheel built successfully.

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- One-shot Chat now reuses its per-turn conversation runtime for delayed
+  compression instead of rebuilding the complete model/tool resource graph.
 - CLI adapters now borrow the already-selected application graph or backend
   without repeatedly passing and resolving the same authority path.
 - Configuration now has one scope-based loading entry point; removed the
