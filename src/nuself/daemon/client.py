@@ -187,7 +187,7 @@ def request(
         ) from exc
 
 
-def decode_response(
+def _decode_response(
     response: DaemonResponse,
     decoder: Callable[[dict[str, JsonValue]], PayloadT],
     *,
@@ -223,7 +223,7 @@ def ping(
             project_root=project_root,
             timeout=timeout,
         )
-        payload = decode_response(
+        payload = _decode_response(
             response,
             DaemonIdentityPayload.from_wire,
             operation="ping",
@@ -241,7 +241,7 @@ def health(
 ) -> SchedulerHealthPayload:
     """Return a fully validated daemon worker-health snapshot."""
 
-    return decode_response(
+    return _decode_response(
         request(
             "health",
             project_root=project_root,
@@ -267,7 +267,7 @@ def chat(
         conversation_id=conversation_id,
         turn_id=turn_id,
     )
-    return decode_response(
+    return _decode_response(
         request(
             "chat",
             payload.to_wire(),
@@ -291,7 +291,7 @@ def shutdown(
         project_root=project_root,
         timeout=timeout,
     )
-    decode_response(
+    _decode_response(
         response,
         EmptyPayload.from_wire,
         operation="shutdown",
@@ -310,7 +310,7 @@ def open_activity(
         {"turn_id": turn_id},
         project_root=project_root,
     )
-    payload = decode_response(
+    payload = _decode_response(
         response,
         ActivitySubscriptionPayload.from_wire,
         operation="activity open",
@@ -337,7 +337,7 @@ def next_activity(
         project_root=project_root,
         timeout=max(1.0, timeout_ms / 1000 + 0.5),
     )
-    payload = decode_response(
+    payload = _decode_response(
         response,
         ActivityEventsResponsePayload.from_wire,
         operation="activity next",
@@ -359,7 +359,7 @@ def close_activity(
         {"subscription_id": subscription_id},
         project_root=project_root,
     )
-    decode_response(
+    _decode_response(
         response,
         EmptyPayload.from_wire,
         operation="activity close",

@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the daemon stop error's duplicate ownership projection.
+Keep generic response decoding private to the daemon client.
 
 ## Ordered Steps
 
-1. Confirm `DaemonStopError.owner_active` only forwards its status field.
-2. Read the authoritative `DaemonStatus.owner_active` directly in audit and
-   tests; keep the error's status snapshot and failure taxonomy unchanged.
-3. Run focused lifecycle/audit tests and full gates, then commit without push.
+1. Confirm `decode_response()` has no production caller outside `client.py`.
+2. Privatize it and test failure classification through the real typed
+   `health()` operation rather than the generic helper.
+3. Run focused daemon transport tests and full gates, then commit without push.
 
 ## Exclusions
 
@@ -25,7 +25,8 @@ Remove the daemon stop error's duplicate ownership projection.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve daemon ownership tri-state semantics and stop failure metadata.
+- Preserve response status classification, payload validation, retry phase,
+  and request identity.
 
 ## Constraints
 
@@ -37,6 +38,12 @@ Remove the daemon stop error's duplicate ownership projection.
 
 ## Phase Evidence
 
+- Generic daemon successful-response decoding is now private to `client.py`;
+  the public client surface consists of typed protocol operations. Replaced two
+  helper-level tests with `health()` boundary tests that still prove application
+  failure and malformed-payload classification. Focused daemon client/transport
+  tests: 65 passed; full suite: 2440 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - `DaemonStopError` now exposes ownership only through its authoritative
   `status` snapshot. Removed the duplicate `owner_active` forwarding property;
   lifecycle audit reads `error.status.owner_active` directly and preserves the

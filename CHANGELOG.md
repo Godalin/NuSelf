@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Generic daemon response decoding is now private to the typed client
+  operations; failure tests exercise the public health boundary instead.
 - Daemon stop failures now expose ownership through their authoritative status
   snapshot only, removing a duplicate forwarding property.
 - Daemon chat response confidence decoding now lives beside its range policy,

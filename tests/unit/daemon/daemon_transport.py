@@ -1008,32 +1008,54 @@ def test_activity_client_rejects_lossy_batch(
     assert captured.value.dropped_count == 3
 
 
-def test_typed_response_decoder_distinguishes_application_failure() -> None:
+def test_health_distinguishes_application_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failed_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        del payload, project_root, timeout
+        assert request_type == "health"
+        return DaemonResponse.fail("r", "request rejected")
+
+    monkeypatch.setattr(client, "request", failed_request)
+
     with pytest.raises(
         DaemonApplicationError,
         match="request rejected",
     ):
-        client.decode_response(
-            DaemonResponse.fail("r", "request rejected"),
-            EmptyPayload.from_wire,
-            operation="ping",
+        client.health()
+
+
+def test_health_wraps_malformed_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def malformed_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        del payload, project_root, timeout
+        assert request_type == "health"
+        return DaemonResponse(
+            request_id="r",
+            status="ok",
+            payload={"unexpected": True},
         )
 
+    monkeypatch.setattr(client, "request", malformed_request)
 
-def test_typed_response_decoder_wraps_malformed_success() -> None:
     with pytest.raises(DaemonConnectionError) as captured:
-        client.decode_response(
-            DaemonResponse(
-                request_id="r",
-                status="ok",
-                payload={"unexpected": True},
-            ),
-            EmptyPayload.from_wire,
-            operation="ping",
-        )
+        client.health()
 
     assert isinstance(captured.value.__cause__, ProtocolError)
-    assert "ping response is malformed" in str(captured.value)
+    assert "health response is malformed" in str(captured.value)
     assert captured.value.phase == "payload_decode"
     assert captured.value.request_id == "r"
     assert captured.value.retryable is False

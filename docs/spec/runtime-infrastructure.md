@@ -227,6 +227,10 @@ Success response payload field sets are also exact:
   list of complete log-event records; idempotent activity close returns the
   shared exact empty payload.
 
+The daemon client exposes typed request operations for these protocol actions.
+Generic successful-response decoding is an internal implementation detail, not
+a second public client API.
+
 The in-process `ActivityBroker.close()` command mirrors that protocol: it is
 idempotent and returns no status value. Callers verify absence through later
 subscription operations rather than a test-only removal boolean.
