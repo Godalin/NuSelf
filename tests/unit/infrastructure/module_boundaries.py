@@ -213,7 +213,7 @@ def test_chat_runtime_does_not_compose_authority_or_observability() -> None:
     forbidden_modules = ("nuself.application", "nuself.storage")
     forbidden_symbols = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.logs", "runtime_event_log_sink"),
+        ("nuself.log.store", "runtime_event_log_sink"),
     }
     violations = [
         f"{path.relative_to(_SOURCE_ROOT)} -> {module}"
@@ -290,17 +290,17 @@ def test_reason_consumers_require_injected_service() -> None:
 
 
 def test_log_model_is_independent_from_persistence() -> None:
-    model = _SOURCE_ROOT / "runtime" / "log_event.py"
+    model = _SOURCE_ROOT / "log" / "record.py"
     assert not {
         "nuself.config",
-        "nuself.logs",
+        "nuself.log.store",
         "nuself.private_fs",
     }.intersection(_imports(model))
 
     consumers = [
         str(path.relative_to(_SOURCE_ROOT))
         for path in _SOURCE_ROOT.rglob("*.py")
-        if path.name != "logs.py"
-        and ("nuself.logs", "LogEvent") in _from_imports(path)
+        if path.name != "store.py"
+        and ("nuself.log.store", "LogEvent") in _from_imports(path)
     ]
     assert consumers == []

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.audit.types import LogComponent
 from notification_fixtures import notification_outbox
 from nuself.persona.prompt_repo import PersonaPromptRepository

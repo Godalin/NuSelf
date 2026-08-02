@@ -15,9 +15,8 @@ without compatibility forwarding modules.
 
 ## Next Steps
 
-1. Replace top-level `logs.py` and scattered log files with `nuself/log` owners.
-2. Move Feature policy and execution into `runtime/feature`.
-3. Audit remaining flat files, run full gates, commit each complete boundary,
+1. Move Feature policy and execution into `runtime/feature`.
+2. Audit remaining flat files, run full gates, commit each complete boundary,
    return to Idle, and stop.
 
 ## Exclusions
@@ -38,3 +37,8 @@ without compatibility forwarding modules.
 - Job/Event packages: Pyright 0 errors, 0 warnings; 123 focused message,
   scheduler, publication, definition, and boundary tests passed; no old Job or
   Event source path remains.
+- Log package: the former 1043-line `logs.py` and two scattered runtime files
+  are separated into `record`, `store`, `reader`, and `warning` owners under
+  `nuself.log`; every caller uses a precise owner and no forwarding module
+  remains. Pyright reports 0 errors and 0 warnings; 191 focused log, runtime,
+  daemon, REPL, and boundary tests pass.

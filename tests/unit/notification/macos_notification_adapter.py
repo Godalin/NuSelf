@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.notification.model import OutboxEntry
 from nuself.notification.macos import MacOSNotificationAdapter
 

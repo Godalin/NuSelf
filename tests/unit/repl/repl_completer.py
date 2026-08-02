@@ -12,7 +12,7 @@ from nuself.conversation import ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.cli.application import cli_application
 from nuself.cli.repl.input import InteractiveCompleter
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.reason.repository import ReasonRepository
 
 

@@ -13,8 +13,8 @@ from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.cli.exit_codes import CliExitCode
 from nuself.daemon import client
-from nuself.logs import InteractiveLogCursor
-from nuself.runtime.log_event import LogEvent
+from nuself.log.reader import InteractiveLogCursor
+from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall
 from nuself.tui.render import render_log_event

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 
 
 def test_tool_log_failure_reporter_writes_structured_degradation(

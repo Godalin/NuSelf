@@ -20,7 +20,7 @@ from nuself.private_fs import ensure_private_directory
 from nuself.runtime.messages import decode_json_value, encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.config import runtime_paths
-from nuself.logs import write_log_event
+from nuself.log.store import write_log_event
 
 
 def _write_change_audit(

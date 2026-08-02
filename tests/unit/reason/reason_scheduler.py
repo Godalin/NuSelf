@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonAdvancerProtocol

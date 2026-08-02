@@ -40,7 +40,8 @@ from nuself.config import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
-from nuself.logs import read_log_events, runtime_event_log_sink
+from nuself.log.reader import read_log_events
+from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository

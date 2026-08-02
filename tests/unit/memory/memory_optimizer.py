@@ -19,7 +19,7 @@ from nuself.agent.errors import AgentModelUnavailableError
 from nuself.config import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,

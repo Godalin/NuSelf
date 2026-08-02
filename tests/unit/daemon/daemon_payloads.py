@@ -17,7 +17,7 @@ from nuself.daemon.payloads import (
     SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 
 
 def test_chat_request_payload_validates_and_defaults() -> None:

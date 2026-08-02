@@ -607,10 +607,10 @@ not mandatory and must not replace a more informative name such as
 catch-all `utils`, `helpers`, or `common` modules are
 forbidden. Existing modules with those names must remain narrowly scoped.
 
-Logging persistence remains the single internal event-log implementation, but
-its terminal warning schemas belong to `runtime.log_warning_contracts`. The
-log engine consumes the sealed registry instead of defining presentation
-warning validation beside append, rotation, recovery, and read semantics.
+Logging infrastructure lives in the top-level `nuself.log` package. Its
+`record`, `store`, `reader`, and `warning` modules separately own the immutable
+codec, filesystem writes, filesystem reads, and terminal-warning contracts.
+The package root is empty: it is not a compatibility or convenience facade.
 
 ## Presentation Boundary
 

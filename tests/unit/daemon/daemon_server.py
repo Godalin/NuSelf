@@ -19,7 +19,7 @@ from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.memory.observation import MemoryObservation
 from nuself.notification.model import OutboxEntry
 from nuself.runtime.event.publisher import EventPublisher

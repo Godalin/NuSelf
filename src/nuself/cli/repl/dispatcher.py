@@ -40,7 +40,7 @@ from nuself.cli.repl.transcript import (
     auto_save_interactive_transcripts,
     handle_interactive_export_command,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.tui.render import render_log_event

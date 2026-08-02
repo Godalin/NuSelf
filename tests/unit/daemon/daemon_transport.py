@@ -35,7 +35,7 @@ from nuself.daemon.transport import (
     read_socket_frame,
     write_stream_frame,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.execution import OwnedCall
 
 

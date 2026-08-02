@@ -27,7 +27,7 @@ from nuself.daemon.protocol import (
     RequestType,
 )
 from nuself.daemon.transport import read_socket_frame
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 

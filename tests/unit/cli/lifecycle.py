@@ -10,7 +10,7 @@ import pytest
 from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.definitions import DefinitionRegistrySealedError
 from nuself.scope import resolve_scope
 

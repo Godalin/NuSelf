@@ -29,7 +29,7 @@ from nuself.daemon.tasks import (
     DaemonTaskKind,
     daemon_task,
 )
-from nuself.logs import runtime_event_log_sink
+from nuself.log.store import runtime_event_log_sink
 from nuself.llm import configured_langchain_chat_models
 from nuself.notification.delivery import NotificationDeliveryLoop
 from nuself.notification.composition import build_notification_adapters

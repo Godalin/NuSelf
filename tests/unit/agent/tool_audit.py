@@ -7,7 +7,7 @@ from nuself.agent.tool_audit import (
     SERVICE_TOOL_MESSAGE,
     ToolOutcomeProjection,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 
 
 def test_success_projection_owns_live_and_snapshot_shape(

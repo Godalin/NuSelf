@@ -17,7 +17,7 @@ from nuself.memory.curator_plan import (
     MemoryCuratorPlanLockCleanupError,
     MemoryCuratorPlanLockContended,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from tests.backend import owned_backend
 from nuself.storage import auto_backend
 from memory_fixtures import memory_curator_plan_store

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from nuself.logs import (
+from nuself.log.store import (
     DEFAULT_LOG_RETENTION,
     LogRetentionPolicy,
     create_audit_envelope,
@@ -13,7 +13,7 @@ from nuself.logs import (
     write_log_event,
 )
 from nuself.runtime.audit.types import LogComponent, LogLevel
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditEventDefinition,

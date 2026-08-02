@@ -16,7 +16,7 @@ import pytest
 from nuself.cli import main
 from nuself.cli.exit_codes import CliExitCode
 from nuself.memory.model import MemoryEntry
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
 from tests.backend import owned_backend, close_owned_backend
 

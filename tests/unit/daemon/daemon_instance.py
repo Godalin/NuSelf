@@ -15,7 +15,7 @@ from nuself.daemon.instance import (
     DaemonInstanceLockCleanupError,
     DaemonInstanceLockContended,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.scope import NuSelfScope
 
 

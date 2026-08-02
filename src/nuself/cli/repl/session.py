@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from nuself.cli.application import cli_application
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.cli.repl.transcript import (
     is_shareable_transcript_log,
     conversation_messages_from_index,

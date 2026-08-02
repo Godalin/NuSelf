@@ -32,7 +32,7 @@ from typing import Callable, cast
 import pytest
 
 import nuself.storage_sqlite as sqlite_storage
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.notification.outbox import NotificationOutbox
 from nuself.memory.repository import (
     MemoryCandidateRepository,

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from nuself.daemon.protocol import JsonValue, ProtocolError
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 

@@ -37,7 +37,7 @@ from nuself.daemon.request_audit import (
     write_daemon_request_audit,
 )
 from nuself.daemon.scheduler import DaemonScheduler
-from nuself.logs import project_log_events
+from nuself.log.store import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message

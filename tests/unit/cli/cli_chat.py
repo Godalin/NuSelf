@@ -15,7 +15,8 @@ from nuself.daemon.client import (
     DaemonConnectionError,
 )
 from nuself.daemon.payloads import ChatResponsePayload
-from nuself.logs import read_log_events, write_log_event
+from nuself.log.reader import read_log_events
+from nuself.log.store import write_log_event
 from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,

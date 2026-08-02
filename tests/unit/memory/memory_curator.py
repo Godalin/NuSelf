@@ -30,7 +30,7 @@ from nuself.memory.model import (
     MemoryValidationIssue,
 )
 from nuself.profile.model import ProfileItem
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.memory.curator_contract import (
     CuratorActionsOutput,
     MemoryCuratorSettings,

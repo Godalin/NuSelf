@@ -27,7 +27,7 @@ from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.config import runtime_paths
 from nuself.reflection.model import IdeaCandidate
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.notification.outbox import NotificationOutbox
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate

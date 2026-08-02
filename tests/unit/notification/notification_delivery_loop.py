@@ -15,7 +15,7 @@ from typing import cast
 import pytest
 
 import nuself.notification.outbox as notification_module
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.config import EmailConfig
 from nuself.notification.adapters import LogOnlyNotificationAdapter
 from nuself.notification.model import OutboxEntry

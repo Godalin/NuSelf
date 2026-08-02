@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from nuself.trace.composition import compose_trace_services
 from nuself.config import runtime_paths
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.reason.model import ReasoningStep
 from nuself.reason.errors import (
     ReasonAdvanceError,

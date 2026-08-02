@@ -390,7 +390,7 @@ Rules:
 
 Trace writes should emit structured logs:
 
-- component: `memory` or a future `trace` component only if `logs.py` is expanded;
+- component: `memory` or a future `trace` component only if the log catalog is expanded;
 - event examples: `trace_saved`, `trace_link_saved`;
 - logs must not duplicate large trace summaries or raw inputs.
 

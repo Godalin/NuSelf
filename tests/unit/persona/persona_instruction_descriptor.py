@@ -30,7 +30,7 @@ from nuself.memory.model import (
     default_memory_type_registry,
 )
 from nuself.memory.model import MemoryEntry
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
 
 

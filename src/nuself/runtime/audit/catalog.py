@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
 
-from nuself.logs import write_log_event
+from nuself.log.store import write_log_event
 from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
@@ -14,7 +14,7 @@ from nuself.runtime.audit.definition import (
     UnknownAuditDefinitionError,
 )
 from nuself.runtime.audit.types import LogComponent
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.runtime.observability import (
     report_defined_failure,
     run_observed_best_effort,

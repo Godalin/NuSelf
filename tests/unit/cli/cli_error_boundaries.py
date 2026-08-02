@@ -10,7 +10,7 @@ from nuself.cli.repl.commands import (
     handle_interactive_persona_command,
     handle_interactive_reason_command,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
 from nuself.reason.service import ReasonService

@@ -4,7 +4,7 @@ import pytest
 from prompt_toolkit.history import FileHistory
 
 from nuself.cli.repl.input import InteractiveInput
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 
 
 def _fallback_input(prompt: str) -> str:

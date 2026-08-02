@@ -6,7 +6,7 @@ from nuself.daemon.operations_audit import (
     DAEMON_OPERATIONS_AUDIT,
     report_shutdown_cleanup_failure,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,

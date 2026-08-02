@@ -456,12 +456,12 @@ single-use forwarding functions around those adapters.
 - `agent/middleware.py` owns its sealed callback/reporter terminal-warning
   registry. Tool execution and capture supply only safe caught diagnostics and
   never construct warning presentation.
-- `logs.py` owns its recursive-sensitive sealed infrastructure audit registry.
+- `log/store.py` owns its recursive-sensitive sealed infrastructure audit registry.
   Process-local observer delivery supplies only the caught exception; callable
   identity, presentation, schema, and terminal fallback remain logging-core
   policy.
 - `runtime/warning_definitions.py` owns reusable sealed terminal-warning
-  definition and rendering mechanics. `logs.py` composes its closed six-event
+  definition and rendering mechanics. `log/warning.py` composes its closed six-event
   taxonomy and supplies typed facts, never free-form warning strings.
 - `daemon/lifecycle.py` owns the sealed raw process-log rotation warning
   contract. Startup supplies only the caught exception type and never

@@ -11,8 +11,8 @@ from nuself.cli.repl.notices import (
     turn_interactive_notices,
 )
 from nuself.application.lifecycle import open_application_runtime, use_application_runtime
-from nuself.logs import write_log_event
-from nuself.runtime.log_event import LogEvent
+from nuself.log.store import write_log_event
+from nuself.log.record import LogEvent
 
 
 def _event(component: str, event: str) -> LogEvent:

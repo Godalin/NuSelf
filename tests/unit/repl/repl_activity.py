@@ -17,14 +17,11 @@ from nuself.cli.repl.activity import (
     visible_interactive_activity_events,
 )
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.logs import (
-    InteractiveLogCursor,
-    read_log_events,
-    write_log_event,
-)
+from nuself.log.reader import InteractiveLogCursor, read_log_events
+from nuself.log.store import write_log_event
 from nuself.runtime.audit.types import LogComponent
 from nuself.runtime.execution import OwnedCall, current_cancellation
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 
 
 def _event(

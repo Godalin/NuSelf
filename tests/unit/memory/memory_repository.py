@@ -22,7 +22,7 @@ from nuself.memory.model import (
 )
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
 from nuself.memory.repository import MemorySearchFilters, MemoryStats, memory_stats
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.storage import auto_backend
 
 

@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 import nuself.runtime.observability as observability
-from nuself.logs import LogAppendLifecycleError, read_log_events
+from nuself.log.reader import read_log_events
+from nuself.log.store import LogAppendLifecycleError
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.definition import UnknownEventDefinitionError
 from nuself.runtime.audit.definition import (

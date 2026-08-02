@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.persona.graph import (
     AgentBackedActivationPolicy,
     AgentBackedPersonaNode,

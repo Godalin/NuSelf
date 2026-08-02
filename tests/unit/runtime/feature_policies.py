@@ -29,7 +29,8 @@ from nuself.runtime.frontend import (
     ApprovalDecision,
     ApprovalRequest,
 )
-from nuself.logs import read_log_events, runtime_event_log_sink
+from nuself.log.reader import read_log_events
+from nuself.log.store import runtime_event_log_sink
 
 
 @dataclass

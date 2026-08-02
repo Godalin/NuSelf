@@ -893,9 +893,10 @@ Structured logs are an append-only sink and read model.
   `runtime.audit.types`; definition infrastructure must not import the
   persistence module merely to describe a contract.
 - The immutable log projection and record codec live below persistence in
-  `runtime.log_event`. Protocol, audit-definition, and presentation modules
-  import that model directly; `logs.py` remains the filesystem sink/read model
-  rather than a facade for neutral runtime types.
+  `nuself.log.record`. Protocol, audit-definition, and presentation modules
+  import that model directly. `nuself.log.store` owns filesystem persistence
+  and `nuself.log.reader` owns reads and cursors; neither is a facade for the
+  neutral record type.
 - Metadata must be JSON-safe before it reaches the sink.
 - Runtime envelopes and log events use the same recursive JSON freeze/thaw
   boundary. Frozen payloads do not retain caller container aliases, while

@@ -13,21 +13,21 @@ from typing import IO, BinaryIO, cast
 
 import pytest
 
-import nuself.logs as logs
+import nuself.log.reader as log_reader
+import nuself.log.store as logs
 from nuself.runtime.warning_definitions import TerminalWarningSchemaError
-from nuself.logs import (
-    InteractiveLogCursor,
+from nuself.log.reader import InteractiveLogCursor, read_log_events
+from nuself.log.store import (
     LogAppendLifecycleError,
     LogRetentionPolicy,
     create_audit_envelope,
     log_path,
     project_log_events,
-    read_log_events,
     write_audit_envelope,
     write_log_event,
 )
 from nuself.runtime.audit.types import LogComponent
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     RuntimeEnvelope,
@@ -590,7 +590,7 @@ def test_log_corruption_warning_survives_broken_exception_renderer() -> None:
         RuntimeWarning,
         match="first_error=BrokenCorruption: BrokenCorruption",
     ):
-        logs._report_log_read_corruptions(  # pyright: ignore[reportPrivateUsage]
+        log_reader._report_log_read_corruptions(  # pyright: ignore[reportPrivateUsage]
             Path("chat.log"),
             "chat",
             [BrokenCorruption()],
@@ -601,7 +601,7 @@ def test_log_corruption_warning_redacts_exception_credentials() -> None:
     secret = "private-provider-key"
 
     with pytest.warns(RuntimeWarning) as captured:
-        logs._report_log_read_corruptions(  # pyright: ignore[reportPrivateUsage]
+        log_reader._report_log_read_corruptions(  # pyright: ignore[reportPrivateUsage]
             Path("chat.log"),
             "chat",
             [ValueError(f"invalid record api_key={secret}")],

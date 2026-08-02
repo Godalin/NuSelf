@@ -9,9 +9,7 @@ from nuself.cli.output import print_ansi
 from nuself.cli.application import cli_application
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.config import runtime_paths
-from nuself.logs import (
-    read_log_events,
-)
+from nuself.log.reader import read_log_events
 from nuself.runtime.audit.types import LOG_COMPONENTS, LogComponent
 from nuself.tui.render import render_log_event, render_log_event_json
 

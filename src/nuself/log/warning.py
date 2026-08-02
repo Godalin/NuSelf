@@ -77,7 +77,7 @@ def _validate_identity(metadata: Mapping[str, object]) -> None:
 
 
 def build_log_terminal_warning_registry() -> TerminalWarningRegistry:
-    """Build the sealed warning schema registry used by ``nuself.logs``."""
+    """Build the sealed warning schema registry used by log infrastructure."""
 
     definitions = (
         TerminalWarningDefinition(

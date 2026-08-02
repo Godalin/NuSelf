@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from typing import cast
 
 from nuself.runtime.audit.types import LogComponent
-from nuself.runtime.log_event import LogEvent
+from nuself.log.record import LogEvent
 from nuself.reason.model import ReasoningStep, ReasoningThread, TrackedItem
 from nuself.tui.render import (
     TerminalTheme,
