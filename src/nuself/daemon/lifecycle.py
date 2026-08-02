@@ -201,10 +201,6 @@ class DaemonRestartResult:
                 "daemon restart start must consume the stop result status"
             )
 
-    @property
-    def status(self) -> DaemonStatus:
-        return self.start.status
-
 
 def _validate_transition_runtime(
     before: DaemonStatus,

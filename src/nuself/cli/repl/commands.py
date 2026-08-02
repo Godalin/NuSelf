@@ -355,7 +355,7 @@ def handle_interactive_restart_command(project_root: Path | None) -> str:
             f"{diagnostic_exception_message(exc)}"
         )
     return (
-        f"Restarted daemon: {format_status(result.status)} "
+        f"Restarted daemon: {format_status(result.start.status)} "
         f"stop={result.stop.outcome} start={result.start.outcome}"
     )
 

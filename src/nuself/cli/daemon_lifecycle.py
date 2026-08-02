@@ -186,8 +186,8 @@ def restart_daemon_observed(
             "start_changed": result.start.changed,
             "start_from_phase": result.start.before.phase,
             "start_to_phase": result.start.status.phase,
-            "pid": result.status.pid,
-            "socket": str(result.status.socket_path),
+            "pid": result.start.status.pid,
+            "socket": str(result.start.status.socket_path),
         },
     )
     return result

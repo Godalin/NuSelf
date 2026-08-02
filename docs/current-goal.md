@@ -9,26 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Preserve resolved scope across daemon process startup.
+Remove the duplicate final-status alias from daemon restart results.
 
 ## Ordered Steps
 
-1. Define a daemon startup protocol carrying user root plus optional workspace
-   root; reconstruct scope only through `resolve_scope()` in the child.
-2. Pass `NuSelfScope` through observed lifecycle callers and start the daemon's
-   `ApplicationRuntime` from that reconstructed scope.
-3. Add workspace spawn/config regressions, run focused and full gates, then
-   commit without pushing.
+1. Specify restart as the composition of its stop and start transitions, with
+   the final status owned only by the start result.
+2. Remove the forwarding property and migrate audit and presentation callers
+   to `result.start.status`.
+3. Run focused and full gates, then commit without pushing.
 
 ## Exclusions
 
-- Do not eagerly create export directories or workspace storage.
-- Preserve explicit empty endpoints, failover ordering, readonly tools,
-  workspace/persona/trace injection, and advance behavior.
-- Do not couple the service to a concrete agent or merge model execution into
-  repository persistence.
-- Preserve path-based lifecycle callers, daemon identity, status/stop behavior,
-  spawn isolation, audit roots, and cleanup ordering.
+- Preserve start/stop result contracts, restart validation, audit metadata,
+  rendered output, exit behavior, and lifecycle ordering.
+- Do not merge the two transition results or add a replacement facade.
 
 ## Constraints
 
@@ -40,6 +35,12 @@ Preserve resolved scope across daemon process startup.
 
 ## Phase Evidence
 
+- `DaemonRestartResult` now contains only its stop and start transitions; final
+  status is read from `start.status` instead of a duplicate forwarding
+  property. Audit, one-shot CLI, and REPL presentation use that authoritative
+  path with unchanged metadata and output. Focused lifecycle/CLI/REPL tests:
+  446 passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Daemon startup now serializes the resolved user root and optional workspace
   root, and the child reconstructs one `NuSelfScope` through `resolve_scope()`
   before opening its application runtime. CLI lifecycle callers preserve that

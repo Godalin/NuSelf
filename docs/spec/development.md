@@ -447,7 +447,9 @@ application runtime.
   constructs terminal warning presentation.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
-  surfaces.
+  surfaces. A restart result composes its complete stop and start transitions;
+  its final status is `start.status` and is not duplicated by a forwarding
+  field or property.
 - `cli/daemon_status.py` owns shared status observation, safe failure rendering,
   and status-line formatting. `cli/commands/daemon.py` owns only daemon command
   handlers plus list/health presentation and exit decisions.

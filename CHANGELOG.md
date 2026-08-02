@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon restart results now expose final state only through their composed
+  start transition, removing a duplicate forwarding API.
 - Daemon startup now carries user/workspace scope metadata into the child
   process, preserving layered workspace configuration instead of guessing from
   an authority path.

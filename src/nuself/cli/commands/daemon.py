@@ -56,7 +56,7 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
         return 1
     print(
         "Restarted: "
-        f"{format_status(result.status)} "
+        f"{format_status(result.start.status)} "
         f"stop={result.stop.outcome} start={result.start.outcome}"
     )
     return 0
