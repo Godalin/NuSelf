@@ -141,7 +141,7 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 
 ### Shared Atomic File Boundary
 
-Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
+Runtime JSON and text state uses `nuself.storage.atomic.write_json_atomic()` or
 `write_text_atomic()`. The shared writer creates a unique sibling temporary
 file, writes and `fsync`s its complete content, atomically replaces the
 destination, then `fsync`s the parent directory. Success means both file

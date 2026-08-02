@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage.contract import COLLECTION_NAMES
 from nuself.storage.sqlite import (
     SqliteSchemaValidationError,
@@ -102,7 +103,9 @@ def _validate_thought_pack_connection(
     except ThoughtPackValidationError:
         raise
     except SqliteSchemaValidationError as exc:
-        raise ThoughtPackValidationError(str(exc)) from exc
+        raise ThoughtPackValidationError(
+            diagnostic_exception_message(exc)
+        ) from exc
     except sqlite3.DatabaseError as exc:
         raise ThoughtPackValidationError(
             "thought pack is not a valid SQLite database"

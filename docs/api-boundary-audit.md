@@ -186,7 +186,7 @@ same application and Reflection composition APIs used by production.
 | --- | --- | --- |
 | `runtime`, `decorators` | clean | Typed handlers, definitions, events, jobs, feature policy, and cleanup are appropriate shared APIs. |
 | `logs`, `config`, `llm`, `scope`, `authority` | mostly clean | Correct shared ownership; callers should receive resolved config/model capabilities instead of invoking defaults inside domains. |
-| `storage`, `storage_sqlite`, migrations | clean infrastructure | Direct collection/schema access is expected here, not in feature adapters. |
+| `storage`, migrations | clean infrastructure | Precise contract, authority, SQLite, pack, workspace, atomic, and audit owners replace the former flat modules. |
 | `conversation` | clean domain API | Store and bounded history service are separated; the application projector remains finding A4. |
 | `memory`, `profile` | partial | Profile port is a good pattern; candidate application still hard-codes profile routing (A5). |
 | `persona` | partial | Typed domain models exist, but definition loading and default model composition cross boundaries (A6). |

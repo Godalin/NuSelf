@@ -304,3 +304,15 @@ def test_log_model_is_independent_from_persistence() -> None:
         and ("nuself.log.store", "LogEvent") in _from_imports(path)
     ]
     assert consumers == []
+
+
+def test_storage_package_has_precise_owners_without_facades() -> None:
+    storage = _SOURCE_ROOT / "storage"
+    assert (storage / "__init__.py").read_text(encoding="utf-8") == ""
+    assert not (_SOURCE_ROOT / "storage.py").exists()
+    assert not (_SOURCE_ROOT / "storage_sqlite.py").exists()
+    assert not (_SOURCE_ROOT / "storage_audit.py").exists()
+    assert not (_SOURCE_ROOT / "store.py").exists()
+    assert not (_SOURCE_ROOT / "workspace.py").exists()
+    assert "nuself.storage.pack" not in _imports(storage / "sqlite.py")
+    assert "nuself.storage.sqlite" in _imports(storage / "pack.py")

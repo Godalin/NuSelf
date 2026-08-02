@@ -1,9 +1,4 @@
-"""General-purpose sync SQLite key-value store, implementing LangGraph's BaseStore.
-
-Any agent can use ``SqliteStore`` for persistent JSON document storage,
-and ``ScopedWorkspace`` to auto-inject a namespace prefix (e.g. a thread ID)
-so the agent does not need to manage namespaces manually.
-"""
+"""Private workspace paths and the LangGraph SQLite BaseStore adapter."""
 
 from __future__ import annotations
 

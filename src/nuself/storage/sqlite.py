@@ -1,8 +1,4 @@
-"""SQLite-backed storage backend for v0.2.4+.
-
-Every top-level key from the wire dict becomes its own SQL column.
-Complex values (list, dict) are stored as strict JSON text.
-"""
+"""Live SQLite backend, transaction, schema, lease, and backup primitives."""
 
 from __future__ import annotations
 
