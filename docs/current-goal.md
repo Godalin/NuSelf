@@ -9,14 +9,14 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Keep confidence decoding inside the daemon chat response codec.
+Remove the daemon stop error's duplicate ownership projection.
 
 ## Ordered Steps
 
-1. Confirm `_optional_number()` serves only chat-response confidence.
-2. Decode the optional finite-range input beside its existing range check and
-   remove the generic one-call helper.
-3. Run focused daemon payload tests and full gates, then commit without pushing.
+1. Confirm `DaemonStopError.owner_active` only forwards its status field.
+2. Read the authoritative `DaemonStatus.owner_active` directly in audit and
+   tests; keep the error's status snapshot and failure taxonomy unchanged.
+3. Run focused lifecycle/audit tests and full gates, then commit without push.
 
 ## Exclusions
 
@@ -25,8 +25,7 @@ Keep confidence decoding inside the daemon chat response codec.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve omitted/null distinction, bool rejection, numeric coercion, and
-  confidence range validation.
+- Preserve daemon ownership tri-state semantics and stop failure metadata.
 
 ## Constraints
 
@@ -38,6 +37,12 @@ Keep confidence decoding inside the daemon chat response codec.
 
 ## Phase Evidence
 
+- `DaemonStopError` now exposes ownership only through its authoritative
+  `status` snapshot. Removed the duplicate `owner_active` forwarding property;
+  lifecycle audit reads `error.status.owner_active` directly and preserves the
+  same true/false/unknown projection. Focused lifecycle/audit tests: 73 passed;
+  full suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - `ChatResponsePayload.from_wire()` now owns confidence presence, numeric type,
   conversion, and range validation in one block. Removed the sole-use generic
   `_optional_number()` helper without weakening null/bool/NaN/infinity rejection.

@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon stop failures now expose ownership through their authoritative status
+  snapshot only, removing a duplicate forwarding property.
 - Daemon chat response confidence decoding now lives beside its range policy,
   removing a generic helper with one caller.
 - Daemon chat request decoding now keeps its two optional ID defaults directly

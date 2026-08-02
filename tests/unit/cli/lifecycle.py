@@ -949,7 +949,7 @@ def test_stop_timeout_retains_ambiguous_transport_failure(
     error = captured.value
     assert error.reason == "timeout"
     assert error.status is stopped
-    assert error.owner_active is True
+    assert error.status.owner_active is True
     assert error.__cause__ is request_error
     assert isclose(sum(sleeps), 0.12)
     assert str(error) == (
@@ -998,7 +998,7 @@ def test_stop_rejection_is_not_retried(
 
     error = captured.value
     assert error.reason == "request_failed"
-    assert error.owner_active is True
+    assert error.status.owner_active is True
     assert error.__cause__ is rejection
     assert str(error) == "daemon rejected the shutdown request"
     assert "private rejection" not in str(error)
@@ -1041,7 +1041,7 @@ def test_stop_wraps_instance_ownership_inspection_failure(
 
     error = captured.value
     assert error.reason == "ownership_check_failed"
-    assert error.owner_active is None
+    assert error.status.owner_active is None
     assert isinstance(error.__cause__, lifecycle.DaemonStatusError)
     assert error.__cause__.status == unknown
     assert error.__cause__.__cause__ is failure

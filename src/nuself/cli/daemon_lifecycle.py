@@ -63,7 +63,7 @@ def _write_stop_failure_audit(
             "phase": error.status.phase,
             "pid": error.status.pid,
             "socket": str(error.status.socket_path),
-            "owner_active": error.owner_active,
+            "owner_active": error.status.owner_active,
             **({"stage": stage} if stage is not None else {}),
         },
     )

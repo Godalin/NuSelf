@@ -284,11 +284,6 @@ class DaemonStopError(RuntimeError):
         self.status = status
         self.timeout_seconds = timeout_seconds
 
-    @property
-    def owner_active(self) -> bool | None:
-        return self.status.owner_active
-
-
 def status(
     project_root: Path | None = None,
     *,
