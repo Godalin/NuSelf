@@ -9,7 +9,7 @@ from nuself.cli.daemon_lifecycle import (
     restart_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi
 from nuself.cli.persona_management import (
     create_persona,

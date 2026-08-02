@@ -19,7 +19,7 @@ from nuself.daemon.lifecycle import (
     DaemonStartResult,
     DaemonStatus,
 )
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 from nuself.config import runtime_paths
 
 

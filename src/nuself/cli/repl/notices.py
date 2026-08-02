@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.logs import read_log_events
 from nuself.runtime.log_event import LogEvent
 

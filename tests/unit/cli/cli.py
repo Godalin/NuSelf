@@ -86,7 +86,7 @@ from nuself.runtime.execution import current_cancellation
 from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 
 
 def _authority(workspace: Path) -> Path:
@@ -252,8 +252,8 @@ def test_chat_uses_one_shot_when_daemon_is_missing(
 def test_one_shot_chat_runs_memory_curator_after_reply(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    def compose_fake_curator(application: object) -> FakeChangedCurator:
-        del application
+    def compose_fake_curator(*dependencies: object) -> FakeChangedCurator:
+        del dependencies
         return FakeChangedCurator()
 
     monkeypatch.setattr(

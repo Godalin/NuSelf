@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from nuself.config import ConfigSystem
-from nuself.cli.composition import cli_backend
+from nuself.cli.application import cli_backend
 from nuself.private_fs import ensure_managed_directory
 from nuself.scope import NuSelfScope, resolve_runtime_paths
 

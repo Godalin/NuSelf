@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.memory_preview import format_memory_preview

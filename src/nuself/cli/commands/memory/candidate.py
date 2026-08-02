@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.cli.output import (
     print_ansi,

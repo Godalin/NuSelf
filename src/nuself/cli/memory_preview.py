@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.tui.memory import render_memory_entry_row
 
 DEFAULT_PREVIEW_LIMIT = 8

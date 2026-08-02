@@ -115,8 +115,8 @@ def test_langchain_tool_materialization_has_one_owner() -> None:
 
 
 def test_conversation_composition_has_bounded_public_fan_in() -> None:
-    runtime_tree = ast.parse(
-        (_SOURCE_ROOT / "agent" / "chat" / "runtime.py").read_text(
+    engine_tree = ast.parse(
+        (_SOURCE_ROOT / "agent" / "chat" / "engine.py").read_text(
             encoding="utf-8"
         )
     )
@@ -126,8 +126,8 @@ def test_conversation_composition_has_bounded_public_fan_in() -> None:
         )
     )
 
-    runtime_init = _class_method(
-        runtime_tree,
+    engine_init = _class_method(
+        engine_tree,
         "ConversationGraphRuntime",
         "__init__",
     )
@@ -145,7 +145,7 @@ def test_conversation_composition_has_bounded_public_fan_in() -> None:
             - 1
         )
 
-    assert collaborator_count(runtime_init) <= 7
+    assert collaborator_count(engine_init) <= 7
     assert collaborator_count(tool_runtime_init) <= 4
 
 
@@ -163,8 +163,8 @@ def test_chat_tool_runtime_does_not_compose_persistence() -> None:
     } == set()
 
 
-def test_conversation_runtime_does_not_compose_authority() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+def test_conversation_engine_does_not_compose_authority() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
     forbidden_prefixes = ("nuself.application", "nuself.storage")
     assert [
         imported
@@ -174,12 +174,12 @@ def test_conversation_runtime_does_not_compose_authority() -> None:
 
 
 def test_chat_has_one_framework_native_agent_graph() -> None:
-    runtime = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+    engine = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
     response = _SOURCE_ROOT / "agent" / "chat" / "response.py"
 
     assert not any(
         imported == "langgraph.graph"
-        for imported in _imports(runtime)
+        for imported in _imports(engine)
     )
     assert (
         "langchain.agents",
@@ -741,8 +741,8 @@ def test_memory_curator_contract_is_separate_from_orchestration() -> None:
         assert declaration not in source
 
 
-def test_conversation_runtime_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+def test_conversation_engine_does_not_resolve_authority() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
         ("nuself.storage", "auto_backend"),
@@ -754,8 +754,8 @@ def test_conversation_runtime_does_not_resolve_authority() -> None:
     } == set()
 
 
-def test_conversation_runtime_does_not_compose_observability() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "runtime.py"
+def test_conversation_engine_does_not_compose_observability() -> None:
+    path = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
     imports = set(_from_imports(path))
     assert ("nuself.logs", "runtime_event_log_sink") not in imports
     source = path.read_text(encoding="utf-8")

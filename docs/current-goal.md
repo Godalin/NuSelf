@@ -42,3 +42,9 @@ models, workflows, and evaluation code into their owning domains.
   Domain composition receives explicit capabilities rather than importing
   `ApplicationGraph`. Pyright: 0 errors, 0 warnings; affected boundary/domain/
   Chat/CLI suite: 959 passed.
+- Stage 3: concrete execution owners are named by responsibility:
+  `application.lifecycle`, `agent.chat.engine`, `cli.repl.loop`,
+  `agent.skill_loader`, and `cli.application`. No compatibility modules remain.
+  Pyright: 0 errors, 0 warnings; focused regression and boundary suite: 56
+  passed (the broader affected suite reached 914 passing tests before exposing
+  and correcting stale test paths and one outdated test double).

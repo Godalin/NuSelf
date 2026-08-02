@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 
 
 @pytest.fixture(autouse=True)

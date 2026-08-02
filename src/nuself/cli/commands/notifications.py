@@ -9,7 +9,7 @@ import time
 from typing import cast
 
 from nuself.cli.output import print_ansi, resolve_handle
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.exit_codes import CliExitCode
 from nuself.notification.outbox import (
     NotificationOutbox,

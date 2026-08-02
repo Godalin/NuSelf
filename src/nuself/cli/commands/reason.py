@@ -8,7 +8,7 @@ import sys
 from nuself.reason.composition import (
     compose_reason_advancer,
 )
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound

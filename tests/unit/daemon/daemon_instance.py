@@ -873,7 +873,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import signal
-    import nuself.application.runtime as runtime_module
+    import nuself.application.lifecycle as runtime_module
     import nuself.daemon.server as server_module
     import nuself.storage as storage_module
 

@@ -544,7 +544,7 @@ single-use forwarding functions around those adapters.
   session message/log association, memory/reply presentation order, and error
   deduplication. Configured retry/poll values and rendering effects are
   injected by the composition root.
-- `cli/repl/runtime.py` owns the interactive session loop and receives
+- `cli/repl/loop.py` owns the interactive session loop and receives
   application effects through `ReplCallbacks`. Transcript auto-save and memory
   curation execute once each through named cleanup aggregation that preserves
   any main-loop primary failure.

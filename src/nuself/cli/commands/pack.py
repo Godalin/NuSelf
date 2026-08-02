@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from nuself.config import runtime_paths
-from nuself.cli.composition import cli_backend
+from nuself.cli.application import cli_backend
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage_sqlite import (

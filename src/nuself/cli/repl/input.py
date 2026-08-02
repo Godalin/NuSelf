@@ -14,7 +14,7 @@ from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
 from nuself.agent.chat.audit import run_chat_observed
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.repl.registry import (
     command_tokens,
     render_help_lines,

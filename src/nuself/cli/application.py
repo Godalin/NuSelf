@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from nuself.application.composition import ApplicationGraph
-from nuself.application.runtime import (
+from nuself.application.lifecycle import (
     ApplicationRuntime,
     current_application_runtime,
 )

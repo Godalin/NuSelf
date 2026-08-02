@@ -14,7 +14,7 @@ import tempfile
 from typing import cast
 
 from nuself.application.data_admin import DataAdminService, DataResource
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.private_fs import ensure_private_directory

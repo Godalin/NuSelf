@@ -7,7 +7,7 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.chat.runtime import (
+from nuself.agent.chat.engine import (
     ConversationGraphRuntime as _ConversationGraphRuntime,
 )
 from nuself.agent.chat.types import ChatAgentSettings

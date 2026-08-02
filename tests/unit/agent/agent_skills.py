@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.agent.skills import load_agent_skills
+from nuself.agent.skill_loader import load_agent_skills
 
 
 def test_load_agent_skills_from_flat_markdown_files() -> None:

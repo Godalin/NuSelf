@@ -10,7 +10,7 @@ from nuself.cli.repl.notices import (
     startup_interactive_notices,
     turn_interactive_notices,
 )
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 from nuself.logs import write_log_event
 from nuself.runtime.log_event import LogEvent
 

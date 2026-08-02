@@ -44,7 +44,7 @@ from nuself.cli.entrypoints import (
     EntrypointController,
 )
 from nuself.cli.handlers import dispatch_cli
-from nuself.application.runtime import use_application_runtime
+from nuself.application.lifecycle import use_application_runtime
 from nuself.cli.parser import (
     EntrypointHandlers,
 )
@@ -55,7 +55,7 @@ from nuself.cli.presentation import print_assistant_reply
 from nuself.cli.repl.composition import run_repl
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.scope import resolve_scope
-from nuself.application.runtime import open_application_runtime
+from nuself.application.lifecycle import open_application_runtime
 from nuself.storage_audit import report_cli_cleanup_failure
 
 __all__ = [

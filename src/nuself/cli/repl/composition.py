@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.daemon_status import observe_daemon_status
 from nuself.cli.presentation import (
     brand_banner,
@@ -21,7 +21,7 @@ from nuself.cli.repl.notices import (
     print_interactive_notices,
     startup_interactive_notices,
 )
-from nuself.cli.repl.runtime import ReplCallbacks, run_interactive_loop
+from nuself.cli.repl.loop import ReplCallbacks, run_interactive_loop
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.transcript import auto_save_interactive_transcripts
 from nuself.cli.repl.turns import (

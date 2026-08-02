@@ -11,7 +11,7 @@ import pytest
 from nuself.config import runtime_paths
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 from tests.backend import owned_backend
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 
 
 @pytest.fixture(autouse=True)

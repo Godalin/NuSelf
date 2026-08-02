@@ -10,7 +10,7 @@ from prompt_toolkit.document import Document
 
 from nuself.conversation import ConversationState
 from conversation_fixtures import ConversationStore
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.repl.input import InteractiveCompleter
 from nuself.logs import read_log_events
 from nuself.reason.repository import ReasonRepository

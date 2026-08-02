@@ -6,7 +6,7 @@ from nuself.agent.chat.types import (
     ChatAgentSettings,
     ChatResult,
 )
-from nuself.agent.chat.runtime import ConversationGraphRuntime
+from nuself.agent.chat.engine import ConversationGraphRuntime
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService

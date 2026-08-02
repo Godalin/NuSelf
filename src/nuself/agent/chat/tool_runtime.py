@@ -7,7 +7,7 @@ from typing import cast
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.skills import (
+from nuself.agent.skill_loader import (
     load_agent_skills,
     render_tool_placeholders,
 )

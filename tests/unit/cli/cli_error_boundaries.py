@@ -14,7 +14,7 @@ from nuself.logs import read_log_events
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.errors import ReasonPromptError
 from nuself.reason.service import ReasonService
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 
 
 @pytest.fixture(autouse=True)

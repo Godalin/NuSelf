@@ -7,7 +7,7 @@ import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.application.composition import compose_application
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.persona_management import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
 from nuself.logs import read_log_events
 from nuself.config import runtime_paths
@@ -15,7 +15,7 @@ from nuself.persona.definition import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.persona.tools import _record_prompt_trace  # pyright: ignore[reportPrivateUsage]
 from tests.backend import owned_backend
-from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 
 
 @pytest.fixture(autouse=True)

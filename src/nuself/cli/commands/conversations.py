@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable
 
 from nuself.conversation import ConversationState
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 

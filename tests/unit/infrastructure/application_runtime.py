@@ -8,13 +8,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import nuself.application.runtime as runtime_module
-from nuself.application.runtime import (
+import nuself.application.lifecycle as runtime_module
+from nuself.application.lifecycle import (
     ApplicationRuntimeClosedError,
     open_application_runtime,
     use_application_runtime,
 )
-from nuself.cli.composition import (
+from nuself.cli.application import (
     cli_application,
     cli_backend,
 )

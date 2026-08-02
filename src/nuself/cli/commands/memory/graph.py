@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.memory.repository import (
     SymbolicGraphEdge,
     SymbolicGraphEdgeFilters,

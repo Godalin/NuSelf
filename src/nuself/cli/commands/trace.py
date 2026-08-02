@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 from typing import cast
 
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
 from nuself.trace.domain import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter

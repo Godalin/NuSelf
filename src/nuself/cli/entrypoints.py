@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.conversation import ConversationState, ConversationStore
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.daemon_lifecycle import (
     start_daemon_observed,
 )

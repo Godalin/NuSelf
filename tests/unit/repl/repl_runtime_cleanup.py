@@ -6,8 +6,8 @@ from typing import Protocol
 
 import pytest
 
-from nuself.cli.repl import runtime
-from nuself.cli.repl.runtime import (
+from nuself.cli.repl import loop
+from nuself.cli.repl.loop import (
     InteractiveLifecycleError,
     ReplCallbacks,
     run_interactive_loop,
@@ -38,7 +38,7 @@ def _install_input(
         return reader
 
     monkeypatch.setattr(
-        runtime,
+        loop,
         "InteractiveInput",
         input_factory,
     )

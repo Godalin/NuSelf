@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from nuself.application.runtime import ApplicationRuntime, open_application_runtime
+from nuself.application.lifecycle import ApplicationRuntime, open_application_runtime
 from nuself.daemon.state import DaemonState
 
 

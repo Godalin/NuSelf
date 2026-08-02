@@ -9,7 +9,7 @@ from nuself.cli.output import (
     resolve_handle,
     resolve_handle_selection,
 )
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.persona.audit import run_persona_observed

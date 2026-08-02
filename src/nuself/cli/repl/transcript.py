@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.conversation import ConversationState
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.repl.input import interactive_help
 from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths

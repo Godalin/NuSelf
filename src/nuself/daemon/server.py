@@ -118,7 +118,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> None:
     """Run the daemon while the caller holds project instance ownership."""
 
     state: DaemonState | None = None
-    from nuself.application.runtime import (
+    from nuself.application.lifecycle import (
         open_application_runtime,
         use_application_runtime,
     )

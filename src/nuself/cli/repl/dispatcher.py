@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nuself.conversation import ConversationState
-from nuself.cli.composition import cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.memory_preview import format_memory_preview
 from nuself.cli.output import print_ansi

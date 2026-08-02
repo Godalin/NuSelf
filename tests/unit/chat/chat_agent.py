@@ -1489,7 +1489,7 @@ def test_skill_tool_drift_does_not_fall_back_to_component_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.agent.skills import AgentSkill
+    from nuself.agent.skill_loader import AgentSkill
 
     monkeypatch.setattr(
         "nuself.agent.chat.tool_runtime.load_agent_skills",
