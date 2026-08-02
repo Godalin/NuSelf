@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- The CLI composition root now binds Chat and REPL dependencies directly,
+  removing three private forwarding functions from the launch path.
 - Daemon recurring-task registration is now the sole periodic task subset,
   removing a second handwritten task-kind type catalog.
 - Daemon clients now connect directly instead of racing a socket-path

@@ -9,22 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the duplicate periodic daemon task-kind type.
+Remove private forwarding functions from the CLI composition root.
 
 ## Ordered Steps
 
-1. Specify the closed task-kind type as the sole type catalog, while periodic
-   membership is expressed only by the recurring registration sequence.
-2. Remove `PeriodicTaskKind` and let the immutable registration data infer its
-   closed literal members.
+1. Specify direct binding of fixed Chat/REPL dependencies at parser
+   composition, without single-use forwarding callables.
+2. Replace reply-printer and curator forwarding functions with standard
+   partial bindings and migrate tests to the real adapter seams.
 3. Run focused and full gates, then commit without pushing.
 
 ## Exclusions
 
-- Preserve the complete task-kind catalog, handler coverage assertion,
-  recurring intervals, task identities, scheduling, and health behavior.
-- Do not replace the closed task kinds with untyped strings or add a registry
-  abstraction.
+- Preserve entrypoint callback protocols, reply rendering, memory curation,
+  daemon/local selection, REPL behavior, and parser isolation.
+- Do not move launch policy into the root or add a callback facade/class.
 
 ## Constraints
 
@@ -36,6 +35,12 @@ Remove the duplicate periodic daemon task-kind type.
 
 ## Phase Evidence
 
+- The CLI composition root now binds the reply printer and memory-curator
+  callback directly with standard partial application. Removed three private
+  single-use forwarding functions plus their type-only imports; entrypoint
+  policy and callback protocols remain unchanged. Focused CLI/REPL tests: 340
+  passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Removed the handwritten `PeriodicTaskKind` subset. The immutable recurring
   registration sequence is now bounded by the sole closed `DaemonTaskKind`, so
   adding or removing periodic membership requires one data edit rather than a

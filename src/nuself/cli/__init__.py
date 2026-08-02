@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import sys
 import warnings
-from collections.abc import Callable, Sequence
-from pathlib import Path
+from collections.abc import Sequence
+from functools import partial
 
 from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
 
@@ -53,7 +53,6 @@ from nuself.cli.parser import (
 )
 from nuself.cli.presentation import print_assistant_reply
 from nuself.cli.repl.composition import run_repl
-from nuself.cli.repl.types import InteractiveChatResult
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.scope import resolve_scope
 from nuself.application.runtime import open_application_runtime
@@ -135,11 +134,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 def build_parser() -> argparse.ArgumentParser:
     entrypoints = EntrypointController(
         EntrypointCallbacks(
-            send_daemon_chat=_send_chat,
+            send_daemon_chat=partial(
+                _send_daemon_chat,
+                print_reply=print_assistant_reply,
+            ),
             send_daemon_chat_interactive=_send_chat_interactive,
-            send_one_shot_chat=_send_one_shot_chat,
+            send_one_shot_chat=partial(
+                _run_one_shot_chat,
+                print_reply=print_assistant_reply,
+            ),
             send_one_shot_chat_interactive=_send_one_shot_chat_interactive,
-            run_interactive=_interactive_loop,
+            run_interactive=partial(
+                run_repl,
+                run_memory_curator=_run_memory_curator,
+            ),
         )
     )
     return _build_parser(
@@ -150,45 +158,6 @@ def build_parser() -> argparse.ArgumentParser:
             open_conversation=entrypoints.handle_open,
         )
     )
-
-
-def _send_chat(
-    message: str, project_root: Path | None, conversation_id: str = "default"
-) -> int:
-    return _send_daemon_chat(
-        message,
-        project_root,
-        conversation_id,
-        print_reply=print_assistant_reply,
-    )
-
-
-def _interactive_loop(
-    send_message: Callable[[str, str, str | None], InteractiveChatResult],
-    project_root: Path | None,
-    *,
-    initial_conversation_id: str = "default",
-    daemon_activity: bool = False,
-) -> int:
-    return run_repl(
-        send_message,
-        project_root,
-        run_memory_curator=_run_memory_curator,
-        initial_conversation_id=initial_conversation_id,
-        daemon_activity=daemon_activity,
-    )
-
-
-def _send_one_shot_chat(
-    message: str, project_root: Path | None, conversation_id: str = "default"
-) -> int:
-    return _run_one_shot_chat(
-        message,
-        project_root,
-        conversation_id,
-        print_reply=print_assistant_reply,
-    )
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

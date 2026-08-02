@@ -1466,12 +1466,17 @@ def test_default_entrypoint_uses_existing_daemon_with_message(
     def fake_status(project_root: Path | None) -> DaemonStatus:
         return daemon_status
 
-    def fake_send(message: str, project_root: Path | None) -> int:
+    def fake_send(
+        message: str,
+        project_root: Path | None,
+        **kwargs: object,
+    ) -> int:
+        del project_root, kwargs
         print(f"sent {message}")
         return 0
 
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli._send_chat", fake_send)
+    monkeypatch.setattr("nuself.cli._send_daemon_chat", fake_send)
 
     result = main(["--workspace", str(tmp_path), "--message", "hello"])
     captured = capsys.readouterr()
@@ -1541,13 +1546,18 @@ def test_default_entrypoint_creates_daemon_when_missing(
             outcome="started",
         )
 
-    def fake_send(message: str, project_root: Path | None) -> int:
+    def fake_send(
+        message: str,
+        project_root: Path | None,
+        **kwargs: object,
+    ) -> int:
+        del project_root, kwargs
         print(f"sent {message}")
         return 0
 
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
     monkeypatch.setattr("nuself.daemon.lifecycle.start", fake_start)
-    monkeypatch.setattr("nuself.cli._send_chat", fake_send)
+    monkeypatch.setattr("nuself.cli._send_daemon_chat", fake_send)
 
     result = main(["--workspace", str(tmp_path), "--message", "hello"])
     captured = capsys.readouterr()
