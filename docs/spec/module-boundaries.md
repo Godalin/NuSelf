@@ -49,6 +49,52 @@ These rules are checked from the Python AST in the test suite. New exceptions
 require a specification change naming the owner and removal condition; an
 unrecorded allowlist is forbidden.
 
+## Domain API Design Contract
+
+NuSelf has one shared domain API design style, not one common `Service` base
+class. Each role has a distinct contract:
+
+| Role | Owns | Must not own |
+| --- | --- | --- |
+| Model | typed domain state and invariants | storage, rendering, runtime lookup |
+| Service | complete user-intent operations and policy | CLI arguments, backend lifecycle, terminal output |
+| Consumer port | the smallest cross-domain capability a consumer needs | unrelated methods from the concrete provider |
+| Repository | domain persistence, codecs, and indexes | cross-domain orchestration or presentation |
+| Composition | construction from already-resolved capabilities | authority reselection or business behavior |
+| Adapter | transport, arguments, and presentation | domain decisions or direct raw-storage mutation |
+
+Every domain service follows these rules:
+
+1. Construction receives every repository, clock, sink, strategy, and
+   cross-domain capability explicitly. It never reads the active application,
+   resolves scope, or opens storage.
+2. Public methods name domain use cases with verbs such as `start_thread`,
+   `archive`, or `promote_to_reason`; they do not expose generic
+   `execute(action)` or mirror CLI subcommands.
+3. Inputs and results are domain models or typed value objects. `argparse`
+   namespaces, daemon payloads, wire dictionaries, and rendered strings stop
+   at their adapters or codecs.
+4. Validation, state transitions, and required audit/trace behavior belong to
+   the service. Domain-specific failures use stable domain exceptions; an
+   adapter decides only how to transport or present them.
+5. A cross-domain consumer depends on a structural `Protocol` that contains
+   only the operations it uses. The provider may satisfy several ports without
+   inheriting a common framework interface.
+6. Repositories remain valid domain-internal capabilities for persistence,
+   migrations, recovery, and explicit maintenance. A service method is added
+   for a stable business use case, not merely to forward every repository
+   method.
+7. A service owns no `start`, `stop`, `health`, name registry, or backend close
+   method unless that lifecycle is itself genuine domain behavior. Process and
+   authority lifetime belong to outer composition.
+
+Agent tools and daemon tasks are adapters over this contract. Feature
+decorators describe tool identity, effects, confirmation, observation, and
+audit without changing the callable's domain API. `DaemonTask` describes
+scheduling and payload transport without becoming a domain service interface.
+No `BaseService`, dynamic API registry, or service locator may be introduced to
+simulate uniformity.
+
 ## Composition Ownership
 
 Scope and paths are resolved once by an outer composition root. Storage is

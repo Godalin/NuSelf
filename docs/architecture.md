@@ -159,6 +159,10 @@ Typed models describe domain state. Services own user-intent operations and
 policy. Repositories own persistence and indexes. Renderers keep terminal and
 transcript output consistent. Agent tools expose narrow service capabilities;
 agent skills describe when those capabilities should be used.
+All domains follow the shared service/port/repository/composition contract in
+[`spec/module-boundaries.md`](spec/module-boundaries.md#domain-api-design-contract).
+Uniformity is a documented design style enforced through typed boundaries, not
+a common service base class or registry.
 
 Concrete models live with their owning domain (`memory.model`,
 `profile.model`, `reflection.model`, and `memory.source_model`). NuSelf has no

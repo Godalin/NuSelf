@@ -9,8 +9,8 @@ Idle — no active implementation goal.
 
 ## Objective
 
-No active objective. Reason and Reflection now expose consistent domain-owned
-resource snapshots; the bounded daemon/runtime indirection audit is complete.
+No active objective. The authoritative module-boundary specification now
+defines the shared domain API design contract and architecture links to it.
 
 ## Next Steps
 
@@ -22,9 +22,6 @@ None while idle.
 
 ## Last Verification
 
-- Pyright: 0 errors, 0 warnings.
-- Pytest: 2453 passed.
-- Package build: source distribution and wheel succeeded for `0.3.1`.
-- Completion audit: no flat Reason/Reflection compatibility fields remain;
-  daemon task adapters retain explicit scheduler/validation responsibilities;
-  sole-consumer runtime timeout validation now belongs to `runtime.execution`.
+- Documentation consistency and Markdown whitespace checks passed.
+- No runtime code changed; the preceding full gate remains Pyright 0 errors,
+  2453 tests passed, and successful `0.3.1` package build.
