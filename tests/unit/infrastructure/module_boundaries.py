@@ -316,3 +316,10 @@ def test_storage_package_has_precise_owners_without_facades() -> None:
     assert not (_SOURCE_ROOT / "workspace.py").exists()
     assert "nuself.storage.pack" not in _imports(storage / "sqlite.py")
     assert "nuself.storage.sqlite" in _imports(storage / "pack.py")
+
+
+def test_live_provider_matrix_is_not_production_code() -> None:
+    assert not (_SOURCE_ROOT / "live_testing.py").exists()
+    assert (
+        Path(__file__).parents[2] / "live" / "matrix.py"
+    ).is_file()

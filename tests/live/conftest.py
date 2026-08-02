@@ -8,7 +8,7 @@ from typing import cast
 import pytest
 from _pytest.mark.structures import ParameterSet
 
-from nuself.live_testing import (
+from tests.live.matrix import (
     LiveCapability,
     LiveModelCase,
     select_live_model_cases,

@@ -23,7 +23,7 @@ from nuself.llm import (
     configured_langchain_chat_models,
     redacted_llm_diagnostic,
 )
-from nuself.live_testing import LiveModelCase
+from tests.live.matrix import LiveModelCase
 
 pytestmark = pytest.mark.live_api
 

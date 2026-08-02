@@ -22,11 +22,10 @@ No active objective.
 
 ## Last Verification
 
-- Storage infrastructure now lives under the empty-root `nuself.storage`
-  package with precise `contract`, `atomic`, `authority`, `sqlite`, `pack`,
-  `workspace`, and `audit` owners.
-- The former top-level `storage.py`, `storage_sqlite.py`, `storage_audit.py`,
-  `store.py`, and `workspace.py` paths are absent, with no aliases or forwarding
-  modules. Thought-pack dependencies flow one way into SQLite primitives.
-- Full Pyright reports 0 errors and 0 warnings. Full pytest passes. NuSelf 0.3.1
-  source distribution and wheel build successfully.
+- The opt-in live API model/capability matrix lives in
+  `tests/live/matrix.py`; `src/nuself/live_testing.py` is absent and no
+  compatibility module remains.
+- Full Pyright reports 0 errors and 0 warnings. The matrix and structural
+  boundary tests pass, as does the complete default pytest suite.
+- NuSelf 0.3.1 source and wheel builds succeed. Wheel inspection confirms no
+  `live_testing` module or `tests/live` content is shipped.

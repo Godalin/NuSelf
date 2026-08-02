@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nuself.live_testing import (
+from tests.live.matrix import (
     OPENCODE_GO_LIVE_MATRIX,
     LiveModelCase,
     LiveModelSpec,
