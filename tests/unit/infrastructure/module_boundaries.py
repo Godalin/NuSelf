@@ -6,7 +6,7 @@ import ast
 from pathlib import Path
 
 _SOURCE_ROOT = Path(__file__).resolve().parents[3] / "src" / "nuself"
-_OUTER_ADAPTERS = ("nuself.cli", "nuself.daemon", "nuself.repl", "nuself.tui")
+_OUTER_ADAPTERS = ("nuself.cli", "nuself.daemon", "nuself.tui")
 _DOMAIN_PACKAGES = (
     "memory",
     "notification",

@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — the v0.3.1 architecture simplification review is closed.
+Idle — obsolete source-tree directory shells are removed.
 
 ## Objective
 
@@ -19,6 +19,9 @@ No active implementation objective.
 
 ## Last Verification
 
-- Full suite: 2447 passed.
-- Pyright: 0 errors, 0 warnings.
-- `nuself-0.3.1` sdist and wheel built successfully.
+- Removed repository-owned `__pycache__` directories, the cache-only
+  `src/nuself/repl` shell, and the empty `src/nuself/migrations` directory.
+- Source-tree inspection finds no remaining empty or cache directories; the
+  active REPL remains under `src/nuself/cli/repl`.
+- Full suite: 2447 passed; Pyright: 0 errors, 0 warnings; `nuself-0.3.1` sdist
+  and wheel built successfully without regenerating bytecode caches.
