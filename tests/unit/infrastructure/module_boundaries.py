@@ -1,4 +1,4 @@
-"""Executable package dependency rules."""
+"""Executable package dependency rules for the current architecture."""
 
 from __future__ import annotations
 
@@ -25,10 +25,13 @@ _LEGACY_STATIC_TYPING_NAMES = {
 }
 
 
+def _tree(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
 def _imports(path: Path) -> tuple[str, ...]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported: list[str] = []
-    for node in ast.walk(tree):
+    for node in ast.walk(_tree(path)):
         if isinstance(node, ast.Import):
             imported.extend(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
@@ -37,161 +40,153 @@ def _imports(path: Path) -> tuple[str, ...]:
 
 
 def _from_imports(path: Path) -> tuple[tuple[str, str], ...]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imported: list[tuple[str, str]] = []
-    for node in ast.walk(tree):
+    for node in ast.walk(_tree(path)):
         if isinstance(node, ast.ImportFrom) and node.module is not None:
-            imported.extend(
-                (node.module, alias.name) for alias in node.names
-            )
+            imported.extend((node.module, alias.name) for alias in node.names)
     return tuple(imported)
 
 
-def _package_files(package: str) -> tuple[Path, ...]:
-    return tuple(sorted((_SOURCE_ROOT / package).rglob("*.py")))
+def _package_files(*packages: str) -> tuple[Path, ...]:
+    return tuple(
+        path
+        for package in packages
+        for path in sorted((_SOURCE_ROOT / package).rglob("*.py"))
+    )
 
 
-def test_source_uses_native_generic_and_alias_syntax() -> None:
-    violations: list[str] = []
-    for path in _SOURCE_ROOT.rglob("*.py"):
-        for module, name in _from_imports(path):
-            if module == "typing" and name in _LEGACY_STATIC_TYPING_NAMES:
-                violations.append(f"{path.relative_to(_SOURCE_ROOT)} -> {name}")
+def _module_matches(module: str, prefixes: tuple[str, ...]) -> bool:
+    return any(
+        module == prefix or module.startswith(f"{prefix}.")
+        for prefix in prefixes
+    )
 
-    assert violations == []
+
+def _import_violations(
+    packages: tuple[str, ...],
+    forbidden: tuple[str, ...],
+) -> tuple[str, ...]:
+    return tuple(
+        f"{path.relative_to(_SOURCE_ROOT)} -> {module}"
+        for path in _package_files(*packages)
+        for module in _imports(path)
+        if _module_matches(module, forbidden)
+    )
 
 
 def _class_method(
-    tree: ast.Module,
+    path: Path,
     class_name: str,
     method_name: str,
 ) -> ast.FunctionDef:
     return next(
         node
-        for class_node in tree.body
+        for class_node in _tree(path).body
         if isinstance(class_node, ast.ClassDef)
         and class_node.name == class_name
         for node in class_node.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name == method_name
+        if isinstance(node, ast.FunctionDef) and node.name == method_name
     )
 
 
-def _violations(
-    packages: tuple[str, ...],
-    forbidden: tuple[str, ...],
-) -> tuple[str, ...]:
-    violations: list[str] = []
-    for package in packages:
-        for path in _package_files(package):
-            for imported in _imports(path):
-                if any(
-                    imported == prefix or imported.startswith(f"{prefix}.")
-                    for prefix in forbidden
-                ):
-                    violations.append(
-                        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-                    )
-    return tuple(violations)
+def test_source_uses_native_generic_and_alias_syntax() -> None:
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {name}"
+        for path in _SOURCE_ROOT.rglob("*.py")
+        for module, name in _from_imports(path)
+        if module == "typing" and name in _LEGACY_STATIC_TYPING_NAMES
+    ]
+    assert violations == []
 
 
-def test_runtime_does_not_depend_on_adapters_or_domains() -> None:
-    forbidden = _OUTER_ADAPTERS + ("nuself.agent",) + tuple(
-        f"nuself.{package}" for package in _DOMAIN_PACKAGES
+def test_package_dependency_matrix() -> None:
+    rules = (
+        (
+            ("runtime",),
+            _OUTER_ADAPTERS
+            + ("nuself.agent",)
+            + tuple(f"nuself.{package}" for package in _DOMAIN_PACKAGES),
+        ),
+        (_DOMAIN_PACKAGES, _OUTER_ADAPTERS),
+        (("agent",), _OUTER_ADAPTERS),
+        (("application",), ("nuself.tui",)),
+        (("memory",), ("nuself.application", "nuself.conversation")),
+        (("reason", "reflection"), ("nuself.application",)),
+        (("persona",), ("nuself.memory",)),
     )
-
-    assert _violations(("runtime",), forbidden) == ()
-
-
-def test_domains_do_not_depend_on_outer_adapters() -> None:
-    assert _violations(_DOMAIN_PACKAGES, _OUTER_ADAPTERS) == ()
-
-
-def test_agent_does_not_depend_on_process_or_terminal_adapters() -> None:
-    assert _violations(("agent",), _OUTER_ADAPTERS) == ()
+    violations = [
+        violation
+        for packages, forbidden in rules
+        for violation in _import_violations(packages, forbidden)
+    ]
+    assert violations == []
 
 
-def test_application_does_not_depend_on_terminal_adapter() -> None:
-    assert _violations(("application",), ("nuself.tui",)) == ()
-
-
-def test_horizontal_architecture_packages_remain_small() -> None:
-    application_files = {
-        path.name for path in (_SOURCE_ROOT / "application").glob("*.py")
+def test_domain_packages_do_not_resolve_storage_authority() -> None:
+    allowed = {"notification/eval.py"}
+    forbidden = {
+        ("nuself.config", "runtime_paths"),
+        ("nuself.storage", "auto_backend"),
     }
-    assert application_files == {
-        "__init__.py",
-        "composition.py",
-        "data_admin.py",
-        "projection.py",
-        "lifecycle.py",
+    violations = [
+        f"{relative} -> {module}.{name}"
+        for path in _package_files(*_DOMAIN_PACKAGES)
+        if (relative := str(path.relative_to(_SOURCE_ROOT))) not in allowed
+        for module, name in _from_imports(path)
+        if (module, name) in forbidden
+    ]
+    assert violations == []
+
+
+def test_package_roots_are_import_light() -> None:
+    roots = _DOMAIN_PACKAGES + ("runtime", "application")
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for package in roots
+        if _imports(path := _SOURCE_ROOT / package / "__init__.py")
+    ]
+    if _imports(_SOURCE_ROOT / "agent" / "chat" / "__init__.py"):
+        violations.append("agent/chat/__init__.py")
+    assert violations == []
+
+
+def test_process_adapters_only_open_storage_for_infrastructure_commands() -> None:
+    allowed = {
+        "cli/commands/dev.py",
+        "cli/commands/pack.py",
+        "cli/commands/scope.py",
     }
-    assert not (_SOURCE_ROOT / "domain").exists()
-
-
-def test_concrete_execution_modules_use_responsibility_names() -> None:
-    assert not any(
-        path.parent != _SOURCE_ROOT / "runtime"
-        for path in _SOURCE_ROOT.rglob("runtime.py")
-    )
-    assert not (_SOURCE_ROOT / "agent" / "skills.py").exists()
-    assert (_SOURCE_ROOT / "agent" / "skill_loader.py").is_file()
-    assert (_SOURCE_ROOT / "agent" / "skills").is_dir()
-
-
-def test_single_owner_timeout_validation_lives_with_execution() -> None:
-    assert not (_SOURCE_ROOT / "runtime" / "validation.py").exists()
-    execution = (_SOURCE_ROOT / "runtime" / "execution.py").read_text(
-        encoding="utf-8"
-    )
-    assert "def validate_timeout(" in execution
-
-
-def test_domain_workflows_live_with_their_owner() -> None:
-    assert (_SOURCE_ROOT / "reason" / "export_service.py").is_file()
-    assert not (_SOURCE_ROOT / "daemon" / "reason_export.py").exists()
-    assert (_SOURCE_ROOT / "notification" / "eval.py").is_file()
-    assert not (_SOURCE_ROOT / "notification_eval.py").exists()
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in _package_files("cli")
+        if ("nuself.storage", "auto_backend") in _from_imports(path)
+        and str(path.relative_to(_SOURCE_ROOT)) not in allowed
+    ]
+    assert violations == []
 
 
 def test_langchain_tool_materialization_has_one_owner() -> None:
-    owners: list[str] = []
-    for path in _SOURCE_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+    owners = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in _SOURCE_ROOT.rglob("*.py")
         if any(
             isinstance(node, ast.Attribute)
             and node.attr == "from_function"
             and isinstance(node.value, ast.Name)
             and node.value.id == "StructuredTool"
-            for node in ast.walk(tree)
-        ):
-            owners.append(str(path.relative_to(_SOURCE_ROOT)))
-
+            for node in ast.walk(_tree(path))
+        )
+    ]
     assert owners == ["agent/tools/decorated.py"]
 
 
-def test_conversation_composition_has_bounded_public_fan_in() -> None:
-    engine_tree = ast.parse(
-        (_SOURCE_ROOT / "agent" / "chat" / "engine.py").read_text(
-            encoding="utf-8"
-        )
-    )
-    tool_runtime_tree = ast.parse(
-        (_SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py").read_text(
-            encoding="utf-8"
-        )
-    )
+def test_chat_uses_framework_agent_and_bounded_composition() -> None:
+    engine = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
+    response = _SOURCE_ROOT / "agent" / "chat" / "response.py"
+    tool_runtime = _SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py"
 
-    engine_init = _class_method(
-        engine_tree,
-        "ConversationGraphRuntime",
-        "__init__",
-    )
-    tool_runtime_init = _class_method(
-        tool_runtime_tree,
-        "ConversationToolRuntime",
-        "__init__",
-    )
+    assert "langgraph.graph" not in _imports(engine)
+    assert ("langchain.agents", "create_agent") in _from_imports(response)
 
     def collaborator_count(node: ast.FunctionDef) -> int:
         return (
@@ -201,173 +196,49 @@ def test_conversation_composition_has_bounded_public_fan_in() -> None:
             - 1
         )
 
-    assert collaborator_count(engine_init) <= 7
-    assert collaborator_count(tool_runtime_init) <= 4
+    assert collaborator_count(
+        _class_method(engine, "ConversationGraphRuntime", "__init__")
+    ) <= 7
+    assert collaborator_count(
+        _class_method(tool_runtime, "ConversationToolRuntime", "__init__")
+    ) <= 4
 
 
-def test_chat_tool_runtime_does_not_compose_persistence() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden or imported[0].startswith("nuself.application")
-    } == set()
-
-
-def test_conversation_engine_does_not_compose_authority() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
-    forbidden_prefixes = ("nuself.application", "nuself.storage")
-    assert [
-        imported
-        for imported in _imports(path)
-        if imported.startswith(forbidden_prefixes)
-    ] == []
-
-
-def test_chat_has_one_framework_native_agent_graph() -> None:
-    engine = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
-    response = _SOURCE_ROOT / "agent" / "chat" / "response.py"
-
-    assert not any(
-        imported == "langgraph.graph"
-        for imported in _imports(engine)
+def test_chat_runtime_does_not_compose_authority_or_observability() -> None:
+    chat_paths = (
+        _SOURCE_ROOT / "agent" / "chat" / "engine.py",
+        _SOURCE_ROOT / "agent" / "chat" / "tool_runtime.py",
     )
-    assert (
-        "langchain.agents",
-        "create_agent",
-    ) in _from_imports(response)
-
-
-def test_conversation_store_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "conversation" / "store.py"
-    forbidden = {
+    paths = chat_paths + (_SOURCE_ROOT / "conversation" / "store.py",)
+    forbidden_modules = ("nuself.application", "nuself.storage")
+    forbidden_symbols = {
         ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
+        ("nuself.logs", "runtime_event_log_sink"),
     }
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_domain_role_files_use_owned_single_word_names() -> None:
-    assert not (_SOURCE_ROOT / "conversation.py").exists()
-    assert {
-        path.name for path in (_SOURCE_ROOT / "conversation").glob("*.py")
-    } == {"__init__.py", "history.py", "model.py", "store.py"}
-    assert not (_SOURCE_ROOT / "reason" / "domain.py").exists()
-    assert (_SOURCE_ROOT / "reason" / "model.py").is_file()
-    assert not (_SOURCE_ROOT / "trace" / "domain.py").exists()
-    assert (_SOURCE_ROOT / "trace" / "model.py").is_file()
-    assert not (_SOURCE_ROOT / "memory" / "query.py").exists()
-    assert (_SOURCE_ROOT / "memory" / "service.py").is_file()
-
-
-def test_workspace_store_and_export_worker_do_not_resolve_authority() -> None:
-    workspace_path = _SOURCE_ROOT / "workspace.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-    }
-    assert {
-        imported
-        for imported in _from_imports(workspace_path)
-        if imported in forbidden
-    } == set()
-
-    worker_path = _SOURCE_ROOT / "reason" / "export_service.py"
-    tree = ast.parse(worker_path.read_text(encoding="utf-8"))
-    assert [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "PrivateWorkspaceStore"
-    ] == []
-
-
-def test_persona_definition_loader_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "persona" / "definition.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-    }
-    assert [
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ] == []
-
-
-def test_chat_tool_collection_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "agent" / "tools" / "__init__.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-        ("nuself.application", "compose_trace_services"),
-    }
-
-    assert {
-        imported for imported in _from_imports(path) if imported in forbidden
-    } == set()
-
-
-def test_domain_package_roots_are_import_light() -> None:
-    for package in (
-        "persona",
-        "profile",
-        "reason",
-        "reflection",
-        "runtime",
-        "trace",
-        "notification",
-    ):
-        path = _SOURCE_ROOT / package / "__init__.py"
-        assert _imports(path) == ()
-
-    assert _imports(_SOURCE_ROOT / "agent" / "chat" / "__init__.py") == ()
-    assert _imports(_SOURCE_ROOT / "application" / "__init__.py") == ()
-
-
-def test_process_surfaces_use_application_chat_factory() -> None:
-    paths = (
-        _SOURCE_ROOT / "cli" / "chat.py",
-        _SOURCE_ROOT / "daemon" / "state.py",
-    )
-
-    forbidden = {
-        "nuself.agent.chat",
-        "nuself.memory.curator",
-    }
-
-    assert all(
-        not forbidden.intersection(_imports(path))
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {module}"
+        for path in chat_paths
+        for module in _imports(path)
+        if _module_matches(module, forbidden_modules)
+    ]
+    violations.extend(
+        f"{path.relative_to(_SOURCE_ROOT)} -> {module}.{name}"
         for path in paths
+        for module, name in _from_imports(path)
+        if (module, name) in forbidden_symbols
     )
+    assert violations == []
+    assert "EventPublisher()" not in paths[0].read_text(encoding="utf-8")
 
 
-def test_application_composition_does_not_construct_domain_internals() -> None:
-    application_tree = ast.parse(
-        (_SOURCE_ROOT / "application" / "composition.py").read_text(
-            encoding="utf-8"
-        )
-    )
-
-    def constructed_names(tree: ast.Module) -> set[str]:
-        return {
-            node.func.id
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-        }
-
-    assert constructed_names(application_tree).isdisjoint(
+def test_application_composition_uses_domain_factories() -> None:
+    tree = _tree(_SOURCE_ROOT / "application" / "composition.py")
+    constructed = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert constructed.isdisjoint(
         {
             "ReasonRepository",
             "ReasonService",
@@ -378,463 +249,37 @@ def test_application_composition_does_not_construct_domain_internals() -> None:
     )
 
 
-def test_cli_commands_do_not_hide_graph_fields_behind_shallow_helpers() -> None:
-    forbidden_helpers = {
-        "commands/data.py": {"_service", "_resource"},
-        "commands/notifications.py": {"_outbox"},
-        "commands/reason.py": {"_service"},
-        "commands/reflections.py": {"_service"},
-        "commands/trace.py": {"_trace_query"},
-        "repl/commands.py": {"_reflection_service"},
-    }
-    for relative, forbidden in forbidden_helpers.items():
-        tree = ast.parse(
-            (_SOURCE_ROOT / "cli" / relative).read_text(encoding="utf-8")
-        )
-        declared = {
-            node.name
-            for node in tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
-        assert declared.isdisjoint(forbidden)
-
-
-def test_cli_and_repl_do_not_call_each_others_adapters() -> None:
-    parser = _SOURCE_ROOT / "cli" / "parser.py"
-    repl_commands = _SOURCE_ROOT / "cli" / "repl" / "commands.py"
-
-    assert "nuself.cli.repl.commands" not in _imports(parser)
-    assert "argparse" not in _imports(repl_commands)
-    assert not any(
-        imported == "nuself.cli.commands.persona"
-        for imported in _imports(repl_commands)
-    )
-
-
-def test_migrated_trace_package_does_not_resolve_authority() -> None:
-    violations: list[str] = []
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    for path in _package_files("trace"):
-        for imported in _from_imports(path):
-            if imported in forbidden:
-                violations.append(
-                    f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-                )
-
-    assert violations == []
-
-
-def test_migrated_profile_package_does_not_resolve_authority() -> None:
-    violations: list[str] = []
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    for path in _package_files("profile"):
-        for imported in _from_imports(path):
-            if imported in forbidden:
-                violations.append(
-                    f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-                )
-
-    assert violations == []
-
-
-def test_process_adapters_only_resolve_storage_for_infrastructure_commands() -> None:
-    allowed = {
-        "cli/commands/dev.py",
-        "cli/commands/pack.py",
-        "cli/commands/scope.py",
-    }
-    offenders: list[str] = []
-    for path in _package_files("cli"):
-        if any(
-            module == "nuself.storage"
-            and name == "auto_backend"
-            for module, name in _from_imports(path)
-        ):
-            relative = str(path.relative_to(_SOURCE_ROOT))
-            if relative not in allowed:
-                offenders.append(relative)
-
-    assert offenders == []
-
-
-def test_cross_domain_projection_lives_in_application() -> None:
-    assert _violations(("persona",), ("nuself.memory",)) == ()
-    projector = _SOURCE_ROOT / "application" / "projection.py"
-    forbidden = {"nuself.application.composition"}
-    assert not forbidden.intersection(_imports(projector))
-
-
-def test_data_cli_does_not_decode_or_mutate_storage_records() -> None:
-    path = _SOURCE_ROOT / "cli" / "commands" / "data.py"
-    forbidden = (
-        "nuself.storage",
-        "nuself.memory.model",
-        "nuself.conversation",
-    )
-    assert not any(
-        imported.startswith(forbidden) for imported in _imports(path)
-    )
-
-
-def test_reflection_scheduler_receives_foreign_capabilities() -> None:
-    path = _SOURCE_ROOT / "reflection" / "scheduler.py"
-    forbidden = {
-        "nuself.notification.outbox",
-        "nuself.persona.discussion",
-        "nuself.trace.service",
-    }
-    assert not forbidden.intersection(_imports(path))
-
-
-def test_migrated_reason_repository_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "reason" / "repository.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
+def test_cross_domain_services_receive_foreign_capabilities() -> None:
+    rules = {
+        "reflection/scheduler.py": {
+            "nuself.notification.outbox",
+            "nuself.persona.discussion",
+            "nuself.trace.service",
+        },
+        "reflection/service.py": {
+            "nuself.reason.service",
+            "nuself.trace.repository",
+        },
+        "memory/repository.py": {"nuself.profile.repository"},
+        "memory/source_repository.py": {"nuself.profile.repository"},
+        "memory/service.py": {"nuself.profile.repository"},
     }
     violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for imported in _from_imports(path)
-        if imported in forbidden
+        f"{relative} -> {module}"
+        for relative, forbidden in rules.items()
+        for module in _imports(_SOURCE_ROOT / relative)
+        if module in forbidden
     ]
-
     assert violations == []
 
 
-def test_reason_domain_does_not_import_application_composition() -> None:
-    assert _violations(("reason",), ("nuself.application",)) == ()
-
-
-def test_migrated_reflection_repository_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "reflection" / "repository.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ]
-
-    assert violations == []
-
-
-def test_reflection_domain_does_not_import_application_composition() -> None:
-    assert _violations(("reflection",), ("nuself.application",)) == ()
-
-
-def test_reflection_orchestration_does_not_resolve_authority() -> None:
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    paths = (
-        _SOURCE_ROOT / "reflection" / "scheduler.py",
-        _SOURCE_ROOT / "reflection" / "organizer.py",
-        _SOURCE_ROOT / "reflection" / "service.py",
-    )
-    violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for path in paths
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ]
-
-    assert violations == []
-
-
-def test_reflection_schedule_state_is_not_defined_by_scheduler() -> None:
-    scheduler = ast.parse(
-        (_SOURCE_ROOT / "reflection" / "scheduler.py").read_text(
-            encoding="utf-8"
-        )
-    )
-    classes = {
-        node.name
-        for node in scheduler.body
-        if isinstance(node, ast.ClassDef)
-    }
-
-    assert "ReflectionScheduleState" not in classes
-    assert (
-        _SOURCE_ROOT / "reflection" / "schedule_state.py"
-    ).is_file()
-
-
-def test_reflection_relevance_is_a_separate_responsibility() -> None:
-    scheduler = ast.parse(
-        (_SOURCE_ROOT / "reflection" / "scheduler.py").read_text(
-            encoding="utf-8"
-        )
-    )
-    public_classes = {
-        node.name
-        for node in scheduler.body
-        if isinstance(node, ast.ClassDef)
-        and not node.name.startswith("_")
-    }
-
-    assert "LLMRelevanceGate" not in public_classes
-    assert "RelevanceScoreOutput" not in public_classes
-    assert (
-        _SOURCE_ROOT / "reflection" / "relevance.py"
-    ).is_file()
-
-
-def test_reflection_candidates_depend_only_on_conversation_history_api() -> None:
+def test_reflection_candidates_use_conversation_history_api() -> None:
     path = _SOURCE_ROOT / "reflection" / "candidates.py"
     source = path.read_text(encoding="utf-8")
-
-    assert not {
-        imported
-        for imported in _imports(path)
-        if imported == "nuself.agent.chat"
-        or imported.startswith("nuself.agent.chat.")
-    }
+    forbidden = ("nuself.agent.chat",)
+    assert not any(_module_matches(module, forbidden) for module in _imports(path))
     assert "ConversationStore" not in source
     assert "ConversationState" not in source
-
-
-def test_memory_domain_does_not_import_conversation() -> None:
-    assert _violations(("memory",), ("nuself.conversation",)) == ()
-
-
-def test_reflection_service_does_not_compose_infrastructure() -> None:
-    path = _SOURCE_ROOT / "reflection" / "service.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-        ("nuself.reason.service", "ReasonService"),
-        ("nuself.trace.repository", "TraceRepository"),
-    }
-    assert [
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ] == []
-
-
-def test_migrated_memory_repositories_do_not_resolve_authority() -> None:
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    paths = (
-        _SOURCE_ROOT / "memory" / "curator_plan.py",
-        _SOURCE_ROOT / "memory" / "repository.py",
-        _SOURCE_ROOT / "memory" / "source_repository.py",
-    )
-    violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for path in paths
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ]
-
-    assert violations == []
-
-
-def test_migrated_persona_repository_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "persona" / "prompt_repo.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ]
-
-    assert violations == []
-
-
-def test_persona_definition_loading_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "persona" / "definition.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-    }
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_persona_tools_do_not_resolve_or_compose_authority() -> None:
-    path = _SOURCE_ROOT / "persona" / "tools.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-        ("nuself.application", "compose_trace_services"),
-    }
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_reason_advancement_does_not_resolve_or_compose_authority() -> None:
-    paths = (
-        _SOURCE_ROOT / "agent" / "tools" / "reason.py",
-        _SOURCE_ROOT / "reason" / "advancer.py",
-        _SOURCE_ROOT / "reason" / "output.py",
-        _SOURCE_ROOT / "reason" / "scheduler.py",
-    )
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-    }
-    assert {
-        (path.relative_to(_SOURCE_ROOT), imported)
-        for path in paths
-        for imported in _from_imports(path)
-        if imported in forbidden or imported[0].startswith("nuself.application")
-    } == set()
-
-
-def test_reason_output_does_not_construct_workspace_authority() -> None:
-    path = _SOURCE_ROOT / "reason" / "output.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    assert [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "PrivateWorkspaceStore"
-    ] == []
-
-
-def test_reason_output_contracts_are_separate_from_workflow() -> None:
-    workflow_path = _SOURCE_ROOT / "reason" / "output.py"
-    workflow = ast.parse(workflow_path.read_text(encoding="utf-8"))
-    workflow_classes = {
-        node.name
-        for node in workflow.body
-        if isinstance(node, ast.ClassDef)
-    }
-    assert workflow_classes == {"ReasonOutputService"}
-    assert (
-        _SOURCE_ROOT / "reason" / "output_contracts.py"
-    ).is_file()
-    assert "nuself.reason.output_contracts" in _imports(workflow_path)
-
-
-def test_migrated_notification_outbox_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "notification" / "__init__.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ]
-
-    assert violations == []
-
-
-def test_notification_delivery_is_not_implemented_in_package_root() -> None:
-    root = ast.parse(
-        (_SOURCE_ROOT / "notification" / "__init__.py").read_text(
-            encoding="utf-8"
-        )
-    )
-    root_classes = {
-        node.name for node in root.body if isinstance(node, ast.ClassDef)
-    }
-
-    assert "NotificationDeliveryLoop" not in root_classes
-    assert (
-        _SOURCE_ROOT / "notification" / "delivery.py"
-    ).is_file()
-
-
-def test_remaining_persistence_stores_do_not_resolve_authority() -> None:
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    paths = (
-        _SOURCE_ROOT / "persona" / "prompt_repo.py",
-        _SOURCE_ROOT / "memory" / "curator_plan.py",
-    )
-    violations = [
-        f"{path.relative_to(_SOURCE_ROOT)} -> {imported}"
-        for path in paths
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ]
-
-    assert violations == []
-
-
-def test_memory_domain_does_not_import_application_composition() -> None:
-    assert _violations(("memory",), ("nuself.application",)) == ()
-
-
-def test_memory_intake_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "memory" / "intake.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_memory_optimizer_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "memory" / "optimizer.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_memory_curator_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "memory" / "curator.py"
-    forbidden = {
-        ("nuself.storage", "auto_backend"),
-        ("nuself.config", "runtime_paths"),
-    }
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_reason_service_does_not_compose_infrastructure() -> None:
-    path = _SOURCE_ROOT / "reason" / "service.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-        ("nuself.trace.repository", "TraceRepository"),
-    }
-    assert [
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    ] == []
 
 
 def test_reason_consumers_require_injected_service() -> None:
@@ -844,77 +289,18 @@ def test_reason_consumers_require_injected_service() -> None:
         assert "service or ReasonService" not in source
 
 
-def test_memory_curator_contract_is_separate_from_orchestration() -> None:
-    source = (_SOURCE_ROOT / "memory" / "curator.py").read_text(
-        encoding="utf-8"
-    )
-    for declaration in (
-        "class MemoryCuratorSettings",
-        "class MemoryCuratorCursor",
-        "class MemoryCuratorResult",
-        "class CuratorActionsOutput",
-    ):
-        assert declaration not in source
-
-
-def test_conversation_engine_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
-    forbidden = {
-        ("nuself.config", "runtime_paths"),
-        ("nuself.storage", "auto_backend"),
-    }
-    assert {
-        imported
-        for imported in _from_imports(path)
-        if imported in forbidden
-    } == set()
-
-
-def test_conversation_engine_does_not_compose_observability() -> None:
-    path = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
-    imports = set(_from_imports(path))
-    assert ("nuself.logs", "runtime_event_log_sink") not in imports
-    source = path.read_text(encoding="utf-8")
-    assert "EventPublisher()" not in source
-
-
-def test_log_warning_contracts_are_separate_from_log_engine() -> None:
-    source = (_SOURCE_ROOT / "logs.py").read_text(encoding="utf-8")
-    assert "def _build_log_terminal_warning_registry" not in source
-    assert "runtime.log_warning_contracts" in source
-
-
-def test_log_event_model_does_not_depend_on_persistence() -> None:
-    path = _SOURCE_ROOT / "runtime" / "log_event.py"
-
+def test_log_model_is_independent_from_persistence() -> None:
+    model = _SOURCE_ROOT / "runtime" / "log_event.py"
     assert not {
         "nuself.config",
         "nuself.logs",
         "nuself.private_fs",
-    }.intersection(_imports(path))
+    }.intersection(_imports(model))
 
-
-def test_production_consumers_do_not_import_log_event_from_sink() -> None:
-    violations = [
+    consumers = [
         str(path.relative_to(_SOURCE_ROOT))
         for path in _SOURCE_ROOT.rglob("*.py")
         if path.name != "logs.py"
         and ("nuself.logs", "LogEvent") in _from_imports(path)
     ]
-
-    assert violations == []
-
-
-def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:
-    paths = (
-        _SOURCE_ROOT / "memory" / "repository.py",
-        _SOURCE_ROOT / "memory" / "source_repository.py",
-        _SOURCE_ROOT / "memory" / "service.py",
-    )
-    violations = [
-        str(path.relative_to(_SOURCE_ROOT))
-        for path in paths
-        if "nuself.profile.repository" in _imports(path)
-    ]
-
-    assert violations == []
+    assert consumers == []

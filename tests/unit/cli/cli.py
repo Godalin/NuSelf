@@ -5940,29 +5940,6 @@ def test_nested_subcommand_help(argv: list[str]) -> None:
     assert exc_info.value.code == 0
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["source", "--help"],
-        ["reflection", "--help"],
-        ["notify", "--help"],
-        ["logs", "--help"],
-        ["status", "--help"],
-        ["health", "--help"],
-        ["config", "--help"],
-        ["eval", "--help"],
-        ["open", "--help"],
-        ["memory", "candidate", "--help"],
-        ["conversation", "create", "--help"],
-    ],
-)
-def test_removed_v02_command_paths_fail(argv: list[str]) -> None:
-    parser = build_parser()
-    with pytest.raises(SystemExit) as exc_info:
-        parser.parse_args(argv)
-    assert exc_info.value.code == 2
-
-
 def test_help_does_not_emit_langgraph_warning() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "nuself.cli", "--help"],

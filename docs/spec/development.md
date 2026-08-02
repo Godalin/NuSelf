@@ -22,6 +22,12 @@
 - Tests live in a domain-oriented hierarchy under `tests/`, and test module
   filenames omit the redundant `test_` prefix. Ordinary tests live under
   `tests/unit/` and are the only default pytest collection root.
+- Tests describe current contracts, not the chronology of past refactors.
+  Prefer one declarative or parameterized architecture rule over repeated
+  per-file import assertions. Do not retain tombstone tests solely to prove an
+  obsolete internal module, symbol, or pre-release command remains deleted;
+  retain historical coverage only where a governing specification still
+  promises persisted-data, wire, migration, security, or user-facing behavior.
 - Real-provider tests live under `tests/live/`, inside the unified test tree
   but outside pytest's default `tests/unit/` collection root. They run only
   when that path and the
