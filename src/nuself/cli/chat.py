@@ -9,7 +9,7 @@ from pathlib import Path
 from nuself.agent.chat.composition import compose_conversation_runtime
 from nuself.agent.chat.engine import ConversationGraphRuntime
 from nuself.memory.composition import compose_memory_curator
-from nuself.application.knowledge_projection import publish_chat_observation
+from nuself.application.projection import publish_chat_observation
 from nuself.cli.application import cli_application
 from nuself.agent.chat.audit import (
     report_chat_failure,

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from nuself.agent.chat.composition import ChatResult, compose_conversation_runtime
 from nuself.memory.composition import compose_memory_curator
-from nuself.application.knowledge_projection import publish_chat_observation
+from nuself.application.projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.reason.composition import compose_reason_advancer

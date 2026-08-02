@@ -18,7 +18,7 @@ from langchain_core.messages import BaseMessage
 
 from nuself.persona.definition import BUILTIN_PERSONAS
 from nuself.persona.graph import AgentBackedActivationPolicy
-from nuself.application.knowledge_projection import load_personas_from_memory
+from nuself.application.projection import load_personas_from_memory
 from nuself.persona.definition import (
     PersonaActivationOutput,
     PersonaDefinition,

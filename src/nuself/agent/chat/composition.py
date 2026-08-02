@@ -17,7 +17,7 @@ from nuself.memory.query import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.tools import build_persona_tools
 from nuself.persona.prompt_repo import PersonaPromptRepository
-from nuself.application.knowledge_projection import load_personas_from_memory
+from nuself.application.projection import load_personas_from_memory
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService

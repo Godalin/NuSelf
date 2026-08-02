@@ -106,7 +106,7 @@ def test_horizontal_architecture_packages_remain_small() -> None:
         "__init__.py",
         "composition.py",
         "data_admin.py",
-        "knowledge_projection.py",
+        "projection.py",
         "lifecycle.py",
     }
     assert not (_SOURCE_ROOT / "domain").exists()
@@ -380,7 +380,7 @@ def test_process_adapters_only_resolve_storage_for_infrastructure_commands() -> 
 
 def test_cross_domain_projection_lives_in_application() -> None:
     assert _violations(("persona",), ("nuself.memory",)) == ()
-    projector = _SOURCE_ROOT / "application" / "knowledge_projection.py"
+    projector = _SOURCE_ROOT / "application" / "projection.py"
     forbidden = {"nuself.application.composition"}
     assert not forbidden.intersection(_imports(projector))
 

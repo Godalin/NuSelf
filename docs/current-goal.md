@@ -9,8 +9,8 @@ Idle — no active implementation goal.
 
 ## Objective
 
-No active objective. The approved four-stage ownership cleanup is complete;
-its history is preserved in Git and `CHANGELOG.md`.
+No active objective. The cross-domain projection module now follows the
+single-word filename convention as `application.projection`.
 
 ## Next Steps
 
@@ -22,6 +22,6 @@ None while idle.
 
 ## Last Verification
 
-- Pyright: 327 source files, 0 errors, 0 warnings.
-- Pytest: 2450 passed.
-- Package build: source distribution and wheel succeeded for `0.3.1`.
+- Pyright: 0 errors, 0 warnings.
+- Focused projection, boundary, Chat, CLI, Persona, and daemon tests: 411
+  passed.
