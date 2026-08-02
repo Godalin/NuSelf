@@ -227,7 +227,7 @@ def test_chat_has_one_framework_native_agent_graph() -> None:
 
 
 def test_conversation_store_does_not_resolve_authority() -> None:
-    path = _SOURCE_ROOT / "conversation.py"
+    path = _SOURCE_ROOT / "conversation" / "store.py"
     forbidden = {
         ("nuself.config", "runtime_paths"),
         ("nuself.storage", "auto_backend"),
@@ -237,6 +237,19 @@ def test_conversation_store_does_not_resolve_authority() -> None:
         for imported in _from_imports(path)
         if imported in forbidden
     } == set()
+
+
+def test_domain_role_files_use_owned_single_word_names() -> None:
+    assert not (_SOURCE_ROOT / "conversation.py").exists()
+    assert {
+        path.name for path in (_SOURCE_ROOT / "conversation").glob("*.py")
+    } == {"__init__.py", "history.py", "model.py", "store.py"}
+    assert not (_SOURCE_ROOT / "reason" / "domain.py").exists()
+    assert (_SOURCE_ROOT / "reason" / "model.py").is_file()
+    assert not (_SOURCE_ROOT / "trace" / "domain.py").exists()
+    assert (_SOURCE_ROOT / "trace" / "model.py").is_file()
+    assert not (_SOURCE_ROOT / "memory" / "query.py").exists()
+    assert (_SOURCE_ROOT / "memory" / "service.py").is_file()
 
 
 def test_workspace_store_and_export_worker_do_not_resolve_authority() -> None:
@@ -879,7 +892,7 @@ def test_memory_persistence_depends_on_profile_port_not_adapter() -> None:
     paths = (
         _SOURCE_ROOT / "memory" / "repository.py",
         _SOURCE_ROOT / "memory" / "source_repository.py",
-        _SOURCE_ROOT / "memory" / "query.py",
+        _SOURCE_ROOT / "memory" / "service.py",
     )
     violations = [
         str(path.relative_to(_SOURCE_ROOT))

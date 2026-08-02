@@ -18,7 +18,7 @@ from nuself.decorators import (
 )
 from nuself.handles import VisibleHandleError, parse_visible_index
 from nuself.reason.audit import write_reason_audit
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output import ReasonOutputService
 from nuself.reason.output_contracts import SectionPlanner

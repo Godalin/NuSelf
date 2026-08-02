@@ -24,7 +24,7 @@ from nuself.agent.chat.types import (
 )
 from nuself.conversation import ConversationState
 from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryService
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.discussion import PersonaDiscussionAgents
 from nuself.persona.graph import PersonaGraphAgents

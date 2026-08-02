@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.reason.domain import ReasoningStep
-from nuself.reason.domain import ReasoningThread
+from nuself.reason.model import ReasoningStep
+from nuself.reason.model import ReasoningThread
 from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
@@ -148,6 +148,6 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
 
 
 def _step(thread_id: str, summary: str, output: str, delta: str):
-    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.model import ReasoningStep
 
     return ReasoningStep(thread_id=thread_id, summary=summary, output=output, delta=delta)

@@ -13,7 +13,7 @@ from pathlib import Path
 from nuself.config import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
-from nuself.memory.query import MemoryQuery, MemoryService
+from nuself.memory.service import MemoryQuery, MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository

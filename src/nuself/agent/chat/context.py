@@ -9,7 +9,7 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.conversation import ConversationMessage
-from nuself.memory.query import MemoryQuery, MemoryService
+from nuself.memory.service import MemoryQuery, MemoryService
 
 
 class ConversationContextPreparer:

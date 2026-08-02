@@ -6206,7 +6206,7 @@ def test_repl_notify_watch_subcommand(
 def test_trace_cli_lists_shows_and_searches_records(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.trace.domain import ThoughtTrace
+    from nuself.trace.model import ThoughtTrace
 
     trace = _trace_repository(tmp_path).save_trace(
         ThoughtTrace(
@@ -6241,7 +6241,7 @@ def test_trace_cli_lists_shows_and_searches_records(
 def test_trace_cli_lists_records_related_to_artifact(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.trace.domain import ThoughtTrace, TraceLink
+    from nuself.trace.model import ThoughtTrace, TraceLink
 
     repository = _trace_repository(tmp_path)
     trace = repository.save_trace(ThoughtTrace(
@@ -6274,7 +6274,7 @@ def test_trace_cli_lists_records_related_to_artifact(
 def test_trace_cli_hides_internal_records_by_default(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.trace.domain import ThoughtTrace
+    from nuself.trace.model import ThoughtTrace
 
     repo = _trace_repository(tmp_path)
     repo.save_trace(
@@ -6302,7 +6302,7 @@ def test_trace_cli_hides_internal_records_by_default(
 def test_repl_trace_lists_records(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.trace.domain import ThoughtTrace
+    from nuself.trace.model import ThoughtTrace
 
     _trace_repository(tmp_path).save_trace(
         ThoughtTrace(

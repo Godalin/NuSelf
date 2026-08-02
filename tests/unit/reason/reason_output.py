@@ -9,7 +9,7 @@ import json
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
@@ -292,6 +292,6 @@ def test_reason_output_manifest_rejects_shape_drift(
 
 
 def _step(thread_id: str, summary: str, output: str, delta: str):
-    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.model import ReasoningStep
 
     return ReasoningStep(thread_id=thread_id, summary=summary, output=output, delta=delta)

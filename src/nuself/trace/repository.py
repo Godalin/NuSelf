@@ -10,7 +10,7 @@ from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend
-from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
+from nuself.trace.model import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
 TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
 

@@ -9,7 +9,7 @@ from typing import Protocol
 
 from nuself.clock import utc_now_iso
 from nuself.reason.audit import run_reason_observed, write_reason_audit
-from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
+from nuself.reason.model import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.errors import (
     ReasonAdvanceError,
     ReasonPromptError,

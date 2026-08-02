@@ -10,7 +10,7 @@ from nuself.profile.model import ProfileItem
 from nuself.memory.source_model import SourceDocument
 from nuself.notification.model import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
-from nuself.reason.domain import ReasoningStep
+from nuself.reason.model import ReasoningStep
 from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row, render_profile_row, render_source_row
 from nuself.tui.reason import render_step_watch_entry
 from nuself.tui.render import (

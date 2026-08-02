@@ -7,7 +7,7 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.memory.query import MemoryService
+from nuself.memory.service import MemoryService
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService

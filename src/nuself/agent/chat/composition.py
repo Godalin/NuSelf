@@ -13,7 +13,7 @@ from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.text import LangChainTextAgent
 from nuself.config import RuntimePaths, SystemConfig
 from nuself.conversation import ConversationStore
-from nuself.memory.query import MemoryService
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.tools import build_persona_tools
 from nuself.persona.prompt_repo import PersonaPromptRepository

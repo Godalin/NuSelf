@@ -7,7 +7,7 @@ from typing import cast
 
 from nuself.runtime.audit_types import LogComponent
 from nuself.runtime.log_event import LogEvent
-from nuself.reason.domain import ReasoningStep, ReasoningThread, TrackedItem
+from nuself.reason.model import ReasoningStep, ReasoningThread, TrackedItem
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.trace.domain import ThoughtTrace, TraceLink
+from nuself.trace.model import ThoughtTrace, TraceLink
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,

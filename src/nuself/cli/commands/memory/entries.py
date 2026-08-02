@@ -23,7 +23,7 @@ from nuself.memory.model import (
 )
 from nuself.llm import configured_langchain_chat_models
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
-from nuself.memory.query import MemoryQuery
+from nuself.memory.service import MemoryQuery
 from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryRelationFilters,

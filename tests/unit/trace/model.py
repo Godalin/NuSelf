@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from nuself.trace.domain import ThoughtTrace, TraceLink
+from nuself.trace.model import ThoughtTrace, TraceLink
 
 
 def test_thought_trace_detaches_and_freezes_collection_inputs() -> None:

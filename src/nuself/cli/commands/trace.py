@@ -8,7 +8,7 @@ from typing import cast
 
 from nuself.cli.application import cli_application
 from nuself.cli.output import print_ansi, print_json_lines
-from nuself.trace.domain import TRACE_KINDS, TraceKind
+from nuself.trace.model import TRACE_KINDS, TraceKind
 from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
 from nuself.tui.trace import render_trace_detail, render_trace_row
 

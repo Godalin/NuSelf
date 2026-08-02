@@ -44,6 +44,19 @@ Concrete domain models belong to their owning packages. A horizontal `domain`
 package is forbidden because it splits Memory, Profile, Source, or Reflection
 semantics from their repositories and services without creating a reusable
 infrastructure boundary.
+Within an owning package, the primary persisted domain types live in
+`model.py`, the main user-intent API in `service.py`, persistence in
+`repository.py` or an accurate domain-specific owner, and multi-dependency
+construction in `composition.py`. A role file exists only when the role is
+real; empty template modules and pass-through compatibility modules are
+forbidden. Directories provide context so responsibility filenames remain a
+single word where practical.
+
+Conversation is a first-class domain package. Its persisted types belong to
+`conversation.model`, mutation and locking to `conversation.store`, and its
+bounded cross-domain read API to `conversation.history`. The package root may
+explicitly re-export that established public API, but no top-level
+`conversation.py` compatibility module remains.
 
 These rules are checked from the Python AST in the test suite. New exceptions
 require a specification change naming the owner and removal condition; an

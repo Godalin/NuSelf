@@ -24,7 +24,7 @@ from nuself.llm import (
     configured_langchain_chat_models,
 )
 from nuself.logs import runtime_event_log_sink
-from nuself.memory.query import MemoryService
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.persona.tools import build_persona_tools

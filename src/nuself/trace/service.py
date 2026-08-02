@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
+from nuself.trace.model import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 from nuself.trace.repository import TraceRepository, TraceVisibilityFilter
 
 if TYPE_CHECKING:
-    from nuself.reason.domain import ReasoningStep, ReasoningThread
+    from nuself.reason.model import ReasoningStep, ReasoningThread
 
 
 class TraceRecorder:

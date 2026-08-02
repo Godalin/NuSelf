@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from nuself.conversation import ConversationMessage, ConversationState
-from nuself.conversation import _PendingTurn
+from nuself.conversation.model import PendingTurn
 from nuself.storage import auto_backend
 from conversation_fixtures import ConversationStore
 from tests.backend import owned_backend
@@ -537,7 +537,7 @@ def test_thread_lifecycle_preserves_or_excludes_pending_turns(
     tmp_path: Path,
 ) -> None:
     store = ConversationStore(tmp_path)
-    pending = _PendingTurn.from_message("turn-1", "unfinished")
+    pending = PendingTurn.from_message("turn-1", "unfinished")
     store.save(
         ConversationState(
             conversation_id="source",

@@ -32,7 +32,7 @@ from nuself.reason.advancer import (
     build_system_prompt,
     default_reason_advancer,
 )
-from nuself.reason.domain import ReasoningThread
+from nuself.reason.model import ReasoningThread
 from nuself.reason.errors import ReasonAdvanceError
 from nuself.runtime.context import (
     RuntimeContext,

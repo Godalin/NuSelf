@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from nuself.reason.domain import ReasoningThread
+from nuself.reason.model import ReasoningThread
 
 
 class ReasonThreadStarter(Protocol):

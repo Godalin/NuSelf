@@ -7,7 +7,7 @@ from pathlib import Path
 
 from nuself.clock import utc_now
 from nuself.reason.audit import report_reason_failure, write_reason_audit
-from nuself.reason.domain import ReasoningThread
+from nuself.reason.model import ReasoningThread
 from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
 from nuself.runtime.context import runtime_context
 

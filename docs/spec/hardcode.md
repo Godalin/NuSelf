@@ -32,8 +32,8 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `DEFAULT_MEMORY_LIMIT` | `memory/query.py:14` | 8 | Default memory search result limit |
-| scoring weights | `memory/query.py:201-236` | various | Title/body/tag/confidence/importance boost values |
+| `DEFAULT_MEMORY_LIMIT` | `memory/service.py:14` | 8 | Default memory search result limit |
+| scoring weights | `memory/service.py:201-236` | various | Title/body/tag/confidence/importance boost values |
 | `min_quality_chars` | `memory/curator.py:28` | 120 | Minimum body chars for memory curation |
 | `existing_memory_limit` | `memory/curator.py:29` | 12 | Existing entries loaded for dedup context |
 | `memory_limit` | `memory/optimizer.py:25` | 50 | Batch size for memory optimization |

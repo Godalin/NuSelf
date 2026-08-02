@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, Sequence, TypeVar, cast
 
 from nuself.clock import utc_now_iso
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.model import ReasoningStep, ReasoningThread
 
 REASON_OUTPUT_STORAGE_VERSION = "NuSelfReasonOutput/v1"
 REASON_OUTPUT_MODES: tuple[str, ...] = ("outline", "narrative", "report", "summary")

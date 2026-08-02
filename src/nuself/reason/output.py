@@ -13,7 +13,7 @@ from typing import Callable, Sequence, cast
 from uuid import uuid4
 
 from nuself.clock import utc_now, utc_now_iso
-from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
+from nuself.reason.model import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output_contracts import (
     REASON_OUTPUT_FORMATS,

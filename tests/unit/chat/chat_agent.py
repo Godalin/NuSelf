@@ -40,7 +40,7 @@ from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import read_log_events, runtime_event_log_sink
-from nuself.memory.query import MemoryService
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.runtime.jobs import JobMessage, JobSink
@@ -1625,7 +1625,7 @@ def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path
     from nuself.reason.output import ReasonOutputService
     from nuself.reason.repository import ReasonRepository
     from reason_fixtures import ReasonService
-    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.model import ReasoningStep
 
     def _should_not_compose(*args: object, **kwargs: object) -> str:
         raise AssertionError("reason_export should not compose synchronously")
@@ -1862,7 +1862,7 @@ def test_reason_context_tool_shows_global_state_without_steps(tmp_path: Path) ->
 
 
 def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) -> None:
-    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.model import ReasoningStep
     from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
@@ -1901,7 +1901,7 @@ def test_reason_step_tool_shows_specific_step_without_tool_logs(tmp_path: Path) 
 
 
 def test_reason_show_tool_omits_tool_logs(tmp_path: Path) -> None:
-    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.model import ReasoningStep
     from reason_fixtures import ReasonService
 
     service = ReasonService(tmp_path, prompt_generator=_test_reason_prompt_generator)
@@ -1941,7 +1941,7 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
 
 
 def test_trace_search_tool(tmp_path: Path) -> None:
-    from nuself.trace.domain import ThoughtTrace
+    from nuself.trace.model import ThoughtTrace
 
     trace = _trace_repository(tmp_path).save_trace(ThoughtTrace(
         kind="decision",
@@ -1957,7 +1957,7 @@ def test_trace_search_tool(tmp_path: Path) -> None:
 
 
 def test_trace_count_tool(tmp_path: Path) -> None:
-    from nuself.trace.domain import ThoughtTrace
+    from nuself.trace.model import ThoughtTrace
 
     _trace_repository(tmp_path).save_trace(ThoughtTrace(
         kind="decision",
@@ -1972,7 +1972,7 @@ def test_trace_count_tool(tmp_path: Path) -> None:
 
 
 def test_trace_show_tool(tmp_path: Path) -> None:
-    from nuself.trace.domain import ThoughtTrace
+    from nuself.trace.model import ThoughtTrace
 
     trace = _trace_repository(tmp_path).save_trace(ThoughtTrace(
         kind="decision",

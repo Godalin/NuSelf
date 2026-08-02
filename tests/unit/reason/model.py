@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from nuself.reason.domain import ReasoningStep, ReasoningThread, TrackedItem
+from nuself.reason.model import ReasoningStep, ReasoningThread, TrackedItem
 
 
 def test_thread_defaults() -> None:

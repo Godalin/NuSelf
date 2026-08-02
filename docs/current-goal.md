@@ -9,8 +9,8 @@ Idle — no active implementation goal.
 
 ## Objective
 
-No active objective. The authoritative module-boundary specification now
-defines the shared domain API design contract and architecture links to it.
+No active objective. Reason, Trace, Memory, and Conversation now follow the
+owned single-word role structure established by the domain API design.
 
 ## Next Steps
 
@@ -22,6 +22,9 @@ None while idle.
 
 ## Last Verification
 
-- Documentation consistency and Markdown whitespace checks passed.
-- No runtime code changed; the preceding full gate remains Pyright 0 errors,
-  2453 tests passed, and successful `0.3.1` package build.
+- Pyright: 0 errors, 0 warnings.
+- Pytest: 2454 passed.
+- Package build: source distribution and wheel succeeded for `0.3.1`.
+- Completion audit: old source modules and imports are absent; Conversation
+  contains exactly `model.py`, `store.py`, `history.py`, and its explicit
+  package API; no empty role or compatibility module was added.

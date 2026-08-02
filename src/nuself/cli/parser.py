@@ -105,7 +105,7 @@ from nuself.cli.readiness import (
     NO_READINESS,
 )
 from nuself.runtime.audit_types import LOG_COMPONENTS
-from nuself.trace.domain import TRACE_KINDS
+from nuself.trace.model import TRACE_KINDS
 
 
 @dataclass(frozen=True)

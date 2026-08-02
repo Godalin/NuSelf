@@ -8,7 +8,7 @@ from typing import Generator
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
 from nuself.config import RuntimePaths
-from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
+from nuself.reason.model import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage import StorageBackend

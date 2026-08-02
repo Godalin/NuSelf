@@ -10,7 +10,7 @@ import pytest
 
 from nuself.config import runtime_paths
 from nuself.logs import read_log_events
-from nuself.reason.domain import ReasoningStep, ReasoningThread
+from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonAdvancerProtocol
 from reason_fixtures import ReasonScheduler

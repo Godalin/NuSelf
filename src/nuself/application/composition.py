@@ -14,7 +14,7 @@ from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification.outbox import NotificationOutbox
-from nuself.memory.query import MemoryService
+from nuself.memory.service import MemoryService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reflection.composition import (
     ReflectionResources,
