@@ -38,18 +38,8 @@ def startup_interactive_notices(
         else None
     )
     notices: list[InteractiveNotice] = []
-    try:
-        config = compose_cli_application(project_root).config
-    except (OSError, ValueError):
-        config = None
-        notices.append(
-            InteractiveNotice(
-                "configuration-invalid",
-                "The selected authority configuration is invalid or unreadable; "
-                "run `nuself dev config` to inspect it.",
-            )
-        )
-    if config is not None and not any(
+    config = compose_cli_application(project_root).config
+    if not any(
         endpoint.api_key.strip()
         and endpoint.base_url.strip()
         and endpoint.model.strip()

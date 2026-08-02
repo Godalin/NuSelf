@@ -382,6 +382,10 @@ single-use forwarding functions around those adapters.
   between daemon-backed and local interactive sessions. It receives chat and
   REPL execution as typed callbacks from the composition root and does not
   implement either capability itself.
+- CLI readiness owns expected invalid/unreadable configuration diagnostics
+  before application composition. REPL startup notices consume the composed
+  graph and must not catch graph/storage errors as configuration failures;
+  unexpected composition failures propagate to the outer lifecycle boundary.
 - Shared terminal workflows used by both argparse and REPL live in a narrow
   CLI module rather than either adapter. `cli.reason_watch` owns the reasoning
   polling loop; `commands.reason` owns its argparse adapter and the REPL

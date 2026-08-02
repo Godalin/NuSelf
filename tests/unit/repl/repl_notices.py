@@ -63,6 +63,23 @@ def test_startup_reports_missing_model_and_explicit_scope_mismatch(
     assert "`nuself --local`" in notices[1].message
 
 
+def test_startup_does_not_misclassify_application_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_composition(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise OSError("storage unavailable")
+
+    monkeypatch.setattr(
+        "nuself.cli.repl.notices.compose_cli_application",
+        fail_composition,
+    )
+
+    with pytest.raises(OSError, match="storage unavailable"):
+        startup_interactive_notices(tmp_path, cwd=tmp_path)
+
+
 def test_turn_groups_record_failures_without_payloads() -> None:
     events = [
         _event("memory", "record_decode_failed"),

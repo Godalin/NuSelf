@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- REPL startup notices no longer misclassify application or storage composition
+  failures as invalid configuration; readiness remains the configuration
+  diagnostic boundary and unexpected failures propagate.
 - Daemon chat now reads its request timeout directly from the application
   graph at the client-call boundary, removing a single-use config getter.
 - `ApplicationRuntime` now has one lazy backend acquisition path shared by

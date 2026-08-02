@@ -9,21 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the single-use daemon chat timeout getter.
+Remove REPL startup's redundant configuration-error catch.
 
 ## Ordered Steps
 
-1. Specify direct consumption of the application-owned timeout at the daemon
-   chat client call.
-2. Inline the lookup and remove helper-only tests/API.
-3. Replace them with a workspace-layer adapter regression, run focused/full
-   gates, record evidence, and commit without pushing.
+1. Specify readiness as the owner of expected configuration diagnostics and
+   application composition as fail-fast after readiness.
+2. Remove the broad REPL notice catch that misclassifies graph/storage errors
+   as invalid configuration.
+3. Add a propagation regression, run focused/full gates, record evidence, and
+   commit without pushing.
 
 ## Exclusions
 
-- Preserve timeout validation/fallback, workspace layering, client error
-  classification, runtime context, and chat presentation.
-- Do not add a config subsection facade or cache.
+- Preserve readiness actions, missing-model notice, authority mismatch notice,
+  recent-failure aggregation, and outer CLI cleanup/error handling.
+- Do not duplicate readiness parsing inside REPL or add a generic fallback.
 
 ## Constraints
 
@@ -35,6 +36,13 @@ Remove the single-use daemon chat timeout getter.
 
 ## Phase Evidence
 
+- REPL startup notices now consume the composed graph without catching
+  `OSError`/`ValueError` as configuration failures. Expected invalid config is
+  already owned by command readiness; storage and composition failures retain
+  their real type for the outer lifecycle boundary. A regression proves an
+  application `OSError` propagates instead of producing a misleading notice.
+  Focused readiness/REPL/CLI tests: 336 passed; full suite: 2445 passed;
+  Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Daemon chat now reads `request_timeout_seconds` directly at its
   `client.chat()` call. Removed the single-use timeout getter and three tests of
   that internal getter; one adapter-boundary regression now proves the actual
