@@ -10,8 +10,8 @@ import sqlite3
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.workspace import PrivateWorkspaceStore
-from nuself.storage import _create_sqlite_backend
+from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.storage.authority import _create_sqlite_backend
 
 
 def test_private_workspace_store_resolves_main_authority_without_side_tree(
@@ -27,7 +27,7 @@ def test_private_workspace_store_resolves_main_authority_without_side_tree(
     assert workspace.database == db_path
     assert not workspace.root.exists()
 
-    from nuself.store import SqliteStore
+    from nuself.storage.workspace import SqliteStore
     s = SqliteStore(db_path)
     s.put(("reason-abc",), "key", {"hello": "world"})
     assert db_path.is_file()

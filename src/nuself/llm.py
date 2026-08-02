@@ -34,7 +34,7 @@ from nuself.runtime.diagnostics import (
 from nuself.runtime.observability import (
     report_corrupt_record,
 )
-from nuself.storage import write_json_atomic
+from nuself.storage.atomic import write_json_atomic
 
 @dataclass(frozen=True)
 class LLMSettings:

@@ -97,8 +97,8 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `limit=10, offset=0` | `store.py:228` | 10 | Default workspace entry listing limit |
-| `limit=100, offset=0` | `store.py:242` | 100 | Default namespace listing limit |
+| `limit=10, offset=0` | `storage/workspace.py` | 10 | Default workspace entry listing limit |
+| `limit=100, offset=0` | `storage/workspace.py` | 100 | Default namespace listing limit |
 
 ## Agent
 

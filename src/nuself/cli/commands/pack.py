@@ -11,7 +11,7 @@ from nuself.config import runtime_paths
 from nuself.cli.application import cli_backend
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage_sqlite import (
+from nuself.storage.sqlite import (
     SqliteStorageBackend,
     ThoughtPackValidationError,
     import_sqlite_thought_pack,

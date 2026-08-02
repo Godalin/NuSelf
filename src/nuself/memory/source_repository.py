@@ -16,7 +16,7 @@ from nuself.memory.source_model import SourceChunk, SourceDocument, SourceKind, 
 from nuself.memory.repository import MemoryCandidateRepository
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 SUPPORTED_SOURCE_SUFFIXES = {".md", ".markdown", ".txt"}
 DEFAULT_CHUNK_TARGET_CHARS = 1200

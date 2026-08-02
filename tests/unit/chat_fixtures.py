@@ -42,7 +42,7 @@ from nuself.runtime.job.message import JobSink
 from nuself.runtime.frontend import ApprovalPort
 from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 class ConversationGraphRuntime(_ConversationGraphRuntime):

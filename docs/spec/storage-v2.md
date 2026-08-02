@@ -36,6 +36,26 @@ the SQLite backup API captures committed WAL state consistently.
 
 ## Storage protocol
 
+Storage infrastructure lives in the import-light `nuself.storage` package:
+
+- `contract` owns backend/collection protocols, the collection catalog, and
+  opaque-key validation;
+- `atomic` owns durable atomic text and JSON replacement;
+- `authority` owns canonical SQLite selection and creation lifecycle;
+- `sqlite` currently owns the live SQLite backend, transaction semantics, and
+  explicit thought-pack validation/exchange; these cohesive regions may be
+  separated without changing their authority contract;
+- `workspace` adapts the authority's `workspace_entries` table to LangGraph's
+  official `BaseStore` contract and adds namespace-scoped agent views;
+- `audit` owns storage lifecycle audit definitions and reporting.
+
+The package root is empty and callers import the precise owner they use. These
+modules are infrastructure owners, not alternate storage authorities or a
+compatibility facade. A generic `model.py` is not part of this structure:
+storage exposes contracts and persisted records remain owned by their domains.
+The workspace adapter is not a second authority: it opens the same validated
+SQLite database and accesses only the schema-owned `workspace_entries` table.
+
 Repositories depend on `StorageBackend` and `StorageCollection`:
 
 ```python

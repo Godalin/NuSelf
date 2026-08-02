@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from nuself.profile.model import ProfileItem
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import _create_sqlite_backend
+from nuself.storage.authority import _create_sqlite_backend
 from tests.backend import owned_backend
 
 

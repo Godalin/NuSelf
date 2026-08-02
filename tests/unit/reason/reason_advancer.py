@@ -39,9 +39,9 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
-from nuself.storage import _create_sqlite_backend
+from nuself.storage.authority import _create_sqlite_backend
 from tests.backend import owned_backend
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 def _advancer_dependencies(project_root: Path) -> dict[str, Any]:

@@ -16,7 +16,7 @@ from nuself.conversation.model import (
     PendingTurn,
 )
 from nuself.private_fs import blocking_private_file_lock
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 class ConversationStore:
     """SQLite-backed conversation store under the selected authority."""

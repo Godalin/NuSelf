@@ -29,8 +29,8 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
-from nuself.storage import (
-    auto_backend,
+from nuself.storage.authority import auto_backend
+from nuself.storage.contract import (
     StorageBackend,
     StorageCollection,
 )

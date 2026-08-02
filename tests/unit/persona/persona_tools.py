@@ -17,8 +17,8 @@ from nuself.persona.tools import (
     build_persona_tools,
     build_reason_persona_tools,
 )
-from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.storage import _create_sqlite_backend
+from nuself.storage.workspace import ScopedWorkspace, SqliteStore
+from nuself.storage.authority import _create_sqlite_backend
 from tests.backend import owned_backend
 
 

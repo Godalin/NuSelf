@@ -223,6 +223,12 @@ by [`spec/config.md`](spec/config.md) and [`spec/scope.md`](spec/scope.md);
 migration and storage behavior are governed by
 [`spec/storage-v2.md`](spec/storage-v2.md).
 
+The `nuself.storage` infrastructure package keeps this boundary explicit:
+contracts, atomic file writes, authority lifecycle, SQLite persistence and
+exchange, LangGraph workspace adaptation, and audit have precise owners. The
+workspace adapter uses the same authority database; the package root does not
+re-export these owners as a broad storage facade.
+
 ## Decision Boundaries
 
 Mechanical operations such as parsing, time arithmetic, validation, caps,

@@ -17,7 +17,7 @@ from nuself.reason.errors import (
 )
 from nuself.reason.repository import ReasonRepository
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 _MAX_EVIDENCE_REFS = 20
 

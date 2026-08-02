@@ -12,7 +12,7 @@ from nuself.reflection.schedule_state import (
     decode_reflection_schedule_state,
 )
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)

@@ -53,7 +53,7 @@ from nuself.runtime.messages import RuntimeEnvelope
 from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.tui.approval import TerminalApprovalPort
 from nuself.agent.tools.resources import ToolResources

@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from nuself.memory.model import MemoryEntry
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 
 
 def migrate_record(record: dict[str, object]) -> dict[str, object] | None:

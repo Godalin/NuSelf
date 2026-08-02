@@ -36,10 +36,10 @@ from nuself.reason.errors import ReasonAdvanceError
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.runtime.context import current_runtime_context, runtime_context
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
-    from nuself.store import ScopedWorkspace
+    from nuself.storage.workspace import ScopedWorkspace
 
 
 def _current_reason_thread_id() -> str:
@@ -384,7 +384,7 @@ class ReasonAdvancer:
     def _thread_workspace(self) -> ScopedWorkspace:
         """Resolve one workspace from the active Reason thread context."""
 
-        from nuself.store import ScopedWorkspace, SqliteStore
+        from nuself.storage.workspace import ScopedWorkspace, SqliteStore
 
         thread_id = _current_reason_thread_id()
         workspace = self._workspace_store.paths(thread_id)

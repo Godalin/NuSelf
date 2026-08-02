@@ -10,11 +10,11 @@ from pathlib import Path
 
 from nuself.config import runtime_paths
 from nuself.persona.prompt_repo import PersonaPromptRepository, create_persona_prompt
-from nuself.storage import (
+from nuself.storage.authority import (
     _create_sqlite_backend,
     open_sqlite_backend,
 )
-from nuself.store import ScopedWorkspace, SqliteStore, WorkspaceCollection
+from nuself.storage.workspace import ScopedWorkspace, SqliteStore, WorkspaceCollection
 
 
 def _durable_repo(tmp_path: Path) -> PersonaPromptRepository:

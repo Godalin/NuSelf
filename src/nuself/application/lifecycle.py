@@ -15,8 +15,9 @@ from nuself.application.composition import (
 )
 from nuself.config import RuntimePaths, runtime_paths
 from nuself.scope import NuSelfScope
-from nuself.storage import ClosableStorageBackend, auto_backend
-from nuself.storage_audit import report_backend_close_failure
+from nuself.storage.authority import auto_backend
+from nuself.storage.contract import ClosableStorageBackend
+from nuself.storage.audit import report_backend_close_failure
 
 
 class ApplicationRuntimeClosedError(RuntimeError):

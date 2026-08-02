@@ -11,7 +11,7 @@ import stat
 import pytest
 
 from nuself.cli import main
-from nuself.storage_sqlite import COLLECTION_NAMES, SqliteStorageBackend
+from nuself.storage.sqlite import COLLECTION_NAMES, SqliteStorageBackend
 
 
 def _create_pack_schema(path: Path, *, version: int) -> None:
@@ -88,7 +88,7 @@ def test_pack_export_fails_without_db(tmp_path: Path) -> None:
 
 
 def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     backend = _create_sqlite_backend(
         tmp_path / ".nuself",
@@ -129,7 +129,7 @@ def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
 def test_pack_import_copies_file(tmp_path: Path) -> None:
     # Create a "foreign" database
     foreign = tmp_path / "friend-thoughts.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
     be = _create_sqlite_backend(db_path=foreign)
     try:
         be.collection("memory_entries").put(
@@ -148,7 +148,7 @@ def test_pack_import_copies_file(tmp_path: Path) -> None:
 
 def test_pack_import_rejects_duplicate(tmp_path: Path) -> None:
     foreign = tmp_path / "thoughts.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
     _create_sqlite_backend(db_path=foreign).close()
 
     assert main(["--workspace", str(tmp_path), "pack", "import", str(foreign)]) == 0
@@ -244,7 +244,7 @@ def test_pack_import_accepts_legacy_schema_without_mutating_source(
 
 def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
     source = tmp_path / "live.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     backend = _create_sqlite_backend(db_path=source)
     backend.collection("memory_entries").put(
@@ -279,7 +279,7 @@ def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
 
 
 def test_pack_inspect_shows_summary(tmp_path: Path) -> None:
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
     db = tmp_path / "pack.sqlite"
     be = _create_sqlite_backend(db_path=db)
     try:
@@ -339,7 +339,7 @@ def test_pack_inspect_counts_live_wal_data(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / "live-inspect.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     backend = _create_sqlite_backend(db_path=source)
     backend.collection("memory_entries").put(

@@ -11,7 +11,7 @@ from nuself.config import RuntimePaths
 from nuself.reason.model import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 _write_lock = threading.RLock()
 

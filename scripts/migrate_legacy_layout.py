@@ -18,10 +18,8 @@ from nuself.private_fs import (
     ensure_managed_directory,
 )
 from nuself.scope import NuSelfScope, resolve_scope
-from nuself.storage import (
-    COLLECTION_NAMES,
-    open_sqlite_backend,
-)
+from nuself.storage.authority import open_sqlite_backend
+from nuself.storage.contract import COLLECTION_NAMES
 
 _SQLITE_TRANSIENT_SUFFIXES = ("-wal", "-shm", "-journal")
 _SQLITE_TRANSIENT_FILENAMES = frozenset(

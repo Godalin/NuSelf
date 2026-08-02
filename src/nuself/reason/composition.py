@@ -17,9 +17,9 @@ from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
 from nuself.persona.prompt_repo import PersonaPromptRepository
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
     from nuself.config import RuntimePaths, SystemConfig

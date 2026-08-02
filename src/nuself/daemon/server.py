@@ -29,7 +29,7 @@ from nuself.daemon.state import DaemonState
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.scope import NuSelfScope, resolve_scope
-from nuself.storage import write_text_atomic
+from nuself.storage.atomic import write_text_atomic
 
 
 class DaemonLifecycleError(RuntimeError):

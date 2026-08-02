@@ -16,7 +16,7 @@ from nuself.cli.repl.registry import command_body
 from nuself.config import runtime_paths
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import write_text_atomic
+from nuself.storage.atomic import write_text_atomic
 from nuself.tui.render import format_display_timestamp, render_log_event
 
 

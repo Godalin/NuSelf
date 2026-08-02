@@ -8,7 +8,7 @@ import stat
 import pytest
 
 from nuself.private_fs import ensure_private_directory
-from nuself.storage import (
+from nuself.storage.authority import (
     _create_sqlite_backend,
 )
 

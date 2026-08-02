@@ -31,7 +31,7 @@ from typing import Callable, cast
 
 import pytest
 
-import nuself.storage_sqlite as sqlite_storage
+import nuself.storage.sqlite as sqlite_storage
 from nuself.log.reader import read_log_events
 from nuself.notification.outbox import NotificationOutbox
 from nuself.memory.repository import (
@@ -44,13 +44,13 @@ from nuself.config import runtime_paths
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
-from nuself.storage import (
+from nuself.storage.authority import (
     _create_sqlite_backend as create_sqlite_backend,
     auto_backend,
     open_sqlite_backend,
 )
-from nuself.storage_sqlite import (
-    COLLECTION_NAMES,
+from nuself.storage.contract import COLLECTION_NAMES
+from nuself.storage.sqlite import (
     SqliteStorageBackend,
     SqliteStorageBackupCleanupError,
     SqliteStorageCheckpointError,
@@ -650,7 +650,7 @@ def test_online_backup_includes_wal_data_and_closes_destination(
         return tracked
 
     monkeypatch.setattr(
-        "nuself.storage_sqlite.sqlite3.connect",
+        "nuself.storage.sqlite.sqlite3.connect",
         tracking_connect,
     )
     destination = tmp_path / "exports" / "snapshot.sqlite"
@@ -743,7 +743,7 @@ def test_backup_and_destination_close_failure_retain_both_errors(
         return cast(sqlite3.Connection, destination)
 
     monkeypatch.setattr(
-        "nuself.storage_sqlite.sqlite3.connect",
+        "nuself.storage.sqlite.sqlite3.connect",
         connect_destination,
     )
     setattr(backend, "_conn", cast(sqlite3.Connection, source))
@@ -812,7 +812,7 @@ def test_readonly_inspection_closes_source_connection(
         return connection
 
     monkeypatch.setattr(
-        "nuself.storage_sqlite.sqlite3.connect",
+        "nuself.storage.sqlite.sqlite3.connect",
         tracking_connect,
     )
 

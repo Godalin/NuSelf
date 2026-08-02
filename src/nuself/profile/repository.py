@@ -8,7 +8,7 @@ from nuself.config import RuntimePaths
 from nuself.memory.model import MemoryCandidate, merge_relations
 from nuself.profile.model import ProfileItem
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)

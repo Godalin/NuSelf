@@ -15,7 +15,7 @@ from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonAdvancerProtocol
 from reason_fixtures import ReasonScheduler
 from reason_fixtures import ReasonService
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 from tests.backend import owned_backend
 
 

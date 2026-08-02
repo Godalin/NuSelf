@@ -7,7 +7,7 @@ from typing import Literal, cast
 from uuid import NAMESPACE_URL, uuid5
 
 from nuself.clock import utc_now_iso
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 
 type ObservationStatus = Literal["pending", "processed"]

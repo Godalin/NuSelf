@@ -21,7 +21,7 @@ from nuself.runtime.context import (
 )
 from nuself.runtime.job.definition import UnknownJobDefinitionError
 from nuself.runtime.job.message import JobMessage
-from nuself.storage import write_json_atomic
+from nuself.storage.atomic import write_json_atomic
 
 _STATE_OWNER = DaemonStateOwner()
 

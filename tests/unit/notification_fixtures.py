@@ -6,7 +6,7 @@ from pathlib import Path
 
 from nuself.config import RuntimePaths, runtime_paths
 from nuself.notification.outbox import NotificationOutbox
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 from tests.backend import owned_backend
 
 

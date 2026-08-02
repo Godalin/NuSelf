@@ -26,7 +26,7 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import (
+from nuself.storage.atomic import (
     AtomicWriteDurabilityError,
 )
 from tests.backend import owned_backend

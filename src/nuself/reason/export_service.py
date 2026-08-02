@@ -39,8 +39,8 @@ from nuself.reason.audit import (
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.job.message import JobMessage
 from nuself.runtime.job.definition import JobDefinitionRegistry
-from nuself.storage import write_json_atomic
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.atomic import write_json_atomic
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 MAX_EXPORT_ATTEMPTS = 5
 EXPORT_RETRY_BASE_SECONDS = 10

@@ -56,7 +56,7 @@ from nuself.cli.repl.composition import run_repl
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.scope import resolve_scope
 from nuself.application.lifecycle import open_application_runtime
-from nuself.storage_audit import report_cli_cleanup_failure
+from nuself.storage.audit import report_cli_cleanup_failure
 
 __all__ = [
     "build_parser",

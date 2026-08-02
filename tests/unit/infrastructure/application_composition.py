@@ -16,7 +16,7 @@ from nuself.scope import (
     resolve_scope,
     scope_from_authority_root,
 )
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 
 
 def test_application_graph_reuses_one_authority_repository_graph(

@@ -28,7 +28,7 @@ from nuself.llm import configured_langchain_chat_models
 from nuself.llm import LangChainLLMEndpoint
 from nuself.log.store import runtime_event_log_sink
 from nuself.trace.composition import TraceServices
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 __all__ = ["ChatResult", "compose_conversation_runtime"]
 

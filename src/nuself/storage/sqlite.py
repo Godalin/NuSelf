@@ -35,7 +35,7 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
 )
 from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import (
+from nuself.storage.contract import (
     COLLECTION_LOG_COMPONENTS,
     COLLECTION_NAMES,
 )

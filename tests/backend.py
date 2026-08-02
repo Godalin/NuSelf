@@ -6,7 +6,8 @@ from contextvars import ContextVar, Token
 from pathlib import Path
 
 from nuself.config import runtime_paths
-from nuself.storage import ClosableStorageBackend, StorageBackend, auto_backend
+from nuself.storage.authority import auto_backend
+from nuself.storage.contract import ClosableStorageBackend, StorageBackend
 
 _BACKENDS: ContextVar[dict[Path, StorageBackend] | None] = ContextVar(
     "nuself_owned_backends",

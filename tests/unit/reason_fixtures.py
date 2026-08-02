@@ -15,7 +15,7 @@ from nuself.reason.service import (
 )
 from tests.backend import owned_backend
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 class ReasonService(_ReasonService):

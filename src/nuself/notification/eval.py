@@ -27,7 +27,7 @@ from nuself.reflection.schedule_state import (
     ReflectionScheduleState,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 
 
 def run_notification_eval(

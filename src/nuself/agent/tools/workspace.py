@@ -11,7 +11,7 @@ from langchain_core.tools import BaseTool
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.store import ScopedWorkspace
+from nuself.storage.workspace import ScopedWorkspace
 
 
 def build_workspace_tools_from_provider(

@@ -14,7 +14,7 @@ import pytest
 
 from nuself.conversation import ConversationMessage, ConversationState
 from nuself.conversation.model import PendingTurn
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 from conversation_fixtures import ConversationStore
 from tests.backend import owned_backend
 

@@ -13,7 +13,7 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.job.message import JobSink
 from nuself.trace.service import TraceQueryService
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 @dataclass(frozen=True)

@@ -8,6 +8,7 @@ so the agent does not need to manage namespaces manually.
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, cast
@@ -24,15 +25,56 @@ from langgraph.store.base import (
     SearchOp,
 )
 
+from nuself.config import RuntimePaths
 from nuself.private_fs import require_private_file
 from nuself.runtime.messages import decode_json_value, encode_json_value
 
 __all__ = [
+    "PrivateWorkspacePaths",
+    "PrivateWorkspaceStore",
     "SqliteStore",
     "SqliteStoreLifecycleError",
     "ScopedWorkspace",
     "WorkspaceCollection",
 ]
+
+
+@dataclass(frozen=True)
+class PrivateWorkspacePaths:
+    """Filesystem and database paths for one isolated workspace owner."""
+
+    root: Path
+    database: Path
+
+
+class PrivateWorkspaceStore:
+    """Resolve isolated scratch workspaces under one authority."""
+
+    def __init__(self, paths: RuntimePaths, *, scope: str) -> None:
+        _validate_segment(scope, "workspace scope")
+        self._root = paths.exports_dir / scope
+        self._db_path = paths.authority_root / "nuself.sqlite"
+
+    def paths(self, owner_id: str) -> PrivateWorkspacePaths:
+        _validate_segment(owner_id, "workspace owner id")
+        return PrivateWorkspacePaths(
+            root=self._root / owner_id,
+            database=self._db_path,
+        )
+
+    def list_owners(self) -> list[str]:
+        if not self._root.exists():
+            return []
+        return sorted(
+            child.name
+            for child in self._root.iterdir()
+            if child.is_dir() and not child.name.startswith(".")
+        )
+
+
+def _validate_segment(value: str, label: str) -> None:
+    if value == "" or "/" in value or value in {".", ".."}:
+        raise ValueError(f"invalid {label}: {value}")
 
 class SqliteStoreLifecycleError(RuntimeError):
     """Retain transaction and connection cleanup failures."""

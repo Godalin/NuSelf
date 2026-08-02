@@ -875,7 +875,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     import signal
     import nuself.application.lifecycle as runtime_module
     import nuself.daemon.server as server_module
-    import nuself.storage as storage_module
+    import nuself.storage.authority as storage_module
 
     paths = runtime_paths(tmp_path)
     paths.runtime_dir.mkdir(parents=True)

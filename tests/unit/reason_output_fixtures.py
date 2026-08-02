@@ -8,7 +8,7 @@ from nuself.config import runtime_paths
 from nuself.reason.output import ReasonOutputService as _ReasonOutputService
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 class ReasonOutputService(_ReasonOutputService):

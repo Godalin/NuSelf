@@ -17,7 +17,7 @@ from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, c
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.persona.audit import PERSONA_AUDIT
-from nuself.store import ScopedWorkspace, WorkspaceCollection
+from nuself.storage.workspace import ScopedWorkspace, WorkspaceCollection
 from nuself.trace.service import TraceRecorder
 
 

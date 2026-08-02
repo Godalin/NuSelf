@@ -23,11 +23,11 @@ from nuself.config import runtime_paths
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from reason_fixtures import ReasonService
-from nuself.store import ScopedWorkspace, SqliteStore
+from nuself.storage.workspace import ScopedWorkspace, SqliteStore
 from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 def _names(tools: tuple[object, ...]) -> set[str]:
@@ -116,7 +116,7 @@ def test_subsystem_tool_builders_own_their_registries(
 def test_workspace_tool_builder_owns_workspace_registry(
     tmp_path: Path,
 ) -> None:
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     database = tmp_path / "workspace.sqlite"
     _create_sqlite_backend(db_path=database).close()

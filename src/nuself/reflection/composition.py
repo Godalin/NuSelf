@@ -17,7 +17,7 @@ from nuself.reflection.service import ReflectionService
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.persona.discussion import SharedPersonaDiscussionService
 from nuself.reason.service import ReasonService
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
 
 

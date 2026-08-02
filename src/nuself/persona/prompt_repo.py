@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from nuself.config import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageCollection
+from nuself.storage.contract import StorageCollection
 
 # ── Unified ID prefix for persona prompts ──────────────────────────────
 ID_PREFIX = "pp"

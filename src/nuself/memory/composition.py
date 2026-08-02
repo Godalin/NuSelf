@@ -25,7 +25,7 @@ from nuself.memory.optimizer import (
 )
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
 
 

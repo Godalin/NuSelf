@@ -7,7 +7,7 @@ from nuself.application.lifecycle import (
     ApplicationRuntime,
     current_application_runtime,
 )
-from nuself.storage import ClosableStorageBackend
+from nuself.storage.contract import ClosableStorageBackend
 
 
 def _current_runtime() -> ApplicationRuntime:

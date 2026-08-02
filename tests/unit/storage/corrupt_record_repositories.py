@@ -9,7 +9,7 @@ from notification_fixtures import notification_outbox
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 from nuself.trace.repository import TraceRepository
 
 CASES: tuple[tuple[str, LogComponent], ...] = (

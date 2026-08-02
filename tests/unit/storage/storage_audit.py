@@ -12,7 +12,7 @@ from nuself.runtime.cleanup import (
     CleanupFailure,
     cleanup_failure_records,
 )
-from nuself.storage_audit import (
+from nuself.storage.audit import (
     STORAGE_OPERATIONS_AUDIT,
     report_backend_close_failure,
     report_cli_cleanup_failure,

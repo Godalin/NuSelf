@@ -434,7 +434,7 @@ single-use forwarding functions around those adapters.
 - `daemon/operations_audit.py` owns process cleanup and worker join-timeout
   diagnostics. It preserves ordered cleanup error records while server and
   supervisor owners retain control flow and exception propagation.
-- `storage_audit.py` owns backend-close and outer CLI storage-cleanup audit
+- `storage/audit.py` owns backend-close and outer CLI storage-cleanup audit
   schemas. Storage and CLI owners retain teardown control flow and exception
   aggregation but do not construct audit presentation.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,

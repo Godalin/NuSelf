@@ -14,11 +14,11 @@ from scripts.migrate_legacy_layout import (
     migrate_legacy_layout,
 )
 from nuself.scope import resolve_scope
-from nuself.storage import (
+from nuself.storage.authority import (
     _create_sqlite_backend,
     auto_backend,
 )
-from nuself.storage_sqlite import SqliteStorageBackend
+from nuself.storage.sqlite import SqliteStorageBackend
 
 
 def _sqlite_backend(path: Path) -> SqliteStorageBackend:

@@ -11,13 +11,13 @@ from typing import Any, Callable, cast
 import pytest
 from langgraph.store.base import PutOp
 
-from nuself.store import (
+from nuself.storage.workspace import (
     ScopedWorkspace,
     SqliteStore,
     SqliteStoreLifecycleError,
 )
-from nuself.storage import _create_sqlite_backend
-from nuself.workspace import PrivateWorkspacePaths
+from nuself.storage.authority import _create_sqlite_backend
+from nuself.storage.workspace import PrivateWorkspacePaths
 
 
 def _paths(tmp_path: Path) -> PrivateWorkspacePaths:
@@ -137,7 +137,7 @@ def test_store_batch_retains_primary_rollback_and_close_failures(
         fail_close=True,
     )
     monkeypatch.setattr(
-        "nuself.store.sqlite3.connect",
+        "nuself.storage.workspace.sqlite3.connect",
         _connection_factory(connection),
     )
 
@@ -162,7 +162,7 @@ def test_store_commit_failure_propagates_after_successful_cleanup(
     raw = sqlite3.connect(_db(tmp_path))
     connection = LifecycleConnectionProxy(raw, fail_commit=True)
     monkeypatch.setattr(
-        "nuself.store.sqlite3.connect",
+        "nuself.storage.workspace.sqlite3.connect",
         _connection_factory(connection),
     )
 
@@ -180,7 +180,7 @@ def test_store_surfaces_close_failure_after_successful_commit(
     raw = sqlite3.connect(_db(tmp_path))
     connection = LifecycleConnectionProxy(raw, fail_close=True)
     monkeypatch.setattr(
-        "nuself.store.sqlite3.connect",
+        "nuself.storage.workspace.sqlite3.connect",
         _connection_factory(connection),
     )
 

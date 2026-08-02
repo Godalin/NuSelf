@@ -10,7 +10,7 @@ import subprocess
 import sys
 from typing import Callable, cast
 
-from nuself.storage import _create_sqlite_backend
+from nuself.storage.authority import _create_sqlite_backend
 
 _SCRIPT = (
     Path(__file__).resolve().parents[3]

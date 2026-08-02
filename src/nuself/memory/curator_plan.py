@@ -20,7 +20,7 @@ from nuself.memory.curator_contract import (
 )
 from nuself.private_fs import ensure_private_file
 from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)

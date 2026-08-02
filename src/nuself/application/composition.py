@@ -20,7 +20,7 @@ from nuself.reflection.composition import (
     ReflectionResources,
     compose_reflection_resources,
 )
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)

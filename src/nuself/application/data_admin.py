@@ -8,7 +8,7 @@ from typing import Callable
 from nuself.conversation import ConversationState, ConversationStore
 from nuself.memory.model import MemoryEntry
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.storage import COLLECTION_NAMES, StorageBackend
+from nuself.storage.contract import COLLECTION_NAMES, StorageBackend
 
 type Record = dict[str, object]
 type Decoder = Callable[[Record], object]

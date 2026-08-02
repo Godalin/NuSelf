@@ -21,7 +21,8 @@ from nuself.notification.outbox import (
 )
 from nuself.notification.adapters import LogOnlyNotificationAdapter
 from nuself.config import runtime_paths
-from nuself.storage import ClosableStorageBackend, auto_backend
+from nuself.storage.authority import auto_backend
+from nuself.storage.contract import ClosableStorageBackend
 
 
 class _PausingNotificationOutbox(NotificationOutbox):

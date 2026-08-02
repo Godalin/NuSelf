@@ -17,7 +17,7 @@ from nuself.notification.model import (
 )
 from nuself.runtime.observability import decode_observed_record
 from nuself.private_fs import blocking_private_file_lock
-from nuself.storage import (
+from nuself.storage.contract import (
     StorageBackend,
     validate_storage_key,
 )

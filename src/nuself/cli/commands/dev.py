@@ -6,7 +6,7 @@ import argparse
 import sys
 
 from nuself.cli.application import cli_backend
-from nuself.storage_sqlite import SqliteStorageBackend
+from nuself.storage.sqlite import SqliteStorageBackend
 
 
 def handle_dev_db_schema(args: argparse.Namespace) -> int:
