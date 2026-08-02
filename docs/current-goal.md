@@ -9,22 +9,20 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the obsolete process-global single-file config cache.
+Remove the unused runtime-owned test configuration factory.
 
 ## Ordered Steps
 
-1. Specify application-owned immutable snapshots instead of global loader
-   memoization.
-2. Remove cache state/key invalidation and simplify `ConfigSystem.load()` to a
-   hardened read/validate operation.
-3. Add a same-size/same-mtime reload regression, run focused/full gates, record
-   evidence, and commit without pushing.
+1. Specify that test timing/config overrides belong to fixtures and explicit
+   inputs, not an unused production loader branch.
+2. Remove `ConfigSystem._test_config()` and its duplicate configuration tree.
+3. Run focused/full gates, record evidence, and commit without pushing.
 
 ## Exclusions
 
-- Preserve config hardening, defaults, validation, malformed-file fallback,
-  layered scope loading, and daemon restart semantics.
-- Do not add another cache or live daemon reload mechanism.
+- Preserve production defaults, schema validation, layered loading, and all
+  test fixture behavior.
+- Do not replace the dead method with an environment-sensitive test branch.
 
 ## Constraints
 
@@ -36,6 +34,12 @@ Remove the obsolete process-global single-file config cache.
 
 ## Phase Evidence
 
+- Removed the unreferenced `ConfigSystem._test_config()` method and its duplicate
+  daemon/reflection configuration tree. Production config has no hidden test
+  branch; tests continue to supply explicit fixtures and typed settings. Source,
+  test, and script search finds no remaining reference. Focused config/daemon/
+  reflection tests: 143 passed; full suite: 2446 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - Removed `_CONFIG_CACHE` and its path/mtime/size invalidation machinery from
   `ConfigSystem.load()`. Application runtimes already freeze one effective
   snapshot, while explicit loads now always read current contents. A regression

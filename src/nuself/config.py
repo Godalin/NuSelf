@@ -327,38 +327,6 @@ class ConfigSystem:
         """Return safe default configuration."""
         return SystemConfig()
 
-    @staticmethod
-    def _test_config() -> SystemConfig:
-        """Return fast configuration suitable for testing."""
-        return SystemConfig(
-            daemon=DaemonConfig(
-                memory_curator=DaemonMemoryCuratorConfig(interval_seconds=5),
-                reflection_scheduler=DaemonReflectionSchedulerConfig(check_interval_seconds=1),
-                notification_delivery=DaemonNotificationDeliveryConfig(interval_seconds=1),
-                reason_scheduler=DaemonReasonSchedulerConfig(interval_seconds=1),
-            ),
-            reflection=ReflectionSettings(
-                scheduler=ReflectionSchedulerConfig(
-                    interval_seconds=10,
-                    cooldown_seconds=0,
-                    quiet_start_hour=23,
-                    quiet_end_hour=23,
-                    daily_cap=100,
-                    jitter_percent=0,
-                ),
-                gate=ReflectionGateConfig(
-                    relevance_threshold=0.0,
-                    persona_discussion_threshold=1.0,
-                ),
-                moderator=ReflectionModeratorConfig(
-                    max_discussion_rounds=2,
-                    moderator_convergence_patience=1,
-                ),
-                discussion=ReflectionDiscussionConfig(),
-                auto_notify=False,
-            ),
-        )
-
     @classmethod
     def load(cls, config_path: Path | None = None, project_root: Path | None = None) -> SystemConfig:
         """Load one configuration file with defaults."""

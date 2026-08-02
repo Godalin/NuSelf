@@ -21,6 +21,10 @@ scope inspection commands remain separate read-only projections. Consumers
 read the required subsection at their operation boundary; single-use field
 getter functions must not mirror the immutable graph.
 
+The production configuration loader has no hidden test-mode defaults. Tests
+that need shorter intervals or alternate policies supply explicit typed config
+or fixture files; runtime behavior never branches on a test environment.
+
 ## Config Sections
 
 | Section | Dataclass | Purpose |

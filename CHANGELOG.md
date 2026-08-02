@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Removed the unused `ConfigSystem._test_config()` production-code branch and
+  its duplicate daemon/reflection configuration tree.
 - Removed the obsolete process-global single-file configuration cache;
   application runtimes still own one immutable snapshot, while explicit later
   loads always inspect current file contents.
