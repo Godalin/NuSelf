@@ -9,13 +9,13 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Keep generic response decoding private to the daemon client.
+Keep raw request transport private to the typed daemon client.
 
 ## Ordered Steps
 
-1. Confirm `decode_response()` has no production caller outside `client.py`.
-2. Privatize it and test failure classification through the real typed
-   `health()` operation rather than the generic helper.
+1. Confirm raw `request()` has no production caller outside `client.py`.
+2. Privatize it while retaining direct low-level transport tests and all typed
+   operations; add no client class or protocol facade.
 3. Run focused daemon transport tests and full gates, then commit without push.
 
 ## Exclusions
@@ -25,8 +25,8 @@ Keep generic response decoding private to the daemon client.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve response status classification, payload validation, retry phase,
-  and request identity.
+- Preserve framing, cancellation, timeout, request identity, and structured
+  transport failure phases.
 
 ## Constraints
 
@@ -38,6 +38,12 @@ Keep generic response decoding private to the daemon client.
 
 ## Phase Evidence
 
+- Raw daemon socket request transport is now private to `client.py`; production
+  callers use only the seven typed operations. Low-level transport and CLI
+  retry/error tests retain direct control of the private seam without adding a
+  client class or facade. Focused daemon transport/CLI tests: 362 passed; full
+  suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Generic daemon successful-response decoding is now private to `client.py`;
   the public client surface consists of typed protocol operations. Replaced two
   helper-level tests with `health()` boundary tests that still prove application

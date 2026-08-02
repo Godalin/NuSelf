@@ -96,7 +96,7 @@ class ActivityStreamGapError(DaemonApplicationError):
         self.dropped_count = dropped_count
 
 
-def request(
+def _request(
     request_type: RequestType,
     payload: dict[str, JsonValue] | None = None,
     *,
@@ -218,7 +218,7 @@ def ping(
     """Return whether the daemon responds to ping."""
 
     try:
-        response = request(
+        response = _request(
             "ping",
             project_root=project_root,
             timeout=timeout,
@@ -242,7 +242,7 @@ def health(
     """Return a fully validated daemon worker-health snapshot."""
 
     return _decode_response(
-        request(
+        _request(
             "health",
             project_root=project_root,
             timeout=timeout,
@@ -268,7 +268,7 @@ def chat(
         turn_id=turn_id,
     )
     return _decode_response(
-        request(
+        _request(
             "chat",
             payload.to_wire(),
             project_root=project_root,
@@ -286,7 +286,7 @@ def shutdown(
 ) -> None:
     """Request shutdown and validate the acknowledgement payload."""
 
-    response = request(
+    response = _request(
         "shutdown",
         project_root=project_root,
         timeout=timeout,
@@ -305,7 +305,7 @@ def open_activity(
 ) -> str:
     """Open one turn-scoped daemon activity subscription."""
 
-    response = request(
+    response = _request(
         "activity_open",
         {"turn_id": turn_id},
         project_root=project_root,
@@ -327,7 +327,7 @@ def next_activity(
 ) -> tuple[LogEvent, ...]:
     """Long-poll the next bounded activity batch."""
 
-    response = request(
+    response = _request(
         "activity_next",
         {
             "subscription_id": subscription_id,
@@ -354,7 +354,7 @@ def close_activity(
 ) -> None:
     """Close a daemon activity subscription."""
 
-    response = request(
+    response = _request(
         "activity_close",
         {"subscription_id": subscription_id},
         project_root=project_root,

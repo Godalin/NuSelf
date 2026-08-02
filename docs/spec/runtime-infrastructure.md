@@ -228,8 +228,8 @@ Success response payload field sets are also exact:
   shared exact empty payload.
 
 The daemon client exposes typed request operations for these protocol actions.
-Generic successful-response decoding is an internal implementation detail, not
-a second public client API.
+Raw request transport and generic successful-response decoding are internal
+implementation details, not second public client APIs.
 
 The in-process `ActivityBroker.close()` command mirrors that protocol: it is
 idempotent and returns no status value. Callers verify absence through later

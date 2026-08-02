@@ -1030,7 +1030,7 @@ def test_interactive_daemon_timeout_retries_and_preserves_logs(
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client._request", fake_request)
 
     result = main(["--workspace", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -1101,7 +1101,7 @@ def test_interactive_daemon_application_error_does_not_retry(
 
     monkeypatch.setattr("sys.stdin", _TextInput("hello\n:q\n"))
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client._request", fake_request)
 
     result = main(["--workspace", str(tmp_path), "chat"])
     captured = capsys.readouterr()
@@ -1156,7 +1156,7 @@ def test_interactive_malformed_daemon_payload_does_not_retry(
         fake_status,
     )
     monkeypatch.setattr(
-        "nuself.cli.chat.client.request",
+        "nuself.cli.chat.client._request",
         fake_request,
     )
 
@@ -1594,7 +1594,7 @@ def test_daemon_chat_uses_long_timeout(
         return daemon_status
 
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client._request", fake_request)
 
     result = main(["--workspace", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()
@@ -1645,7 +1645,7 @@ def test_daemon_chat_uses_configured_request_timeout(
         return daemon_status
 
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client._request", fake_request)
 
     result = main(["--workspace", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()
@@ -1678,7 +1678,7 @@ def test_daemon_chat_connection_error_is_reported(
         return daemon_status
 
     monkeypatch.setattr("nuself.daemon.lifecycle.status", fake_status)
-    monkeypatch.setattr("nuself.cli.chat.client.request", fake_request)
+    monkeypatch.setattr("nuself.cli.chat.client._request", fake_request)
 
     result = main(["--workspace", str(tmp_path), "attach", "--message", "hello"])
     captured = capsys.readouterr()

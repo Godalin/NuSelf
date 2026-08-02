@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Raw daemon request transport is now private to the typed client operations;
+  low-level framing tests continue to exercise the internal boundary directly.
 - Generic daemon response decoding is now private to the typed client
   operations; failure tests exercise the public health boundary instead.
 - Daemon stop failures now expose ownership through their authoritative status

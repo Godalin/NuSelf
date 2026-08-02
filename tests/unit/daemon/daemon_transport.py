@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 import io
@@ -706,7 +707,7 @@ def test_client_classifies_missing_socket_as_connect_failure(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert captured.value.phase == "connect"
     assert captured.value.request_id is not None
@@ -736,7 +737,7 @@ def test_client_request_encoding_failure_is_not_retryable(
     )
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request(
+        client._request(
             "ping",
             {"value": float("nan")},
             project_root=tmp_path,
@@ -788,7 +789,7 @@ def test_client_classifies_socket_io_phase(
     )
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert captured.value.phase == phase
     assert captured.value.request_id is not None
@@ -819,7 +820,7 @@ def test_client_request_cancellation_closes_owned_socket(
     )
     call = OwnedCall(
         name="cancelled-daemon-request",
-        target=lambda: client.request(
+        target=lambda: client._request(
             "ping",
             project_root=tmp_path,
             timeout=60,
@@ -853,7 +854,7 @@ def test_client_rejects_mismatched_response_identity(
     monkeypatch.setattr(client.socket, "socket", socket_factory)
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert isinstance(captured.value.__cause__, ProtocolError)
     assert "request_id does not match" in str(captured.value)
@@ -877,7 +878,7 @@ def test_client_wraps_extra_response_frame_as_connection_error(
     monkeypatch.setattr(client.socket, "socket", socket_factory)
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert isinstance(captured.value.__cause__, DaemonExtraFrameData)
     assert captured.value.phase == "response_decode"
@@ -889,7 +890,7 @@ def test_client_wraps_extra_response_frame_as_connection_error(
 @pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan"), True])
 def test_client_rejects_invalid_timeout(timeout: object) -> None:
     with pytest.raises(ValueError, match="positive and finite"):
-        client.request("ping", timeout=timeout)  # type: ignore[arg-type]
+        client._request("ping", timeout=timeout)  # type: ignore[arg-type]
 
 
 def test_ping_forwards_readiness_timeout(
@@ -918,7 +919,7 @@ def test_ping_forwards_readiness_timeout(
             },
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     assert client.ping(tmp_path, timeout=0.125) is True
     assert captured_timeout == 0.125
@@ -944,7 +945,7 @@ def test_ping_rejects_daemon_for_another_authority(
             },
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     assert client.ping(tmp_path) is False
 
@@ -973,7 +974,7 @@ def test_shutdown_forwards_remaining_timeout(
             payload=EmptyPayload().to_wire(),
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     client.shutdown(tmp_path, timeout=0.125)
     assert captured_timeout == 0.125
@@ -1000,7 +1001,7 @@ def test_activity_client_rejects_lossy_batch(
             ).to_wire(),
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     with pytest.raises(ActivityStreamGapError) as captured:
         client.next_activity("sub-1", timeout_ms=0)
@@ -1022,7 +1023,7 @@ def test_health_distinguishes_application_failure(
         assert request_type == "health"
         return DaemonResponse.fail("r", "request rejected")
 
-    monkeypatch.setattr(client, "request", failed_request)
+    monkeypatch.setattr(client, "_request", failed_request)
 
     with pytest.raises(
         DaemonApplicationError,
@@ -1049,7 +1050,7 @@ def test_health_wraps_malformed_success(
             payload={"unexpected": True},
         )
 
-    monkeypatch.setattr(client, "request", malformed_request)
+    monkeypatch.setattr(client, "_request", malformed_request)
 
     with pytest.raises(DaemonConnectionError) as captured:
         client.health()
