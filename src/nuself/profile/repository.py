@@ -46,7 +46,7 @@ class ProfileItemRepository:
                 ProfileItem.from_wire,
                 component="memory",
                 collection="profile_items",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if item is not None:
                 items.append(item)

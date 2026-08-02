@@ -43,7 +43,7 @@ class ApplicationRuntime:
             if self._application is None:
                 backend = self._backend
                 if backend is None:
-                    backend = auto_backend(self._paths.project_root)
+                    backend = auto_backend(self._paths.authority_root)
                     self._backend = backend
                 self._application = compose_application(
                     self._paths,
@@ -58,7 +58,7 @@ class ApplicationRuntime:
         with self._lock:
             self._require_open()
             if self._backend is None:
-                self._backend = auto_backend(self._paths.project_root)
+                self._backend = auto_backend(self._paths.authority_root)
             return self._backend
 
     def close(self) -> None:
@@ -75,7 +75,7 @@ class ApplicationRuntime:
         except Exception as exc:
             report_backend_close_failure(
                 exc,
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
                 backend_type=type(backend).__name__,
             )
             raise

@@ -69,12 +69,6 @@ class RuntimePaths:
     daemon_process_log_path: Path
     outbox_log_path: Path
 
-    @property
-    def project_root(self) -> Path:
-        """Temporary internal bridge while composition callers migrate."""
-
-        return self.authority_root
-
 def resolve_scope(
     *,
     local: bool = False,

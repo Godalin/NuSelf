@@ -218,7 +218,7 @@ class MemoryEntryRepository:
                 _entry_from_wire,
                 component="memory",
                 collection="memory_entries",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if entry is not None:
                 entries.append(entry)
@@ -442,7 +442,7 @@ class MemoryCandidateRepository:
                 MemoryCandidate.from_wire,
                 component="memory",
                 collection="memory_candidates",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if candidate is None:
                 continue

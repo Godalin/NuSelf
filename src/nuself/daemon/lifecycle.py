@@ -291,7 +291,7 @@ def status(
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
     running = client.ping(
-        paths.project_root,
+        paths.authority_root,
         timeout=ping_timeout,
     )
     partial = DaemonStatus(
@@ -329,7 +329,7 @@ def start(
     paths = runtime_paths(project_root)
     if initial_status is None:
         ensure_runtime_dirs(paths)
-        current = _status_for_start(paths.project_root)
+        current = _status_for_start(paths.authority_root)
     else:
         _validate_status_paths(initial_status, paths)
         ensure_runtime_dirs(paths)
@@ -372,9 +372,9 @@ def start(
                     "-m",
                     "nuself.daemon.server",
                     "--project-root",
-                    str(paths.project_root),
+                    str(paths.authority_root),
                 ],
-                cwd=paths.project_root,
+                cwd=paths.authority_root,
                 stdout=process_log,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
@@ -390,7 +390,7 @@ def start(
         if remaining <= 0:
             break
         current = _status_for_start(
-            paths.project_root,
+            paths.authority_root,
             ping_timeout=remaining,
         )
         if current.running:
@@ -476,7 +476,7 @@ def stop(
     paths = runtime_paths(project_root)
     deadline = time.monotonic() + shutdown_policy.timeout_seconds
     current = _status_for_stop(
-        paths.project_root,
+        paths.authority_root,
         ping_timeout=min(
             DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
             shutdown_policy.timeout_seconds,
@@ -501,7 +501,7 @@ def stop(
         )
     try:
         client.shutdown(
-            paths.project_root,
+            paths.authority_root,
             timeout=min(
                 DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
                 remaining,
@@ -519,7 +519,7 @@ def stop(
         if remaining <= 0:
             break
         current = _status_for_stop(
-            paths.project_root,
+            paths.authority_root,
             ping_timeout=min(
                 DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
                 remaining,
@@ -595,5 +595,5 @@ def _report_invalid_pid(paths: RuntimePaths) -> None:
         component="daemon",
         collection="daemon_runtime",
         record_id=paths.pid_path.stem,
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
     )

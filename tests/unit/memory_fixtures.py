@@ -39,7 +39,7 @@ def _resources(
         if isinstance(root_or_paths, RuntimePaths)
         else runtime_paths(root_or_paths)
     )
-    return paths, backend or owned_backend(paths.project_root)
+    return paths, backend or owned_backend(paths.authority_root)
 
 
 def memory_entry_repository(
@@ -142,7 +142,7 @@ class MemoryCurator(_MemoryCurator):
         paths, selected_backend = _resources(project_root, backend)
         self._test_paths = paths
         self._test_conversations = conversation_store or ConversationStore(
-            paths.project_root, backend=selected_backend
+            paths.authority_root, backend=selected_backend
         )
         self._test_observations = MemoryObservationRepository(selected_backend)
         entries = repository or memory_entry_repository(

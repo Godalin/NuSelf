@@ -23,12 +23,12 @@ def build_notification_adapters(
     if email_config.enabled:
         adapters.append(
             EmailNotificationAdapter(
-                paths.project_root,
+                paths.authority_root,
                 config=email_config,
             )
         )
     if macos_config.enabled:
-        adapters.append(MacOSNotificationAdapter(paths.project_root))
+        adapters.append(MacOSNotificationAdapter(paths.authority_root))
     if not adapters:
-        adapters.append(LogOnlyNotificationAdapter(paths.project_root))
+        adapters.append(LogOnlyNotificationAdapter(paths.authority_root))
     return tuple(adapters)

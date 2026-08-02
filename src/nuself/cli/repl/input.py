@@ -179,7 +179,7 @@ class InteractiveInput:
     def __init__(self, project_root: Path | None) -> None:
         paths = runtime_paths(project_root)
         ensure_runtime_dirs(paths)
-        self._project_root = paths.project_root
+        self._project_root = paths.authority_root
         history_path = paths.runtime_dir / "interactive_history"
         self.history: FileHistory = DedupFileHistory(
             str(history_path),

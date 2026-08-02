@@ -152,7 +152,7 @@ class MemoryCurator:
             write_memory_audit(
                 "curator_contended",
                 "Memory curator found the source observation busy",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
                 metadata={"observation_id": observation_id},
             )
             return MemoryCuratorResult(
@@ -198,7 +198,7 @@ class MemoryCurator:
                 write_memory_audit(
                     "curator_deferred",
                     "Memory curator deferred the source range",
-                    project_root=self._paths.project_root,
+                    project_root=self._paths.authority_root,
                     metadata={
                         "observation_id": observation_id,
                         "source_ref": observation.source_ref,
@@ -259,7 +259,7 @@ class MemoryCurator:
         write_memory_audit(
             "curator_completed",
             "Memory curator processed a source range",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "observation_id": observation_id,
                 "source_ref": source_ref,
@@ -411,7 +411,7 @@ class MemoryCurator:
                 write_memory_audit(
                     "candidate_merged",
                     "Memory curator created an update candidate by merging",
-                    project_root=self._paths.project_root,
+                    project_root=self._paths.authority_root,
                     metadata={
                         "candidate_id": candidate.id,
                         "target_entry_id": existing.id,
@@ -447,7 +447,7 @@ class MemoryCurator:
         write_memory_audit(
             "candidate_created",
             "Memory curator created a candidate",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "candidate_id": candidate.id,
                 "memory_type": candidate.type,
@@ -510,7 +510,7 @@ class MemoryCurator:
         write_memory_audit(
             "candidate_updated",
             "Memory curator created an explicit update candidate",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "candidate_id": candidate.id,
                 "target_entry_id": existing.id,
@@ -556,7 +556,7 @@ class MemoryCurator:
                 target_review_state="reviewed",
             ),
             event="auto_accept_failed",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "candidate_id": candidate.id,
                 "action": candidate.action,
@@ -592,7 +592,7 @@ class MemoryCurator:
                 source_trace_id=source_trace_id,
             ),
             event="trace_recording_failed",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "memory_id": entry.id,
                 "action": action,

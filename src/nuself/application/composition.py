@@ -57,9 +57,9 @@ def compose_application(
     reason = ReasonRepository(paths, backend=backend)
     reflection = ReflectionRepository(paths, backend=backend)
     reason_workspace = PrivateWorkspaceStore(paths, scope="reason")
-    config = ConfigSystem.load(project_root=paths.project_root)
+    config = ConfigSystem.load(project_root=paths.authority_root)
     reason_service = ReasonService(
-        paths.project_root,
+        paths.authority_root,
         repository=reason,
         workspace_store=reason_workspace,
         trace_recorder=trace.recorder,
@@ -89,7 +89,7 @@ def compose_application(
             reason_service,
             trace.recorder,
             ReflectionOrganizer(
-                paths.project_root,
+                paths.authority_root,
                 repository=reflection,
             ),
         ),

@@ -37,7 +37,7 @@ class ReasonService(_ReasonService):
                 "tests must compose an injected reason repository with an "
                 "explicit project_root"
             )
-        root = runtime_paths(project_root).project_root
+        root = runtime_paths(project_root).authority_root
         backend = owned_backend(root)
         selected_repository = repository or ReasonRepository(
             runtime_paths(root),

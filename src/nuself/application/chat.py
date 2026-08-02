@@ -43,13 +43,13 @@ def compose_conversation_runtime(
         langchain_models
         if langchain_models is not None
         else configured_langchain_chat_models(
-            paths.project_root,
+            paths.authority_root,
             config=config,
         )
     )
     resources = ConversationResources(
         tools=ToolResources(
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             memory=application.memory_service,
             reflections=application.reflection_service,
             reasons=application.reason_service,
@@ -57,12 +57,12 @@ def compose_conversation_runtime(
             traces=application.trace.query,
             persona_tools=tuple(
                 build_persona_tools(
-                    paths.project_root,
+                    paths.authority_root,
                     repository=application.persona_prompts,
                     trace_recorder=application.trace.recorder,
                     text_agent=LangChainTextAgent(
                         endpoints=models,
-                        project_root=paths.project_root,
+                        project_root=paths.authority_root,
                         component="persona",
                     ),
                 )
@@ -73,7 +73,7 @@ def compose_conversation_runtime(
         trace_recorder=application.trace.recorder,
         personas=load_personas_from_memory(
             application.memory.entries,
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
         ),
         conversation_store=application.conversations,
         reflection_settings=config.reflection,
@@ -83,7 +83,7 @@ def compose_conversation_runtime(
     if publisher is None:
         publisher = EventPublisher()
         publisher.attach_projection(
-            runtime_event_log_sink(paths.project_root)
+            runtime_event_log_sink(paths.authority_root)
         )
     return ConversationGraphRuntime(
         resources,

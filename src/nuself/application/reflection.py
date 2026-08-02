@@ -25,7 +25,7 @@ def compose_reflection_scheduler(
 
     paths = application.paths
     generator = IdeaCandidateGenerator(
-        paths.project_root,
+        paths.authority_root,
         memory_repository=application.memory.entries,
         source_repository=application.memory.sources,
         profile_repository=application.memory.profile,
@@ -34,13 +34,13 @@ def compose_reflection_scheduler(
         langchain_models=langchain_models,
     )
     gate = LLMRelevanceGate(
-        paths.project_root,
+        paths.authority_root,
         config,
         repository=application.reflection,
         langchain_models=langchain_models,
     )
     return ReflectionScheduler(
-        paths.project_root,
+        paths.authority_root,
         config,
         repository=application.reflection,
         outbox=application.notifications,
@@ -49,7 +49,7 @@ def compose_reflection_scheduler(
         relevance_gate=gate,
         organizer=application.reflection_service,
         discussion=SharedPersonaDiscussionService(
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             config=config,
             language_preference=language_preference,
             langchain_models=langchain_models,

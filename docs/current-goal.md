@@ -9,15 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove duplicated daemon-unavailable state from system health.
+Remove the temporary `RuntimePaths.project_root` authority alias.
 
 ## Ordered Steps
 
-1. Confirm `status_unavailable` exactly mirrors `daemon is None` within one
-   health command invocation.
-2. Branch on the authoritative observation result directly while preserving
-   accumulated authority-root issue output.
-3. Run focused system CLI tests and full gates, then commit without pushing.
+1. Specify `authority_root` as the sole canonical root exposed by
+   `RuntimePaths`; distinguish unrelated workspace/project parameters.
+2. Migrate every typed-path consumer and test, then delete the temporary alias.
+3. Prove no alias reads remain; run scope/application/daemon focused tests and
+   full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -26,7 +26,8 @@ Remove duplicated daemon-unavailable state from system health.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve health issue ordering, safe status diagnostics, and exit codes.
+- Preserve every resolved path value, authority ID, scope selection, and
+  filesystem/daemon behavior; do not rename unrelated public parameters here.
 
 ## Constraints
 
@@ -38,6 +39,12 @@ Remove duplicated daemon-unavailable state from system health.
 
 ## Phase Evidence
 
+- `RuntimePaths` now exposes `authority_root` as its sole canonical root field.
+  Migrated application, daemon, storage, memory, Reason, Reflection,
+  Notification, Persona, Trace, CLI, and test consumers, then removed the
+  explicitly temporary `project_root` property. Boundary search finds no alias
+  reads. Focused scope/application/daemon/storage tests: 191 passed; full suite:
+  2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - System health now uses the observed daemon status directly instead of
   retaining a second `status_unavailable` boolean. Missing authority issues are
   still aggregated before the unavailable status exit. Focused system/CLI/error

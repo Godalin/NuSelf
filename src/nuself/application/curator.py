@@ -29,7 +29,7 @@ def compose_memory_curator(
         langchain_models
         if langchain_models is not None
         else configured_langchain_chat_models(
-            paths.project_root,
+            paths.authority_root,
             config=application.config,
         )
     )
@@ -38,7 +38,7 @@ def compose_memory_curator(
         agent=LangChainStructuredAgent(
             CuratorActionsOutput,
             endpoints=models,
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             component="memory",
         ),
         observation_repository=application.memory.observations,
@@ -62,10 +62,10 @@ def compose_memory_optimizer(
         agent=LangChainStructuredAgent(
             OptimizeActionsOutput,
             endpoints=configured_langchain_chat_models(
-                application.paths.project_root,
+                application.paths.authority_root,
                 config=application.config,
             ),
-            project_root=application.paths.project_root,
+            project_root=application.paths.authority_root,
             component="memory",
         ),
         settings=settings,

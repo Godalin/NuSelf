@@ -363,7 +363,7 @@ def _append_log_event(
 ) -> _LogEvent:
     paths = runtime_paths(project_root)
     ensure_runtime_dirs(paths)
-    path = log_path(event_record.component, project_root=paths.project_root)
+    path = log_path(event_record.component, project_root=paths.authority_root)
     line = (
         json.dumps(event_record.to_record(), sort_keys=True, ensure_ascii=True) + "\n"
     )
@@ -401,7 +401,7 @@ def _append_log_event(
         except Exception as exc:
             _report_log_observer_failure(
                 exc,
-                project_root=paths.project_root,
+                project_root=paths.authority_root,
             )
             continue
         finally:

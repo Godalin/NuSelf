@@ -20,7 +20,7 @@ def _runtime_for_authority(
     if current is None:
         raise RuntimeError("CLI application runtime is not active")
     requested = runtime_paths(project_root)
-    if requested.project_root != current.paths.project_root:
+    if requested.authority_root != current.paths.authority_root:
         raise RuntimeError(
             "CLI handler requested a different authority than its "
             "application runtime"

@@ -27,7 +27,7 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert not hasattr(graph, "_backend")
     assert not hasattr(graph, "composition_storage")
     assert graph.notifications._backend is backend
-    assert graph.persona_prompts._project_root == paths.project_root
+    assert graph.persona_prompts._project_root == paths.authority_root
     assert graph.memory.curator_plans._backend is backend
     assert graph.memory_service._repository is graph.memory.entries
     assert graph.memory.candidates._entry_repository is graph.memory.entries
@@ -61,7 +61,7 @@ def test_reason_prompt_models_are_composed_lazily(
 
     def generate_prompt(*args: object, **kwargs: object) -> str:
         del args
-        assert kwargs["project_root"] == paths.project_root
+        assert kwargs["project_root"] == paths.authority_root
         assert kwargs["endpoints"] == ()
         return "Composed prompt."
 

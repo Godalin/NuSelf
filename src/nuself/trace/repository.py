@@ -60,7 +60,7 @@ class TraceRepository:
                 ThoughtTrace.from_wire,
                 component="reasoning",
                 collection="trace_nodes",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if trace is None:
                 continue
@@ -158,7 +158,7 @@ class TraceRepository:
             TraceLink.from_wire,
             component="reasoning",
             collection="trace_edges",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
         )
 
 

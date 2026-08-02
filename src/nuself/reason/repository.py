@@ -58,7 +58,7 @@ class ReasonRepository:
                 ReasoningThread.from_wire,
                 component="reasoning",
                 collection="reason_threads",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if thread is None:
                 continue
@@ -107,7 +107,7 @@ class ReasonRepository:
                 ReasoningStep.from_wire,
                 component="reasoning",
                 collection="reason_steps",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if step is None:
                 continue

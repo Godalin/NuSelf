@@ -22,5 +22,5 @@ def notification_outbox(
     )
     return NotificationOutbox(
         paths,
-        backend or owned_backend(paths.project_root),
+        backend or owned_backend(paths.authority_root),
     )

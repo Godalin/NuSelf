@@ -219,7 +219,7 @@ def open_sqlite_backend(
     managed = path.absolute() == canonical.absolute()
     return SqliteStorageBackend(
         path,
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
         _managed=managed,
     )
 
@@ -253,7 +253,7 @@ def auto_backend(project_root: Path | None = None) -> ClosableStorageBackend:
 
     with sqlite_schema_lease(db_path, managed=True):
         if not (db_path.exists() or db_path.is_symlink()):
-            _initialize_sqlite_authority(paths.project_root)
+            _initialize_sqlite_authority(paths.authority_root)
     if db_path.exists() or db_path.is_symlink():
         return open_sqlite_backend(project_root=project_root)
     raise SqliteStorageAuthorityError(
@@ -274,7 +274,7 @@ def _initialize_sqlite_authority(project_root: Path) -> Path:
     published = False
     try:
         backend = _create_sqlite_backend(
-            paths.project_root,
+            paths.authority_root,
             db_path=temporary,
         )
         backend.close()

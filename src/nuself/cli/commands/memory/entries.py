@@ -188,10 +188,10 @@ def handle_memory_add(args: argparse.Namespace) -> int:
             agent=LangChainStructuredAgent(
                 IntakeResultOutput,
                 endpoints=configured_langchain_chat_models(
-                    application.paths.project_root,
+                    application.paths.authority_root,
                     config=application.config,
                 ),
-                project_root=application.paths.project_root,
+                project_root=application.paths.authority_root,
                 component="memory",
             ),
             profile_repository=application.memory.profile,

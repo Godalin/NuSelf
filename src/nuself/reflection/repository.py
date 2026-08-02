@@ -141,7 +141,7 @@ class ReflectionRepository:
                 ReflectionEntry.from_wire,
                 component="reflection",
                 collection="reflection_entries",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if entry is None:
                 continue

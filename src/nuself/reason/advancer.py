@@ -227,7 +227,7 @@ class ReasonAdvancer:
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._paths = paths
-        self._project_root = paths.project_root
+        self._project_root = paths.authority_root
         self._workspace_store = workspace_store
         self._persona_repository = persona_repository
         self._trace_recorder = trace_recorder
@@ -376,7 +376,7 @@ class ReasonAdvancer:
             get_thread_workspace=self._thread_workspace,
             text_agent=LangChainTextAgent(
                 endpoints=self._langchain_models,
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
                 component="persona",
             ),
         )

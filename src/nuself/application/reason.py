@@ -35,9 +35,9 @@ def compose_reason_prompt_generator(
             topic,
             mandates=mandates,
             active_items=active_items,
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             endpoints=configured_langchain_chat_models(
-                paths.project_root,
+                paths.authority_root,
                 config=config,
             ),
         )
@@ -63,7 +63,7 @@ def compose_reason_advancer(
             langchain_models
             if langchain_models is not None
             else configured_langchain_chat_models(
-                application.paths.project_root,
+                application.paths.authority_root,
                 config=application.config,
             )
         ),

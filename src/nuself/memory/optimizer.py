@@ -136,7 +136,7 @@ class MemoryOptimizer:
             write_memory_audit(
                 "optimizer_deferred",
                 "Memory optimizer deferred",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
                 metadata={"reviewed": 0},
             )
             return MemoryOptimizerResult(
@@ -167,7 +167,7 @@ class MemoryOptimizer:
         write_memory_audit(
             "optimizer_completed",
             "Memory optimizer completed",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "reviewed": len(entries),
                 "updated": updated,
@@ -285,7 +285,7 @@ class MemoryOptimizer:
         write_memory_audit(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "action": "update",
                 "candidate_id": candidate.id,
@@ -323,7 +323,7 @@ class MemoryOptimizer:
         write_memory_audit(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "action": "delete",
                 "candidate_id": candidate.id,

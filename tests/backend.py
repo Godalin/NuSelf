@@ -39,7 +39,7 @@ def end_backend_scope(
 
 def owned_backend(project_root: Path | None) -> StorageBackend:
     backends = _require_scope()
-    root = runtime_paths(project_root).project_root
+    root = runtime_paths(project_root).authority_root
     backend = backends.get(root)
     if backend is None:
         backend = auto_backend(root)
@@ -48,7 +48,10 @@ def owned_backend(project_root: Path | None) -> StorageBackend:
 
 
 def close_owned_backend(project_root: Path) -> None:
-    backend = _require_scope().pop(runtime_paths(project_root).project_root, None)
+    backend = _require_scope().pop(
+        runtime_paths(project_root).authority_root,
+        None,
+    )
     if isinstance(backend, ClosableStorageBackend):
         backend.close()
 

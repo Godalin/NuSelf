@@ -32,7 +32,7 @@ class NotificationOutbox:
     ) -> None:
         self._backend = backend
         self._col = backend.collection("notification_outbox")
-        self._project_root = paths.project_root
+        self._project_root = paths.authority_root
         self._entry_lock_directory = (
             paths.authority_root / "notifications" / "locks"
         )

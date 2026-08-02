@@ -59,7 +59,7 @@ class DaemonState:
         application: ApplicationGraph,
     ) -> None:
         paths = application.paths
-        self.project_root = paths.project_root
+        self.project_root = paths.authority_root
         self.authority_id = paths.scope.authority_id
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()

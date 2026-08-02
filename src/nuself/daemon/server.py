@@ -93,7 +93,7 @@ def run_daemon(project_root: Path | None = None) -> int:
     except DaemonInstanceLockContended as exc:
         write_lifecycle_audit(
             "instance_lock_contended",
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             error=diagnostic_exception_message(exc),
         )
         return 1
@@ -106,7 +106,7 @@ def run_daemon(project_root: Path | None = None) -> int:
         (("instance_lock.release", instance_lock.release),)
     )
     _finish_daemon_lifecycle(
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
         primary_error=primary_error,
         cleanup_failures=cleanup_failures,
     )
@@ -122,7 +122,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> None:
         use_application_runtime,
     )
 
-    application_runtime = open_application_runtime(paths.project_root)
+    application_runtime = open_application_runtime(paths.authority_root)
     signal_owner: DaemonSignalOwner | None = None
     ready = False
     primary_error: BaseException | None = None
@@ -148,7 +148,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> None:
                 raise RuntimeError("daemon scheduler is not running")
             write_lifecycle_audit(
                 "started",
-                project_root=paths.project_root,
+                project_root=paths.authority_root,
             )
             ready = True
             server.timeout = 0.2
@@ -183,10 +183,10 @@ def _run_owned_daemon(paths: RuntimePaths) -> None:
     if ready and not cleanup_failures:
         write_lifecycle_audit(
             "stopped",
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
         )
     _finish_daemon_lifecycle(
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
         primary_error=primary_error,
         cleanup_failures=cleanup_failures,
     )
@@ -222,7 +222,7 @@ def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:
     if any(recovered.values()):
         write_lifecycle_audit(
             "runtime_metadata_recovered",
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             metadata=recovered,
         )
 

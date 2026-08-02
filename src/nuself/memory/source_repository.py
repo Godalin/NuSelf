@@ -108,7 +108,7 @@ class SourceRepository:
                 SourceDocument.from_wire,
                 component="memory",
                 collection="source_documents",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if document is not None:
                 items.append(document)
@@ -157,7 +157,7 @@ class SourceRepository:
             SourceChunk.from_wire,
             component="memory",
             collection="source_chunks",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
         )
 
     def _delete_derived_candidates(self, source_prefix: str) -> None:

@@ -47,6 +47,10 @@ checkout is neither an install root nor an implicit authority.
 
 Runtime paths include the selected scope, authority ID, configuration files,
 database, source/import/export directories, logs, and daemon lifecycle paths.
+`RuntimePaths.authority_root` is the sole canonical root field; it does not
+expose a legacy `project_root` alias. APIs that still name an authority input
+`project_root` receive this same canonical value until their own boundary is
+explicitly renamed.
 Managed authority roots and files retain NuSelf's no-follow and owner-only
 filesystem protections.
 

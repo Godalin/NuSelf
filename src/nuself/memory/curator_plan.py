@@ -281,7 +281,7 @@ class MemoryCuratorPlanStore:
             component="memory",
             collection="memory_curator_plans",
             record_id=observation_id,
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
         )
         raise MemoryCuratorPlanCorruptError(
             f"invalid memory curator plan for observation {observation_id!r}; "

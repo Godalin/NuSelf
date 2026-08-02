@@ -331,7 +331,7 @@ def build_reason_persona_tools(
         repo.save(persona)
         _record_prompt_trace(
             persona,
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             recorder=trace_recorder,
         )
         result = f"Created thinking persona '{name}' (id={persona.id}, scoped to this reason thread)."
@@ -430,7 +430,7 @@ def build_reason_persona_tools(
         global_repo.set_disabled(prompt.id, True)
         _record_prompt_disabled_trace(
             prompt,
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             recorder=trace_recorder,
         )
         return f"Disabled persona: {prompt.name}"
@@ -455,7 +455,7 @@ def build_reason_persona_tools(
         global_repo.set_disabled(prompt.id, False)
         _record_prompt_enabled_trace(
             prompt,
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             recorder=trace_recorder,
         )
         return f"Enabled persona: {prompt.name}"

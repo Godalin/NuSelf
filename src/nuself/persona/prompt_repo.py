@@ -75,7 +75,7 @@ class PersonaPromptRepository:
         collection: StorageCollection,
         paths: RuntimePaths,
     ) -> None:
-        self._project_root = paths.project_root
+        self._project_root = paths.authority_root
         self._collection = collection
         self._lock = threading.Lock()
 
