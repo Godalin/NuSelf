@@ -9,21 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the duplicate final-status alias from daemon restart results.
+Remove the daemon client's socket-existence preflight.
 
 ## Ordered Steps
 
-1. Specify restart as the composition of its stop and start transitions, with
-   the final status owned only by the start result.
-2. Remove the forwarding property and migrate audit and presentation callers
-   to `result.start.status`.
+1. Specify that connection classification comes from the socket operation,
+   without a racy filesystem existence probe.
+2. Remove the preflight and require missing-socket failures to retain their
+   original `OSError` like every other connection failure.
 3. Run focused and full gates, then commit without pushing.
 
 ## Exclusions
 
-- Preserve start/stop result contracts, restart validation, audit metadata,
-  rendered output, exit behavior, and lifecycle ordering.
-- Do not merge the two transition results or add a replacement facade.
+- Preserve connection phase, request identity, retry/completion classification,
+  timeout validation, cancellation, and concise diagnostics.
+- Do not add a transport facade or provider-specific error classifier.
 
 ## Constraints
 
@@ -35,6 +35,12 @@ Remove the duplicate final-status alias from daemon restart results.
 
 ## Phase Evidence
 
+- Daemon client requests now call the Unix socket `connect()` operation
+  directly instead of first checking path existence. This removes a TOCTOU
+  branch and makes missing sockets retain the same connect-phase `OSError`
+  cause as stale or otherwise unusable sockets. Focused transport/chat/lifecycle
+  tests: 116 passed; full suite: 2444 passed; Pyright: 0 errors, 0 warnings;
+  sdist and wheel build succeeded.
 - `DaemonRestartResult` now contains only its stop and start transitions; final
   status is read from `start.status` instead of a duplicate forwarding
   property. Audit, one-shot CLI, and REPL presentation use that authoritative

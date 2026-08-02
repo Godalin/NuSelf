@@ -113,12 +113,6 @@ def _request(
         raise ValueError("daemon request timeout must be positive and finite")
     req = DaemonRequest(type=request_type, payload=payload or {})
     paths = runtime_paths(project_root)
-    if not paths.socket_path.exists():
-        raise DaemonConnectionError(
-            f"daemon socket does not exist: {paths.socket_path}",
-            phase="connect",
-            request_id=req.request_id,
-        )
 
     phase: DaemonConnectionPhase = "connect"
     try:

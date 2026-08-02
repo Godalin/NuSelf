@@ -713,7 +713,7 @@ def test_client_classifies_missing_socket_as_connect_failure(
     assert captured.value.request_id is not None
     assert captured.value.retryable is True
     assert captured.value.request_may_have_completed is False
-    assert captured.value.__cause__ is None
+    assert isinstance(captured.value.__cause__, OSError)
 
 
 def test_client_request_encoding_failure_is_not_retryable(

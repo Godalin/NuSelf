@@ -389,6 +389,9 @@ bounded by `MAX_DAEMON_FRAME_BYTES`, including that newline.
   request thread forever by withholding the newline.
 - Client connect, send, and response-read operations share the caller's
   positive finite timeout.
+- The client calls the Unix socket `connect()` operation directly; it does not
+  perform a racy path-existence preflight. Missing and stale socket paths are
+  ordinary connect-phase `OSError` failures with their cause retained.
 - A decoded response must carry the request id sent on that connection.
 - Malformed, oversized, incomplete, extra, or mismatched responses are exposed
   to callers as `DaemonConnectionError` with the protocol/transport error as

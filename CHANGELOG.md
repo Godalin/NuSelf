@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon clients now connect directly instead of racing a socket-path
+  existence preflight; missing sockets retain their structural connect failure
+  and original OS error like other transport failures.
 - Daemon restart results now expose final state only through their composed
   start transition, removing a duplicate forwarding API.
 - Daemon startup now carries user/workspace scope metadata into the child
