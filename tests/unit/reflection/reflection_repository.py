@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.reflection.repository import (
     ReflectionEntry,
     ReflectionEntryNotFound,

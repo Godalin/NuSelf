@@ -16,7 +16,7 @@ from langchain_core.messages import BaseMessage
 
 import nuself.runtime.observability as observability
 from nuself.agent.errors import AgentModelUnavailableError
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.log.reader import read_log_events
@@ -424,4 +424,4 @@ def test_memory_optimizer_respects_limit(tmp_path: Path) -> None:
     result = optimizer.run_once()
 
     assert result.reviewed == 1
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths

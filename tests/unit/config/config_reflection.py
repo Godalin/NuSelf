@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import ConfigSystem, SystemConfig
-from nuself.scope import scope_from_authority_root
+from nuself.config.settings import ConfigSystem, SystemConfig
+from nuself.config.scope import scope_from_authority_root
 
 
 def _load_config(authority_root: Path) -> SystemConfig:

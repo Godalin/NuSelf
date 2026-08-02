@@ -24,8 +24,8 @@ from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableEr
 from conversation_fixtures import ConversationStore
 from nuself.application.composition import compose_application
 from nuself.reflection.composition import compose_reflection_scheduler
-from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
-from nuself.config import runtime_paths
+from nuself.config.settings import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
+from nuself.config.settings import runtime_paths
 from nuself.reflection.model import IdeaCandidate
 from nuself.log.reader import read_log_events
 from nuself.notification.outbox import NotificationOutbox
@@ -509,7 +509,7 @@ def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: Reflect
 
 
 def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
-    from nuself.config import ReflectionSettings
+    from nuself.config.settings import ReflectionSettings
     scheduler._config = ReflectionSettings(
         scheduler=scheduler._config.scheduler,
         gate=scheduler._config.gate,

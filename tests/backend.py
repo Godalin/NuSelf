@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextvars import ContextVar, Token
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.storage.authority import auto_backend
 from nuself.storage.contract import ClosableStorageBackend, StorageBackend
 

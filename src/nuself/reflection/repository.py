@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.reflection.schedule_state import (
     ReflectionScheduleState,
     decode_reflection_schedule_state,

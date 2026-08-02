@@ -18,7 +18,7 @@ from nuself.agent.tools.resources import ToolResources
 from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.application.composition import compose_application
 from nuself.application.projection import load_personas_from_memory
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon import client
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.client import DaemonApplicationError

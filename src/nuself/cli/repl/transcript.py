@@ -13,7 +13,7 @@ from nuself.conversation import ConversationState
 from nuself.cli.application import cli_application
 from nuself.cli.repl.input import interactive_help
 from nuself.cli.repl.registry import command_body
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.storage.atomic import write_text_atomic

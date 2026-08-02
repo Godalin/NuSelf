@@ -20,7 +20,7 @@ from nuself.cli.repl.registry import (
     render_help_lines,
     tokens_for,
 )
-from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.config.settings import ensure_runtime_dirs, runtime_paths
 from nuself.reason.audit import REASON_AUDIT
 
 

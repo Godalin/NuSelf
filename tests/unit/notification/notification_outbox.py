@@ -20,7 +20,7 @@ from nuself.notification.outbox import (
     OutboxEntryNotFound,
 )
 from nuself.notification.adapters import LogOnlyNotificationAdapter
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.storage.authority import auto_backend
 from nuself.storage.contract import ClosableStorageBackend
 

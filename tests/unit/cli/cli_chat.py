@@ -23,7 +23,7 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.runtime.execution import CancellationToken, use_cancellation
-from nuself.scope import resolve_scope
+from nuself.config.scope import resolve_scope
 
 
 @pytest.fixture(autouse=True)

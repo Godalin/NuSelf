@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.persona.prompt_repo import PersonaPromptRepository, create_persona_prompt
 from nuself.storage.authority import (
     _create_sqlite_backend,

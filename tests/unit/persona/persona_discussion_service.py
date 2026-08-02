@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import ReflectionSettings
+from nuself.config.settings import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate
 from nuself.persona.discussion import SharedPersonaDiscussionService
 

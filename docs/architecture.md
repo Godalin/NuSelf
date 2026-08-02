@@ -168,6 +168,12 @@ All domains follow the shared service/port/repository/composition contract in
 Uniformity is a documented design style enforced through typed boundaries, not
 a common service base class or registry.
 
+The `nuself` package root is import-light and contains no substantive flat
+modules. Cross-domain runtime primitives belong to `runtime`; configuration and
+scope belong to `config`; model endpoints belong to `agent`; private filesystem
+primitives belong to `storage`; evaluation is an owned feature package; release
+verification remains repository tooling under `scripts` and is not shipped.
+
 Concrete models live with their owning domain (`memory.model`,
 `profile.model`, `reason.model`, `reflection.model`, `trace.model`, and
 `memory.source_model`). NuSelf has no

@@ -6,8 +6,8 @@ import stat
 import pytest
 from pydantic import ValidationError
 
-from nuself.config import ConfigSystem
-from nuself.scope import resolve_scope
+from nuself.config.settings import ConfigSystem
+from nuself.config.scope import resolve_scope
 
 
 def _write_config(root: Path, content: str) -> Path:

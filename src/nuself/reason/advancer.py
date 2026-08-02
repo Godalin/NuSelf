@@ -22,7 +22,7 @@ from nuself.agent.structured import require_structured_response
 from nuself.agent.tool_utils import (
     index_tool_service_components,
 )
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reason.model import (

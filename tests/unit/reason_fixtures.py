@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from nuself.trace.composition import compose_trace_services
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.scheduler import ReasonScheduler as _ReasonScheduler
 from nuself.reason.service import (

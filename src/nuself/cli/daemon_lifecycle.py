@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
 )
-from nuself.scope import NuSelfScope
+from nuself.config.scope import NuSelfScope
 
 
 def write_start_failure_audit(

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from tests.backend import owned_backend
 from nuself.trace.model import ThoughtTrace, TraceLink
 from nuself.trace.repository import TraceNotFound, TraceRepository

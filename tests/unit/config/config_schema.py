@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import pytest
 import yaml
 
-from nuself.config import (
+from nuself.config.settings import (
     ChatConfig,
     ChatContextConfig,
     ConfigSystem,
@@ -30,7 +30,7 @@ from nuself.config import (
     ReflectionSettings,
     SystemConfig,
 )
-from nuself.scope import scope_from_authority_root
+from nuself.config.scope import scope_from_authority_root
 
 
 ROOT = Path(__file__).resolve().parents[3]

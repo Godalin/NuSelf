@@ -12,7 +12,7 @@ from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import component, mutating, observed, readonly, tool
 from nuself.agent.errors import AgentError
 from nuself.agent.text import TextAgent
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.execution import FeatureExecutor

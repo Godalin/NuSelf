@@ -37,7 +37,7 @@ from nuself.cli.repl.composition import send_interactive_chat_turn
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.transcript import render_chat_transcript
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.config import ChatConfig, runtime_paths
+from nuself.config.settings import ChatConfig, runtime_paths
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.lifecycle import (
     DaemonStartError,

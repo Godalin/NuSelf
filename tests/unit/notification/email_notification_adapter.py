@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nuself.config import EmailConfig, EmailSmtpConfig
+from nuself.config.settings import EmailConfig, EmailSmtpConfig
 from nuself.log.reader import read_log_events
 from nuself.notification.model import OutboxEntry
 from nuself.notification.email import EmailNotificationAdapter

@@ -7,7 +7,7 @@ import threading
 from typing import Literal, cast
 
 from nuself.handles import VisibleHandleError, resolve_visible_item
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage.contract import StorageBackend
 from nuself.trace.model import ThoughtTrace, TraceKind, TraceLink, TraceVisibility

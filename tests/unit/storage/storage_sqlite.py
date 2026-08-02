@@ -41,7 +41,7 @@ from nuself.memory.repository import (
 )
 from nuself.memory.source_repository import SourceRepository
 from nuself.trace.composition import compose_trace_services
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository

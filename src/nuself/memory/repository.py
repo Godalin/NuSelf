@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Literal, cast
 
 from nuself.clock import utc_now_iso
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,

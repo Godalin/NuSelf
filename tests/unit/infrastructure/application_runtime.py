@@ -18,7 +18,7 @@ from nuself.cli.application import (
     cli_application,
     cli_backend,
 )
-from nuself.scope import resolve_scope
+from nuself.config.scope import resolve_scope
 
 
 def test_application_runtime_factory_does_not_open_storage(

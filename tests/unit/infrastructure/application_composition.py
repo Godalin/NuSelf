@@ -9,9 +9,9 @@ from pathlib import Path
 from pytest import MonkeyPatch
 
 from nuself.application.composition import compose_application
-from nuself.config import ConfigSystem
-from nuself.config import runtime_paths
-from nuself.scope import (
+from nuself.config.settings import ConfigSystem
+from nuself.config.settings import runtime_paths
+from nuself.config.scope import (
     resolve_runtime_paths,
     resolve_scope,
     scope_from_authority_root,

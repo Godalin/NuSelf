@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.cli.application import cli_backend
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime.diagnostics import diagnostic_exception_message

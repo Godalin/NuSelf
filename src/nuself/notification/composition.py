@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.config import EmailConfig, MacosNotificationConfig, RuntimePaths
+from nuself.config.settings import EmailConfig, MacosNotificationConfig, RuntimePaths
 from nuself.notification.adapters import (
     LogOnlyNotificationAdapter,
     NotificationAdapter,

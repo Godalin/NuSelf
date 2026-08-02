@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.log.reader import read_log_events
 from nuself.runtime.audit.types import LogComponent
 from notification_fixtures import notification_outbox

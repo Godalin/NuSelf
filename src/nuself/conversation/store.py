@@ -8,7 +8,7 @@ from dataclasses import replace
 import time
 from typing import Generator
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.conversation.model import (
     ConversationState,
     ConversationTurnConflictError,

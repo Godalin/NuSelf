@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from nuself.agent.tools.resources import ToolResources
-from nuself.config import ReflectionSettings
+from nuself.config.settings import ReflectionSettings
 from nuself.conversation import ConversationStore
 from nuself.persona.definition import PersonaDefinition
 from nuself.trace.service import TraceRecorder

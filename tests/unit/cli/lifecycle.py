@@ -7,12 +7,12 @@ from typing import BinaryIO, cast
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
 from nuself.log.reader import read_log_events
 from nuself.runtime.definitions import DefinitionRegistrySealedError
-from nuself.scope import resolve_scope
+from nuself.config.scope import resolve_scope
 
 
 def test_daemon_lifecycle_warning_registry_is_complete_and_sealed() -> None:

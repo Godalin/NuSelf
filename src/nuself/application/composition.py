@@ -11,7 +11,7 @@ from nuself.memory.composition import (
 from nuself.reason.composition import ReasonResources, compose_reason_resources
 from nuself.application.data_admin import DataAdminService
 from nuself.trace.composition import TraceServices, compose_trace_services
-from nuself.config import ConfigSystem, RuntimePaths, SystemConfig
+from nuself.config.settings import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.notification.outbox import NotificationOutbox
 from nuself.memory.service import MemoryService

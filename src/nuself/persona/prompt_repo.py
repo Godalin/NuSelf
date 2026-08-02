@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import threading
 from uuid import uuid4
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage.contract import StorageCollection
 

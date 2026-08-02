@@ -25,8 +25,8 @@ from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 
-from nuself.config import SystemConfig
-from nuself.config import runtime_paths
+from nuself.config.settings import SystemConfig
+from nuself.config.settings import runtime_paths
 from nuself.runtime.diagnostics import (
     redact_sensitive_text,
     safe_exception_message,

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 
-from nuself.config import ConfigSystem
+from nuself.config.settings import ConfigSystem
 from nuself.cli.application import cli_backend
 from nuself.private_fs import ensure_managed_directory
-from nuself.scope import NuSelfScope, resolve_runtime_paths
+from nuself.config.scope import NuSelfScope, resolve_runtime_paths
 
 
 def handle_init(args: argparse.Namespace) -> int:

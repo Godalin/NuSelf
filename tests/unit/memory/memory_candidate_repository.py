@@ -13,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,

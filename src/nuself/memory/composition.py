@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.config import RuntimePaths, SystemConfig
+from nuself.config.settings import RuntimePaths, SystemConfig
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,

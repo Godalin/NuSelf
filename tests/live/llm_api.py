@@ -15,8 +15,8 @@ from nuself.agent.chat.response import ConversationResponseSynthesizer
 from nuself.agent.chat.types import ChatStructuredOutput
 from nuself.agent.middleware import ToolOutcome
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.config import ConfigSystem
-from nuself.scope import scope_from_authority_root
+from nuself.config.settings import ConfigSystem
+from nuself.config.scope import scope_from_authority_root
 from nuself.llm import (
     LangChainLLMEndpoint,
     build_langchain_endpoint,

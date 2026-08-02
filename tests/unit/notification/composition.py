@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from nuself.config import (
+from nuself.config.settings import (
     EmailConfig,
     EmailSmtpConfig,
     MacosNotificationConfig,

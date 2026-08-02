@@ -20,7 +20,7 @@ from langgraph.store.base import (
     SearchOp,
 )
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.private_fs import require_private_file
 from nuself.runtime.messages import decode_json_value, encode_json_value
 

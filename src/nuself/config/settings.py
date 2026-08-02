@@ -23,7 +23,7 @@ from nuself.private_fs import (
     harden_managed_file,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.scope import (
+from nuself.config.scope import (
     NuSelfScope,
     RuntimePaths,
     resolve_runtime_paths,

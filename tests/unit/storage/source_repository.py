@@ -10,7 +10,7 @@ from memory_fixtures import (
 
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.memory.repository import MemoryCandidateRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.memory.source_model import SourceChunk, SourceDocument

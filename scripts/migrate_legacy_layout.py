@@ -17,7 +17,7 @@ from nuself.private_fs import (
     PRIVATE_FILE_MODE,
     ensure_managed_directory,
 )
-from nuself.scope import NuSelfScope, resolve_scope
+from nuself.config.scope import NuSelfScope, resolve_scope
 from nuself.storage.authority import open_sqlite_backend
 from nuself.storage.contract import COLLECTION_NAMES
 

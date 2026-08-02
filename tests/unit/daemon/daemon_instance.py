@@ -9,14 +9,14 @@ from typing import IO, cast
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon.instance import (
     DaemonInstanceLock,
     DaemonInstanceLockCleanupError,
     DaemonInstanceLockContended,
 )
 from nuself.log.reader import read_log_events
-from nuself.scope import NuSelfScope
+from nuself.config.scope import NuSelfScope
 
 
 def test_daemon_entrypoint_reconstructs_workspace_scope(

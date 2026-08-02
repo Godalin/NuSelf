@@ -7,7 +7,7 @@ from email.message import EmailMessage
 from html import escape
 from pathlib import Path
 
-from nuself.config import EmailConfig
+from nuself.config.settings import EmailConfig
 from nuself.notification.model import OutboxEntry
 from nuself.notification.audit import (
     NOTIFICATION_AUDIT,

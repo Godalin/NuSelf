@@ -19,7 +19,7 @@ from nuself.agent.tools.selves import build_selves_tools
 from nuself.agent.tools.trace import build_trace_tools
 from nuself.agent.tools.workspace import build_workspace_tools_from_provider
 from nuself.application.composition import compose_application
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from reason_fixtures import ReasonService

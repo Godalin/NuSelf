@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
 from nuself.reason.job_contracts import (

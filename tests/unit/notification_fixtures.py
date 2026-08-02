@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.config import RuntimePaths, runtime_paths
+from nuself.config.settings import RuntimePaths, runtime_paths
 from nuself.notification.outbox import NotificationOutbox
 from nuself.storage.contract import StorageBackend
 from tests.backend import owned_backend

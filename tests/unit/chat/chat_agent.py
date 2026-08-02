@@ -36,7 +36,7 @@ from nuself.conversation import (
 from conversation_fixtures import ConversationStore
 from nuself.agent.tool_utils import tool_service_component
 from nuself.trace.composition import compose_trace_services
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.llm import LangChainLLMEndpoint

@@ -226,4 +226,4 @@ def test_memory_intake_includes_profile_context_in_prompt(
     assert "Consider existing profile items" in system_content
     assert "Existing profile items:" in user_content
     assert "Concise output" in user_content
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths

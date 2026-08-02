@@ -8,7 +8,7 @@ import stat
 import pytest
 from pydantic import ValidationError
 
-from nuself.config import (
+from nuself.config.settings import (
     ConfigSystem,
     EmailConfig,
     EmailSmtpConfig,
@@ -16,7 +16,7 @@ from nuself.config import (
     SystemConfig,
     runtime_paths,
 )
-from nuself.scope import scope_from_authority_root
+from nuself.config.scope import scope_from_authority_root
 
 
 def _load_config(authority_root: Path) -> SystemConfig:

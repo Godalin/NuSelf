@@ -10,7 +10,7 @@ from memory_fixtures import (
 
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.memory.service import MemoryQuery, MemoryService

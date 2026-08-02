@@ -19,7 +19,7 @@ from nuself.cli.exit_codes import CliExitCode
 from nuself.private_fs import ensure_private_directory
 from nuself.runtime.messages import decode_json_value, encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.log.store import write_log_event
 
 

@@ -16,7 +16,7 @@ from typing import IO, BinaryIO, Literal
 from uuid import UUID, uuid4
 from weakref import WeakValueDictionary
 
-from nuself.config import ensure_runtime_dirs, runtime_paths
+from nuself.config.settings import ensure_runtime_dirs, runtime_paths
 from nuself.private_fs import ensure_private_file
 from nuself.runtime.context import (
     RuntimeContext,

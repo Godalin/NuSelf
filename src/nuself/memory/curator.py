@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,

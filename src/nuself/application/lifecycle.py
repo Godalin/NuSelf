@@ -13,8 +13,8 @@ from nuself.application.composition import (
     ApplicationGraph,
     compose_application,
 )
-from nuself.config import RuntimePaths, runtime_paths
-from nuself.scope import NuSelfScope
+from nuself.config.settings import RuntimePaths, runtime_paths
+from nuself.config.scope import NuSelfScope
 from nuself.storage.authority import auto_backend
 from nuself.storage.contract import ClosableStorageBackend
 from nuself.storage.audit import report_backend_close_failure

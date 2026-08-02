@@ -9,7 +9,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Literal
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
     ActivityEventsResponsePayload,

@@ -12,7 +12,7 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.application.composition import compose_application
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.persona.tools import (
     build_persona_tools,
     build_reason_persona_tools,

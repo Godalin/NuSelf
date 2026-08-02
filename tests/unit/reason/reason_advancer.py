@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from nuself.agent.middleware import ToolOutcome
 from nuself.application.composition import compose_application
 from nuself.reason.composition import compose_reason_advancer
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.llm import LLMSettings, LangChainLLMEndpoint
 from nuself.log.reader import read_log_events
 from nuself.reason.advancer import (

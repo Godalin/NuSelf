@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from nuself.config import ReflectionSettings
+from nuself.config.settings import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate, RelevanceScore
 from nuself.notification.deep_link import DeepLink
 from nuself.reflection.audit import (

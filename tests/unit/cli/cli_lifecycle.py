@@ -7,7 +7,7 @@ import pytest
 
 from nuself.cli import CliLifecycleError, main
 from nuself.cli.exit_codes import CliExitCode
-from nuself.scope import NuSelfScope
+from nuself.config.scope import NuSelfScope
 
 
 class _Parser:

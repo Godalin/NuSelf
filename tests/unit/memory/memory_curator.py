@@ -21,7 +21,7 @@ from langchain_core.messages import BaseMessage
 from nuself.trace.composition import compose_trace_services
 from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.memory.model import (
     MemoryEntry,

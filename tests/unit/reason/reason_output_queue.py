@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.log.reader import read_log_events
 from tests.backend import owned_backend
 from nuself.reason.model import ReasoningStep, ReasoningThread

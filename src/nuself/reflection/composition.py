@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nuself.config import ReflectionSettings, RuntimePaths
+from nuself.config.settings import ReflectionSettings, RuntimePaths
 from nuself.conversation import ConversationHistoryService
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.composition import MemoryRepositories

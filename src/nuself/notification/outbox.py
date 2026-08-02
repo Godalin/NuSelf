@@ -6,7 +6,7 @@ from contextlib import AbstractContextManager
 from dataclasses import replace
 
 from nuself.clock import utc_now, utc_now_iso
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.notification.model import (
     AdapterDelivery,
     NotificationClearStatus,

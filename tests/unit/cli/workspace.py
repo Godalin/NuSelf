@@ -9,7 +9,7 @@ import sqlite3
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.storage.authority import _create_sqlite_backend
 

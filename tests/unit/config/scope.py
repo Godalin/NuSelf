@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.scope import (
+from nuself.config.scope import (
     NuSelfScope,
     ScopeSelectionError,
     resolve_runtime_paths,

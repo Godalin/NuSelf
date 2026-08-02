@@ -7,7 +7,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.config import (
+from nuself.config.settings import (
     RuntimePaths,
     ensure_runtime_dirs,
     runtime_paths,
@@ -28,7 +28,7 @@ from nuself.daemon.socket_server import (
 from nuself.daemon.state import DaemonState
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.scope import NuSelfScope, resolve_scope
+from nuself.config.scope import NuSelfScope, resolve_scope
 from nuself.storage.atomic import write_text_atomic
 
 

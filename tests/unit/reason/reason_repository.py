@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository

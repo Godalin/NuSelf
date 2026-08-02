@@ -9,7 +9,7 @@ import re
 from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.clock import utc_now_iso
 from nuself.memory.model import MemoryCandidate, MemoryEvidence, PrivacyLevel
 from nuself.memory.source_model import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path

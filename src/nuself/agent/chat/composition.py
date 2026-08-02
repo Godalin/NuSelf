@@ -11,7 +11,7 @@ from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.text import LangChainTextAgent
-from nuself.config import RuntimePaths, SystemConfig
+from nuself.config.settings import RuntimePaths, SystemConfig
 from nuself.conversation import ConversationStore
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository

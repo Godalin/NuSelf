@@ -22,7 +22,7 @@ from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
-    from nuself.config import RuntimePaths, SystemConfig
+    from nuself.config.settings import RuntimePaths, SystemConfig
 
 
 @dataclass(frozen=True)

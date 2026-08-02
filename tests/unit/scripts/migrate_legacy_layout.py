@@ -13,7 +13,7 @@ from scripts.migrate_legacy_layout import (
     main as migrate_main,
     migrate_legacy_layout,
 )
-from nuself.scope import resolve_scope
+from nuself.config.scope import resolve_scope
 from nuself.storage.authority import (
     _create_sqlite_backend,
     auto_backend,

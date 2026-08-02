@@ -20,7 +20,7 @@ from nuself.daemon.lifecycle import (
     DaemonStatus,
 )
 from nuself.application.lifecycle import open_application_runtime, use_application_runtime
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 
 
 @pytest.fixture(autouse=True)

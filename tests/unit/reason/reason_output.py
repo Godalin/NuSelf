@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.output_contracts import (
     ReasonOutputManifest,

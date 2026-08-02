@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.storage.contract import StorageBackend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService, TraceRecorder

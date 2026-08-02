@@ -607,6 +607,13 @@ not mandatory and must not replace a more informative name such as
 catch-all `utils`, `helpers`, or `common` modules are
 forbidden. Existing modules with those names must remain narrowly scoped.
 
+The production package root contains only `nuself/__init__.py`. Substantive
+modules import their precise owner: `config.settings`, `config.scope`,
+`agent.endpoint`, `runtime.clock`, `runtime.handles`, `storage.filesystem`, and
+`evaluation.suite`. Repository-only release gates belong to `scripts.release`
+and must not enter the production wheel. Package roots remain empty unless they
+deliberately define a documented public DSL; they do not re-export moved names.
+
 Logging infrastructure lives in the top-level `nuself.log` package. Its
 `record`, `store`, `reader`, and `warning` modules separately own the immutable
 codec, filesystem writes, filesystem reads, and terminal-warning contracts.

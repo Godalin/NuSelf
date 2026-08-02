@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.reason.output import ReasonOutputService as _ReasonOutputService
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-from nuself.config import (
+from nuself.config.settings import (
     ReflectionDiscussionConfig,
     ReflectionGateConfig,
     ReflectionModeratorConfig,
