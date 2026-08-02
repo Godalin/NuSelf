@@ -15,6 +15,7 @@ from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
 from nuself.daemon.instance import daemon_instance_owned
 from nuself.private_fs import ensure_private_file
+from nuself.scope import NuSelfScope
 from nuself.runtime.observability import report_corrupt_record
 from nuself.runtime.warning_definitions import (
     TerminalWarningDefinition,
@@ -318,7 +319,7 @@ def status(
 
 
 def start(
-    project_root: Path | None = None,
+    authority: NuSelfScope | Path | None = None,
     *,
     initial_status: DaemonStatus | None = None,
     process_log_retention: DaemonProcessLogRetentionPolicy = (
@@ -326,7 +327,7 @@ def start(
     ),
     startup_policy: DaemonWaitPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
 ) -> DaemonStartResult:
-    paths = runtime_paths(project_root)
+    paths = runtime_paths(authority)
     if initial_status is None:
         ensure_runtime_dirs(paths)
         current = _status_for_start(paths.authority_root)
@@ -366,14 +367,22 @@ def start(
     ensure_private_file(paths.daemon_process_log_path)
     with paths.daemon_process_log_path.open("ab") as process_log:
         try:
+            command = [
+                sys.executable,
+                "-m",
+                "nuself.daemon.server",
+                "--user-root",
+                str(paths.scope.user_root),
+            ]
+            if paths.scope.workspace_root is not None:
+                command.extend(
+                    [
+                        "--workspace-root",
+                        str(paths.scope.workspace_root),
+                    ]
+                )
             process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "nuself.daemon.server",
-                    "--project-root",
-                    str(paths.authority_root),
-                ],
+                command,
                 cwd=paths.authority_root,
                 stdout=process_log,
                 stderr=subprocess.STDOUT,

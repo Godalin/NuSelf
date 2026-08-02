@@ -20,6 +20,7 @@ from nuself.daemon.lifecycle import (
     DaemonStatus,
 )
 from nuself.application.runtime import open_application_runtime, use_application_runtime
+from nuself.config import runtime_paths
 
 
 @pytest.fixture(autouse=True)
@@ -157,7 +158,11 @@ def test_default_entrypoint_reuses_its_initial_status(
     monkeypatch.setattr(entrypoints.lifecycle, "start", start)
 
     result = RecordingCallbacks().controller().handle_default(
-        argparse.Namespace(project_root=tmp_path, message="hello")
+        argparse.Namespace(
+            project_root=tmp_path,
+            scope=runtime_paths(tmp_path).scope,
+            message="hello",
+        )
     )
 
     assert result == 0
@@ -189,7 +194,11 @@ def test_default_entrypoint_reports_typed_start_failure(
     callbacks = RecordingCallbacks()
 
     result = callbacks.controller().handle_default(
-        argparse.Namespace(project_root=tmp_path, message="hello")
+        argparse.Namespace(
+            project_root=tmp_path,
+            scope=runtime_paths(tmp_path).scope,
+            message="hello",
+        )
     )
 
     assert result == 1

@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon startup now carries user/workspace scope metadata into the child
+  process, preserving layered workspace configuration instead of guessing from
+  an authority path.
 - The CLI now passes its resolved `NuSelfScope` into `ApplicationRuntime`
   instead of discarding workspace/user-layer metadata to a root path.
 - Application composition now loads configuration from its already-resolved

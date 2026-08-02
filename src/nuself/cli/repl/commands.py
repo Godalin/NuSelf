@@ -346,8 +346,9 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 
 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
+    scope = compose_cli_application(project_root).paths.scope
     try:
-        result = restart_daemon_observed(project_root)
+        result = restart_daemon_observed(scope)
     except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
         return (
             "Failed to restart daemon: "

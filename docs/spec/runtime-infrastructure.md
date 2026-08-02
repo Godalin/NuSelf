@@ -417,6 +417,11 @@ the typed daemon request registry boundary, encodes one `DaemonResponse`, and
 writes one bounded frame. The module must not import `DaemonState` or the
 daemon process runner.
 
+The daemon process entrypoint accepts explicit user-root and optional
+workspace-root inputs from lifecycle startup. It reconstructs the selected
+scope before opening `ApplicationRuntime`; it does not infer workspace scope
+from an `.nuself` path or ambient current directory.
+
 The socket adapter catches request-envelope `ProtocolError` only around
 `DaemonRequest.from_json_line(...)`. Handler invocation has a separate
 `Exception` boundary, so an invocation that happens to raise `ProtocolError`

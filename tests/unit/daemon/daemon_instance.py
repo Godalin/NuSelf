@@ -16,6 +16,39 @@ from nuself.daemon.instance import (
     DaemonInstanceLockContended,
 )
 from nuself.logs import read_log_events
+from nuself.scope import NuSelfScope
+
+
+def test_daemon_entrypoint_reconstructs_workspace_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    user_root = tmp_path / "user"
+    workspace_root = tmp_path / "workspace"
+    captured: NuSelfScope | None = None
+
+    def run(scope: NuSelfScope) -> int:
+        nonlocal captured
+        captured = scope
+        return 7
+
+    monkeypatch.setattr(server_module, "run_daemon", run)
+
+    assert server_module.main(
+        [
+            "--user-root",
+            str(user_root),
+            "--workspace-root",
+            str(workspace_root),
+        ]
+    ) == 7
+    assert captured is not None
+    assert captured.kind == "workspace"
+    assert captured.user_root == user_root.resolve()
+    assert captured.workspace_root == workspace_root.resolve()
+    assert captured.root == (workspace_root / ".nuself").resolve()
 
 
 def test_instance_lock_contends_then_releases(tmp_path: Path) -> None:

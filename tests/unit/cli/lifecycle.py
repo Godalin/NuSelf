@@ -12,6 +12,7 @@ from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
 from nuself.logs import read_log_events
 from nuself.runtime.definitions import DefinitionRegistrySealedError
+from nuself.scope import resolve_scope
 
 
 def test_daemon_lifecycle_warning_registry_is_complete_and_sealed() -> None:
@@ -234,6 +235,70 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
     )
     assert not paths.daemon_log_path.exists()
     assert read_log_events(project_root=tmp_path, component="daemon") == []
+
+
+def test_start_serializes_workspace_scope_for_daemon_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_root = tmp_path / "user"
+    workspace_root = tmp_path / "workspace"
+    scope = resolve_scope(
+        workspace=workspace_root,
+        environ={"NUSELF_HOME": str(user_root)},
+    )
+    paths = runtime_paths(scope)
+    stopped = lifecycle.DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    ready = lifecycle.DaemonStatus(
+        phase="ready",
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    status_calls = 0
+    spawned_command: list[str] | None = None
+
+    def fake_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
+        nonlocal status_calls
+        status_calls += 1
+        return stopped if status_calls == 1 else ready
+
+    class Process:
+        def poll(self) -> None:
+            return None
+
+    def fake_popen(args: object, **kwargs: object) -> Process:
+        del kwargs
+        nonlocal spawned_command
+        spawned_command = cast(list[str], args)
+        return Process()
+
+    monkeypatch.setattr(lifecycle, "status", fake_status)
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
+
+    result = lifecycle.start(scope)
+
+    assert result.status is ready
+    assert spawned_command == [
+        lifecycle.sys.executable,
+        "-m",
+        "nuself.daemon.server",
+        "--user-root",
+        str(scope.user_root),
+        "--workspace-root",
+        str(scope.workspace_root),
+    ]
 
 
 def test_start_reuses_matching_initial_ready_status(

@@ -28,6 +28,7 @@ from nuself.daemon.socket_server import (
 from nuself.daemon.state import DaemonState
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.scope import NuSelfScope, resolve_scope
 from nuself.storage import write_text_atomic
 
 
@@ -82,10 +83,10 @@ def _finish_daemon_lifecycle(
         raise primary_error.with_traceback(primary_error.__traceback__)
 
 
-def run_daemon(project_root: Path | None = None) -> int:
+def run_daemon(authority: NuSelfScope | Path | None = None) -> int:
     """Run the local daemon until a shutdown request is received."""
 
-    paths = runtime_paths(project_root)
+    paths = runtime_paths(authority)
     ensure_runtime_dirs(paths)
     instance_lock = DaemonInstanceLock(paths.daemon_lock_path)
     try:
@@ -122,7 +123,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> None:
         use_application_runtime,
     )
 
-    application_runtime = open_application_runtime(paths.authority_root)
+    application_runtime = open_application_runtime(paths.scope)
     signal_owner: DaemonSignalOwner | None = None
     ready = False
     primary_error: BaseException | None = None
@@ -229,9 +230,19 @@ def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m nuself.daemon.server")
-    parser.add_argument("--project-root", type=Path, default=None)
+    parser.add_argument("--user-root", type=Path, default=None)
+    parser.add_argument("--workspace-root", type=Path, default=None)
     args = parser.parse_args(argv)
-    return run_daemon(args.project_root)
+    if args.user_root is None:
+        if args.workspace_root is not None:
+            parser.error("--workspace-root requires --user-root")
+        scope = resolve_scope()
+    else:
+        scope = resolve_scope(
+            workspace=args.workspace_root,
+            environ={"NUSELF_HOME": str(args.user_root)},
+        )
+    return run_daemon(scope)
 
 
 if __name__ == "__main__":

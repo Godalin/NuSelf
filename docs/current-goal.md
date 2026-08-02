@@ -9,15 +9,16 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Preserve the resolved scope when opening the CLI application runtime.
+Preserve resolved scope across daemon process startup.
 
 ## Ordered Steps
 
-1. Add a runtime regression proving an explicit `NuSelfScope` remains the exact
-   scope carried by `RuntimePaths`.
-2. Let the runtime factory accept a scope or authority path and pass the CLI's
-   already-resolved scope instead of only `scope.root`.
-3. Run focused scope/runtime/CLI tests and full gates, then commit without push.
+1. Define a daemon startup protocol carrying user root plus optional workspace
+   root; reconstruct scope only through `resolve_scope()` in the child.
+2. Pass `NuSelfScope` through observed lifecycle callers and start the daemon's
+   `ApplicationRuntime` from that reconstructed scope.
+3. Add workspace spawn/config regressions, run focused and full gates, then
+   commit without pushing.
 
 ## Exclusions
 
@@ -26,8 +27,8 @@ Preserve the resolved scope when opening the CLI application runtime.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve lazy backend opening, authority drift checks, runtime cleanup, CLI
-  parser fields, and path-based infrastructure/test callers.
+- Preserve path-based lifecycle callers, daemon identity, status/stop behavior,
+  spawn isolation, audit roots, and cleanup ordering.
 
 ## Constraints
 
@@ -39,6 +40,13 @@ Preserve the resolved scope when opening the CLI application runtime.
 
 ## Phase Evidence
 
+- Daemon startup now serializes the resolved user root and optional workspace
+  root, and the child reconstructs one `NuSelfScope` through `resolve_scope()`
+  before opening its application runtime. CLI lifecycle callers preserve that
+  scope while status, stop, audit, and process ownership remain rooted at the
+  selected authority. Spawn and entrypoint regressions cover both halves of the
+  process boundary. Focused daemon/CLI tests: 428 passed; full suite: 2444
+  passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - `open_application_runtime()` now accepts an explicit `NuSelfScope`, and CLI
   main passes the scope it already resolved rather than only `scope.root`.
   Path-based internal/test callers remain supported; a regression proves the

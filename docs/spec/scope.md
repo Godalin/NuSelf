@@ -112,6 +112,12 @@ Each authority has an independent daemon instance with its own:
 - SQLite authority;
 - background scheduler and notification outbox.
 
+Daemon startup serializes the resolved user root and, for workspace scope, the
+workspace root. The child reconstructs `NuSelfScope` through the canonical
+scope resolver before deriving paths or loading configuration. Passing only the
+authority root and guessing scope kind is forbidden because it would discard
+the user configuration layer beneath a workspace authority.
+
 Socket paths must remain below platform Unix-domain socket length limits.
 NuSelf may place sockets in a short, owner-private runtime base and name them
 by `authority_id`; metadata records the canonical authority root. Persistent

@@ -92,7 +92,7 @@ class EntrypointController:
             print("Starting NuSelf daemon...")
             try:
                 transition = start_daemon_observed(
-                    args.project_root,
+                    args.scope,
                     initial_status=result,
                 )
             except lifecycle.DaemonStartError as exc:

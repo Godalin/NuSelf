@@ -18,7 +18,7 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 def handle_daemon_start(args: argparse.Namespace) -> int:
     try:
         result = start_daemon_observed(
-            args.project_root,
+            args.scope,
         )
     except lifecycle.DaemonStartError as exc:
         print(
@@ -33,7 +33,7 @@ def handle_daemon_start(args: argparse.Namespace) -> int:
 def handle_daemon_stop(args: argparse.Namespace) -> int:
     try:
         result = stop_daemon_observed(
-            args.project_root,
+            args.scope,
         )
     except lifecycle.DaemonStopError as exc:
         print(
@@ -47,7 +47,7 @@ def handle_daemon_stop(args: argparse.Namespace) -> int:
 
 def handle_daemon_restart(args: argparse.Namespace) -> int:
     try:
-        result = restart_daemon_observed(args.project_root)
+        result = restart_daemon_observed(args.scope)
     except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
         print(
             f"Failed to restart daemon: {diagnostic_exception_message(exc)}",

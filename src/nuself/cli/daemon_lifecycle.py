@@ -5,11 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
 )
+from nuself.scope import NuSelfScope
 
 
 def write_start_failure_audit(
@@ -74,94 +76,97 @@ def _transition_result_metadata(
 
 
 def start_daemon_observed(
-    project_root: Path | None,
+    authority: NuSelfScope | Path | None,
     *,
     initial_status: lifecycle.DaemonStatus | None = None,
 ) -> lifecycle.DaemonStartResult:
     """Run one daemon start with shared lifecycle projections."""
 
+    paths = runtime_paths(authority)
     write_lifecycle_audit(
         "start_requested",
-        project_root=project_root,
+        project_root=paths.authority_root,
     )
     try:
         if initial_status is None:
-            result = lifecycle.start(project_root)
+            result = lifecycle.start(paths.scope)
         else:
             result = lifecycle.start(
-                project_root,
+                paths.scope,
                 initial_status=initial_status,
             )
     except lifecycle.DaemonStartError as exc:
         write_start_failure_audit(
             exc,
             operation="start",
-            project_root=project_root,
+            project_root=paths.authority_root,
         )
         raise
     write_lifecycle_audit(
         "start_completed",
-        project_root=project_root,
+        project_root=paths.authority_root,
         metadata=_transition_result_metadata(result),
     )
     return result
 
 
 def stop_daemon_observed(
-    project_root: Path | None,
+    authority: NuSelfScope | Path | None,
 ) -> lifecycle.DaemonStopResult:
     """Run one daemon stop with shared lifecycle projections."""
 
+    paths = runtime_paths(authority)
     write_lifecycle_audit(
         "stop_requested",
-        project_root=project_root,
+        project_root=paths.authority_root,
     )
     try:
-        result = lifecycle.stop(project_root)
+        result = lifecycle.stop(paths.authority_root)
     except lifecycle.DaemonStopError as exc:
         _write_stop_failure_audit(
             exc,
             operation="stop",
-            project_root=project_root,
+            project_root=paths.authority_root,
         )
         raise
     write_lifecycle_audit(
         "stop_completed",
-        project_root=project_root,
+        project_root=paths.authority_root,
         metadata=_transition_result_metadata(result),
     )
     return result
 
 
 def restart_daemon_observed(
-    project_root: Path | None,
+    authority: NuSelfScope | Path | None,
 ) -> lifecycle.DaemonRestartResult:
     """Run one ordered restart and project its combined outcome."""
 
+    paths = runtime_paths(authority)
     write_lifecycle_audit(
         "restart_requested",
-        project_root=project_root,
+        project_root=paths.authority_root,
     )
     try:
-        stop_result = lifecycle.stop(project_root)
+        stop_result = lifecycle.stop(paths.authority_root)
     except lifecycle.DaemonStopError as exc:
         _write_stop_failure_audit(
             exc,
             operation="restart",
-            project_root=project_root,
+            project_root=paths.authority_root,
             stage="stop",
         )
         raise
     try:
         start_result = lifecycle.start(
-            project_root,
+            paths.scope,
             initial_status=stop_result.status,
         )
     except lifecycle.DaemonStartError as exc:
         write_start_failure_audit(
             exc,
             operation="restart",
-            project_root=project_root,
+            project_root=paths.authority_root,
             stage="start",
         )
         raise
@@ -171,7 +176,7 @@ def restart_daemon_observed(
     )
     write_lifecycle_audit(
         "restart_completed",
-        project_root=project_root,
+        project_root=paths.authority_root,
         metadata={
             "stop_outcome": result.stop.outcome,
             "stop_changed": result.stop.changed,
