@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from nuself.eval import EvalResult, load_fixtures, run_eval
+from nuself.evaluation.suite import EvalResult, load_fixtures, run_eval
 from nuself.notification.eval import run_notification_eval
 
 

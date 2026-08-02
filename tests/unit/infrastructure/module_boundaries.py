@@ -323,3 +323,15 @@ def test_live_provider_matrix_is_not_production_code() -> None:
     assert (
         Path(__file__).parents[2] / "live" / "matrix.py"
     ).is_file()
+
+
+def test_nuself_root_contains_no_substantive_modules() -> None:
+    assert tuple(
+        sorted(path.name for path in _SOURCE_ROOT.glob("*.py"))
+    ) == ("__init__.py",)
+    assert (
+        _SOURCE_ROOT / "config" / "__init__.py"
+    ).read_text(encoding="utf-8") == ""
+    assert (
+        _SOURCE_ROOT / "evaluation" / "__init__.py"
+    ).read_text(encoding="utf-8") == ""

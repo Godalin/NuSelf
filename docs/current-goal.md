@@ -5,40 +5,30 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-In progress — remove flat production modules from the package root.
+Idle — no active implementation goal.
 
 ## Objective
 
-Move every substantive `src/nuself/*.py` module to its real owner package,
-using precise single-word filenames. Migrate all callers without package-root
-facades, aliases, or forwarding modules; leave only `nuself/__init__.py` at the
-source root.
+No active objective.
 
 ## Next Steps
 
-1. Move evaluation into `evaluation` and release gates into testable `scripts`
-   tooling rather than the production wheel.
-2. Audit imports and built contents, run full gates, commit coherent batches,
-   return this file to Idle, and stop.
+1. Define the next objective, exclusions, ordered steps, and completion evidence
+   before implementation.
 
 ## Exclusions
 
-- Preserve configuration schemas, scope resolution, endpoint behavior,
-  evaluation results, filesystem security, CLI behavior, and release checks.
-- Do not split cohesive implementations merely to shorten files.
-- Do not add package-root re-exports, compatibility modules, or generic
-  `common`, `helpers`, `utils`, or `model` owners.
+- Do not start non-trivial implementation while this goal is idle.
 
 ## Last Verification
 
-- Initial audit found eight substantive root modules: `clock`, `config`,
-  `eval`, `handles`, `llm`, `private_fs`, `release_gate`, and `scope`.
-- Each has a concrete existing or minimal owner: runtime, config, evaluation,
-  agent, storage, or scripts. No root module needs to remain a public facade.
-- Config/Scope batch: settings and scope resolution now live in the empty-root
-  `config` package. Full Pyright reports 0 errors and 0 warnings; 145 focused
-  configuration, readiness, lifecycle, and composition tests pass.
-- Infrastructure batch: LLM endpoint construction lives in `agent.endpoint`,
-  clock and visible handles in `runtime`, and private filesystem primitives in
-  `storage.filesystem`. Full Pyright reports 0 errors and 0 warnings; 127
-  focused endpoint, agent, clock, handle, filesystem, and boundary tests pass.
+- `src/nuself` now contains only `__init__.py` as a Python file. Settings and
+  scope belong to `config`; endpoints to `agent`; clock and handles to
+  `runtime`; filesystem primitives to `storage`; evaluation to `evaluation`;
+  release checks to repository-only `scripts` tooling.
+- Old flat imports and compatibility modules are absent. Package roots remain
+  empty, and a structural test enforces the production-root boundary.
+- Full Pyright reports 0 errors and 0 warnings. Full default pytest passes.
+  NuSelf 0.3.1 source and wheel builds succeed; wheel inspection contains the
+  new owners and none of the old flat modules or release tooling. A locked-
+  dependency smoke test imports the owners directly from the wheel zip.

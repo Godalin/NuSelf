@@ -37,5 +37,5 @@ jobs:
         run: |
           python -m venv /tmp/nuself-wheel-smoke
           /tmp/nuself-wheel-smoke/bin/python -m pip install dist/*.whl
-          /tmp/nuself-wheel-smoke/bin/python -c "import nuself.cli; import nuself.llm"
+          /tmp/nuself-wheel-smoke/bin/python -c "import nuself.cli; import nuself.agent.endpoint"
           /tmp/nuself-wheel-smoke/bin/nuself --version

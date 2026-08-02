@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nuself.eval import (
+from nuself.evaluation.suite import (
     EvalFixture,
     FixtureExpectations,
     FixtureMemoryEntry,

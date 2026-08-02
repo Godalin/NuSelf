@@ -2,7 +2,7 @@
 
 All non-configurable numeric constants, thresholds, and caps that affect
 behavior, grouped by subsystem. Configurable defaults live in
-[`config.md`](config.md) and `src/nuself/config.py`.
+[`config.md`](config.md) and `src/nuself/config/settings.py`.
 
 ## Reason
 
@@ -121,7 +121,7 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 ## Design Notes
 
-- **Config candidates**: Constants with `default=` in `config.py` are already
+- **Config candidates**: Constants with `default=` in `config/settings.py` are already
   user-configurable. The rest are candidates for promotion when a user need
   arises.
 - **Internal vs external**: Truncation limits (120, 140, 180 chars) and
