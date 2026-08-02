@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from nuself.eval import EvalResult, load_fixtures, run_eval
-from nuself.notification_eval import run_notification_eval
+from nuself.notification.eval import run_notification_eval
 
 
 def handle_eval(args: argparse.Namespace) -> int:

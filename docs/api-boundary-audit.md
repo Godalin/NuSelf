@@ -170,14 +170,15 @@ or locks.
 
 ### A9 — Resolved: private evaluation construction
 
-`notification_eval` constructs `ReflectionScheduler` via `__new__`, assigns
-private fields, calls private methods, and selects storage independently.
+The former top-level `notification_eval` constructed `ReflectionScheduler` via
+`__new__`, assigned private fields, called private methods, and selected storage
+independently.
 
 Risk: evaluation can pass against an impossible runtime object and breaks on
 internal refactors instead of API changes.
 
-Minimal correction: construct the real scheduler through an evaluation
-composition fixture with fake ports and an in-memory/test backend.
+Correction: `notification.eval` now constructs the real scheduler through the
+same application and Reflection composition APIs used by production.
 
 ## Package Coverage
 
@@ -197,7 +198,7 @@ composition fixture with fake ports and an in-memory/test backend.
 | `daemon` | structurally sound | One process and one scheduler are correct; task contracts need typing (A8), while `DaemonState` remains an oversized composition root. |
 | `cli`, `cli.repl` | needs work | Handler registry is good; data access and repeated composition bypass the application API (A2, A7). |
 | `tui`, `repl` | clean adapters | Presentation dependencies point outward and do not own persistence. |
-| evaluation modules | needs work | `notification_eval` violates public construction (A9); migration/evaluation-only direct storage should be explicit and isolated. |
+| evaluation modules | clean | Notification evaluation is domain-owned and uses public application/Reflection composition (A9). |
 
 ## Historical Recommended Order
 

@@ -1,4 +1,4 @@
-"""Daemon-scheduled durable reason-output export service."""
+"""Durable Reason output workflow executed by the daemon scheduler."""
 
 from __future__ import annotations
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from nuself.notification_eval import run_notification_eval
+from nuself.notification.eval import run_notification_eval
 
 FIXTURES_DIR = (
     Path(__file__).parents[2] / "fixtures" / "notifications"

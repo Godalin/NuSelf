@@ -98,6 +98,37 @@ def test_application_does_not_depend_on_terminal_adapter() -> None:
     assert _violations(("application",), ("nuself.tui",)) == ()
 
 
+def test_horizontal_architecture_packages_remain_small() -> None:
+    application_files = {
+        path.name for path in (_SOURCE_ROOT / "application").glob("*.py")
+    }
+    assert application_files == {
+        "__init__.py",
+        "composition.py",
+        "data_admin.py",
+        "knowledge_projection.py",
+        "lifecycle.py",
+    }
+    assert not (_SOURCE_ROOT / "domain").exists()
+
+
+def test_concrete_execution_modules_use_responsibility_names() -> None:
+    assert not any(
+        path.parent != _SOURCE_ROOT / "runtime"
+        for path in _SOURCE_ROOT.rglob("runtime.py")
+    )
+    assert not (_SOURCE_ROOT / "agent" / "skills.py").exists()
+    assert (_SOURCE_ROOT / "agent" / "skill_loader.py").is_file()
+    assert (_SOURCE_ROOT / "agent" / "skills").is_dir()
+
+
+def test_domain_workflows_live_with_their_owner() -> None:
+    assert (_SOURCE_ROOT / "reason" / "export_service.py").is_file()
+    assert not (_SOURCE_ROOT / "daemon" / "reason_export.py").exists()
+    assert (_SOURCE_ROOT / "notification" / "eval.py").is_file()
+    assert not (_SOURCE_ROOT / "notification_eval.py").exists()
+
+
 def test_langchain_tool_materialization_has_one_owner() -> None:
     owners: list[str] = []
     for path in _SOURCE_ROOT.rglob("*.py"):
@@ -212,7 +243,7 @@ def test_workspace_store_and_export_worker_do_not_resolve_authority() -> None:
         if imported in forbidden
     } == set()
 
-    worker_path = _SOURCE_ROOT / "daemon" / "reason_export.py"
+    worker_path = _SOURCE_ROOT / "reason" / "export_service.py"
     tree = ast.parse(worker_path.read_text(encoding="utf-8"))
     assert [
         node

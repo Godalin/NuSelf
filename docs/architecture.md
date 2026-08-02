@@ -84,6 +84,13 @@ repositories; the application root invokes those factories while retaining one
 resource graph. This ownership rule adds no generic composition framework or
 base-class hierarchy.
 
+Concrete execution modules use responsibility names: application lifecycle,
+Chat engine, and REPL loop. Reason owns its durable export workflow and
+Notification owns its evaluation fixtures; daemon and CLI adapters only invoke
+those APIs. The neutral `runtime` package remains the sole home for generic
+execution infrastructure. Agent Skill resources and their loader are distinct
+paths, avoiding a module/package name collision.
+
 A composition helper exists only when it assembles policy or multiple
 dependencies for a real consumer; one-line repository constructors and
 pass-through accessors are not service APIs. Domain composition receives

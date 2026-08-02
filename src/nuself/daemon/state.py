@@ -14,7 +14,7 @@ from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.reason.composition import compose_reason_advancer
 from nuself.agent.text import LangChainTextAgent
 from nuself.daemon.activity import ActivityBroker
-from nuself.daemon.reason_export import (
+from nuself.reason.export_service import (
     ReasonExportService,
     build_reason_export_section_planner,
 )

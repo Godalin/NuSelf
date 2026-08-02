@@ -111,9 +111,9 @@ the application package.
 
 `ReflectionRepository` follows the same persistence boundary: construction
 requires resolved paths and the selected backend, while concrete assembly is
-owned by the application layer. Reflection workflow constructors remain
-migration scope until the shared service graph owns their complete lifecycle;
-they may not move authority lookup back into the repository.
+owned by Reflection composition. The application root supplies explicit graph
+capabilities and retains lifecycle ownership; Reflection may not move authority
+lookup back into its repository or workflow constructors.
 Reflection entry creation and replacement share the repository's single
 stable-ID `save(entry)` operation; identical `add` and `update` aliases are not
 separate capabilities. User status operations remain explicit on
@@ -126,6 +126,14 @@ single reflection schedule record. Its schedule collection remains private:
 mutate a raw `StorageCollection`. Scheduling policy and corruption reporting
 remain in the scheduler/gate; the repository only decodes and saves the typed
 state.
+
+Concrete workflows belong to their domains even when an outer adapter triggers
+them. Reason owns durable output export in `reason.export_service`; daemon owns
+only scheduling and lifecycle. Notification owns its evaluation entry point in
+`notification.eval`; CLI owns only argument handling and result presentation.
+Generic execution infrastructure remains in `runtime`, while concrete owners
+use responsibility names such as `application.lifecycle`, `agent.chat.engine`,
+and `cli.repl.loop`.
 
 Memory persistence is composed as one authority-scoped graph.
 `MemoryEntryRepository`, `MemoryCandidateRepository`, and `SourceRepository`

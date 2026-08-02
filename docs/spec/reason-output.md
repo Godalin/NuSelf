@@ -384,7 +384,7 @@ incomplete manifests into scheduler tasks.
 
 ### Daemon service ownership
 
-`nuself.daemon.reason_export.ReasonExportService` owns reason-export domain
+`nuself.reason.export_service.ReasonExportService` owns reason-export domain
 behavior while `DaemonScheduler` owns execution lifecycle. The service exposes:
 
 - `enqueue(JobMessage)` accepts an already-typed job envelope;
