@@ -6,7 +6,6 @@ import argparse
 import sys
 
 from nuself.cli.daemon_lifecycle import (
-    format_lifecycle_failure,
     restart_daemon_observed,
     start_daemon_observed,
     stop_daemon_observed,
@@ -33,7 +32,7 @@ def handle_daemon_start(args: argparse.Namespace) -> int:
         )
     except lifecycle.DaemonStartError as exc:
         print(
-            f"Failed to start daemon: {format_lifecycle_failure(exc)}",
+            f"Failed to start daemon: {diagnostic_exception_message(exc)}",
             file=sys.stderr,
         )
         return 1
@@ -48,7 +47,7 @@ def handle_daemon_stop(args: argparse.Namespace) -> int:
         )
     except lifecycle.DaemonStopError as exc:
         print(
-            f"Failed to stop daemon: {format_lifecycle_failure(exc)}",
+            f"Failed to stop daemon: {diagnostic_exception_message(exc)}",
             file=sys.stderr,
         )
         return 1
@@ -61,7 +60,7 @@ def handle_daemon_restart(args: argparse.Namespace) -> int:
         result = restart_daemon_observed(args.project_root)
     except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
         print(
-            f"Failed to restart daemon: {format_lifecycle_failure(exc)}",
+            f"Failed to restart daemon: {diagnostic_exception_message(exc)}",
             file=sys.stderr,
         )
         return 1

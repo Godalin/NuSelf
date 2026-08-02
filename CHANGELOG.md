@@ -6,6 +6,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- CLI lifecycle failures now use the shared safe diagnostic formatter directly,
+  removing a policy-free lifecycle-specific forwarding function.
 - Raw daemon request transport is now private to the typed client operations;
   low-level framing tests continue to exercise the internal boundary directly.
 - Generic daemon response decoding is now private to the typed client

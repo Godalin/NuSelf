@@ -9,16 +9,7 @@ from nuself.daemon import lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
-    diagnostic_exception_message,
 )
-
-
-def format_lifecycle_failure(
-    error: lifecycle.DaemonStartError | lifecycle.DaemonStopError,
-) -> str:
-    """Render one safe daemon lifecycle failure across CLI surfaces."""
-
-    return diagnostic_exception_message(error)
 
 
 def write_start_failure_audit(

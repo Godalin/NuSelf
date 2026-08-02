@@ -9,14 +9,15 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Keep raw request transport private to the typed daemon client.
+Remove the policy-free lifecycle failure formatting facade.
 
 ## Ordered Steps
 
-1. Confirm raw `request()` has no production caller outside `client.py`.
-2. Privatize it while retaining direct low-level transport tests and all typed
-   operations; add no client class or protocol facade.
-3. Run focused daemon transport tests and full gates, then commit without push.
+1. Confirm `format_lifecycle_failure()` only forwards the shared diagnostic
+   formatter and has no lifecycle-specific policy.
+2. Use `diagnostic_exception_message()` directly at CLI presentation sites and
+   remove the facade/imports.
+3. Run focused lifecycle/CLI tests and full gates, then commit without pushing.
 
 ## Exclusions
 
@@ -25,8 +26,7 @@ Keep raw request transport private to the typed daemon client.
   workspace/persona/trace injection, and advance behavior.
 - Do not couple the service to a concrete agent or merge model execution into
   repository persistence.
-- Preserve framing, cancellation, timeout, request identity, and structured
-  transport failure phases.
+- Preserve safe exception-chain rendering and all lifecycle audit behavior.
 
 ## Constraints
 
@@ -38,6 +38,12 @@ Keep raw request transport private to the typed daemon client.
 
 ## Phase Evidence
 
+- CLI daemon lifecycle failures now use the shared safe diagnostic formatter at
+  their presentation sites. Removed the lifecycle-specific one-line forwarding
+  function and its imports while leaving shared start/stop/restart audit
+  orchestration intact. Focused lifecycle/CLI/entrypoint tests: 379 passed; full
+  suite: 2440 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build
+  succeeded.
 - Raw daemon socket request transport is now private to `client.py`; production
   callers use only the seven typed operations. Low-level transport and CLI
   retry/error tests retain direct control of the private seam without adding a
