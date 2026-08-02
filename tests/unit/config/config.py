@@ -16,6 +16,11 @@ from nuself.config import (
     SystemConfig,
     runtime_paths,
 )
+from nuself.scope import scope_from_authority_root
+
+
+def _load_config(authority_root: Path) -> SystemConfig:
+    return ConfigSystem.load_scope(scope_from_authority_root(authority_root))
 
 
 def test_runtime_paths_are_under_authority_root(tmp_path: Path) -> None:
@@ -54,7 +59,7 @@ def test_flat_config_redacts_every_endpoint_key_without_aggregate_values(
         encoding="utf-8",
     )
 
-    config = ConfigSystem.load(config_path, tmp_path)
+    config = _load_config(tmp_path)
     flat = ConfigSystem.as_flat_dict(config)
     rendered = repr(flat)
 
@@ -117,7 +122,7 @@ def test_validation_error_hides_secret_input(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValidationError) as captured:
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
     assert secret not in str(captured.value)
 
@@ -138,7 +143,7 @@ def test_invalid_or_unknown_configuration_fails_explicitly(
     config_path.write_text(content, encoding="utf-8")
 
     with pytest.raises((ValueError, ValidationError)):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
 
 @pytest.mark.parametrize("non_finite", [".inf", "-.inf", ".nan"])
@@ -165,7 +170,7 @@ def test_non_finite_timeouts_are_rejected_before_runtime_clients(
     )
 
     with pytest.raises(ValidationError):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
 
 def test_retired_v025_config_field_is_rejected(
@@ -177,7 +182,7 @@ def test_retired_v025_config_field_is_rejected(
     )
 
     with pytest.raises(ValidationError, match="langmem_adapter"):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
 
 def test_enabled_email_ignores_legacy_file_and_uses_current_validation(
@@ -208,7 +213,7 @@ def test_enabled_email_ignores_legacy_file_and_uses_current_validation(
     )
 
     with pytest.raises(ValidationError) as captured:
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
     message = str(captured.value)
     assert legacy_secret not in message
@@ -224,7 +229,7 @@ def test_config_read_hardens_authority_root_and_file(
     config_path.write_text("email:\n  enabled: false\n", encoding="utf-8")
     config_path.chmod(0o644)
 
-    ConfigSystem.load(project_root=tmp_path)
+    _load_config(tmp_path)
 
     assert stat.S_IMODE(authority.stat().st_mode) == 0o700
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
@@ -241,7 +246,7 @@ def test_config_reload_does_not_trust_reused_file_metadata(
     original_stat = config_path.stat()
 
     assert (
-        ConfigSystem.load(project_root=tmp_path).chat.language_preference
+        _load_config(tmp_path).chat.language_preference
         == "en"
     )
 
@@ -255,7 +260,7 @@ def test_config_reload_does_not_trust_reused_file_metadata(
     )
 
     assert (
-        ConfigSystem.load(project_root=tmp_path).chat.language_preference
+        _load_config(tmp_path).chat.language_preference
         == "fr"
     )
 
@@ -267,4 +272,4 @@ def test_config_read_rejects_symlink(tmp_path: Path) -> None:
     config_path.symlink_to(target)
 
     with pytest.raises(OSError, match="regular file"):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)

@@ -9,22 +9,20 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove implicit configuration loading from structured-agent composition.
+Remove the parallel single-file configuration loader.
 
 ## Ordered Steps
 
-1. Specify application composition as the owner of endpoint resolution; domain
-   structured-agent factories receive endpoints and never reload config.
-2. Require explicit config at the configured model factory and make omitted
-   structured-agent endpoints an explicit empty set.
-3. Update live/test callers, run focused/full gates, record evidence, and
-   commit without pushing.
+1. Specify `load_scope()` as the sole configuration-loading boundary.
+2. Migrate explicit test/live callers to an authority scope and delete
+   `ConfigSystem.load()` plus its obsolete filesystem branch.
+3. Run focused/full gates, record evidence, and commit without pushing.
 
 ## Exclusions
 
-- Preserve endpoint ordering/state, failover, no-model typed errors, application
-  model reuse, and local live-test configuration.
-- Do not introduce a model registry, service locator, or path-based fallback.
+- Preserve user/workspace layering, managed-file hardening, strict validation,
+  reload semantics, and local live-test configuration.
+- Do not add a loader wrapper, compatibility alias, or implicit scope lookup.
 
 ## Constraints
 
@@ -36,6 +34,12 @@ Remove implicit configuration loading from structured-agent composition.
 
 ## Phase Evidence
 
+- Configuration file loading now has one explicit scope-based boundary.
+  Removed `ConfigSystem.load()` and its duplicate path/default/hardening branch;
+  unit, composition, schema, and opt-in live callers now construct the authority
+  scope they mean. Source/test/script search finds no old loader call. Focused
+  config/composition tests: 72 passed; live API collection: 4 tests; full suite:
+  2447 passed; Pyright: 0 errors, 0 warnings; sdist and wheel build succeeded.
 - Structured-agent composition no longer imports or calls `ConfigSystem`.
   `configured_langchain_chat_models()` requires the application-owned config,
   while `default_structured_agent()` consumes only its supplied endpoint tuple;

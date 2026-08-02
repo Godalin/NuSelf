@@ -21,7 +21,6 @@ from pydantic import (
 from nuself.private_fs import (
     ensure_private_directory,
     harden_managed_file,
-    harden_private_file,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.scope import (
@@ -321,31 +320,6 @@ def _is_sensitive_config_key(key: str) -> bool:
 
 class ConfigSystem:
     """Unified configuration loader."""
-
-    @classmethod
-    def load(cls, config_path: Path | None = None, project_root: Path | None = None) -> SystemConfig:
-        """Load one configuration file with defaults."""
-        if config_path is None and project_root is None:
-            return cls.load_scope(resolve_scope())
-        if config_path is None and project_root is not None:
-            config_path = project_root / "config.yaml"
-
-        if config_path and config_path.exists():
-            if project_root is not None:
-                ensure_private_directory(
-                    runtime_paths(project_root).authority_root
-                )
-            harden_private_file(config_path)
-        yaml_data = (
-            cls._read_mapping(config_path)
-            if config_path and config_path.exists()
-            else {}
-        )
-        cls._normalize_mapping(yaml_data)
-        defaults = SystemConfig().model_dump(mode="python")
-        return SystemConfig.model_validate(
-            _deep_merge(defaults, yaml_data)
-        )
 
     @classmethod
     def load_scope(cls, scope: NuSelfScope) -> SystemConfig:

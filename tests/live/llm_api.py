@@ -16,6 +16,7 @@ from nuself.agent.chat.types import ChatStructuredOutput
 from nuself.agent.middleware import ToolOutcome
 from nuself.agent.structured import LangChainStructuredAgent
 from nuself.config import ConfigSystem
+from nuself.scope import scope_from_authority_root
 from nuself.llm import (
     LangChainLLMEndpoint,
     build_langchain_endpoint,
@@ -41,7 +42,9 @@ def live_endpoint(
 ) -> LangChainLLMEndpoint:
     endpoints = configured_langchain_chat_models(
         PROJECT_ROOT,
-        config=ConfigSystem.load(project_root=PROJECT_ROOT),
+        config=ConfigSystem.load_scope(
+            scope_from_authority_root(PROJECT_ROOT)
+        ),
     )
     if not endpoints:
         pytest.fail(

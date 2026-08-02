@@ -25,6 +25,11 @@ The production configuration loader has no hidden test-mode defaults. Tests
 that need shorter intervals or alternate policies supply explicit typed config
 or fixture files; runtime behavior never branches on a test environment.
 
+`ConfigSystem.load_scope()` is the sole file-loading entry point. Callers that
+already own an authority root first construct its explicit `NuSelfScope`; there
+is no parallel path/config-file loader with different layering or hardening
+semantics.
+
 The flat inspection projection uses the model-shaped
 `llm.endpoints.<index>.*` namespace for every endpoint plus the derived
 `llm.count`. It does not duplicate the first endpoint under `llm.0.*`.
@@ -108,8 +113,8 @@ the disk projection is not presented as a live daemon reload.
 Malformed YAML, invalid encoding, and expected file-read failures print one
 concise warning and fall back to defaults. Unexpected exceptions are not
 configuration fallback: they propagate so programming defects remain visible.
-Callers must not wrap `ConfigSystem.load()` in a broad catch merely to recover
-one default field.
+Callers must not wrap `ConfigSystem.load_scope()` in a broad catch merely to
+recover one default field.
 
 ## LLM Endpoint List And Failover
 
