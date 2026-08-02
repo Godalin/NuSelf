@@ -61,7 +61,7 @@ from nuself.cli.commands.memory.source import (
     handle_memory_source_show,
 )
 from nuself.cli.handlers import CliHandlerBindings
-from nuself.domain.memory import default_relation_descriptor_registry
+from nuself.memory.model import default_relation_descriptor_registry
 
 
 def add_memory_parser(

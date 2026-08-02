@@ -7,8 +7,8 @@ import sys
 
 from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, resolve_handle
-from nuself.domain.memory import PrivacyLevel
-from nuself.domain.source import SourceChunk
+from nuself.memory.model import PrivacyLevel
+from nuself.memory.source_model import SourceChunk
 from nuself.memory.source_repository import (
     SourceChunkMatch,
     SourceDocumentNotFound,

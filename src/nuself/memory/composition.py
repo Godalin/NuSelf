@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.config import RuntimePaths
+from nuself.config import RuntimePaths, SystemConfig
 from nuself.llm import (
     LangChainLLMEndpoint,
     configured_langchain_chat_models,
@@ -27,9 +26,7 @@ from nuself.memory.optimizer import (
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import StorageBackend
-
-if TYPE_CHECKING:
-    from nuself.application.composition import ApplicationGraph
+from nuself.trace.service import TraceRecorder
 
 
 @dataclass(frozen=True)
@@ -78,19 +75,21 @@ def compose_memory_repositories(
 
 
 def compose_memory_curator(
-    application: "ApplicationGraph",
+    paths: RuntimePaths,
+    repositories: MemoryRepositories,
+    trace_recorder: TraceRecorder,
+    config: SystemConfig,
     *,
     langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> MemoryCurator:
     """Build curation from one existing authority graph."""
 
-    paths = application.paths
     models = (
         langchain_models
         if langchain_models is not None
         else configured_langchain_chat_models(
             paths.authority_root,
-            config=application.config,
+            config=config,
         )
     )
     return MemoryCurator(
@@ -101,35 +100,37 @@ def compose_memory_curator(
             project_root=paths.authority_root,
             component="memory",
         ),
-        observation_repository=application.memory.observations,
-        repository=application.memory.entries,
-        candidate_repository=application.memory.candidates,
-        profile_repository=application.memory.profile,
-        trace_recorder=application.trace.recorder,
-        plan_store=application.memory.curator_plans,
+        observation_repository=repositories.observations,
+        repository=repositories.entries,
+        candidate_repository=repositories.candidates,
+        profile_repository=repositories.profile,
+        trace_recorder=trace_recorder,
+        plan_store=repositories.curator_plans,
     )
 
 
 def compose_memory_optimizer(
-    application: "ApplicationGraph",
+    paths: RuntimePaths,
+    repositories: MemoryRepositories,
+    config: SystemConfig,
     *,
     settings: MemoryOptimizerSettings | None = None,
 ) -> MemoryOptimizer:
     """Build memory optimization from one existing authority graph."""
 
     return MemoryOptimizer(
-        application.paths,
+        paths,
         agent=LangChainStructuredAgent(
             OptimizeActionsOutput,
             endpoints=configured_langchain_chat_models(
-                application.paths.authority_root,
-                config=application.config,
+                paths.authority_root,
+                config=config,
             ),
-            project_root=application.paths.authority_root,
+            project_root=paths.authority_root,
             component="memory",
         ),
         settings=settings,
-        repository=application.memory.entries,
-        candidate_repository=application.memory.candidates,
-        profile_repository=application.memory.profile,
+        repository=repositories.entries,
+        candidate_repository=repositories.candidates,
+        profile_repository=repositories.profile,
     )

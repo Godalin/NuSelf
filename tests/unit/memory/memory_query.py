@@ -11,8 +11,8 @@ from memory_fixtures import (
 from pathlib import Path
 
 from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryEntry
-from nuself.domain.profile import ProfileItem
+from nuself.memory.model import MemoryEntry
+from nuself.profile.model import ProfileItem
 from nuself.memory.query import MemoryQuery, MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
@@ -379,7 +379,7 @@ def test_memory_query_expands_transitive_relation_closure(tmp_path: Path) -> Non
 
 
 def test_memory_query_uses_registry_retrieve_to_filter_types(tmp_path: Path) -> None:
-    from nuself.domain.memory import (
+    from nuself.memory.model import (
         MemoryObject,
         MemoryTypeRegistry,
         MemoryValidationIssue,

@@ -9,7 +9,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import ValidationError
 
-from nuself.domain.profile import ProfileItem
+from nuself.profile.model import ProfileItem
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage import _create_sqlite_backend

@@ -6,9 +6,9 @@ from typing import cast
 
 import pytest
 
-from nuself.domain.memory import MemoryEvidence
-from nuself.domain.profile import ProfileItem
-from nuself.domain.source import SourceDocument
+from nuself.memory.model import MemoryEvidence
+from nuself.profile.model import ProfileItem
+from nuself.memory.source_model import SourceDocument
 
 
 def test_profile_item_detaches_and_freezes_collection_inputs() -> None:

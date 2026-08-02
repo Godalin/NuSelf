@@ -12,7 +12,7 @@ from nuself.cli.output import (
     resolve_handle,
     resolve_handle_selection,
 )
-from nuself.domain.memory import MemoryCandidate
+from nuself.memory.model import MemoryCandidate
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryCandidateNotFound,

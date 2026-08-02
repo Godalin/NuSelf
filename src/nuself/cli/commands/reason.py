@@ -105,7 +105,11 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
     advancer = None
     if args.action == "advance":
         advancer = compose_reason_advancer(
-            application
+            application.paths,
+            application.reason_workspace,
+            application.persona_prompts,
+            application.trace.recorder,
+            application.config,
         )
     method = getattr(service, method_name)
     try:

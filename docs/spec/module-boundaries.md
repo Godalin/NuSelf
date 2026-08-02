@@ -40,6 +40,11 @@ The following import rules are mandatory:
 - CLI, daemon, and TUI are outer adapters and may depend inward.
 - A function-local import does not exempt a dependency from these rules.
 
+Concrete domain models belong to their owning packages. A horizontal `domain`
+package is forbidden because it splits Memory, Profile, Source, or Reflection
+semantics from their repositories and services without creating a reusable
+infrastructure boundary.
+
 These rules are checked from the Python AST in the test suite. New exceptions
 require a specification change naming the owner and removal condition; an
 unrecorded allowlist is forbidden.

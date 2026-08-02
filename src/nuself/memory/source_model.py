@@ -9,7 +9,7 @@ from typing import Literal, TypeAlias, cast
 from uuid import uuid5, NAMESPACE_URL
 
 from nuself.clock import utc_now_iso
-from nuself.domain.memory import PrivacyLevel
+from nuself.memory.model import PrivacyLevel
 
 SourceKind: TypeAlias = Literal["markdown", "text"]
 

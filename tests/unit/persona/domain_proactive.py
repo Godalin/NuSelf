@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nuself.domain.proactive import IdeaCandidate, RelevanceScore
+from nuself.reflection.model import IdeaCandidate, RelevanceScore
 
 
 def test_idea_candidate_round_trip() -> None:

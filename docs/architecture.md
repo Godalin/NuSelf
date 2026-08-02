@@ -138,6 +138,11 @@ policy. Repositories own persistence and indexes. Renderers keep terminal and
 transcript output consistent. Agent tools expose narrow service capabilities;
 agent skills describe when those capabilities should be used.
 
+Concrete models live with their owning domain (`memory.model`,
+`profile.model`, `reflection.model`, and `memory.source_model`). NuSelf has no
+horizontal `domain` package that separates a model from the repository and
+service that own its semantics.
+
 Feature functions declare cross-cutting behavior through orthogonal decorators
 for tool identity, component ownership, effects, confirmation, observation,
 and audit. Decorators attach immutable policy only. Shared middleware executes

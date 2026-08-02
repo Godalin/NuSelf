@@ -159,8 +159,18 @@ def send_one_shot_chat_interactive(
         source="client",
     ):
         try:
+            application = cli_application()
             conversation_runtime = compose_conversation_runtime(
-                cli_application(),
+                application.paths,
+                application.config,
+                application.conversations,
+                application.memory_service,
+                application.memory.entries,
+                application.reflection_service,
+                application.reason_service,
+                application.reason_workspace,
+                application.trace,
+                application.persona_prompts,
                 approval_port=TerminalApprovalPort(),
             )
             result = conversation_runtime.respond(
@@ -206,8 +216,12 @@ def run_memory_curator(
     """Run post-turn curation and present its optional status."""
 
     try:
+        application = cli_application()
         result = compose_memory_curator(
-            cli_application()
+            application.paths,
+            application.memory,
+            application.trace.recorder,
+            application.config,
         ).run_once(observation_id)
     except RuntimeError as exc:
         error = diagnostic_exception_message(exc)

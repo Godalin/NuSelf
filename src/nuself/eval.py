@@ -14,7 +14,7 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.domain.memory import MemoryEntry
+from nuself.memory.model import MemoryEntry
 
 
 @dataclass(frozen=True)
@@ -157,7 +157,16 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
             repo.save(entry.to_domain())
 
         agent = compose_conversation_runtime(
-            application,
+            application.paths,
+            application.config,
+            application.conversations,
+            application.memory_service,
+            application.memory.entries,
+            application.reflection_service,
+            application.reason_service,
+            application.reason_workspace,
+            application.trace,
+            application.persona_prompts,
             response_service=FixtureResponseService(fixture.response),
         )
         result = agent.respond(

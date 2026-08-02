@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nuself.config import ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate
+from nuself.reflection.model import IdeaCandidate
 from nuself.persona.discussion import SharedPersonaDiscussionService
 
 

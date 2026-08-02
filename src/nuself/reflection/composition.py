@@ -2,20 +2,28 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-from nuself.config import ReflectionSettings
+from nuself.config import ReflectionSettings, RuntimePaths
+from nuself.conversation import ConversationHistoryService
 from nuself.llm import LangChainLLMEndpoint
+from nuself.memory.composition import MemoryRepositories
+from nuself.notification.outbox import NotificationOutbox
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
+from nuself.reflection.repository import ReflectionRepository
+from nuself.reflection.service import ReflectionService
 from nuself.persona.discussion import SharedPersonaDiscussionService
-
-if TYPE_CHECKING:
-    from nuself.application.composition import ApplicationGraph
+from nuself.trace.service import TraceRecorder
 
 
 def compose_reflection_scheduler(
-    application: "ApplicationGraph",
+    paths: RuntimePaths,
+    memory: MemoryRepositories,
+    conversation_history: ConversationHistoryService,
+    repository: ReflectionRepository,
+    service: ReflectionService,
+    notifications: NotificationOutbox,
+    trace_recorder: TraceRecorder,
     *,
     config: ReflectionSettings,
     language_preference: str,
@@ -23,31 +31,30 @@ def compose_reflection_scheduler(
 ) -> ReflectionScheduler:
     """Compose reflection orchestration from one authority-owned graph."""
 
-    paths = application.paths
     generator = IdeaCandidateGenerator(
         paths.authority_root,
-        memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
-        profile_repository=application.memory.profile,
-        conversation_history=application.conversation_history,
+        memory_repository=memory.entries,
+        source_repository=memory.sources,
+        profile_repository=memory.profile,
+        conversation_history=conversation_history,
         language_preference=language_preference,
         langchain_models=langchain_models,
     )
     gate = LLMRelevanceGate(
         paths.authority_root,
         config,
-        repository=application.reflection,
+        repository=repository,
         langchain_models=langchain_models,
     )
     return ReflectionScheduler(
         paths.authority_root,
         config,
-        repository=application.reflection,
-        outbox=application.notifications,
-        trace_recorder=application.trace.recorder,
+        repository=repository,
+        outbox=notifications,
+        trace_recorder=trace_recorder,
         candidate_generator=generator,
         relevance_gate=gate,
-        organizer=application.reflection_service,
+        organizer=service,
         discussion=SharedPersonaDiscussionService(
             project_root=paths.authority_root,
             config=config,

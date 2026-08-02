@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from nuself.domain.memory import MemoryCandidate
-from nuself.domain.profile import ProfileItem
+from nuself.memory.model import MemoryCandidate
+from nuself.profile.model import ProfileItem
 
 
 class ProfileRepositoryPort(Protocol):

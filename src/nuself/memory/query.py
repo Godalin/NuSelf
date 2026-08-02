@@ -6,8 +6,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import re
 
-from nuself.domain.memory import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
-from nuself.domain.profile import ProfileItem
+from nuself.memory.model import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
+from nuself.profile.model import ProfileItem
 from nuself.memory.repository import MemoryEntryRepository, SymbolicGraphEdge, SymbolicGraphNode
 from nuself.memory.source_repository import SourceChunkMatch, SourceRepository
 from nuself.profile.contracts import ProfileRepositoryPort

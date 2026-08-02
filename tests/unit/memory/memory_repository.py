@@ -13,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntry,
     MemoryObject,
     MemoryValidationError,
@@ -420,7 +420,7 @@ def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
 
 
 def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
-    from nuself.domain.memory import MemoryEntryType
+    from nuself.memory.model import MemoryEntryType
     repo = memory_entry_repository(tmp_path)
     entry = repo.save(MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact."))
 
@@ -429,7 +429,7 @@ def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
 
 
 def test_repository_rejects_unknown_non_draft_type(tmp_path: Path) -> None:
-    from nuself.domain.memory import MemoryEntryType
+    from nuself.memory.model import MemoryEntryType
     repo = memory_entry_repository(tmp_path)
     invalid = MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact.", review_state="reviewed")
 

@@ -36,8 +36,8 @@ from conversation_fixtures import ConversationStore
 from nuself.agent.tool_utils import tool_service_component
 from nuself.trace.composition import compose_trace_services
 from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryEntry
-from nuself.domain.profile import ProfileItem
+from nuself.memory.model import MemoryEntry
+from nuself.profile.model import ProfileItem
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.query import MemoryService
@@ -1672,7 +1672,7 @@ def test_reason_export_tool_is_absent_without_scheduler(
 
 def test_memory_archive_tool_success(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Old belief", body="..."))
@@ -1692,7 +1692,7 @@ def test_memory_archive_tool_not_found(tmp_path: Path) -> None:
 
 def test_memory_update_importance_tool_success(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(id="m1", type="belief", title="Key belief", body="...", importance=0.3))
@@ -1754,7 +1754,7 @@ def test_memory_count_tool_empty(tmp_path: Path) -> None:
 
 def test_memory_count_tool_with_entries(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["tag1"]))
@@ -1767,7 +1767,7 @@ def test_memory_count_tool_with_entries(tmp_path: Path) -> None:
 
 def test_memory_count_tool_with_type_filter(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="A", body="..."))
@@ -1782,7 +1782,7 @@ def test_memory_count_tool_with_type_filter(tmp_path: Path) -> None:
 
 def test_memory_count_tool_with_tag_filter(tmp_path: Path) -> None:
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="A", body="...", tags=["important"]))

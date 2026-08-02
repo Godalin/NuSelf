@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from nuself.conversation import ConversationState, ConversationStore
-from nuself.domain.memory import MemoryEntry
+from nuself.memory.model import MemoryEntry
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.storage import COLLECTION_NAMES, StorageBackend
 

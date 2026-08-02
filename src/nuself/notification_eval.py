@@ -166,7 +166,13 @@ def _evaluate_scheduler(
     backend = auto_backend(project_root)
     application = compose_application(runtime_paths(project_root), backend)
     scheduler = compose_reflection_scheduler(
-        application,
+        application.paths,
+        application.memory,
+        application.conversation_history,
+        application.reflection,
+        application.reflection_service,
+        application.notifications,
+        application.trace.recorder,
         config=settings,
         language_preference="en",
         langchain_models=configured_langchain_chat_models(

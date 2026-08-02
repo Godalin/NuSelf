@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,
     MemoryEvidence,

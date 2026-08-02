@@ -11,8 +11,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import RuntimePaths
 from nuself.clock import utc_now_iso
-from nuself.domain.memory import MemoryCandidate, MemoryEvidence, PrivacyLevel
-from nuself.domain.source import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
+from nuself.memory.model import MemoryCandidate, MemoryEvidence, PrivacyLevel
+from nuself.memory.source_model import SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
 from nuself.memory.repository import MemoryCandidateRepository
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record

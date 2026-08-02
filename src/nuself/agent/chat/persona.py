@@ -7,7 +7,7 @@ from pathlib import Path
 
 from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.config import ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate
+from nuself.reflection.model import IdeaCandidate
 from nuself.llm import LangChainLLMEndpoint
 from nuself.memory.query import MemoryQuery, MemoryService
 from nuself.persona.definition import (

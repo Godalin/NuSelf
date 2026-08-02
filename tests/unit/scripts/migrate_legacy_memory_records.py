@@ -6,7 +6,7 @@ from typing import Callable, cast
 
 import pytest
 
-from nuself.domain.memory import MemoryEntry
+from nuself.memory.model import MemoryEntry
 from tests.backend import owned_backend, close_owned_backend
 _SCRIPT = (
     Path(__file__).resolve().parents[3]

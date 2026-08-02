@@ -14,7 +14,7 @@ from typing import cast
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,
     MemoryEntryType,

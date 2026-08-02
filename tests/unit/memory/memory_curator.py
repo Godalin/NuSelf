@@ -23,13 +23,13 @@ from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.config import runtime_paths
 from nuself.agent.errors import AgentModelUnavailableError
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntry,
     MemoryObject,
     MemoryTypeRegistry,
     MemoryValidationIssue,
 )
-from nuself.domain.profile import ProfileItem
+from nuself.profile.model import ProfileItem
 from nuself.logs import read_log_events
 from nuself.memory.curator_contract import (
     CuratorActionsOutput,

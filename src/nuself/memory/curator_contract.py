@@ -8,7 +8,7 @@ from typing import Literal, TypeAlias, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntryType,
     default_memory_type_registry,
 )

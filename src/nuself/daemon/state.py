@@ -88,7 +88,16 @@ class DaemonState:
             ),
         )
         self.conversation_runtime = compose_conversation_runtime(
-            application,
+            paths,
+            config,
+            application.conversations,
+            application.memory_service,
+            application.memory.entries,
+            application.reflection_service,
+            application.reason_service,
+            application.reason_workspace,
+            application.trace,
+            application.persona_prompts,
             job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
                 self.authority_root,
@@ -100,11 +109,20 @@ class DaemonState:
         )
 
         self.memory_curator = compose_memory_curator(
-            application,
+            paths,
+            application.memory,
+            application.trace.recorder,
+            config,
             langchain_models=langchain_models,
         )
         self.reflection_scheduler = compose_reflection_scheduler(
-            application,
+            paths,
+            application.memory,
+            application.conversation_history,
+            application.reflection,
+            application.reflection_service,
+            application.notifications,
+            application.trace.recorder,
             config=config.reflection,
             language_preference=config.chat.language_preference,
             langchain_models=langchain_models,
@@ -121,7 +139,11 @@ class DaemonState:
         self.reason_scheduler = ReasonScheduler(
             self.authority_root,
             advancer=compose_reason_advancer(
-                application,
+                paths,
+                application.reason_workspace,
+                application.persona_prompts,
+                application.trace.recorder,
+                config,
                 readonly_tools=self.conversation_runtime.readonly_tools(),
                 langchain_models=langchain_models,
             ),

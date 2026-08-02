@@ -12,7 +12,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
-from nuself.domain.proactive import IdeaCandidate
+from nuself.reflection.model import IdeaCandidate
 from nuself.logs import read_log_events
 from nuself.persona.discussion import (
     PersonaCompetitionResult,

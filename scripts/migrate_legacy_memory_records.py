@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from nuself.domain.memory import MemoryEntry
+from nuself.memory.model import MemoryEntry
 from nuself.storage import auto_backend
 
 

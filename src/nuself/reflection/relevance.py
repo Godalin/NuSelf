@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.config import ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate, RelevanceScore
+from nuself.reflection.model import IdeaCandidate, RelevanceScore
 from nuself.llm import LangChainLLMEndpoint
 from nuself.reflection.audit import report_reflection_failure, write_reflection_audit
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository

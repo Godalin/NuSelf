@@ -6,9 +6,9 @@ from collections.abc import Sequence
 import shutil
 import textwrap
 
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
-from nuself.domain.profile import ProfileItem
-from nuself.domain.source import SourceDocument
+from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryEvidence
+from nuself.profile.model import ProfileItem
+from nuself.memory.source_model import SourceDocument
 from nuself.tui.render import TerminalTheme, render_key_value_field, render_record_block, render_record_header
 
 DEFAULT_TEXT_WIDTH = 88

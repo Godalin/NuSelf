@@ -37,3 +37,8 @@ models, workflows, and evaluation code into their owning domains.
   five modules and retains only graph composition, lifecycle, data admin, and
   cross-domain knowledge projection. Pyright: 0 errors, 0 warnings; affected
   domain/application/CLI/storage suite: 1017 passed.
+- Stage 2: Memory, Profile, Source, and proactive Reflection models now live in
+  their owning packages; the horizontal `nuself.domain` package is removed.
+  Domain composition receives explicit capabilities rather than importing
+  `ApplicationGraph`. Pyright: 0 errors, 0 warnings; affected boundary/domain/
+  Chat/CLI suite: 959 passed.

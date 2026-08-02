@@ -13,7 +13,7 @@ from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent
 from nuself.config import RuntimePaths
 from nuself.clock import utc_now_iso
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
+from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
 from nuself.memory.audit import write_memory_audit
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript

@@ -48,7 +48,7 @@ from nuself.daemon.lifecycle import (
     DaemonStopError,
 )
 from nuself.daemon.protocol import DaemonResponse
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEvidence
+from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryEvidence
 from nuself.memory.curator_contract import MemoryAction
 from nuself.memory.curator_plan import (
     MemoryCuratorPlan,
@@ -63,7 +63,7 @@ def _mock_status(project_root: Path) -> DaemonStatus:
     )
 
 
-from nuself.domain.profile import ProfileItem
+from nuself.profile.model import ProfileItem
 from nuself.logs import (
     InteractiveLogCursor,
     read_log_events,
@@ -3807,7 +3807,7 @@ def test_status_command_shows_daemon_conversations_and_notifications(
 def test_interactive_whoami_shows_profile_items(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.domain.profile import ProfileItem
+    from nuself.profile.model import ProfileItem
 
     repo = _profile_repository(tmp_path)
     repo.save(
@@ -4736,7 +4736,7 @@ def test_health_accepts_missing_config_when_private_root_and_daemon_are_ready(
 def test_interactive_search_finds_memory(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -4827,7 +4827,7 @@ def test_config_command_never_prints_smtp_password(
 
 
 def test_memory_list_shows_entries(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -4852,7 +4852,7 @@ def test_memory_list_empty_shows_message(
 def test_memory_list_sorts_by_importance(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -4880,7 +4880,7 @@ def test_memory_list_sorts_by_importance(
 def test_memory_list_filters_by_review_state(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -4913,7 +4913,7 @@ def test_memory_list_filters_by_review_state(
 
 
 def test_memory_show_displays_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -4935,7 +4935,7 @@ def test_memory_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> No
 
 
 def test_memory_search_finds_match(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -4953,7 +4953,7 @@ def test_memory_search_uses_ranked_tokens_not_whole_query_substring(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -5098,7 +5098,7 @@ def test_memory_stats_shows_empty_state(tmp_path: Path, capsys: CaptureFixture) 
 def test_memory_unquarantine_restores_draft(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryEntryType
+    from nuself.memory.model import MemoryEntryType
 
     repo = memory_entry_repository(_authority(tmp_path))
     entry = repo.save(
@@ -5123,7 +5123,7 @@ def test_memory_unquarantine_restores_draft(
 def test_memory_profile_list_shows_items(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.profile import ProfileItem
+    from nuself.profile.model import ProfileItem
 
     repo = _profile_repository(tmp_path)
     repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
@@ -5147,7 +5147,7 @@ def test_memory_profile_list_empty_shows_message(
 def test_memory_profile_list_sorts_by_importance(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.profile import ProfileItem
+    from nuself.profile.model import ProfileItem
 
     repo = _profile_repository(tmp_path)
     low = repo.save(
@@ -5184,7 +5184,7 @@ def test_memory_profile_list_sorts_by_importance(
 def test_memory_profile_show_displays_item(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.profile import ProfileItem
+    from nuself.profile.model import ProfileItem
 
     repo = _profile_repository(tmp_path)
     item = ProfileItem(type="preference", title="Style", body="Concise.")
@@ -5213,7 +5213,7 @@ def test_memory_profile_show_missing_item(
 def test_memory_profile_search_finds_match(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.profile import ProfileItem
+    from nuself.profile.model import ProfileItem
 
     repo = _profile_repository(tmp_path)
     repo.save(ProfileItem(type="preference", title="Style", body="Concise."))
@@ -5231,7 +5231,7 @@ def test_memory_profile_search_finds_match(
 def test_memory_profile_delete_removes_item(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.profile import ProfileItem
+    from nuself.profile.model import ProfileItem
 
     repo = _profile_repository(tmp_path)
     item = ProfileItem(type="preference", title="Style", body="Concise.")
@@ -5314,7 +5314,7 @@ def test_memory_candidate_list_empty_shows_message(
 def test_memory_candidate_list_filters_by_review_state(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.model import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
     repo = memory_candidate_repository(_authority(tmp_path))
@@ -5354,7 +5354,7 @@ def test_memory_candidate_list_filters_by_review_state(
 def test_memory_candidate_list_sorts_by_importance(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.model import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
     repo = memory_candidate_repository(_authority(tmp_path))
@@ -5392,7 +5392,7 @@ def test_memory_candidate_list_sorts_by_importance(
 def test_memory_candidate_show_displays_candidate(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.model import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
     repo = memory_candidate_repository(_authority(tmp_path))
@@ -5422,7 +5422,7 @@ def test_memory_candidate_show_missing(tmp_path: Path, capsys: CaptureFixture) -
 def test_memory_candidate_accept_creates_entry(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.model import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
     repo = memory_candidate_repository(_authority(tmp_path))
@@ -5442,7 +5442,7 @@ def test_memory_candidate_accept_creates_entry(
 def test_memory_candidate_reject_pending(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.model import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
     repo = memory_candidate_repository(_authority(tmp_path))
@@ -5462,7 +5462,7 @@ def test_memory_candidate_reject_pending(
 def test_memory_candidate_edit_updates_fields(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate
+    from nuself.memory.model import MemoryCandidate
     from nuself.memory.repository import MemoryCandidateRepository
 
     repo = memory_candidate_repository(_authority(tmp_path))
@@ -5494,7 +5494,7 @@ def test_memory_candidate_edit_updates_fields(
 def test_memory_candidate_merge_updates_entry(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryCandidate, MemoryEntry
+    from nuself.memory.model import MemoryCandidate, MemoryEntry
     from nuself.memory.repository import (
         MemoryCandidateRepository,
         MemoryEntryRepository,
@@ -5554,7 +5554,7 @@ def test_memory_add_creates_entry(tmp_path: Path, capsys: CaptureFixture) -> Non
 
 
 def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -5569,7 +5569,7 @@ def test_memory_delete_removes_entry(tmp_path: Path, capsys: CaptureFixture) -> 
 def test_memory_delete_accepts_batch_index_selection(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -5592,7 +5592,7 @@ def test_memory_delete_accepts_batch_index_selection(
 
 
 def test_memory_edit_updates_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -5653,7 +5653,7 @@ def test_daemon_logs_shows_empty(tmp_path: Path, capsys: CaptureFixture) -> None
 
 
 def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     repo = memory_entry_repository(_authority(tmp_path))
@@ -5684,7 +5684,7 @@ def test_memory_export_writes_json(tmp_path: Path, capsys: CaptureFixture) -> No
 def test_memory_import_reads_json(tmp_path: Path, capsys: CaptureFixture) -> None:
     import json
 
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     from nuself.memory.repository import MemoryEntryRepository
 
     # Export first

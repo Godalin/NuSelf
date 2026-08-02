@@ -170,8 +170,13 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         thread_ref = command.removeprefix("advance ").strip()
         from nuself.reason.composition import compose_reason_advancer
 
+        application = cli_application()
         advancer = compose_reason_advancer(
-            cli_application()
+            application.paths,
+            application.reason_workspace,
+            application.persona_prompts,
+            application.trace.recorder,
+            application.config,
         )
         try:
             thread = service.advance_thread(

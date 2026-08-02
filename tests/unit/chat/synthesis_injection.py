@@ -249,7 +249,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
 
 def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path: Path) -> None:
     """Verify that the normal respond path preserves essential system prompt sections."""
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     
     repo = memory_entry_repository(tmp_path)
     repo.save(

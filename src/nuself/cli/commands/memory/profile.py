@@ -7,7 +7,7 @@ import sys
 
 from nuself.cli.composition import cli_application
 from nuself.cli.output import print_ansi, resolve_handle
-from nuself.domain.profile import ProfileItem
+from nuself.profile.model import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,
     ProfileItemRepository,

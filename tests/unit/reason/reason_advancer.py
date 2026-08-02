@@ -92,7 +92,13 @@ def test_application_reason_composition_resolves_models_from_graph_config(
         configured,
     )
 
-    advancer = compose_reason_advancer(application)
+    advancer = compose_reason_advancer(
+        application.paths,
+        application.reason_workspace,
+        application.persona_prompts,
+        application.trace.recorder,
+        application.config,
+    )
 
     assert captured == [(tmp_path, application.config)]
     assert advancer._langchain_models == (endpoint,)

@@ -17,7 +17,7 @@ from nuself.cli.output import (
     resolve_handle,
     resolve_handle_selection,
 )
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntry,
     default_memory_type_registry,
 )

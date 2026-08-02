@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.structured import StructuredAgent
-from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
+from nuself.memory.model import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
 from nuself.profile.contracts import ProfileRepositoryPort
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")

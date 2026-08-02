@@ -15,7 +15,7 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.clock import utc_now_iso
 from nuself.llm import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
-from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType
+from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
 from nuself.profile.repository import ProfileItemRepository

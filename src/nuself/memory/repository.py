@@ -9,7 +9,7 @@ from typing import Literal, cast
 
 from nuself.clock import utc_now_iso
 from nuself.config import RuntimePaths
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,
     MemoryObject,
@@ -20,7 +20,7 @@ from nuself.domain.memory import (
     default_relation_descriptor_registry,
     merge_relations,
 )
-from nuself.domain.profile import ProfileItem
+from nuself.profile.model import ProfileItem
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record
 from nuself.runtime.messages import freeze_json_value

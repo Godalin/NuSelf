@@ -26,7 +26,7 @@ from nuself.application.composition import compose_application
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.config import runtime_paths
-from nuself.domain.proactive import IdeaCandidate
+from nuself.reflection.model import IdeaCandidate
 from nuself.logs import read_log_events
 from nuself.notification.outbox import NotificationOutbox
 from nuself.reflection.candidates import IdeaCandidateGenerator
@@ -174,7 +174,7 @@ def _fake_structured_agent(
 def _seed_memory(tmp_path: Path) -> None:
     """Seed one memory entry so IdeaCandidateGenerator has context."""
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(
@@ -274,7 +274,13 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         owned_backend(tmp_path),
     )
     return compose_reflection_scheduler(
-        application,
+        application.paths,
+        application.memory,
+        application.conversation_history,
+        application.reflection,
+        application.reflection_service,
+        application.notifications,
+        application.trace.recorder,
         config=config,
         language_preference="en",
         langchain_models=(),

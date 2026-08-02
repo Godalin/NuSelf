@@ -134,7 +134,8 @@ Risk: memory schema and persona schema evolve together, while default fallback
 construction hides model/config dependencies.
 
 Minimal correction: define a `PersonaDefinitionSource` API returning persona
-DTOs. Put the memory-to-persona projection in `persona.memory_projection`; inject
+DTOs. Keep the memory-to-persona projection in
+`application.knowledge_projection`; inject
 discussion/activation/synthesis capabilities and resolved settings.
 
 ### A7 — Resolved: process-adapter recomposition

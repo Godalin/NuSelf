@@ -5,9 +5,9 @@ import re
 from _pytest.monkeypatch import MonkeyPatch
 
 from nuself.runtime.log_event import LogEvent
-from nuself.domain.memory import MemoryEntry
-from nuself.domain.profile import ProfileItem
-from nuself.domain.source import SourceDocument
+from nuself.memory.model import MemoryEntry
+from nuself.profile.model import ProfileItem
+from nuself.memory.source_model import SourceDocument
 from nuself.notification.model import OutboxEntry
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reason.domain import ReasoningStep

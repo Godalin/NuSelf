@@ -358,7 +358,7 @@ def test_data_cli_does_not_decode_or_mutate_storage_records() -> None:
     path = _SOURCE_ROOT / "cli" / "commands" / "data.py"
     forbidden = (
         "nuself.storage",
-        "nuself.domain.memory",
+        "nuself.memory.model",
         "nuself.conversation",
     )
     assert not any(

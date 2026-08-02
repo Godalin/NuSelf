@@ -13,7 +13,7 @@ from pathlib import Path
 from nuself.config import runtime_paths
 from nuself.memory.repository import MemoryCandidateRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.domain.source import SourceChunk, SourceDocument
+from nuself.memory.source_model import SourceChunk, SourceDocument
 from nuself.memory.source_repository import SourceRepository, load_source_file
 from tests.backend import owned_backend
 

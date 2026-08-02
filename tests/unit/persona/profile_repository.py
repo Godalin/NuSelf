@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryEvidence
-from nuself.domain.profile import ProfileItem
+from nuself.memory.model import MemoryEvidence
+from nuself.profile.model import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,
     ProfileItemRepository,

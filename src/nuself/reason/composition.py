@@ -13,9 +13,11 @@ from nuself.llm import (
 )
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
 from nuself.reason.prompt import generate_reasoning_prompt
+from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.trace.service import TraceRecorder
+from nuself.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
-    from nuself.application.composition import ApplicationGraph
     from nuself.config import RuntimePaths, SystemConfig
 
 
@@ -46,7 +48,11 @@ def compose_reason_prompt_generator(
 
 
 def compose_reason_advancer(
-    application: "ApplicationGraph",
+    paths: "RuntimePaths",
+    workspace_store: PrivateWorkspaceStore,
+    persona_repository: PersonaPromptRepository,
+    trace_recorder: TraceRecorder,
+    config: "SystemConfig",
     *,
     readonly_tools: Sequence[BaseTool] | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
@@ -54,17 +60,17 @@ def compose_reason_advancer(
     """Compose model-backed reason advancement from one authority graph."""
 
     return default_reason_advancer(
-        paths=application.paths,
-        workspace_store=application.reason_workspace,
-        persona_repository=application.persona_prompts,
-        trace_recorder=application.trace.recorder,
+        paths=paths,
+        workspace_store=workspace_store,
+        persona_repository=persona_repository,
+        trace_recorder=trace_recorder,
         readonly_tools=readonly_tools,
         langchain_models=(
             langchain_models
             if langchain_models is not None
             else configured_langchain_chat_models(
-                application.paths.authority_root,
-                config=application.config,
+                paths.authority_root,
+                config=config,
             )
         ),
     )

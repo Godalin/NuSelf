@@ -9,7 +9,7 @@ from typing import IO, Literal, Never, cast
 from uuid import NAMESPACE_URL, uuid5
 
 from nuself.config import RuntimePaths
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryTypeRegistry,
     default_memory_type_registry,
 )

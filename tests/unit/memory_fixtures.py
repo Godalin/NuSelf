@@ -8,7 +8,7 @@ from conversation_fixtures import ConversationStore
 from nuself.agent.structured import StructuredAgent
 from nuself.trace.composition import compose_trace_services
 from nuself.config import RuntimePaths, runtime_paths
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryTypeRegistry,
     RelationDescriptorRegistry,
 )

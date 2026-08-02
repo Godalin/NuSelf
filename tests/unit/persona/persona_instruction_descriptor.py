@@ -18,18 +18,18 @@ from langchain_core.messages import BaseMessage
 
 from nuself.persona.definition import BUILTIN_PERSONAS
 from nuself.persona.graph import AgentBackedActivationPolicy
-from nuself.persona.memory_projection import load_personas_from_memory
+from nuself.application.knowledge_projection import load_personas_from_memory
 from nuself.persona.definition import (
     PersonaActivationOutput,
     PersonaDefinition,
     PersonaInput,
 )
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryObject,
     MemoryValidationError,
     default_memory_type_registry,
 )
-from nuself.domain.memory import MemoryEntry
+from nuself.memory.model import MemoryEntry
 from nuself.logs import read_log_events
 from nuself.memory.repository import MemoryEntryRepository
 
