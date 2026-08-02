@@ -50,6 +50,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
         return _render_discussion_log_event(event, color=color)
     if event.event == "service_tool_called" and event.metadata:
         return _render_service_tool_called(event, color=color)
+    if event.event == "tool.activity" and _has_structured_tool_io(event):
+        return _render_service_tool_called(event, color=color)
 
     theme = TerminalTheme(color=color)
     tag = _render_log_tags(event, theme)
@@ -93,6 +95,7 @@ def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -
         if isinstance(raw_tool, str):
             extra["tool"] = raw_tool
     return render_tool_call(
+        event=event.event,
         component=event.component,
         service=service or event.component,
         args=args,
@@ -269,6 +272,7 @@ def render_approval_prompt(
 
 def render_tool_call(
     *,
+    event: str = "service_tool_called",
     component: str,
     service: str,
     args: object,
@@ -288,7 +292,7 @@ def render_tool_call(
     theme = TerminalTheme(color=color)
     comp_tag = theme.tag(f"[{component}]", component)
     srv_tag = theme.tag(f"[{service}]", service)
-    header_parts: list[str] = [f"{comp_tag} {srv_tag} service_tool_called"]
+    header_parts: list[str] = [f"{comp_tag} {srv_tag} {event}"]
     remaining_fields = dict(extra_fields or {})
     tool_name = remaining_fields.pop("tool", None)
     if tool_name is not None:

@@ -67,6 +67,34 @@ def test_render_service_tool_log_uses_caller_and_service_tags() -> None:
     ]
 
 
+def test_render_detailed_tool_activity_uses_structured_tool_io() -> None:
+    event = LogEvent(
+        time="2026-08-03T10:00:00Z",
+        level="info",
+        component="chat",
+        event="tool.activity",
+        message="Tool outcome observed",
+        conversation_id="default",
+        status="completed",
+        metadata={
+            "service_component": "memory",
+            "operation": "memory_search",
+            "tool": "memory_search",
+            "args": {"query": "architecture"},
+            "result": "one match",
+        },
+    )
+
+    assert render_log_event(event, color=False).splitlines() == [
+        "[chat] [memory] tool.activity tool=memory_search status=completed conversation=default",
+        "  args: {",
+        '    "query": "architecture"',
+        "  }",
+        "  result:",
+        "    one match",
+    ]
+
+
 def test_render_step_watch_entry_shows_terminal_status() -> None:
     step = ReasoningStep(
         thread_id="reason-1",

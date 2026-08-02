@@ -47,6 +47,11 @@ class ObservationPolicy:
 
 
 @dataclass(frozen=True)
+class CompactPolicy:
+    """Marker for intentionally compact observation presentation."""
+
+
+@dataclass(frozen=True)
 class AuditPolicy:
     """Stable domain audit identity."""
 
@@ -66,6 +71,7 @@ class FeatureSpec:
     effect: Effect | None = None
     confirmation: ConfirmationPolicy | None = None
     observation: ObservationPolicy | None = None
+    compact: CompactPolicy | None = None
     audit: AuditPolicy | None = None
 
 
@@ -224,6 +230,12 @@ def observed[**P, R](
         )
 
     return decorate(function) if function is not None else decorate
+
+
+def compact[**P, R](function: FeatureCallable[P, R]) -> FeatureCallable[P, R]:
+    """Declare operation/status-only presentation for observed outcomes."""
+
+    return _attach(function, compact=CompactPolicy())
 
 
 def audited[**P, R](

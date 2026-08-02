@@ -104,8 +104,22 @@ class ConversationToolRuntime:
         if tool is None:
             return
         metadata = tool.metadata or {}
+        service_component = tool_service_component(tool)
+        if service_component is None:
+            return
         if metadata.get("observed") is True:
             if self._event_publisher is not None:
+                projection = ToolOutcomeProjection(
+                    component="chat",
+                    service_component=service_component,
+                    outcome=outcome,
+                )
+                activity_metadata: dict[str, object] = {
+                    "service_component": service_component,
+                    "operation": outcome.name,
+                }
+                if metadata.get("compact") is not True:
+                    activity_metadata.update(projection.metadata)
                 self._event_publisher.publish(
                     producer="chat",
                     name="tool.activity",
@@ -121,17 +135,10 @@ class ConversationToolRuntime:
                             if outcome.error is not None
                             else "completed"
                         ),
-                        metadata={
-                            "service_component": metadata.get(
-                                "service_component"
-                            ),
-                            "operation": outcome.name,
-                        },
+                        error=outcome.error,
+                        metadata=activity_metadata,
                     ).to_mapping(),
                 )
-            return
-        service_component = tool_service_component(tool)
-        if service_component is None:
             return
         ToolOutcomeProjection(
             component="chat",

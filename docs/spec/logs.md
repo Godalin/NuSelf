@@ -129,6 +129,12 @@ Human-readable rendering must show both tags at the front:
   result: Archived "Old memory".
 ```
 
+Agent tools declared with `@observed` publish the same structured I/O through
+the live `tool.activity` event by default. A tool may add the orthogonal
+`@compact` declaration when its activity should intentionally contain only the
+service component, operation, and status. Compactness is never inferred from
+the presence of `@observed` and must not change the tool's returned value.
+
 Rules:
 
 - The first tag is the caller component and determines the log file.

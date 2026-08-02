@@ -186,15 +186,15 @@ NuSelf does not stamp every domain from an empty package template.
 
 Feature functions declare cross-cutting behavior through orthogonal decorators
 for tool identity, component ownership, effects, confirmation, observation,
-and audit. `runtime.feature.policy` owns those inert declarations while
+compact observation presentation, and audit. `runtime.feature.policy` owns those inert declarations while
 `runtime.feature.execution` interprets them through injected ports. Domain
 functions remain directly testable callables.
 
 Major domains are:
 
-- **Memory and ingestion** — producer-neutral durable observations,
-  authoritative personal records, sources, candidates, profile items,
-  relations, and rebuildable search projections.
+- **Memory and Source** — Memory owns chat-derived observations, authoritative
+  personal records, candidates, profile items, relations, and search;
+  independent Source owns imported external documents and chunks.
   See [`spec/memory.md`](spec/memory.md) and
   [`spec/storage-v2.md`](spec/storage-v2.md).
 - **Conversation and persona** — context preparation, tool execution, bounded

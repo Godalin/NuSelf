@@ -44,6 +44,7 @@ def materialize_tool[**P, R](
         "effect": spec.effect,
         "confirmation_required": spec.confirmation is not None,
         "observed": spec.observation is not None,
+        "compact": spec.compact is not None,
         "audit_event": (
             spec.audit.event if spec.audit is not None else None
         ),

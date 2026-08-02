@@ -28,6 +28,7 @@ A feature function composes one-purpose decorators:
 @mutating
 @requires_confirmation(action="archive", resource="memory")
 @observed
+@compact
 @audited("memory_archived")
 def archive_memory(entry_id: str) -> str: ...
 ```
@@ -38,7 +39,7 @@ dispatch work, or translate results. Composition rejects conflicts such as
 simultaneous `readonly` and `mutating` policies.
 
 The initial dimensions are tool identity, component, effect classification,
-confirmation, observation, and domain audit. Retry, idempotency, timeout, and
+confirmation, observation, observation presentation, and domain audit. Retry, idempotency, timeout, and
 capability may be added independently when their execution contracts exist;
 they must not enlarge one catch-all decorator.
 
@@ -46,8 +47,12 @@ One LangChain adapter reads the composed specification and produces the
 framework tool. Shared execution middleware interprets policies. Confirmation
 uses an injected approval port; terminal, daemon, test, and future web
 frontends provide different adapters without changing feature functions.
-Observation publishes safe lifecycle events. Audit writes durable records
-through an injected sink. Arguments and results are private by default.
+Observation publishes safe lifecycle events and one tool outcome event. Audit
+writes durable records through an injected sink. Observed tool outcomes include
+their structured arguments and result/error by default. `@compact` is an
+independent presentation declaration that reduces the tool outcome to
+component, operation, and status; it does not disable observation or alter the
+tool result.
 For an `@observed` function, the shared executor publishes
 `feature.started` followed by exactly one of `feature.completed` or
 `feature.failed`. Payloads contain component, operation, and status only; the

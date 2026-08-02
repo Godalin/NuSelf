@@ -218,8 +218,8 @@ Important boundaries:
 - Default tests and CI do not read private project data.
 - Opt-in live API tests use fixed synthetic prompts.
 - Diagnostic configuration output redacts credentials.
-- Thought packs and JSON exports are explicit portability tools; keep separate
-  backups of the selected authority.
+- Observed tool activity logs include structured arguments and results by default; explicitly compact tools record only operation and status.
+- Thought packs and JSON exports are explicit portability tools; keep separate backups of the selected authority.
 
 See the [memory guide](docs/memory.md) and
 [storage specification](docs/spec/storage-v2.md) for details.

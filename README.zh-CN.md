@@ -197,6 +197,7 @@ local-first 不等于模型离线：配置远程模型后，一次调用所需�
 - 默认测试和 CI 不读取项目私人数据。
 - 可选的真实 API 测试只发送固定合成提示。
 - 配置诊断会隐藏凭据。
+- 工具活动日志默认包含结构化参数和结果；显式精简的工具只记录操作与状态。
 - thought pack 和 JSON export 是显式迁移工具；仍应独立备份所选 authority。
 
 更多说明见[记忆指南](docs/memory.md)和[存储规范](docs/spec/storage-v2.md)。

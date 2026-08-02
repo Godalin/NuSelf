@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Observed agent-tool logs once again show structured arguments and
+  result/error details by default. Tool authors may apply the orthogonal
+  `@compact` decorator when operation/status-only output is intentional.
+
 - Split imported documents into an independent Source domain and top-level
   `nuself source` command family. Source ingestion and deletion no longer
   create or remove personal Memory/Profile records.

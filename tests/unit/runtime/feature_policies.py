@@ -17,6 +17,7 @@ from nuself.runtime.messages import RuntimeEnvelope
 from nuself.runtime.feature.policy import (
     FeaturePolicyConflictError,
     audited,
+    compact,
     component,
     feature_spec,
     mutating,
@@ -64,14 +65,14 @@ def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
         return value
 
     decorated = audited("memory_archived")(
-        observed(
+        compact(observed(
             requires_confirmation(
                 action="archive",
                 resource="memory",
             )(
                 mutating(component("memory")(tool(name="memory_archive")(implementation)))
             )
-        )
+        ))
     )
 
     assert decorated is implementation
@@ -82,6 +83,7 @@ def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
     assert spec.effect == "mutating"
     assert spec.confirmation is not None
     assert spec.observation is not None
+    assert spec.compact is not None
     assert spec.audit is not None
 
 
@@ -244,6 +246,7 @@ def test_materialized_tool_preserves_framework_boundary() -> None:
         "effect": "readonly",
         "confirmation_required": False,
         "observed": False,
+        "compact": False,
         "audit_event": None,
     }
 
