@@ -25,6 +25,10 @@ The production configuration loader has no hidden test-mode defaults. Tests
 that need shorter intervals or alternate policies supply explicit typed config
 or fixture files; runtime behavior never branches on a test environment.
 
+The flat inspection projection uses the model-shaped
+`llm.endpoints.<index>.*` namespace for every endpoint plus the derived
+`llm.count`. It does not duplicate the first endpoint under `llm.0.*`.
+
 ## Config Sections
 
 | Section | Dataclass | Purpose |

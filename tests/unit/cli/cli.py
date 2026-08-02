@@ -4764,7 +4764,7 @@ def test_config_command_shows_paths(tmp_path: Path, capsys: CaptureFixture) -> N
     assert "authority_root:" in captured.out
     assert "config_layers:" in captured.out
     assert "config_effective:" in captured.out
-    assert "llm.0.api_key:" in captured.out
+    assert "llm.endpoints.0.api_key:" in captured.out
     assert (
         "daemon_reload: restart required after configuration changes"
         in captured.out

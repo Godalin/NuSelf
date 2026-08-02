@@ -419,21 +419,11 @@ class ConfigSystem:
                 "NuSelf configuration 'llm' must be an endpoint list"
             )
 
-    def as_flat_dict(self, config: SystemConfig) -> dict[str, Any]:
+    @staticmethod
+    def as_flat_dict(config: SystemConfig) -> dict[str, Any]:
         """Return configuration as flat key/value pairs for CLI inspection."""
         raw = config.model_dump(mode="python")
         flat = _redact_flat_config(_flatten_config(raw))
 
         flat["llm.count"] = len(config.llm.endpoints)
-        if config.llm.endpoints:
-            flat["llm.0.provider"] = "anthropic" if config.llm.endpoints[0].anthropic else "openai"
-            flat["llm.0.base_url"] = config.llm.endpoints[0].base_url
-            flat["llm.0.api_key"] = "***" if config.llm.endpoints[0].api_key else "(not set)"
-            flat["llm.0.model"] = config.llm.endpoints[0].model
-        else:
-            flat["llm.0.provider"] = "(not set)"
-            flat["llm.0.base_url"] = "(not set)"
-            flat["llm.0.api_key"] = "(not set)"
-            flat["llm.0.model"] = "(not set)"
-
         return flat

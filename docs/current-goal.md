@@ -9,20 +9,21 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Remove the unused runtime-owned test configuration factory.
+Remove duplicate first-endpoint aliases from flattened config output.
 
 ## Ordered Steps
 
-1. Specify that test timing/config overrides belong to fixtures and explicit
-   inputs, not an unused production loader branch.
-2. Remove `ConfigSystem._test_config()` and its duplicate configuration tree.
-3. Run focused/full gates, record evidence, and commit without pushing.
+1. Specify `llm.endpoints.<index>.*` as the sole flattened endpoint namespace.
+2. Remove the hand-built `llm.0.*` mirror and make flat projection a static
+   config operation.
+3. Update CLI/config regressions, run focused/full gates, record evidence, and
+   commit without pushing.
 
 ## Exclusions
 
-- Preserve production defaults, schema validation, layered loading, and all
-  test fixture behavior.
-- Do not replace the dead method with an environment-sensitive test branch.
+- Preserve recursive flattening, secret redaction, `llm.count`, deterministic
+  sorting, and `dev config` presentation.
+- Do not add a replacement compatibility namespace or projection facade.
 
 ## Constraints
 
@@ -34,6 +35,12 @@ Remove the unused runtime-owned test configuration factory.
 
 ## Phase Evidence
 
+- Flattened config inspection now exposes endpoints only through the recursive
+  `llm.endpoints.<index>.*` namespace plus `llm.count`. Removed the hand-built
+  first-endpoint `llm.0.*` mirror and made the stateless projection a static
+  operation, eliminating meaningless `ConfigSystem()` instances. Focused
+  config/CLI tests: 392 passed; full suite: 2446 passed; Pyright: 0 errors, 0
+  warnings; sdist and wheel build succeeded.
 - Removed the unreferenced `ConfigSystem._test_config()` method and its duplicate
   daemon/reflection configuration tree. Production config has no hidden test
   branch; tests continue to supply explicit fixtures and typed settings. Source,

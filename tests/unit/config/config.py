@@ -55,7 +55,7 @@ def test_flat_config_redacts_every_endpoint_key_without_aggregate_values(
     )
 
     config = ConfigSystem.load(config_path, tmp_path)
-    flat = ConfigSystem().as_flat_dict(config)
+    flat = ConfigSystem.as_flat_dict(config)
     rendered = repr(flat)
 
     assert secret_one not in rendered
@@ -82,7 +82,7 @@ def test_smtp_password_is_absent_from_flat_projection_and_repr() -> None:
         )
     )
 
-    flat = ConfigSystem().as_flat_dict(config)
+    flat = ConfigSystem.as_flat_dict(config)
 
     assert flat["email.smtp.password"] == "***"
     assert secret not in repr(flat)

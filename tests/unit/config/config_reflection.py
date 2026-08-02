@@ -78,7 +78,7 @@ llm:
     assert config.llm.endpoints[1].model == "claude-model"
     assert config.llm.endpoints[1].anthropic is True
     assert config.llm.endpoints[1].base_url == "https://api.anthropic.com"
-    assert ConfigSystem().as_flat_dict(config)["llm.count"] == 2
+    assert ConfigSystem.as_flat_dict(config)["llm.count"] == 2
 
 
 def test_llm_endpoint_timeout_and_chat_request_timeout_from_yaml(tmp_path: Path) -> None:
@@ -101,7 +101,7 @@ chat:
 
     assert config.llm.endpoints[0].timeout_seconds == 300
     assert config.chat.request_timeout_seconds == 600
-    assert ConfigSystem().as_flat_dict(config)["chat.request_timeout_seconds"] == 600
+    assert ConfigSystem.as_flat_dict(config)["chat.request_timeout_seconds"] == 600
 
 
 def test_llm_nested_openai_object_is_rejected(tmp_path: Path) -> None:

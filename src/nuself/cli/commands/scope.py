@@ -65,7 +65,7 @@ def handle_dev_config(args: argparse.Namespace) -> int:
     print("config_effective:")
     effective = ConfigSystem.load_scope(scope)
     for key, value in sorted(
-        ConfigSystem().as_flat_dict(effective).items()
+        ConfigSystem.as_flat_dict(effective).items()
     ):
         print(f"  {key}: {value}")
     print(f"selected_config: {paths.config_file}")
