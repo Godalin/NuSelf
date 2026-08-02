@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from nuself.runtime.job_definitions import (
+from nuself.runtime.job.definition import (
     JobDefinitionRegistry,
     RuntimeJobDefinition,
     build_job_definition_registry,

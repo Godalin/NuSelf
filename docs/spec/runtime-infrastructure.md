@@ -651,7 +651,7 @@ Ephemeral events use an in-process publisher/projection interface:
 - cross-process live activity requires an explicit transport or cursor store,
   not repeated full-file scans presented as an event bus.
 
-`nuself.runtime.events.EventPublisher` implements this boundary. This API is
+`nuself.runtime.event.publisher.EventPublisher` implements this boundary. This API is
 not a general asynchronous event bus: every attached projection must be a
 bounded in-process operation whose completion is intentionally part of
 `publish()` completion. Network calls, unbounded waits, retries, notifications,

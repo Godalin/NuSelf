@@ -19,8 +19,8 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
-from nuself.runtime.job_definitions import UnknownJobDefinitionError
-from nuself.runtime.jobs import JobMessage
+from nuself.runtime.job.definition import UnknownJobDefinitionError
+from nuself.runtime.job.message import JobMessage
 from nuself.storage import write_json_atomic
 
 _STATE_OWNER = DaemonStateOwner()

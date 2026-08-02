@@ -26,7 +26,7 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     sanitize_diagnostic_metadata,
 )
-from nuself.runtime.events import EventDeliveryError, EventPublisher
+from nuself.runtime.event.publisher import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.runtime.warning_definitions import (
     TerminalWarningDefinition,

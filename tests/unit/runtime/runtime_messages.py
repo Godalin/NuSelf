@@ -15,7 +15,7 @@ from nuself.runtime.context import (
     runtime_context,
     use_runtime_context,
 )
-from nuself.runtime.jobs import JobMessage
+from nuself.runtime.job.message import JobMessage
 from nuself.runtime.messages import (
     RUNTIME_SCHEMA_VERSION,
     MessageKind,

@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 
 from nuself.runtime.context import RuntimeContext
-from nuself.runtime.job_definitions import (
+from nuself.runtime.job.definition import (
     DuplicateJobDefinitionError,
     JobDefinitionRegistry,
     JobDefinitionRegistrySealedError,
@@ -15,7 +15,7 @@ from nuself.runtime.job_definitions import (
     UnknownJobDefinitionError,
     build_job_definition_registry,
 )
-from nuself.runtime.jobs import JobMessage
+from nuself.runtime.job.message import JobMessage
 from nuself.runtime.messages import RuntimeEnvelope
 
 

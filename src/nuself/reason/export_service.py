@@ -37,8 +37,8 @@ from nuself.reason.audit import (
     REASON_AUDIT,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.jobs import JobMessage
-from nuself.runtime.job_definitions import JobDefinitionRegistry
+from nuself.runtime.job.message import JobMessage
+from nuself.runtime.job.definition import JobDefinitionRegistry
 from nuself.storage import write_json_atomic
 from nuself.workspace import PrivateWorkspaceStore
 

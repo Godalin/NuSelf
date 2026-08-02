@@ -15,10 +15,9 @@ without compatibility forwarding modules.
 
 ## Next Steps
 
-1. Move Job and Event contracts into `runtime/job` and `runtime/event`.
-2. Replace top-level `logs.py` and scattered log files with `nuself/log` owners.
-3. Move Feature policy and execution into `runtime/feature`.
-4. Audit remaining flat files, run full gates, commit each complete boundary,
+1. Replace top-level `logs.py` and scattered log files with `nuself/log` owners.
+2. Move Feature policy and execution into `runtime/feature`.
+3. Audit remaining flat files, run full gates, commit each complete boundary,
    return to Idle, and stop.
 
 ## Exclusions
@@ -36,3 +35,6 @@ without compatibility forwarding modules.
   complete runtime package also reports 0 errors and 0 warnings.
 - Audit package: Pyright 0 errors, 0 warnings; 279 focused audit and boundary
   tests passed; no old Audit source path remains.
+- Job/Event packages: Pyright 0 errors, 0 warnings; 123 focused message,
+  scheduler, publication, definition, and boundary tests passed; no old Job or
+  Event source path remains.

@@ -11,7 +11,7 @@ from nuself.memory.service import MemoryService
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
-from nuself.runtime.jobs import JobSink
+from nuself.runtime.job.message import JobSink
 from nuself.trace.service import TraceQueryService
 from nuself.workspace import PrivateWorkspaceStore
 

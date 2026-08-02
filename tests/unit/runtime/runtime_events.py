@@ -10,7 +10,7 @@ from nuself.logs import (
     runtime_event_log_sink,
     write_runtime_event,
 )
-from nuself.runtime.event_definitions import (
+from nuself.runtime.event.definition import (
     DuplicateEventDefinitionError,
     EventDefinitionRegistry,
     EventDefinitionRegistrySealedError,
@@ -19,8 +19,8 @@ from nuself.runtime.event_definitions import (
     UnknownEventDefinitionError,
     build_event_definition_registry,
 )
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
-from nuself.runtime.events import EventDeliveryError, EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 
 

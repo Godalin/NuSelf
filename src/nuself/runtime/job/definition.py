@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from nuself.runtime.jobs import JobMessage
+    from nuself.runtime.job.message import JobMessage
 
 from nuself.runtime.definitions import (
     DefinitionRegistry,
@@ -162,7 +162,7 @@ class JobDefinitionRegistry:
             raise JobDefinitionRegistryUnsealedError(
                 "job definition registry must be sealed before construction"
             )
-        from nuself.runtime.jobs import JobMessage, JobPayload
+        from nuself.runtime.job.message import JobMessage, JobPayload
 
         context = replace(current_runtime_context(), job_id=job_id)
         job_payload = JobPayload(

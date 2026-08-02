@@ -12,7 +12,7 @@ from nuself.runtime.definitions import (
     DuplicateDefinitionError,
     UnknownDefinitionError,
 )
-from nuself.runtime.event_payloads import (
+from nuself.runtime.event.payload import (
     validate_runtime_log_event_payload,
 )
 from nuself.runtime.identities import (

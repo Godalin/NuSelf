@@ -37,7 +37,7 @@ from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     redact_sensitive_text,
 )
-from nuself.runtime.jobs import JobSink
+from nuself.runtime.job.message import JobSink
 from nuself.storage import write_json_atomic, write_text_atomic
 from nuself.private_fs import ensure_private_directory
 from nuself.workspace import PrivateWorkspaceStore

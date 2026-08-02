@@ -8,7 +8,7 @@ from threading import Lock
 from uuid import UUID, uuid4
 
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.event_definitions import (
+from nuself.runtime.event.definition import (
     EventDefinitionRegistry,
     build_event_definition_registry,
 )

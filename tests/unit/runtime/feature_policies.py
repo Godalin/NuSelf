@@ -11,8 +11,8 @@ from nuself.runtime.feature_execution import (
     FeatureConfirmationDeclined,
     FeatureExecutor,
 )
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.runtime.features import (
     FeaturePolicyConflictError,

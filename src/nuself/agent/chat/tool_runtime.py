@@ -24,8 +24,8 @@ from nuself.runtime.feature_execution import FeatureExecutor
 from nuself.runtime.observability import (
     report_observability_projection_failure,
 )
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
 
 
 class ConversationToolRuntime:

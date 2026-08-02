@@ -34,10 +34,10 @@ from nuself.llm import configured_langchain_chat_models
 from nuself.notification.delivery import NotificationDeliveryLoop
 from nuself.notification.composition import build_notification_adapters
 from nuself.reason.scheduler import ReasonScheduler
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.observability import publish_observed_event
-from nuself.runtime.jobs import JobMessage
+from nuself.runtime.job.message import JobMessage
 
 
 @dataclass(frozen=True)

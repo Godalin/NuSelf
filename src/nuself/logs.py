@@ -37,7 +37,7 @@ from nuself.runtime.diagnostics import (
     redact_sensitive_text,
     sanitize_diagnostic_metadata,
 )
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
+from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.identities import (
     require_audit_event_name,
     require_runtime_event_name,

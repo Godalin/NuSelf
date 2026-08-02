@@ -137,9 +137,11 @@ being forced through one generic message bus:
 The runtime package owns handler registration, message envelopes, correlation
 context, and generic execution facilities. Direct Audit contracts live in the
 compact `runtime.audit` package under precise `definition`, `types`, and
-`catalog` owners rather than prefixed flat files. Logs are append-only audit
-records, not a command bus. Notification outbox records are delivery state, not
-general events. See
+`catalog` owners rather than prefixed flat files. Event publication and Job
+wake-ups likewise live under `runtime.event` and `runtime.job`, with separate
+definition and transport/execution owners. Logs are append-only audit records,
+not a command bus. Notification outbox records are delivery state, not general
+events. See
 [`spec/runtime-infrastructure.md`](spec/runtime-infrastructure.md) and
 [`spec/logs.md`](spec/logs.md).
 

@@ -20,7 +20,7 @@ from nuself.reason.output_contracts import (
 from reason_output_fixtures import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
-from nuself.runtime.jobs import JobMessage
+from nuself.runtime.job.message import JobMessage
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:

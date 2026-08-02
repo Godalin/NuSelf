@@ -44,10 +44,10 @@ from nuself.logs import read_log_events, runtime_event_log_sink
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.memory.source_repository import SourceRepository
-from nuself.runtime.jobs import JobMessage, JobSink
+from nuself.runtime.job.message import JobMessage, JobSink
 from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
-from nuself.runtime.events import EventPublisher
+from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository

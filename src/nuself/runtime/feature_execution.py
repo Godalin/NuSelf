@@ -9,8 +9,8 @@ from typing import Protocol
 from langchain_core.tools import ToolException
 
 from nuself.runtime.features import FeatureSpec, feature_spec
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
-from nuself.runtime.events import EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.frontend import (
     ApprovalPort,
     ApprovalRequest,

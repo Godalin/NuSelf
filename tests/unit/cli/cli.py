@@ -80,8 +80,8 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
-from nuself.runtime.event_payloads import RuntimeLogEventPayload
-from nuself.runtime.events import EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.execution import current_cancellation
 from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository

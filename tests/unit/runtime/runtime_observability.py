@@ -6,8 +6,8 @@ import pytest
 
 import nuself.runtime.observability as observability
 from nuself.logs import LogAppendLifecycleError, read_log_events
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.event_definitions import UnknownEventDefinitionError
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.event.definition import UnknownEventDefinitionError
 from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,

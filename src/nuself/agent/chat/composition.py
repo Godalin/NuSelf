@@ -21,9 +21,9 @@ from nuself.application.projection import load_personas_from_memory
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
-from nuself.runtime.events import EventPublisher
+from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.frontend import ApprovalPort
-from nuself.runtime.jobs import JobSink
+from nuself.runtime.job.message import JobSink
 from nuself.llm import configured_langchain_chat_models
 from nuself.llm import LangChainLLMEndpoint
 from nuself.logs import runtime_event_log_sink

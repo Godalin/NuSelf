@@ -37,8 +37,8 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.jobs import JobSink
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.job.message import JobSink
 from nuself.runtime.frontend import ApprovalPort
 from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
