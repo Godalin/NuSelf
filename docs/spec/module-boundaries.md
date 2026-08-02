@@ -183,7 +183,9 @@ backend, loads one immutable configuration snapshot, constructs one
 idempotently at the outer lifecycle boundary. Command handlers and daemon
 workers borrow the graph; they neither rebuild it nor close its resources.
 Interrupt and exceptional exits follow the same outer cleanup path as normal
-completion.
+completion. Graph construction and explicit infrastructure borrowing share one
+lock-owned lazy backend acquisition path; closing also releases the runtime's
+graph reference after admission is closed.
 Application-owned Chat, daemon, notification, and model composition reuse that
 snapshot. Explicit configuration inspection and adapters documented to reload
 per operation may still call the loader; nested composition must not reload the

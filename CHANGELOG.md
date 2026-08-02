@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- `ApplicationRuntime` now has one lazy backend acquisition path shared by
+  graph composition and infrastructure borrowing, and releases its graph
+  reference during close.
 - Daemon chat timeouts and interactive startup notices now reuse the resolved
   application configuration, preserving user/workspace layering and removing
   duplicate path-only config loads.

@@ -90,6 +90,49 @@ def test_application_runtime_serializes_first_graph_access(
         runtime.close()
 
 
+def test_application_runtime_has_one_backend_acquisition_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = MagicMock()
+    graph = MagicMock()
+    backend_opens = 0
+    graph_compositions = 0
+
+    def open_backend(root: Path) -> MagicMock:
+        nonlocal backend_opens
+        assert root == tmp_path
+        backend_opens += 1
+        return backend
+
+    def compose(paths: object, selected: object) -> MagicMock:
+        nonlocal graph_compositions
+        del paths
+        assert selected is backend
+        graph_compositions += 1
+        return graph
+
+    monkeypatch.setattr(runtime_module, "auto_backend", open_backend)
+    monkeypatch.setattr(runtime_module, "compose_application", compose)
+    runtime = open_application_runtime(tmp_path)
+
+    def borrow(index: int) -> object:
+        return runtime.application if index % 2 else runtime.backend
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            results = tuple(executor.map(borrow, range(16)))
+
+        assert backend_opens == 1
+        assert graph_compositions == 1
+        assert all(
+            result is backend or result is graph
+            for result in results
+        )
+    finally:
+        runtime.close()
+
+
 def test_application_runtime_closes_backend_after_composition_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

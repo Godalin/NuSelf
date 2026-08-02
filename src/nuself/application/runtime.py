@@ -42,13 +42,9 @@ class ApplicationRuntime:
         with self._lock:
             self._require_open()
             if self._application is None:
-                backend = self._backend
-                if backend is None:
-                    backend = auto_backend(self._paths.authority_root)
-                    self._backend = backend
                 self._application = compose_application(
                     self._paths,
-                    backend,
+                    self._backend_locked(),
                 )
             return self._application
 
@@ -58,9 +54,7 @@ class ApplicationRuntime:
 
         with self._lock:
             self._require_open()
-            if self._backend is None:
-                self._backend = auto_backend(self._paths.authority_root)
-            return self._backend
+            return self._backend_locked()
 
     def close(self) -> None:
         with self._lock:
@@ -69,6 +63,7 @@ class ApplicationRuntime:
             self._closed = True
             backend = self._backend
             self._backend = None
+            self._application = None
         if backend is None:
             return
         try:
@@ -86,6 +81,13 @@ class ApplicationRuntime:
             raise ApplicationRuntimeClosedError(
                 "application runtime is already closed"
             )
+
+    def _backend_locked(self) -> ClosableStorageBackend:
+        backend = self._backend
+        if backend is None:
+            backend = auto_backend(self._paths.authority_root)
+            self._backend = backend
+        return backend
 
     def __enter__(self) -> ApplicationRuntime:
         with self._lock:

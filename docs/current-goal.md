@@ -9,23 +9,22 @@ In progress — continuously audit and simplify while preserving composability.
 
 ## Current Phase
 
-Use the authority-scoped application config throughout ordinary CLI flows.
+Give `ApplicationRuntime` one backend acquisition path.
 
 ## Ordered Steps
 
-1. Specify `ApplicationGraph.config` as the process surface's effective
-   resolved configuration; ordinary consumers must not reload from a root path.
-2. Move daemon chat timeout and REPL startup notices to the application config,
-   removing two path-only `ConfigSystem.load()` calls.
-3. Add a workspace-layer regression, run focused/full gates, record evidence,
-   and commit without pushing.
+1. Specify one lock-owned lazy backend acquisition primitive shared by graph
+   and infrastructure access.
+2. Remove duplicated acquisition branches and clear the graph reference during
+   idempotent close.
+3. Add mixed concurrent-access coverage, run focused/full gates, record
+   evidence, and commit without pushing.
 
 ## Exclusions
 
-- Preserve malformed-config fallback/diagnostics, timeout behavior, notice
-  content, log inspection, scope mismatch warnings, and CLI cleanup.
-- Keep explicit `dev scope/config` inspection independent; do not add a config
-  facade or runtime reload path.
+- Preserve lazy opening, one graph/config snapshot, backend borrowing,
+  authority checks, close diagnostics, idempotency, and closed-state errors.
+- Do not expose the acquisition primitive or add a resource-manager hierarchy.
 
 ## Constraints
 
@@ -37,6 +36,13 @@ Use the authority-scoped application config throughout ordinary CLI flows.
 
 ## Phase Evidence
 
+- `ApplicationRuntime.application` and `.backend` now share one lock-owned lazy
+  backend acquisition primitive, eliminating duplicate resource creation
+  branches. Close also releases the graph reference while retaining idempotent
+  backend cleanup and diagnostics. A mixed concurrent-access regression proves
+  one backend open and one graph composition. Focused runtime/composition tests:
+  49 passed; full suite: 2446 passed; Pyright: 0 errors, 0 warnings; sdist and
+  wheel build succeeded.
 - Daemon chat timeout selection and REPL startup notices now consume the
   already-composed `ApplicationGraph.config`; removed their independent
   path-only `ConfigSystem.load()` calls. Ordinary process surfaces therefore
