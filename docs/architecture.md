@@ -102,6 +102,15 @@ public components when that wiring exists in only one place; hiding unique
 wiring behind another factory merely relocates code. CLI handlers borrow graph
 capabilities directly instead of hiding them behind argument-discarding helper
 functions.
+Domains with multiple identity-coupled capabilities expose one immutable
+resource snapshot in `ApplicationGraph`: for example Reason's service and
+workspace, or Reflection's repository and service. These values are typed
+composition results, not API facades; they contain no forwarding methods or
+runtime lookup.
+Runtime helpers live beside their sole owner unless they define a reusable
+protocol, codec, policy, or schema boundary. Daemon's short task methods remain
+explicit adapters for the scheduler contract rather than being hidden in
+lambdas or pushed into domain services.
 
 Reflection orchestration receives candidate generation, relevance,
 organization, discussion, publication, and trace capabilities from its

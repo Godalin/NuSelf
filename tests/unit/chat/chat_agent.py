@@ -119,7 +119,7 @@ def _chat_tool(
         or MemoryService(memory_repository),
         reflections=ReflectionService(
             repo,
-            application.reason_service,
+            application.reason.service,
             trace.recorder,
             ReflectionOrganizer(tmp_path, repository=repo),
         ),

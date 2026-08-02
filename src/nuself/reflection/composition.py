@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from nuself.config import ReflectionSettings, RuntimePaths
 from nuself.conversation import ConversationHistoryService
 from nuself.llm import LangChainLLMEndpoint
@@ -19,18 +21,26 @@ from nuself.storage import StorageBackend
 from nuself.trace.service import TraceRecorder
 
 
-def compose_reflection_service(
+@dataclass(frozen=True)
+class ReflectionResources:
+    """Reflection capabilities sharing one repository identity."""
+
+    repository: ReflectionRepository
+    service: ReflectionService
+
+
+def compose_reflection_resources(
     paths: RuntimePaths,
     backend: StorageBackend,
     reason_service: ReasonService,
     trace_recorder: TraceRecorder,
-) -> tuple[ReflectionRepository, ReflectionService]:
-    """Compose Reflection's authority-scoped repository and service."""
+) -> ReflectionResources:
+    """Compose Reflection's authority-scoped capabilities."""
 
     repository = ReflectionRepository(paths, backend=backend)
-    return (
-        repository,
-        ReflectionService(
+    return ReflectionResources(
+        repository=repository,
+        service=ReflectionService(
             repository,
             reason_service,
             trace_recorder,

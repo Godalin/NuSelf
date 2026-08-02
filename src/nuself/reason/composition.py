@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
@@ -24,25 +25,33 @@ if TYPE_CHECKING:
     from nuself.config import RuntimePaths, SystemConfig
 
 
-def compose_reason_service(
+@dataclass(frozen=True)
+class ReasonResources:
+    """Reason capabilities sharing one authority and workspace identity."""
+
+    service: ReasonService
+    workspace: PrivateWorkspaceStore
+
+
+def compose_reason_resources(
     paths: "RuntimePaths",
     backend: StorageBackend,
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
-) -> tuple[ReasonService, PrivateWorkspaceStore]:
-    """Compose Reason's authority-scoped service and workspace."""
+) -> ReasonResources:
+    """Compose Reason's authority-scoped capabilities."""
 
     repository = ReasonRepository(paths, backend=backend)
     workspace = PrivateWorkspaceStore(paths, scope="reason")
-    return (
-        ReasonService(
+    return ReasonResources(
+        service=ReasonService(
             paths.authority_root,
             repository=repository,
             workspace_store=workspace,
             trace_recorder=trace_recorder,
             prompt_generator=compose_reason_prompt_generator(paths, config),
         ),
-        workspace,
+        workspace=workspace,
     )
 
 

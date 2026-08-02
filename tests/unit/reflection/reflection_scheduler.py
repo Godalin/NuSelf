@@ -219,7 +219,7 @@ def _gate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        repository=application.reflection,
+        repository=application.reflection.repository,
     )
 
 
@@ -277,8 +277,8 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         application.paths,
         application.memory,
         application.conversation_history,
-        application.reflection,
-        application.reflection_service,
+        application.reflection.repository,
+        application.reflection.service,
         application.notifications,
         application.trace.recorder,
         config=config,

@@ -54,7 +54,7 @@ def test_subsystem_tool_builders_own_their_registries(
             compose_application(
                 runtime_paths(tmp_path),
                 owned_backend(tmp_path),
-            ).reflection_service
+            ).reflection.service
         )
     ) == {
         "reflection_list_pending",

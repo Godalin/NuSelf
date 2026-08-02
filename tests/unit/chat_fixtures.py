@@ -88,11 +88,11 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         sources = source_repository or application.memory.sources
         profile = profile_repository or application.memory.profile
         reflections = (
-            application.reflection_service
+            application.reflection.service
             if reflection_repository is None
             else ReflectionService(
                 reflection_repository,
-                application.reason_service,
+                application.reason.service,
                 application.trace.recorder,
                 ReflectionOrganizer(
                     project_root,
@@ -107,7 +107,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 or MemoryService(entries, sources, profile),
                 reflections=reflections,
                 reasons=reason_service
-                or application.reason_service,
+                or application.reason.service,
                 reason_workspace=PrivateWorkspaceStore(
                     runtime_paths(project_root),
                     scope="reason",

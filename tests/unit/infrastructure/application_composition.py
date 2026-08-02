@@ -44,10 +44,11 @@ def test_application_graph_reuses_one_authority_repository_graph(
         is graph.memory.candidates
     )
     assert graph.memory.sources._profile_repository is graph.memory.profile
-    assert not hasattr(graph, "reason")
-    assert graph.reason_service._workspace_store is graph.reason_workspace
-    assert graph.reflection_service._repository is graph.reflection
-    assert graph.reflection_service._reason_service is graph.reason_service
+    assert not hasattr(graph, "reason_service")
+    assert not hasattr(graph, "reason_workspace")
+    assert graph.reason.service._workspace_store is graph.reason.workspace
+    assert graph.reflection.service._repository is graph.reflection.repository
+    assert graph.reflection.service._reason_service is graph.reason.service
     assert not hasattr(graph.trace, "repository")
     assert graph.trace.recorder._repository is graph.trace.query._repository
 
@@ -114,7 +115,7 @@ def test_reason_prompt_models_are_composed_lazily(
     graph = compose_application(paths, backend)
     assert model_calls == 0
 
-    thread = graph.reason_service.start_thread("Composed topic")
+    thread = graph.reason.service.start_thread("Composed topic")
 
     assert thread.reasoning_prompt == "Composed prompt."
     assert model_calls == 1

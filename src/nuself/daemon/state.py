@@ -77,8 +77,8 @@ class DaemonState:
         )
         self.reason_export_service = ReasonExportService(
             self.authority_root,
-            reason_service=application.reason_service,
-            workspace_store=application.reason_workspace,
+            reason_service=application.reason.service,
+            workspace_store=application.reason.workspace,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
             text_agent=LangChainTextAgent(
@@ -93,9 +93,9 @@ class DaemonState:
             application.conversations,
             application.memory_service,
             application.memory.entries,
-            application.reflection_service,
-            application.reason_service,
-            application.reason_workspace,
+            application.reflection.service,
+            application.reason.service,
+            application.reason.workspace,
             application.trace,
             application.persona_prompts,
             job_sink=self.reason_export_service.enqueue,
@@ -119,8 +119,8 @@ class DaemonState:
             paths,
             application.memory,
             application.conversation_history,
-            application.reflection,
-            application.reflection_service,
+            application.reflection.repository,
+            application.reflection.service,
             application.notifications,
             application.trace.recorder,
             config=config.reflection,
@@ -140,7 +140,7 @@ class DaemonState:
             self.authority_root,
             advancer=compose_reason_advancer(
                 paths,
-                application.reason_workspace,
+                application.reason.workspace,
                 application.persona_prompts,
                 application.trace.recorder,
                 config,
@@ -148,7 +148,7 @@ class DaemonState:
                 langchain_models=langchain_models,
             ),
             interval_seconds=reason_interval,
-            service=application.reason_service,
+            service=application.reason.service,
         )
         self._memory_observations = application.memory.observations
         memory_interval = config.daemon.memory_curator.interval_seconds

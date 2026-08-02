@@ -6,14 +6,35 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import Context, ContextVar, Token, copy_context
 from dataclasses import dataclass
+from math import isfinite
 import threading
 from typing import Generator, Generic, TypeVar, cast
-
-from nuself.runtime.validation import validate_timeout
 
 ResultT = TypeVar("ResultT")
 _MISSING = object()
 CancelCallback = Callable[[], None]
+
+
+def validate_timeout(
+    value: float | None,
+    *,
+    field_name: str,
+    allow_none: bool,
+) -> float | None:
+    """Return one finite non-negative execution timeout."""
+
+    if value is None:
+        if allow_none:
+            return None
+        raise ValueError(f"{field_name} must be finite and non-negative")
+    if (
+        isinstance(value, bool)
+        or type(value) not in {int, float}
+        or not isfinite(value)
+        or value < 0
+    ):
+        raise ValueError(f"{field_name} must be finite and non-negative")
+    return float(value)
 
 
 class CancellationCleanupError(RuntimeError):

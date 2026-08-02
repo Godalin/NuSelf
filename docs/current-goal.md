@@ -9,9 +9,8 @@ Idle — no active implementation goal.
 
 ## Objective
 
-No active objective. Application composition now delegates Reason and
-Reflection internals to their domains, and shallow CLI graph-field wrappers
-have been removed.
+No active objective. Reason and Reflection now expose consistent domain-owned
+resource snapshots; the bounded daemon/runtime indirection audit is complete.
 
 ## Next Steps
 
@@ -24,5 +23,8 @@ None while idle.
 ## Last Verification
 
 - Pyright: 0 errors, 0 warnings.
-- Pytest: 2452 passed.
+- Pytest: 2453 passed.
 - Package build: source distribution and wheel succeeded for `0.3.1`.
+- Completion audit: no flat Reason/Reflection compatibility fields remain;
+  daemon task adapters retain explicit scheduler/validation responsibilities;
+  sole-consumer runtime timeout validation now belongs to `runtime.execution`.

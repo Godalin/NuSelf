@@ -122,6 +122,14 @@ def test_concrete_execution_modules_use_responsibility_names() -> None:
     assert (_SOURCE_ROOT / "agent" / "skills").is_dir()
 
 
+def test_single_owner_timeout_validation_lives_with_execution() -> None:
+    assert not (_SOURCE_ROOT / "runtime" / "validation.py").exists()
+    execution = (_SOURCE_ROOT / "runtime" / "execution.py").read_text(
+        encoding="utf-8"
+    )
+    assert "def validate_timeout(" in execution
+
+
 def test_domain_workflows_live_with_their_owner() -> None:
     assert (_SOURCE_ROOT / "reason" / "export_service.py").is_file()
     assert not (_SOURCE_ROOT / "daemon" / "reason_export.py").exists()

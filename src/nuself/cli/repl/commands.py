@@ -136,7 +136,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
 
 
 def handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
-    service = cli_application().reason_service
+    service = cli_application().reason.service
     if command == "":
         return interactive_reason_help()
     if command == "list":
@@ -166,7 +166,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         application = cli_application()
         advancer = compose_reason_advancer(
             application.paths,
-            application.reason_workspace,
+            application.reason.workspace,
             application.persona_prompts,
             application.trace.recorder,
             application.config,
@@ -460,7 +460,7 @@ def handle_interactive_reflection_command(
 ) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = cli_application().reflection_service.list_entries(
+    entries = cli_application().reflection.service.list_entries(
         status=None if include_all else "pending"
     )
     if not entries:
@@ -497,14 +497,14 @@ def handle_interactive_reflection_show_command(project_root: Path | None, entry_
     from nuself.tui.render import render_reflection_entry_detail
 
     try:
-        entry = cli_application().reflection_service.show_entry(entry_id)
+        entry = cli_application().reflection.service.show_entry(entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         return diagnostic_exception_message(exc)
     return render_reflection_entry_detail(entry)
 
 
 def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    service = cli_application().reflection_service
+    service = cli_application().reflection.service
     try:
         service.show_entry(entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:

@@ -123,7 +123,7 @@ class InteractiveCompleter(Completer):
 
     def _all_thread_ids_with_status(self) -> list[str]:
         def load() -> list[str]:
-            service = cli_application().reason_service
+            service = cli_application().reason.service
             return [
                 f"{thread.id} ({thread.status}, {thread.topic[:40]})"
                 for thread in service.list_threads(status="all")

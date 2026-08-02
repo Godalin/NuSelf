@@ -326,6 +326,20 @@ mechanism. Adapter-local helpers that merely discard arguments and return one
 `ApplicationGraph` field are forbidden; adapters borrow that field directly.
 Resource snapshots remain valid when they preserve shared repository identity
 or form a real consumer-specific capability boundary.
+When one domain exposes multiple authority-scoped capabilities that must share
+internal identity, `ApplicationGraph` exposes one immutable domain-owned
+resource snapshot rather than parallel flat fields. The snapshot contains
+concrete capabilities but performs no lookup, dispatch, forwarding, or
+lifecycle work. Reason groups its service and workspace; Reflection groups its
+repository and service. Callers name the capability explicitly through that
+domain resource and no flat compatibility aliases are retained.
+
+Shared runtime files require either multiple consumers or an independently
+testable protocol, codec, policy, or schema boundary. A helper used by exactly
+one runtime owner and expressing only that owner's local validation belongs in
+the owner module. Short daemon handlers remain valid when they adapt the
+uniform `DaemonTask` signature, validate payloads, or mark a scheduler task
+boundary; line count alone does not make them redundant.
 Initialized CLI and REPL commands always run inside one `ApplicationRuntime`;
 helper functions must not create a fallback graph when that scope is absent.
 The daemon server likewise owns its `ApplicationRuntime` and injects the

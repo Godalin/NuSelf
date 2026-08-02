@@ -94,7 +94,7 @@ def test_application_reason_composition_resolves_models_from_graph_config(
 
     advancer = compose_reason_advancer(
         application.paths,
-        application.reason_workspace,
+        application.reason.workspace,
         application.persona_prompts,
         application.trace.recorder,
         application.config,
