@@ -15,7 +15,7 @@ Reason must integrate with trace. Reason owns durable long-run topic state; trac
 ## Non-Goals
 
 - No always-on high-frequency background thinking.
-- No automatic notification for every reasoning step.
+- No automatic external Delivery for every reasoning step.
 - No replacement of memory curation or reflection.
 - No raw hidden model chain-of-thought storage.
 - No explicit branch graph schema in the first storage slice.
@@ -945,9 +945,14 @@ For the reason subsystem specifically:
 - Tool logs should not be truncated by the capture layer; user-facing renderers may choose their own display policy, but persisted step snapshots should preserve the full captured result.
 - Any CLI, REPL, transcript, watch, or detail renderer that displays reason tool logs must call the common log renderer so reason output stays visually and semantically consistent with chat, memory, reflection, trace, and daemon service logs.
 
-### Notification Policy
+### Inbox Policy
 
-Integrate with notification outbox only after manual advance is stable.
+Every persisted non-`no_change` step with a summary, question, finding,
+pending item, or terminal recommendation publishes one idempotent
+`kind=reason_step` Inbox item. The item references the step ID and does not
+copy the complete Reason thread or mutate its lifecycle. Internal no-change
+steps never enter Inbox and Reason does not request external Delivery by
+default.
 
 Notify only when a step is user-worthy:
 

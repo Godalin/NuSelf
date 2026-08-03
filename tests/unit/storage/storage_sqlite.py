@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from notification_fixtures import notification_outbox
-
 # pyright: reportUnusedImport=false
 
 from memory_fixtures import (
@@ -34,7 +32,7 @@ import pytest
 import nuself.storage.sqlite as sqlite_storage
 import nuself.storage.pack as pack_storage
 from nuself.log.reader import read_log_events
-from nuself.notification.outbox import NotificationOutbox
+from nuself.inbox.service import InboxService
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -534,8 +532,8 @@ def test_running_backend_reads_columns_added_by_another_backend(
     database = tmp_path / "shared-schema.sqlite"
     first = create_sqlite_backend(db_path=database)
     second = open_sqlite_backend(db_path=database)
-    first_collection = first.collection("notification_outbox")
-    second_collection = second.collection("notification_outbox")
+    first_collection = first.collection("inbox_items")
+    second_collection = second.collection("inbox_items")
     try:
         first_collection.put("entry", {"id": "entry", "title": "before"})
         assert first_collection.get("entry") == {
@@ -586,11 +584,11 @@ def test_sqlite_put_rejects_record_id_mismatch(
         backend.close()
 
 
-def test_notification_outbox_uses_explicit_authority_backend(
+def test_inbox_uses_explicit_authority_backend(
     tmp_path: Path,
 ) -> None:
     backend = auto_backend(tmp_path)
-    outbox = NotificationOutbox(runtime_paths(tmp_path), backend)
+    outbox = InboxService(runtime_paths(tmp_path), backend)
 
     assert outbox._backend is backend
 
@@ -2170,10 +2168,10 @@ def test_v5_v6_conversation_migration_is_reversible_and_payload_safe(
             "suggested_conversation_id": "default",
         },
     )
-    backend.collection("notification_outbox").put(
-        "notification-1",
+    backend.collection("inbox_items").put(
+        "inbox-1",
         {
-            "id": "notification-1",
+            "id": "inbox-1",
             "deep_link": "nuself://conversation/default?message=hello",
         },
     )
@@ -2227,7 +2225,7 @@ def test_v5_v6_conversation_migration_is_reversible_and_payload_safe(
         assert record("reflection_entries", "reflection-1") == {
             "suggested_conversation_id": "default",
         }
-        assert record("notification_outbox", "notification-1") == {
+        assert record("inbox_items", "inbox-1") == {
             "deep_link": "nuself://conversation/default?message=hello",
         }
     finally:

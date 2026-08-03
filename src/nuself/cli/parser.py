@@ -31,15 +31,6 @@ from nuself.cli.commands.dev import (
 from nuself.cli.commands.eval import handle_eval
 from nuself.cli.commands.memory.parser import add_memory_parser
 from nuself.cli.commands.source import add_source_parser
-from nuself.cli.commands.notifications import (
-    handle_notify_clear,
-    handle_notify_dismiss,
-    handle_notify_list,
-    handle_notify_send,
-    handle_notify_show,
-    handle_notify_stats,
-    handle_notify_watch,
-)
 from nuself.cli.commands.pack import (
     handle_pack_export,
     handle_pack_import,
@@ -78,7 +69,18 @@ from nuself.cli.commands.reflections import (
     handle_reflection_run,
     handle_reflection_status,
 )
-from nuself.cli.commands.inbox import handle_inbox
+from nuself.cli.commands.inbox import (
+    handle_inbox,
+    handle_inbox_clear,
+    handle_inbox_dismiss,
+    handle_inbox_list,
+    handle_inbox_read,
+    handle_inbox_resolve,
+    handle_inbox_send,
+    handle_inbox_show,
+    handle_inbox_stats,
+    handle_inbox_watch,
+)
 from nuself.cli.commands.system import (
     handle_health,
     handle_logs,
@@ -377,8 +379,8 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
 
     inbox_parser = subparsers.add_parser(
         "inbox",
-        help="Show pending items across proactive domains.",
-        description="Show pending items across proactive domains.",
+        help="Manage durable user-attention items.",
+        description="Manage durable user-attention items.",
     )
     bind_handler(inbox_parser, handle_inbox)
     inbox_subparsers = inbox_parser.add_subparsers(
@@ -446,61 +448,30 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         handle_reflection_organize,
     )
 
-    notify_parser = inbox_subparsers.add_parser(
-        "notify",
-        help="Manage notification outbox entries.",
-        description="Manage notification outbox entries.",
+    inbox_list_parser = inbox_subparsers.add_parser("list", help="List Inbox items.")
+    inbox_list_parser.add_argument(
+        "--status", choices=["pending", "read", "dismissed", "resolved"], default=None
     )
-    bind_help(notify_parser)
-    notify_subparsers = notify_parser.add_subparsers(
-        dest="notify_command", metavar="<command>"
+    bind_handler(inbox_list_parser, handle_inbox_list)
+    for name, help_text, handler in (
+        ("show", "Show one Inbox item.", handle_inbox_show),
+        ("read", "Mark one Inbox item read.", handle_inbox_read),
+        ("dismiss", "Dismiss one Inbox item.", handle_inbox_dismiss),
+        ("resolve", "Resolve one Inbox item.", handle_inbox_resolve),
+        ("send", "Deliver one Inbox item now.", handle_inbox_send),
+    ):
+        command = inbox_subparsers.add_parser(name, help=help_text)
+        command.add_argument("entry_id")
+        bind_handler(command, handler)
+    bind_handler(inbox_subparsers.add_parser("stats", help="Show Inbox statistics."), handle_inbox_stats)
+    inbox_watch_parser = inbox_subparsers.add_parser("watch", help="Watch for new Inbox items.")
+    inbox_watch_parser.add_argument("--interval", type=int, default=5)
+    bind_handler(inbox_watch_parser, handle_inbox_watch)
+    inbox_clear_parser = inbox_subparsers.add_parser("clear", help="Clear terminal Inbox items.")
+    inbox_clear_parser.add_argument(
+        "--status", choices=["dismissed", "resolved", "all-terminal"], default="all-terminal"
     )
-    notify_list_parser = notify_subparsers.add_parser(
-        "list", help="List notification entries."
-    )
-    notify_list_parser.add_argument(
-        "--status", choices=["pending", "sent", "failed", "dismissed"], default=None
-    )
-    bind_handler(notify_list_parser, handle_notify_list)
-    notify_show_parser = notify_subparsers.add_parser(
-        "show", help="Show one notification entry."
-    )
-    notify_show_parser.add_argument("entry_id")
-    bind_handler(notify_show_parser, handle_notify_show)
-    notify_send_parser = notify_subparsers.add_parser(
-        "send", help="Send one pending notification now."
-    )
-    notify_send_parser.add_argument("entry_id")
-    bind_handler(notify_send_parser, handle_notify_send)
-    notify_dismiss_parser = notify_subparsers.add_parser(
-        "dismiss", help="Dismiss one notification entry."
-    )
-    notify_dismiss_parser.add_argument("entry_id")
-    bind_handler(notify_dismiss_parser, handle_notify_dismiss)
-    bind_handler(
-        notify_subparsers.add_parser(
-            "stats", help="Show notification outbox statistics."
-        ),
-        handle_notify_stats,
-    )
-    notify_watch_parser = notify_subparsers.add_parser(
-        "watch", help="Watch for pending notifications."
-    )
-    notify_watch_parser.add_argument(
-        "--interval", type=int, default=5, help="Poll interval in seconds"
-    )
-    bind_handler(notify_watch_parser, handle_notify_watch)
-    notify_clear_parser = notify_subparsers.add_parser(
-        "clear",
-        help="Clear terminal notifications.",
-    )
-    notify_clear_parser.add_argument(
-        "--status",
-        choices=["sent", "failed", "dismissed", "all-terminal"],
-        default="all-terminal",
-        help="Terminal status to clear (default: all-terminal)",
-    )
-    bind_handler(notify_clear_parser, handle_notify_clear)
+    bind_handler(inbox_clear_parser, handle_inbox_clear)
 
     reason_parser = subparsers.add_parser(
         "reason",
@@ -720,7 +691,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     dev_eval_parser = dev_subparsers.add_parser("eval", help="Run evaluation fixtures.")
     dev_eval_parser.add_argument("--fixtures", type=Path, default=None)
     dev_eval_parser.add_argument(
-        "--component", choices=["conversations", "notifications", "all"], default="all"
+        "--component", choices=["conversations", "all"], default="all"
     )
     bind_handler(
         dev_eval_parser,

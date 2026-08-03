@@ -77,15 +77,16 @@ inspection command under `dev`, read-only by default.
 
 ### A3 — Resolved: reflection foreign-domain orchestration
 
-`ReflectionScheduler` accepts concrete `NotificationOutbox` and
-`TraceRecorder` implementations, imports persona implementation types, and
+`ReflectionScheduler` now accepts explicit Inbox publication and Delivery
+request capabilities plus `TraceRecorder`; persona/model composition remains
+outside the scheduler. It previously imported persona implementation types and
 constructs `SharedPersonaDiscussionService` inside `reflect()`. Candidate
 generation accepts explicit Memory/Profile capabilities plus the Source
 service and
 loads global configuration internally.
 
 Risk: reflection silently owns persona/model/config composition, cannot be
-extended independently, and can bypass notification or trace policy. Tests
+extended independently, and could bypass delivery or trace policy. Tests
 must replace implementations instead of stable capabilities.
 
 Minimal correction: define consumer-owned ports for candidate context,
@@ -178,8 +179,9 @@ independently.
 Risk: evaluation can pass against an impossible runtime object and breaks on
 internal refactors instead of API changes.
 
-Correction: `notification.eval` now constructs the real scheduler through the
-same application and Reflection composition APIs used by production.
+Correction: that private Notification evaluation path was removed when Inbox
+and Delivery became independent domains. Their contracts are covered directly
+through public service and adapter tests.
 
 ## Package Coverage
 
@@ -193,13 +195,13 @@ same application and Reflection composition APIs used by production.
 | `persona` | partial | Typed domain models exist, but definition loading and default model composition cross boundaries (A6). |
 | `reason` | mostly API-based | Service/repository separation is sound; trace/persona collaborators are still concrete and default prompt-agent construction hides a dependency. Address with the same ports/config pass, not a separate framework. |
 | `reflection` | needs work | Most concentrated cross-domain orchestration problem (A3). |
-| `notification` | mostly API-based | Outbox/delivery adapter split is sound; adapter constructors should receive resolved paths/config rather than rediscover them. |
+| `inbox`, `delivery` | clean split | Inbox owns attention state; Delivery owns adapter attempts and receives resolved paths/config. |
 | `trace` | clean | Recorder/query services provide a stable API; consumers should type against narrow recorder/query ports. |
 | `agent`, `agent.chat`, `agent.tools` | partial | Decorated tools are good; `ToolResources` exposes concrete repositories/services and chat still resolves config/default model collaborators. |
 | `daemon` | structurally sound | One process and one scheduler are correct; task contracts need typing (A8), while `DaemonState` remains an oversized composition root. |
 | `cli`, `cli.repl` | needs work | Handler registry is good; data access and repeated composition bypass the application API (A2, A7). |
 | `tui`, `repl` | clean adapters | Presentation dependencies point outward and do not own persistence. |
-| evaluation modules | clean | Notification evaluation is domain-owned and uses public application/Reflection composition (A9). |
+| evaluation modules | clean | Conversation evaluation remains outside runtime composition. |
 
 ## Historical Recommended Order
 

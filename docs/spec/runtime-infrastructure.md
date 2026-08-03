@@ -3,7 +3,7 @@
 ## Purpose
 
 NuSelf has several runtime boundaries: CLI commands, REPL commands, daemon
-requests, agent tools, background workers, notifications, and structured logs.
+requests, agent tools, background workers, Inbox/Delivery, and structured logs.
 They need shared infrastructure, but they do not all have the same delivery
 semantics. The shared layer must make those semantics explicit instead of
 building one untyped "message bus".
@@ -23,11 +23,11 @@ The pre-infrastructure runtime had these recurring problems:
 4. The REPL repeatedly scans every log file to discover activity. Audit storage
    is therefore also acting as a slow cross-process activity feed.
 5. Internal work uses unrelated transports: tuple queues, process-global
-   callbacks, JSON dictionaries, log polling, and durable notification entries.
+   callbacks, JSON dictionaries, log polling, and durable Inbox/Delivery records.
    Ownership, retry, and replay behavior differ but are not named in a common
    contract.
-6. Some documentation still describes logs or the notification outbox as a
-   generic event bus. Audit records and user notification delivery must not be
+6. Logs, Inbox, and Delivery must not be treated as a generic event bus. Audit
+   records and external Delivery effects must not be
    treated as general command transports.
 
 ## Message Semantics
@@ -40,9 +40,10 @@ Every internal exchange belongs to exactly one of these categories:
 | Event | zero or more projections | none | optional projection | worker lifecycle, tool activity |
 | Job | one worker at a time | completion state | required when retryable | reason export |
 | Audit record | readers only | none | append-only | structured logs |
-| Notification | adapter fan-out | delivery state | durable | outbox entry |
+| Inbox | source-domain publishers | none | durable | user-attention item |
+| Delivery | adapter fan-out | delivery state | durable | delivery record |
 
-Code must not use an audit record as a command, a notification as a general
+Code must not use an audit record as a command, an Inbox item as a general
 event, or an ephemeral event as the only record of retryable work.
 
 ## Frontend Event Boundary
@@ -279,7 +280,7 @@ status. A busy resource prevents overlapping work on that resource without
 allocating a resource lock.
 
 The queue is a wake-up mechanism, never authoritative business state. Durable
-state remains in SQLite, repositories, outboxes, or export manifests. Startup
+state remains in SQLite, repositories, Inbox/Delivery records, or export manifests. Startup
 recovery and periodic discovery may therefore submit the same identity safely.
 A queue-capacity failure does not erase durable work; a later scan or restart
 must rediscover it.
@@ -302,7 +303,7 @@ or approval prompt runs while that condition is held. Tasks declare one primary
 resource; multi-record consistency remains a repository transaction concern.
 When executor capacity is full, or every due task is blocked by a busy
 resource, the dispatcher waits for a completion/admission/shutdown
-notification. It must not repeatedly wait with a zero timeout. Timed waiting
+Delivery. It must not repeatedly wait with a zero timeout. Timed waiting
 considers only future tasks whose resources are currently available.
 
 Control-plane requests (`ping`, `health`, `shutdown`, and activity subscription
@@ -350,7 +351,7 @@ direct CLI coexistence, and the activity broker condition remain independent.
 
 Behavior-identical blocking locks over NuSelf-managed resource files share the
 dependency-neutral context primitive in `nuself.storage.filesystem`. Conversation and
-notification domains choose their own stable lock identity and mutation scope;
+Delivery and conversation domains choose their own stable lock identity and mutation scope;
 the shared primitive only hardens the lock file and owns blocking `flock`
 acquisition and release. Non-blocking daemon ownership, schema migration,
 append-log, and curator locks retain their separate contention and cleanup
@@ -525,8 +526,8 @@ decoding an audit envelope preserves every field needed to append the same
 
 Daemon `request`/response frames are transport contracts owned by
 `daemon.protocol`, including framing limits and response status; they are not
-runtime envelopes. Notification intents are durable outbox records that embed
-`RuntimeContext` directly and are likewise not runtime envelopes. Neither
+runtime envelopes. Delivery records embed `RuntimeContext` directly and are
+likewise not runtime envelopes. Neither
 ownership model is represented by a dormant envelope kind.
 
 At an asynchronous message-consumption boundary, the consumer installs the
@@ -546,9 +547,9 @@ therefore receive top-level correlation fields without relying on duplicated
 metadata.
 
 Durable domain queues may embed `RuntimeContext` directly when the durable
-record itself is the authoritative intent. The notification outbox follows
-this pattern and deliberately does not add a redundant `RuntimeEnvelope`.
-Delivery installs the saved entry context per record under the notification
+record itself is the authoritative intent. Delivery records follow this
+pattern and deliberately do not add a redundant `RuntimeEnvelope`.
+Delivery installs the saved context per record under the Delivery
 worker source, using the same exact replacement/restoration semantics.
 
 Every scheduler task exactly installs its submitted correlation context and a
@@ -654,7 +655,7 @@ Ephemeral events use an in-process publisher/projection interface:
 `nuself.runtime.event.publisher.EventPublisher` implements this boundary. This API is
 not a general asynchronous event bus: every attached projection must be a
 bounded in-process operation whose completion is intentionally part of
-`publish()` completion. Network calls, unbounded waits, retries, notifications,
+`publish()` completion. Network calls, unbounded waits, retries, Delivery,
 and other independently progressing effects require a separately owned bounded
 queue and worker lifecycle; they must not be attached as projections merely to
 reuse event routing.
@@ -857,7 +858,7 @@ blanket-propagated into new threads or long-lived workers.
 
 ## Durable Jobs
 
-Retryable domain work keeps its authoritative state in repositories, outboxes,
+Retryable domain work keeps its authoritative state in repositories, Delivery records,
 or manifests. `RuntimeEnvelope(kind="job")` and `JobMessage` remain the strict
 wake-up contract: stable job identity lives in context, while resource identity
 and validated hints live in `JobPayload`. Producers receive a `JobSink` through

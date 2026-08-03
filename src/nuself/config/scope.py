@@ -67,7 +67,8 @@ class RuntimePaths:
     daemon_lock_path: Path
     daemon_log_path: Path
     daemon_process_log_path: Path
-    outbox_log_path: Path
+    inbox_log_path: Path
+    delivery_log_path: Path
 
 def resolve_scope(
     *,
@@ -133,7 +134,8 @@ def resolve_runtime_paths(scope: NuSelfScope) -> RuntimePaths:
         daemon_lock_path=runtime_dir / "nuself.lock",
         daemon_log_path=logs_dir / "daemon.log",
         daemon_process_log_path=logs_dir / "daemon-process.log",
-        outbox_log_path=logs_dir / "outbox.log",
+        inbox_log_path=logs_dir / "inbox.log",
+        delivery_log_path=logs_dir / "delivery.log",
     )
 
 

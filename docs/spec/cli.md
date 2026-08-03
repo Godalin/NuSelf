@@ -44,7 +44,8 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 | `chat`       | `34` (blue)    |
 | `memory`     | `32` (green)   |
 | `persona`    | `35` (magenta) |
-| `outbox`     | `36` (cyan)    |
+| `inbox`      | `35` (magenta) |
+| `delivery`   | `36` (cyan)    |
 | `reflection` | `33` (yellow)  |
 
 **Semantic status colors:**
@@ -149,8 +150,8 @@ returns immediately.
 ### Interactive Attention Notices
 
 Interactive chat projects important hidden runtime conditions into concise
-notices. This projection is distinct from both the external notification
-outbox and the chronological activity log:
+notices. This projection is distinct from both Inbox/Delivery state and the
+chronological activity log:
 
 - public CLI startup rejects an unusable model configuration before entering
   the REPL. Embedded interactive loops may still project that condition;
@@ -178,7 +179,7 @@ outbox and the chronological activity log:
   complete identity remain visible. Historical logs are preserved; repair
   changes the active projection rather than deleting evidence;
 - a notice does not switch authority, repair data, change the chat result, or
-  enter the external notification outbox;
+  create an Inbox item or Delivery request;
 - failure to inspect optional notice sources must not prevent the REPL from
   starting. Invalid selected configuration is itself rendered as an actionable
   notice.
@@ -350,13 +351,13 @@ alias string sets.
 
 During each chat turn, before printing the assistant reply, the REPL polls for new log events as they are written and prints only interactive activity logs using `render_log_event()`. It does not wait for the final assistant reply before showing current-turn progress logs. Live REPL activity must be scoped to the current top-level `turn_id`; timestamp order alone is not enough to decide that a log belongs to the visible turn.
 
-Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs` and subsystem commands.
+Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, Inbox, Delivery, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs` and subsystem commands.
 
 The interactive session captures the current chat path's `chat`, `daemon`, and
 `persona` activity plus approval prompts for transcript export. `:export all`
 includes every such captured event, including low-level ones that live output
 and the default shareable export omit; it does not turn reason, reflection,
-memory, trace, notification, or other concurrent background audit records into
+memory, trace, Inbox, Delivery, or other concurrent background audit records into
 chat-transcript activity.
 
 When attached to the daemon, the REPL opens a turn-scoped activity
@@ -456,7 +457,7 @@ Top-level commands:
 | `nuself memory` | Personal memory, profile, review queue, graph              |
 | `nuself source` | Imported external knowledge                                |
 | `nuself reflection` | Generate and manage proactive reflections             |
-| `nuself inbox`  | Mixed pending items across proactive domains                |
+| `nuself inbox`  | Durable user-attention items from proactive domains          |
 | `nuself reason` | Long-run reasoning threads                                |
 | `nuself trace`  | Thought provenance records                                |
 | `nuself dev`    | Diagnostics, logs, config, health, eval, status           |
@@ -465,7 +466,7 @@ Breaking moves:
 
 | Removed path                  | New path                                      |
 | ----------------------------- | --------------------------------------------- |
-| `nuself notify ...`           | `nuself inbox notify ...`                     |
+| `nuself notify ...`           | removed; use `nuself inbox ...`               |
 | `nuself logs ...`             | `nuself dev logs ...`                         |
 | `nuself status`               | `nuself dev status` or `nuself daemon status` |
 | `nuself health`               | `nuself dev health`                           |
@@ -482,16 +483,15 @@ Top-level help should group commands as:
 
 Top-level help and command group help must show one-line descriptions for each listed command. Multi-layer groups must
 do the same at every level, including `memory review`, `memory profile`,
-`memory graph`, `source`, `reflection`, and `inbox notify`, so users can choose
+`memory graph`, `source`, `reflection`, and `inbox`, so users can choose
 commands without already knowing the subsystem vocabulary.
 
 REPL commands mirror the same model:
 
 | Command                 | Purpose                      |
 | ----------------------- | ---------------------------- |
-| `:inbox`, `:i`          | List pending proactive items |
+| `:inbox`, `:i`          | Generic Inbox commands       |
 | `:reflection`           | Reflection commands          |
-| `:inbox notify ...`     | Notification commands        |
 | `:mem`, `:m`            | Memory preview               |
 | `:conversation`, `:c`   | Conversation switching/listing |
 | `:reason`               | Long-run reasoning commands  |
@@ -500,9 +500,9 @@ REPL commands mirror the same model:
 | `:restart`, `:r`        | Restart daemon and reconnect |
 | `:export`, `:e`         | Transcript export            |
 
-Interactive Reflection and notification handlers each own one rendering path
-parameterized by pending versus all entries. Inbox composes their pending
-views without owning their mutations.
+Interactive Inbox rendering is parameterized by pending versus all items.
+Reflection and Reason remain authoritative for their source records; Inbox
+owns only attention state and source references.
 REPL command-local formatting and one-branch queries stay at their owning
 branch rather than being exposed as single-use command APIs.
 
@@ -557,20 +557,22 @@ nuself dev logs [--component <c>] [--tail N] [--json] [--no-color]
 - **Purpose**: Raw audit trail. No semantic filtering.
 - **Output**: `[component] event status=... duration_ms=... thread=... request=... error=...`, with body text on following indented lines when present.
 
-### Notifications
+### Inbox
 
 ```
-nuself inbox notify list [--status <state>]
+nuself inbox list [--status <pending|read|dismissed|resolved>]
 ```
 
-- **Output**: `<id> [<status>] <title> created=... attempts=... link=<true|false>`
-- `--status` filters at the outbox level.
+- **Output**: `<id> [<status>] <title> created=... kind=... link=<true|false>`
+- `--status` filters user-attention state.
 
 ```
-nuself inbox notify show <id>
+nuself inbox show <id>
 ```
 
-- **Output**: One record header with ID, status, title, delivery metadata, and deep link; body text starts on the next indented line.
+- **Output**: One record header with ID, status, kind, source ID, title, and
+  deep link; body text starts on the next indented line. Showing a pending item
+  marks it read.
 
 ### Daemon
 

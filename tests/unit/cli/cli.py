@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from notification_fixtures import notification_outbox
+from inbox_fixtures import inbox_service
 
 # pyright: reportUnusedImport=false
 
@@ -2143,12 +2143,6 @@ def test_command_group_help_describes_subcommands(capsys: CaptureFixture) -> Non
             "organize",
             "Merge similar pending reflection entries.",
         ],
-        ("inbox", "notify"): [
-            "send",
-            "Send one pending notification now.",
-            "clear",
-            "Clear terminal notifications.",
-        ],
         ("reason",): [
             "start",
                 "Start a new reasoning thread.",
@@ -3221,8 +3215,8 @@ def test_open_with_message_sends_then_enters_repl(
     assert "conversation=focus" in captured.out
 
 
-def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.model import OutboxEntry
+def test_inbox_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
     private = _authority(tmp_path)
     private.mkdir(exist_ok=True)
@@ -3230,7 +3224,7 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
         "macos_notification:\n  enabled: false\n",
         encoding="utf-8",
     )
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     entry = outbox.add(
         OutboxEntry(
             id="test-001",
@@ -3241,21 +3235,21 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
         )
     )
 
-    list_result = main(["--workspace", str(tmp_path), "inbox", "notify", "list"])
+    list_result = main(["--workspace", str(tmp_path), "inbox", "list"])
     list_output = capsys.readouterr().out
 
     show_result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "show", entry.id]
+        ["--workspace", str(tmp_path), "inbox", "show", entry.id]
     )
     show_output = capsys.readouterr().out
 
     send_result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "send", entry.id]
+        ["--workspace", str(tmp_path), "inbox", "send", entry.id]
     )
     send_output = capsys.readouterr().out
 
     dismiss_result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "dismiss", entry.id]
+        ["--workspace", str(tmp_path), "inbox", "dismiss", entry.id]
     )
     dismiss_output = capsys.readouterr().out
 
@@ -3270,66 +3264,13 @@ def test_notify_list_show_send_dismiss(tmp_path: Path, capsys: CaptureFixture) -
     assert "Test Notification" in show_output
     assert f"Sent: {entry.id}" in send_output
     assert f"Dismissed: {entry.id}" in dismiss_output
-    dismissed = notification_outbox(_authority(tmp_path)).get(entry.id)
-    assert dismissed.required_adapters == ("log",)
-    assert dismissed.deliveries["log"].status == "sent"
-
-
-def test_notify_send_preserves_existing_adapter_plan_and_history(
-    tmp_path: Path,
-    capsys: CaptureFixture,
-) -> None:
-    from nuself.notification.model import OutboxEntry
-
-    outbox = notification_outbox(_authority(tmp_path))
-    outbox.add(
-        OutboxEntry(
-            id="existing-plan",
-            title="Existing plan",
-            body="Do not erase adapter history.",
-            status="pending",
-            idempotency_key="existing-plan",
-        )
-    )
-    outbox.prepare_delivery("existing-plan", ("email", "macos"))
-    outbox.begin_adapter_delivery("existing-plan", "email")
-    outbox.record_adapter_result(
-        "existing-plan",
-        "email",
-        success=True,
-    )
-    outbox.begin_adapter_delivery("existing-plan", "macos")
-    outbox.record_adapter_result(
-        "existing-plan",
-        "macos",
-        success=False,
-    )
-
-    result = main(
-        [
-            "--workspace",
-            str(tmp_path),
-            "inbox",
-            "notify",
-            "send",
-            "existing-plan",
-        ]
-    )
-
-    assert result == 1
-    assert "Failed to send: existing-plan" in capsys.readouterr().err
-    preserved = notification_outbox(_authority(tmp_path)).get("existing-plan")
-    assert preserved.status == "failed"
-    assert preserved.required_adapters == ("email", "macos")
-    assert preserved.deliveries["email"].status == "sent"
-    assert preserved.deliveries["email"].attempts == 1
-    assert preserved.deliveries["macos"].status == "failed"
-    assert preserved.deliveries["macos"].attempts == 1
+    dismissed = inbox_service(_authority(tmp_path)).get(entry.id)
+    assert dismissed.status == "dismissed"
 
 
 def test_notify_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "show", "missing-id"]
+        ["--workspace", str(tmp_path), "inbox", "show", "missing-id"]
     )
     output = capsys.readouterr().err
     assert result == 1
@@ -3338,7 +3279,7 @@ def test_notify_show_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> No
 
 def test_notify_send_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "send", "missing-id"]
+        ["--workspace", str(tmp_path), "inbox", "send", "missing-id"]
     )
     output = capsys.readouterr().err
     assert result == 1
@@ -3347,7 +3288,7 @@ def test_notify_send_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> No
 
 def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) -> None:
     result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "dismiss", "missing-id"]
+        ["--workspace", str(tmp_path), "inbox", "dismiss", "missing-id"]
     )
     output = capsys.readouterr().err
     assert result == 1
@@ -3355,9 +3296,9 @@ def test_notify_dismiss_missing_entry(tmp_path: Path, capsys: CaptureFixture) ->
 
 
 def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
@@ -3369,7 +3310,7 @@ def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -
         )
     )
 
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "show", "1"])
+    result = main(["--workspace", str(tmp_path), "inbox", "show", "1"])
     output = capsys.readouterr().out
     assert result == 0
     assert "Second" in output
@@ -3378,9 +3319,9 @@ def test_notify_show_by_numeric_handle(tmp_path: Path, capsys: CaptureFixture) -
 def test_notify_dismiss_by_numeric_handle(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
@@ -3392,7 +3333,7 @@ def test_notify_dismiss_by_numeric_handle(
         )
     )
 
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "dismiss", "0"])
+    result = main(["--workspace", str(tmp_path), "inbox", "dismiss", "0"])
     output = capsys.readouterr().out
     assert result == 0
     assert "Dismissed: e1" in output
@@ -3401,32 +3342,32 @@ def test_notify_dismiss_by_numeric_handle(
 def test_notify_numeric_handle_out_of_range(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B1", status="pending", idempotency_key="k1"
         )
     )
 
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "show", "5"])
+    result = main(["--workspace", str(tmp_path), "inbox", "show", "5"])
     output = capsys.readouterr().err
     assert result == 1
-    assert "Invalid notification index" in output
+    assert "Invalid Inbox item index" in output
 
 
-def test_notify_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "list"])
+def test_inbox_list_empty(tmp_path: Path, capsys: CaptureFixture) -> None:
+    result = main(["--workspace", str(tmp_path), "inbox", "list"])
     output = capsys.readouterr().out
     assert result == 0
-    assert "No outbox entries." in output
+    assert "No Inbox items." in output
 
 
-def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.model import OutboxEntry
+def test_inbox_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"
@@ -3434,12 +3375,12 @@ def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -
     )
     outbox.add(
         OutboxEntry(
-            id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"
+            id="e2", title="Read", body="B", status="read", idempotency_key="k2"
         )
     )
     outbox.add(
         OutboxEntry(
-            id="e3", title="Failed", body="B", status="failed", idempotency_key="k3"
+            id="e3", title="Resolved", body="B", status="resolved", idempotency_key="k3"
         )
     )
 
@@ -3448,7 +3389,6 @@ def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -
             "--workspace",
             str(tmp_path),
             "inbox",
-            "notify",
             "list",
             "--status",
             "pending",
@@ -3457,14 +3397,14 @@ def test_notify_list_filters_by_status(tmp_path: Path, capsys: CaptureFixture) -
     output = capsys.readouterr().out
     assert result == 0
     assert "Pending" in output
-    assert "Sent" not in output
-    assert "Failed" not in output
+    assert "Read" not in output
+    assert "Resolved" not in output
 
 
-def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.model import OutboxEntry
+def test_inbox_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1",
@@ -3475,51 +3415,51 @@ def test_notify_show_renders_detail(tmp_path: Path, capsys: CaptureFixture) -> N
             deep_link="nuself://conversation/default",
         )
     )
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "show", "e1"])
+    result = main(["--workspace", str(tmp_path), "inbox", "show", "e1"])
     output = capsys.readouterr().out
     assert result == 0
     assert "Test Title" in output
     assert "Test Body" in output
-    assert "pending" in output
+    assert "read" in output
     assert "nuself://conversation/default" in output
     assert "idempotency_key=k1" in output
 
 
-def test_notify_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
-    from nuself.notification.model import OutboxEntry
+def test_inbox_stats_counts(tmp_path: Path, capsys: CaptureFixture) -> None:
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="A", body="B", status="pending", idempotency_key="k1"
         )
     )
     outbox.add(
-        OutboxEntry(id="e2", title="A", body="B", status="sent", idempotency_key="k2")
+        OutboxEntry(id="e2", title="A", body="B", status="read", idempotency_key="k2")
     )
     outbox.add(
-        OutboxEntry(id="e3", title="A", body="B", status="sent", idempotency_key="k3")
+        OutboxEntry(id="e3", title="A", body="B", status="read", idempotency_key="k3")
     )
     outbox.add(
-        OutboxEntry(id="e4", title="A", body="B", status="failed", idempotency_key="k4")
+        OutboxEntry(id="e4", title="A", body="B", status="resolved", idempotency_key="k4")
     )
 
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "stats"])
+    result = main(["--workspace", str(tmp_path), "inbox", "stats"])
     output = capsys.readouterr().out
     assert result == 0
     assert "Total:      4" in output
-    assert "Pending:    1" in output
-    assert "Sent:       2" in output
-    assert "Failed:     1" in output
-    assert "Dismissed:  0" in output
+    assert "Pending:   1" in output
+    assert "Read:      2" in output
+    assert "Resolved:  1" in output
+    assert "Dismissed: 0" in output
 
 
-def test_repl_notify_list_shows_all(
+def test_repl_inbox_list_shows_all(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="Pending", body="B", status="pending", idempotency_key="k1"
@@ -3527,32 +3467,32 @@ def test_repl_notify_list_shows_all(
     )
     outbox.add(
         OutboxEntry(
-            id="e2", title="Sent", body="B", status="sent", idempotency_key="k2"
+            id="e2", title="Read", body="B", status="read", idempotency_key="k2"
         )
     )
 
-    monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify list\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":inbox list\n:q\n"))
     result = main(["--workspace", str(tmp_path), "chat"])
     output = capsys.readouterr().out
     assert result == 0
-    assert "All notifications:" in output
+    assert "All Inbox items:" in output
     assert "Pending" in output
-    assert "Sent" in output
+    assert "Read" in output
 
 
-def test_repl_notify_show_detail(
+def test_repl_inbox_show_detail(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="Test", body="Body", status="pending", idempotency_key="k1"
         )
     )
 
-    monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify show e1\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":inbox show e1\n:q\n"))
     result = main(["--workspace", str(tmp_path), "chat"])
     output = capsys.readouterr().out
     assert result == 0
@@ -3633,7 +3573,7 @@ def test_open_with_new_conversation_deep_link(
     assert "Created conversation: proactive-conversation" in captured.out
 
 
-def test_status_command_shows_daemon_conversations_and_notifications(
+def test_status_command_shows_daemon_conversations_and_inbox(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     result = main(["--workspace", str(tmp_path), "dev", "status"])
@@ -3641,7 +3581,7 @@ def test_status_command_shows_daemon_conversations_and_notifications(
     assert result == 0
     assert "daemon:" in captured.out
     assert "conversations:" in captured.out
-    assert "pending notifications:" in captured.out
+    assert "pending Inbox items:" in captured.out
 
 
 def test_interactive_whoami_shows_profile_items(
@@ -3664,12 +3604,12 @@ def test_interactive_whoami_shows_profile_items(
     assert "concise answers" in captured.out
 
 
-def test_interactive_notify_lists_pending(
+def test_interactive_inbox_lists_pending(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="n-001",
@@ -3680,7 +3620,7 @@ def test_interactive_notify_lists_pending(
         )
     )
 
-    monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":inbox\n:q\n"))
     monkeypatch.setattr(
         "nuself.daemon.lifecycle.status",
         _mock_status,
@@ -3688,16 +3628,16 @@ def test_interactive_notify_lists_pending(
     result = main(["--workspace", str(tmp_path), "attach"])
     captured = capsys.readouterr()
     assert result == 0
-    assert "Pending notifications:" in captured.out
+    assert "Pending Inbox items:" in captured.out
     assert "Test Note" in captured.out
 
 
-def test_interactive_notify_send_and_dismiss(
+def test_interactive_inbox_dismisses_item(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="n-002",
@@ -3708,7 +3648,7 @@ def test_interactive_notify_send_and_dismiss(
         )
     )
 
-    monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify dismiss n-002\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":inbox dismiss n-002\n:q\n"))
     monkeypatch.setattr(
         "nuself.daemon.lifecycle.status",
         _mock_status,
@@ -4435,25 +4375,22 @@ def test_interactive_sources_lists_documents(
     assert "Notes" in captured.out
 
 
-def test_notify_clear_defaults_to_all_terminal(
+def test_inbox_clear_defaults_to_all_terminal(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.notification.model import (
-        OutboxEntry,
-        OutboxStatus,
-    )
+    from nuself.inbox.model import InboxItem, InboxStatus
 
-    outbox = notification_outbox(_authority(tmp_path))
-    statuses: tuple[tuple[str, OutboxStatus], ...] = (
+    outbox = inbox_service(_authority(tmp_path))
+    statuses: tuple[tuple[str, InboxStatus], ...] = (
         ("pending", "pending"),
-        ("sent", "sent"),
-        ("failed", "failed"),
+        ("read", "read"),
         ("dismissed", "dismissed"),
+        ("resolved", "resolved"),
     )
     for entry_id, status in statuses:
         outbox.add(
-            OutboxEntry(
+            InboxItem(
                 id=entry_id,
                 title=entry_id,
                 body=entry_id,
@@ -4462,79 +4399,52 @@ def test_notify_clear_defaults_to_all_terminal(
             )
         )
 
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "clear"])
+    result = main(["--workspace", str(tmp_path), "inbox", "clear"])
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Cleared 3 all-terminal" in captured.out
-    remaining = notification_outbox(_authority(tmp_path)).list()
-    assert [entry.id for entry in remaining] == ["pending"]
+    assert "Cleared 2 all-terminal" in captured.out
+    remaining = inbox_service(_authority(tmp_path)).list()
+    assert {entry.id for entry in remaining} == {"pending", "read"}
 
 
-def test_notify_clear_selects_failed_including_uncertain_plan(
+def test_inbox_clear_selects_resolved(
     tmp_path: Path,
     capsys: CaptureFixture,
 ) -> None:
-    from nuself.notification.model import (
-        AdapterDelivery,
-        OutboxEntry,
-        OutboxStatus,
-    )
-    from nuself.notification.outbox import NotificationOutbox
+    from nuself.inbox.model import InboxItem
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
-        OutboxEntry(
-            id="uncertain",
-            title="Uncertain",
-            body="External effect is ambiguous.",
-            status="failed",
-            idempotency_key="uncertain",
-            required_adapters=("email",),
-            deliveries={
-                "email": AdapterDelivery(
-                    status="uncertain",
-                    attempts=1,
-                )
-            },
+        InboxItem(
+            id="resolved", title="Resolved", body="Done", status="resolved",
+            idempotency_key="resolved",
         )
     )
-    statuses: tuple[tuple[str, OutboxStatus], ...] = (
-        ("sent", "sent"),
-        ("dismissed", "dismissed"),
-        ("pending", "pending"),
-    )
-    for entry_id, status in statuses:
-        outbox.add(
-            OutboxEntry(
-                id=entry_id,
-                title=entry_id,
-                body=entry_id,
-                status=status,
-                idempotency_key=entry_id,
-            )
+    outbox.add(
+        InboxItem(
+            id="dismissed", title="Dismissed", body="Ignored", status="dismissed",
+            idempotency_key="dismissed",
         )
+    )
 
     result = main(
         [
             "--workspace",
             str(tmp_path),
             "inbox",
-            "notify",
             "clear",
             "--status",
-            "failed",
+            "resolved",
         ]
     )
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Cleared 1 failed" in captured.out
-    remaining = notification_outbox(_authority(tmp_path)).list()
+    assert "Cleared 1 resolved" in captured.out
+    remaining = inbox_service(_authority(tmp_path)).list()
     assert {entry.id for entry in remaining} == {
-        "sent",
         "dismissed",
-        "pending",
     }
 
 
@@ -5779,12 +5689,12 @@ def _test_reason_prompt_generator(*args: object, **kwargs: object) -> str:
         ["reflection", "archive", "--help"],
         ["reflection", "promote", "--help"],
         ["reflection", "organize", "--help"],
-        ["inbox", "notify", "--help"],
-        ["inbox", "notify", "list", "--help"],
-        ["inbox", "notify", "show", "--help"],
-        ["inbox", "notify", "send", "--help"],
-        ["inbox", "notify", "dismiss", "--help"],
-        ["inbox", "notify", "clear", "--help"],
+        ["inbox", "--help"],
+        ["inbox", "list", "--help"],
+        ["inbox", "show", "--help"],
+        ["inbox", "send", "--help"],
+        ["inbox", "dismiss", "--help"],
+        ["inbox", "clear", "--help"],
         ["dev", "status", "--help"],
         ["dev", "health", "--help"],
         ["dev", "config", "--help"],
@@ -5888,12 +5798,12 @@ def test_third_level_subcommand_help(argv: list[str]) -> None:
     assert exc_info.value.code == 0
 
 
-def test_notify_watch_detects_new_entries(
+def test_inbox_watch_detects_new_entries(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B", status="pending", idempotency_key="k1"
@@ -5920,17 +5830,17 @@ def test_notify_watch_detects_new_entries(
 
     monkeypatch.setattr("time.sleep", _fake_sleep)
     result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "watch", "--interval", "1"]
+        ["--workspace", str(tmp_path), "inbox", "watch", "--interval", "1"]
     )
     output = capsys.readouterr().out
 
     assert result == 0
-    assert "Watching outbox every 1s" in output
+    assert "Watching Inbox every 1s" in output
     assert "Second" in output
     assert "Stopped watching" in output
 
 
-def test_notify_watch_default_interval(
+def test_inbox_watch_default_interval(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
     sleep_calls: list[int] = []
@@ -5940,16 +5850,16 @@ def test_notify_watch_default_interval(
         raise KeyboardInterrupt
 
     monkeypatch.setattr("time.sleep", _fake_sleep)
-    result = main(["--workspace", str(tmp_path), "inbox", "notify", "watch"])
+    result = main(["--workspace", str(tmp_path), "inbox", "watch"])
     output = capsys.readouterr().out
 
     assert result == 0
     assert sleep_calls == [5]
-    assert "Watching outbox every 5s" in output
+    assert "Watching Inbox every 5s" in output
 
 
 @pytest.mark.parametrize("watch_input", ["q\n", ""])
-def test_notify_watch_stops_on_q_or_eof(
+def test_inbox_watch_stops_on_q_or_eof(
     tmp_path: Path,
     capsys: CaptureFixture,
     monkeypatch: MonkeyPatchFixture,
@@ -5968,12 +5878,12 @@ def test_notify_watch_stops_on_q_or_eof(
         return readers, writers, errors
 
     monkeypatch.setattr(
-        "nuself.cli.commands.notifications.select.select",
+        "nuself.cli.commands.inbox.select.select",
         readable_input,
     )
 
     result = main(
-        ["--workspace", str(tmp_path), "inbox", "notify", "watch"]
+        ["--workspace", str(tmp_path), "inbox", "watch"]
     )
 
     assert result == 0
@@ -5983,9 +5893,9 @@ def test_notify_watch_stops_on_q_or_eof(
 def test_repl_watch_detects_new_entries(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B", status="pending", idempotency_key="k1"
@@ -6010,7 +5920,7 @@ def test_repl_watch_detects_new_entries(
             raise KeyboardInterrupt
 
     monkeypatch.setattr("time.sleep", _fake_sleep)
-    monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify watch\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":inbox watch\n:q\n"))
     monkeypatch.setattr(
         "nuself.daemon.lifecycle.status",
         _mock_status,
@@ -6019,18 +5929,18 @@ def test_repl_watch_detects_new_entries(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Watching outbox" in captured.out
+    assert "Watching Inbox" in captured.out
     assert "Second" in captured.out
     assert "Stopped watching" in captured.out
     assert sleep_calls == [2, 2]
 
 
-def test_repl_notify_watch_subcommand(
+def test_repl_inbox_watch_subcommand(
     tmp_path: Path, capsys: CaptureFixture, monkeypatch: MonkeyPatchFixture
 ) -> None:
-    from nuself.notification.model import OutboxEntry
+    from nuself.inbox.model import InboxItem as OutboxEntry
 
-    outbox = notification_outbox(_authority(tmp_path))
+    outbox = inbox_service(_authority(tmp_path))
     outbox.add(
         OutboxEntry(
             id="e1", title="First", body="B", status="pending", idempotency_key="k1"
@@ -6055,7 +5965,7 @@ def test_repl_notify_watch_subcommand(
             raise KeyboardInterrupt
 
     monkeypatch.setattr("time.sleep", _fake_sleep)
-    monkeypatch.setattr("sys.stdin", _TextInput(":inbox notify watch\n:q\n"))
+    monkeypatch.setattr("sys.stdin", _TextInput(":inbox watch\n:q\n"))
     monkeypatch.setattr(
         "nuself.daemon.lifecycle.status",
         _mock_status,
@@ -6064,7 +5974,7 @@ def test_repl_notify_watch_subcommand(
     captured = capsys.readouterr()
 
     assert result == 0
-    assert "Watching outbox" in captured.out
+    assert "Watching Inbox" in captured.out
     assert "Second" in captured.out
     assert "Stopped watching" in captured.out
 

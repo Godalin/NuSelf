@@ -15,7 +15,7 @@ from nuself.config.settings import (
     ConfigSystem,
     DaemonConfig,
     DaemonMemoryCuratorConfig,
-    DaemonNotificationDeliveryConfig,
+    DaemonDeliveryConfig,
     DaemonReasonSchedulerConfig,
     DaemonReflectionSchedulerConfig,
     EmailConfig,
@@ -129,8 +129,8 @@ def test_runtime_models_and_published_schema_have_complete_parity() -> None:
             _object_at(schema, "daemon", "reflection_scheduler"),
         ),
         (
-            DaemonNotificationDeliveryConfig,
-            _object_at(schema, "daemon", "notification_delivery"),
+            DaemonDeliveryConfig,
+            _object_at(schema, "daemon", "delivery"),
         ),
         (
             DaemonReasonSchedulerConfig,

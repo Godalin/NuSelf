@@ -22,6 +22,7 @@ from nuself.reason.errors import (
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
 from tests.backend import owned_backend
+from inbox_fixtures import inbox_service
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -395,6 +396,28 @@ def test_advance_thread(tmp_path: Path) -> None:
     steps = service.list_steps(t.id)
     assert len(steps) == 1
     assert steps[0] == step
+
+    items = inbox_service(tmp_path).list()
+    assert [(item.kind, item.source_id) for item in items] == [
+        ("reason_step", step.id)
+    ]
+
+
+def test_no_change_step_does_not_enter_inbox(tmp_path: Path) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("No change")
+    service.advance_thread(
+        thread.id,
+        step=ReasoningStep(
+            thread_id=thread.id,
+            kind="no_change",
+            summary="No meaningful change.",
+            delta="No new evidence.",
+            output="Continue later.",
+        ),
+    )
+
+    assert inbox_service(tmp_path).list() == []
 
 
 def test_advance_thread_applies_resolved_terminal_status(tmp_path: Path) -> None:

@@ -122,7 +122,8 @@ Public/domain collections:
 | `trace_nodes` | thought traces |
 | `trace_edges` | trace links |
 | `reflection_entries` | reflection inbox entries |
-| `notification_outbox` | notification delivery state |
+| `inbox_items` | durable user-attention items |
+| `delivery_records` | external adapter delivery state |
 
 Internal collections:
 
@@ -220,5 +221,5 @@ These paths may remain files:
 - explicit user-requested data exports.
 
 Chat threads, memory, profile, curator state, scheduler state, reasoning,
-traces, reflections, and notifications are structured data and therefore live
+traces, reflections, Inbox items, and delivery records are structured data and therefore live
 only in SQLite.

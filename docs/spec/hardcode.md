@@ -68,13 +68,12 @@ behavior, grouped by subsystem. Configurable defaults live in
 | `MAX_DAEMON_FRAME_BYTES` | `daemon/protocol.py` | 1 MiB | Maximum request/response JSONL frame including newline |
 | `DAEMON_REQUEST_IO_TIMEOUT_SECONDS` | `daemon/socket_server.py` | 5 s | Server timeout for receiving one request frame and delivering its response |
 
-## Notification
+## Inbox And Delivery
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| retention days | `notification/__init__.py:263` | 7 | Dismissed outbox entries cleaned after 7 days |
 | daemon raw log size/backups | `daemon/lifecycle.py` | 5 MiB / 3 | Startup-time retention for inherited stdout/stderr |
-| `timeout=30` | `notification/email.py:81` | 30 s | SMTP connection timeout |
+| `timeout=30` | `delivery/email.py` | 30 s | SMTP connection timeout |
 
 ## CLI
 

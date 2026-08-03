@@ -6,6 +6,14 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Replaced the mixed Notification outbox with a generic Inbox domain and an
+  independent Delivery pipeline. Reflections and meaningful Reason steps now
+  publish durable Inbox items, while macOS, email, and log adapters track only
+  external delivery attempts.
+- Promoted Inbox item management to `nuself inbox ...` / `:inbox ...`, removed
+  the nested `inbox notify` interface, and added an explicit preview/apply
+  migration script for existing Notification records.
+
 - Reflection now owns a top-level `nuself reflection` command family with
   explicit `run` and `status` operations plus entry management. `nuself inbox`
   is now the mixed pending-item view and no longer owns Reflection commands.

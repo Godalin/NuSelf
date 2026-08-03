@@ -1,4 +1,4 @@
-"""Deep link parsing and resolution for notification outbox entries."""
+"""Deep-link parsing and resolution for Inbox actions."""
 
 from __future__ import annotations
 

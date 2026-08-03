@@ -125,7 +125,7 @@ class DaemonReflectionSchedulerConfig(_ConfigModel):
     check_interval_seconds: int = Field(default=600, ge=1)
 
 
-class DaemonNotificationDeliveryConfig(_ConfigModel):
+class DaemonDeliveryConfig(_ConfigModel):
 
     interval_seconds: int = Field(default=30, ge=1)
 
@@ -139,7 +139,7 @@ class DaemonConfig(_ConfigModel):
 
     memory_curator: DaemonMemoryCuratorConfig = DaemonMemoryCuratorConfig()
     reflection_scheduler: DaemonReflectionSchedulerConfig = DaemonReflectionSchedulerConfig()
-    notification_delivery: DaemonNotificationDeliveryConfig = DaemonNotificationDeliveryConfig()
+    delivery: DaemonDeliveryConfig = DaemonDeliveryConfig()
     reason_scheduler: DaemonReasonSchedulerConfig = DaemonReasonSchedulerConfig()
 
 

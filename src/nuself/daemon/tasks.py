@@ -15,7 +15,7 @@ DaemonTaskKind = Literal[
     "conversation.compress",
     "reflection.check",
     "reason.check",
-    "notification.deliver",
+    "delivery.run",
     "reason.export",
 ]
 DAEMON_TASK_KINDS: tuple[str, ...] = get_args(DaemonTaskKind)

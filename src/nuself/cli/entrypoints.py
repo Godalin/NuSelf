@@ -18,7 +18,7 @@ from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import lifecycle
-from nuself.notification.deep_link import DeepLink
+from nuself.inbox.link import DeepLink
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 type InteractiveSender = Callable[

@@ -13,7 +13,8 @@ from nuself.application.data_admin import DataAdminService
 from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config.settings import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import ConversationHistoryService, ConversationStore
-from nuself.notification.outbox import NotificationOutbox
+from nuself.delivery.store import DeliveryStore
+from nuself.inbox.service import InboxService
 from nuself.memory.service import MemoryService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reflection.composition import (
@@ -36,7 +37,8 @@ class ApplicationGraph:
     memory: MemoryRepositories
     memory_service: MemoryService
     sources: SourceService
-    notifications: NotificationOutbox
+    inbox: InboxService
+    deliveries: DeliveryStore
     persona_prompts: PersonaPromptRepository
     reason: ReasonResources
     reflection: ReflectionResources
@@ -55,11 +57,14 @@ def compose_application(
     sources = compose_source_service(paths, backend)
     trace = compose_trace_services(paths, backend)
     config = ConfigSystem.load_scope(paths.scope)
+    inbox = InboxService(paths, backend)
+    deliveries = DeliveryStore(paths, backend)
     reason = compose_reason_resources(
         paths,
         backend,
         trace.recorder,
         config,
+        inbox,
     )
     reflection = compose_reflection_resources(
         paths,
@@ -75,7 +80,8 @@ def compose_application(
         memory=memory,
         memory_service=MemoryService(memory.entries),
         sources=sources,
-        notifications=NotificationOutbox(paths, backend),
+        inbox=inbox,
+        deliveries=deliveries,
         persona_prompts=PersonaPromptRepository(
             backend.collection("persona_prompts"),
             paths,

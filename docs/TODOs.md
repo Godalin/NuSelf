@@ -31,13 +31,6 @@ same change.
   flows through PyPI and Homebrew. Define artifact provenance, upgrade and
   uninstall behavior, platform support, and release automation first.
 
-## Reasoning And Notifications
-
-- [ ] Define and implement the long-run reason notification policy. Specify
-  which state transitions are user-visible, how notification deduplication and
-  quiet hours apply, and how reason events map onto the existing notification
-  outbox before implementation.
-
 ## Semi-Durable Chat Threads
 
 - [ ] Make ConversationStore lifecycle mutations crash-durable across directories.

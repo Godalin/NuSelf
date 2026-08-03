@@ -28,7 +28,8 @@ from nuself.config.settings import ReflectionDiscussionConfig, ReflectionGateCon
 from nuself.config.settings import runtime_paths
 from nuself.reflection.model import IdeaCandidate
 from nuself.log.reader import read_log_events
-from nuself.notification.outbox import NotificationOutbox
+from nuself.inbox.service import InboxService
+from nuself.delivery.store import DeliveryStore
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
@@ -248,7 +249,6 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     # Create a minimal project structure
     (tmp_path / "runtime").mkdir(parents=True)
     (tmp_path / "logs").mkdir(parents=True)
-    (tmp_path / "outbox").mkdir(parents=True)
     monkeypatch.setattr(
         "nuself.reflection.candidates.default_structured_agent",
         _fake_structured_agent,
@@ -280,7 +280,8 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         application.conversation_history,
         application.reflection.repository,
         application.reflection.service,
-        application.notifications,
+        application.inbox,
+        application.deliveries,
         application.trace.recorder,
         config=config,
         language_preference="en",
@@ -521,7 +522,7 @@ def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: Reflect
     assert not any(event.event == "cycle_pending_limit_reached" for event in events)
 
 
-def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
+def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: ReflectionScheduler) -> None:
     from nuself.config.settings import ReflectionSettings
     scheduler._config = ReflectionSettings(
         scheduler=scheduler._config.scheduler,
@@ -536,11 +537,20 @@ def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler
     # Reflection repo has the entry
     refl_entries = scheduler._reflection_repo.list()
     assert len(refl_entries) == 1
-    # Outbox has a notify entry pointing to it
-    outbox_entries = cast(NotificationOutbox, scheduler._outbox).list()
-    assert len(outbox_entries) == 1
-    assert outbox_entries[0].title.startswith("New reflection:")
-    assert refl_entries[0].id in outbox_entries[0].body
+    inbox_items = cast(InboxService, scheduler._inbox).list()
+    assert len(inbox_items) == 1
+    assert inbox_items[0].title.startswith("New reflection:")
+    assert refl_entries[0].id in inbox_items[0].body
+    assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
+
+
+def test_reflect_creates_inbox_without_delivery_by_default(
+    scheduler: ReflectionScheduler,
+) -> None:
+    assert scheduler.reflect(datetime(2024, 1, 1, 12, 0, tzinfo=UTC)) is True
+
+    assert len(cast(InboxService, scheduler._inbox).list()) == 1
+    assert cast(DeliveryStore, scheduler._deliveries).list() == []
 
 
 def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionScheduler) -> None:

@@ -60,11 +60,11 @@ runtime context:
 - `reason_id` for long-running reason ownership;
 - `request_id` for daemon/client request ownership;
 - `turn_id` for one logical chat turn;
-- `job_id` for daemon background jobs such as memory, reflection, notification, or future log maintenance;
+- `job_id` for daemon background jobs such as memory, reflection, Delivery, or future log maintenance;
 - `trace_id` for cross-service provenance;
 - `source` for the runtime boundary that wrote the event, such as `daemon`, `client`, or `chat_runtime`.
 
-Every scheduled memory-curator, reflection, reason, and notification-delivery
+Every scheduled memory-curator, reflection, reason, and Delivery
 tick owns a fresh `job_id`. Its worker source and job id are installed before
 domain code runs; nested domain context adds fields without replacing that tick
 identity. Iteration failure logs use the same job id, and reused worker threads
@@ -417,7 +417,8 @@ is written to disk.
 | `chat`       | `chat.log`       | Conversation turns                                                   |
 | `memory`     | `memory.log`     | Memory operations                                                    |
 | `persona`    | `persona.log`    | Persona activations, host decisions, competitive persona discussions |
-| `outbox`     | `outbox.log`     | Notification delivery attempts                                       |
+| `inbox`      | `inbox.log`      | User-attention item persistence and lifecycle                         |
+| `delivery`   | `delivery.log`   | External Inbox delivery attempts                                     |
 | `reflection` | `reflection.log` | Reflection scheduling                                                |
 | `reasoning`  | `reasoning.log`  | Long-run reasoning threads                                           |
 | `storage`    | `storage.log`    | Shared persistence lifecycle and backend infrastructure              |

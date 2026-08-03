@@ -36,6 +36,8 @@ from nuself.storage.contract import (
 
 _SQLITE_INITIALIZATION_LOCK = threading.Lock()
 SQLITE_SCHEMA_VERSION = 7
+# Historical v1-v3 identity contract; current compact authorities use
+# COLLECTION_NAMES and migrate this legacy collection explicitly.
 _V2_COLLECTION_NAMES = (
     "memory_entries",
     "memory_candidates",

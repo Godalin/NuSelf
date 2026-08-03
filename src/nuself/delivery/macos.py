@@ -1,4 +1,4 @@
-"""macOS notification adapter using osascript."""
+"""macOS delivery adapter using osascript."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from nuself.notification.model import OutboxEntry
-from nuself.notification.audit import (
-    NOTIFICATION_AUDIT,
+from nuself.inbox.model import InboxItem
+from nuself.delivery.audit import (
+    DELIVERY_AUDIT,
 )
 
 
-class MacOSNotificationAdapter:
-    """Deliver outbox entries as macOS system notifications via osascript.
+class MacOSDeliveryAdapter:
+    """Deliver Inbox items as macOS system notifications via osascript.
 
     Falls back to logging when osascript is unavailable or ``dry_run`` is set.
     """
@@ -25,14 +25,14 @@ class MacOSNotificationAdapter:
         self._dry_run = dry_run
         self._has_osascript = shutil.which("osascript") is not None
 
-    def send(self, entry: OutboxEntry) -> bool:
+    def send(self, entry: InboxItem, *, attempt: int) -> bool:
         if self._dry_run or not self._has_osascript:
-            NOTIFICATION_AUDIT.write_strict(
+            DELIVERY_AUDIT.write_strict(
                 "macos_dry_run" if self._dry_run else "macos_unavailable",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "attempt": entry.attempts,
+                    "attempt": attempt,
                 },
             )
             return True
@@ -51,18 +51,18 @@ class MacOSNotificationAdapter:
             )
         except subprocess.TimeoutExpired:
             # A hung osascript must not block the notification-delivery thread.
-            NOTIFICATION_AUDIT.failure(
+            DELIVERY_AUDIT.failure(
                 TimeoutError("osascript timed out"),
                 event="macos_failed",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "attempt": entry.attempts,
+                    "attempt": attempt,
                 },
             )
             return False
         if result.returncode != 0:
-            NOTIFICATION_AUDIT.failure(
+            DELIVERY_AUDIT.failure(
                 RuntimeError(
                     result.stderr.strip() or "osascript failed"
                 ),
@@ -70,7 +70,7 @@ class MacOSNotificationAdapter:
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "attempt": entry.attempts,
+                    "attempt": attempt,
                 },
             )
             return False

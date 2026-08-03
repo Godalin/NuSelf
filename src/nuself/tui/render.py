@@ -10,7 +10,7 @@ import sys
 from typing import cast
 
 from nuself.log.record import LogEvent
-from nuself.notification.model import OutboxEntry
+from nuself.inbox.model import InboxItem
 from nuself.reflection.repository import ReflectionEntry
 import re
 
@@ -625,7 +625,8 @@ _COLORS_256: dict[str, str] = {
     "persona": "35",
     "reasoning": "95",
     "selves": "95",
-    "outbox": "36",
+    "delivery": "36",
+    "inbox": "35",
     "trace": "96",
     "reflection": "33",
     "workspace": "38;5;208",
@@ -639,7 +640,8 @@ _COLORS_BASIC: dict[str, str] = {
     "persona": "35",
     "reasoning": "35",
     "selves": "35",
-    "outbox": "36",
+    "delivery": "36",
+    "inbox": "35",
     "trace": "36",
     "reflection": "33",
     "workspace": "33",
@@ -672,8 +674,8 @@ def _status_color(status: str) -> str:
     return "0"
 
 
-def render_outbox_summary(entry: OutboxEntry, *, index: int | None = None, color: bool | None = None) -> str:
-    """Render one outbox entry as a compact terminal line."""
+def render_inbox_summary(entry: InboxItem, *, index: int | None = None, color: bool | None = None) -> str:
+    """Render one Inbox item as a compact terminal line."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     created = format_display_timestamp(entry.created_at) if entry.created_at else "-"
@@ -683,26 +685,25 @@ def render_outbox_summary(entry: OutboxEntry, *, index: int | None = None, color
         _render_key_value_fields(
             [
                 ("created", created),
-                ("attempts", entry.attempts),
+                ("kind", entry.kind),
                 ("link", entry.deep_link is not None),
             ]
         ),
     )
 
 
-def render_outbox_detail(entry: OutboxEntry, *, color: bool | None = None) -> str:
-    """Render one outbox entry as a multi-line detail view."""
+def render_inbox_detail(entry: InboxItem, *, color: bool | None = None) -> str:
+    """Render one Inbox item as a multi-line detail view."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     fields = _render_key_value_fields(
         [
             ("idempotency_key", entry.idempotency_key),
-            ("attempts", entry.attempts),
+            ("kind", entry.kind),
+            ("source_id", entry.source_id),
             ("created_at", entry.created_at),
         ]
     )
-    if entry.sent_at is not None:
-        fields.append(render_key_value_field("sent_at", entry.sent_at))
     if entry.deep_link is not None:
         fields.append(render_key_value_field("deep_link", entry.deep_link))
     return render_record_block(

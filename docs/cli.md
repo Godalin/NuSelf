@@ -68,7 +68,7 @@ uv run nuself daemon stop
 ```
 
 The daemon hosts chat plus background memory, reflection, reasoning, and
-notification workers over a local Unix socket.
+Delivery work over a local Unix socket.
 
 ## Conversations
 
@@ -123,8 +123,10 @@ One-time record migrations are repository scripts rather than installed CLI
 commands. Preview with
 `uv run python scripts/migrate_legacy_memory_records.py --authority-root .nuself`
 and add `--apply` explicitly to commit. Unknown legacy data stays untouched.
+For a pre-refactor v0.3.1 database, preview Notification-to-Inbox migration
+with `uv run python scripts/inbox.py .nuself/nuself.sqlite`, then add `--apply`.
 
-## Reflections And Notifications
+## Reflections And Inbox
 
 ```bash
 uv run nuself reflection status
@@ -133,10 +135,10 @@ uv run nuself reflection list
 uv run nuself reflection show <reflection-id>
 uv run nuself reflection dismiss <reflection-id>
 
-uv run nuself inbox notify list
-uv run nuself inbox notify show <notification-id>
-uv run nuself inbox notify send <notification-id>
-uv run nuself inbox notify dismiss <notification-id>
+uv run nuself inbox
+uv run nuself inbox show <item-id>
+uv run nuself inbox send <item-id>
+uv run nuself inbox dismiss <item-id>
 ```
 
 ## Long-Run Reasoning And Trace

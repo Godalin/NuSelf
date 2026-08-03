@@ -190,8 +190,8 @@ state.
 
 Concrete workflows belong to their domains even when an outer adapter triggers
 them. Reason owns durable output export in `reason.export_service`; daemon owns
-only scheduling and lifecycle. Notification owns its evaluation entry point in
-`notification.eval`; CLI owns only argument handling and result presentation.
+only scheduling and lifecycle. CLI owns only argument handling and result
+presentation for Inbox and Delivery operations.
 Generic execution infrastructure remains in `runtime`, while concrete owners
 use responsibility names such as `application.lifecycle`, `agent.chat.engine`,
 and `cli.repl.loop`.
@@ -244,7 +244,7 @@ the same graph-owned prompt and trace capabilities to every reason advancer.
 
 `ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
 one selected `StorageBackend`. It retains those exact resources and the shared
-conversation, memory, notification, persona, reason, reflection, and trace
+conversation, memory, Inbox, Delivery, persona, reason, reflection, and trace
 graph. Process
 adapters may choose transport and lifecycle, but must not rebuild domain
 dependencies after a graph has been supplied.
@@ -259,7 +259,7 @@ Interrupt and exceptional exits follow the same outer cleanup path as normal
 completion. Graph construction and explicit infrastructure borrowing share one
 lock-owned lazy backend acquisition path; closing also releases the runtime's
 graph reference after admission is closed.
-Domain-owned Chat, daemon, notification, and model composition reuse that
+Domain-owned Chat, daemon, Delivery, and model composition reuse that
 application snapshot. Explicit configuration inspection and adapters documented to reload
 per operation may still call the loader; nested composition must not reload the
 same snapshot merely to obtain one subsection.
@@ -309,7 +309,7 @@ Conversation state and persistence are isolated domain infrastructure under
 receives resolved runtime paths and the selected backend as required resources
 and is constructed exactly once in `ApplicationGraph`; only the conversation
 API implementation, chat, and explicit conversation-management surfaces may
-borrow it. Memory, reflection, reason, persona, notification, and trace code
+borrow it. Memory, reflection, reason, persona, Inbox, Delivery, and trace code
 must not import or query conversation state or storage. A domain that needs
 chat evidence uses the read-only conversation history API and receives bounded,
 immutable DTOs; this explicit API dependency is allowed.
@@ -333,11 +333,11 @@ read-only conversation API. It must not accept a `ConversationStore` or decode
 conversation records. Conversation may consume reflection through user-facing
 tools; the two directions meet only at their public APIs.
 
-Daemon curation, reflection, reasoning, and notification workers follow the
-same rule: process composition supplies their backend, repositories, outbox,
-plans, and trace recorder from the existing graph. A worker must not select a
+Daemon curation, reflection, reasoning, and Delivery workers follow the same
+rule: process composition supplies their backend, repositories, Inbox,
+Delivery plans, and trace recorder from the existing graph. A worker must not select a
 second authority after those collaborators have been supplied.
-Notification adapter composition likewise receives the graph's resolved
+Delivery adapter composition likewise receives the graph's resolved
 configuration explicitly; it must not reload configuration as an optional
 fallback for CLI, REPL, or daemon callers.
 Concrete adapters receive their resolved project path and subsystem config from
@@ -418,14 +418,11 @@ composition graph. By contrast, `nuself.decorators` is the deliberate public
 spelling for the cohesive inert feature-declaration DSL and may re-export the
 policies and decorators owned by `runtime.feature.policy`.
 
-The `nuself.notification` package root is also import-light. Immutable records
-and strict codecs belong to `notification.model`; storage and entry locking
-belong to `notification.outbox`; adapter contracts and delivery orchestration
-belong to `notification.adapters` and `notification.delivery`; concrete
-adapters and their composition remain separate. These modules import one
-another only in that direction, and the package root must not recreate their
-former circular facade. Renderers and concrete adapters that only inspect an
-entry depend on the model, not on storage and filesystem locking.
+`nuself.inbox` owns immutable attention records and `InboxService` persistence.
+`nuself.delivery` owns delivery records, adapter contracts, orchestration, and
+concrete external-channel adapters. Delivery may read Inbox items through the
+service API; Inbox never imports Delivery. Neither package re-exports a broad
+facade or accesses a source domain's repository.
 
 Cross-domain APIs stay coarse enough to represent a use case. Do not wrap
 every repository method in a one-method interface, introduce a generic service
@@ -446,14 +443,10 @@ Persona definitions are loaded from an explicitly supplied memory repository
 at that application boundary and passed into chat persona orchestration;
 persona policy must not resolve the active authority itself.
 
-`NotificationOutbox` is persistence and follows the same rule: it receives
-resolved paths and the selected backend, derives its entry-lock directory only
-from those paths, and never resolves authority itself. The application graph
-owns the concrete outbox used by outer adapters and notification workflows.
-Notification delivery orchestration is a separate module: it borrows an
-outbox and a frozen adapter plan, but does not own storage selection or
-per-entry locking. The package root may re-export these public types; it may
-not contain both persistence and delivery-loop implementations.
+`InboxService` and `DeliveryStore` receive resolved paths and the selected
+backend and never resolve authority. `DeliveryLoop` borrows both plus a frozen
+adapter plan. Inbox attention transitions and Delivery adapter transitions
+remain separate transactions and state machines.
 
 Cross-domain behavior depends on a narrow `Protocol` owned by the consumer or
 by a neutral contracts module. It must not depend on another domain's concrete

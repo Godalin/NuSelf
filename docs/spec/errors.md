@@ -31,7 +31,7 @@ must not use a formatting failure as a new application failure.
 | Transport | daemon socket timeout, connection refused, broken pipe | Yes, once in REPL chat | Print the transport error, preserve logs, retry the same user message once |
 | Application | conversation graph node failure, LLM protocol parse failure, memory validation error | No | Print concise error and return to prompt |
 | User input | missing command arg, invalid ID, unsupported command | No | Print command-specific error/help; do not run side effects |
-| Background | curator, reflection, notification loop failure | No immediate chat retry | Log error and keep the owning loop/process alive when possible |
+| Background | curator, reflection, Delivery loop failure | No immediate chat retry | Log error and keep the owning loop/process alive when possible |
 | Fatal process | daemon cannot bind socket, corrupted runtime path permissions | No | Exit current command with non-zero status |
 
 ## User-Facing Failure Disposition
@@ -598,10 +598,10 @@ and organizer completion audits are secondary projections; failure of a
 projection or its structured diagnostic cannot replace or replay committed
 domain results.
 
-Notification adapter `False` outcomes for missing email configuration, SMTP
+Delivery adapter `False` outcomes for missing email configuration, SMTP
 failure, and osascript failure are authoritative. Their failure diagnostics
 are secondary and cannot leave an entry pending by raising before
-`record_adapter_result`. Log-only, dry-run, external send, and outbox state
+the adapter-result write. Log-only, dry-run, external send, and Delivery state
 writes remain authoritative effects. Once a terminal adapter result is
 persisted, crash recovery may finalize its global projection but cannot invoke
 that adapter again.
@@ -816,5 +816,5 @@ Error-handling changes should include tests for:
 - REPL does not retry daemon/application errors;
 - logs produced before failure are still printed/captured;
 - transcript export remains valid Markdown when failure logs are included.
-- curator, reflection, reason, export, and notification worker boundaries stay
+- curator, reflection, reason, export, and Delivery worker boundaries stay
   alive and log an unexpected non-`RuntimeError` iteration failure.

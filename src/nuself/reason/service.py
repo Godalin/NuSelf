@@ -18,8 +18,21 @@ from nuself.reason.errors import (
 from nuself.reason.repository import ReasonRepository
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.inbox.model import InboxItem
+from nuself.inbox.service import InboxService
 
 _MAX_EVIDENCE_REFS = 20
+
+
+def _step_requires_attention(step: ReasoningStep) -> bool:
+    """Keep internal no-op advancement out of the user's Inbox."""
+
+    return step.kind != "no_change" and bool(
+        step.summary.strip()
+        or step.new_findings_data
+        or step.new_pending_data
+        or step.terminal_status
+    )
 
 
 class ReasonAdvancerProtocol(Protocol):
@@ -66,12 +79,14 @@ class ReasonService:
         workspace_store: PrivateWorkspaceStore,
         trace_recorder: TraceRecorder,
         prompt_generator: Callable[..., str],
+        inbox: InboxService,
     ) -> None:
         self._repository = repository
         self._project_root = project_root
         self._workspace_store = workspace_store
         self._trace_recorder = trace_recorder
         self._prompt_generator = prompt_generator
+        self._inbox = inbox
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -216,6 +231,17 @@ class ReasonService:
         with self._repository.batch_write():
             self._repository.save_step(step)
             self._repository.save_thread(updated)
+        if _step_requires_attention(step):
+            self._inbox.add(
+                InboxItem(
+                    id=f"inbox-reason-step-{step.id}",
+                    kind="reason_step",
+                    source_id=step.id,
+                    title=f"Reason update: {updated.topic}",
+                    body=step.summary,
+                    idempotency_key=f"reason-step-{step.id}",
+                )
+            )
         REASON_AUDIT.observe(
             lambda: self._trace_recorder.record_reason_step(
                 thread=updated,

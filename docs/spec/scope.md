@@ -78,7 +78,7 @@ configuration model. Diagnostics identify the layer containing malformed YAML
 or an invalid value without exposing secrets.
 
 Configuration layering does not layer runtime state. SQLite, memory, threads,
-profile, persona, reason, trace, reflection, notification, logs, and runtime
+profile, persona, reason, trace, reflection, Inbox, Delivery, logs, and runtime
 preferences read and write only the selected authority.
 
 ## Initialization
@@ -110,7 +110,7 @@ Each authority has an independent daemon instance with its own:
 - PID and lifecycle metadata;
 - Unix socket;
 - SQLite authority;
-- background scheduler and notification outbox.
+- background scheduler, Inbox, and Delivery records.
 
 Daemon startup serializes the resolved user root and, for workspace scope, the
 workspace root. The child reconstructs `NuSelfScope` through the canonical

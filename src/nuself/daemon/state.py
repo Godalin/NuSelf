@@ -31,8 +31,8 @@ from nuself.daemon.tasks import (
 )
 from nuself.log.store import runtime_event_log_sink
 from nuself.agent.endpoint import configured_langchain_chat_models
-from nuself.notification.delivery import NotificationDeliveryLoop
-from nuself.notification.composition import build_notification_adapters
+from nuself.delivery.loop import DeliveryLoop
+from nuself.delivery.composition import build_delivery_adapters
 from nuself.reason.scheduler import ReasonScheduler
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
@@ -123,15 +123,17 @@ class DaemonState:
             application.conversation_history,
             application.reflection.repository,
             application.reflection.service,
-            application.notifications,
+            application.inbox,
+            application.deliveries,
             application.trace.recorder,
             config=config.reflection,
             language_preference=config.chat.language_preference,
             langchain_models=langchain_models,
         )
-        self.notification_delivery_loop = NotificationDeliveryLoop(
-            application.notifications,
-            build_notification_adapters(
+        self.delivery_loop = DeliveryLoop(
+            application.inbox,
+            application.deliveries,
+            build_delivery_adapters(
                 paths,
                 email_config=config.email,
                 macos_config=config.macos_notification,
@@ -163,8 +165,8 @@ class DaemonState:
             ),
             ("reason.check", reason_interval),
             (
-                "notification.deliver",
-                config.daemon.notification_delivery.interval_seconds,
+                "delivery.run",
+                config.daemon.delivery.interval_seconds,
             ),
         )
         handlers = {
@@ -175,7 +177,7 @@ class DaemonState:
             "conversation.compress": self._compress_conversation,
             "reflection.check": self._check_reflection,
             "reason.check": self._check_reasons,
-            "notification.deliver": self._deliver_notifications,
+            "delivery.run": self._run_delivery,
             "reason.export": self._run_reason_export,
         }
         if set(handlers) != set(DAEMON_TASK_KINDS):
@@ -326,8 +328,8 @@ class DaemonState:
     def _check_reasons(self, _task: DaemonTask) -> None:
         self.reason_scheduler.run_once()
 
-    def _deliver_notifications(self, _task: DaemonTask) -> None:
-        self.notification_delivery_loop.run_once()
+    def _run_delivery(self, _task: DaemonTask) -> None:
+        self.delivery_loop.run_once()
 
     def _schedule_reason_export(
         self,

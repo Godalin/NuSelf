@@ -28,7 +28,6 @@ def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunctio
 def project_root(tmp_path: Path) -> Path:
     (tmp_path / "private" / "runtime").mkdir(parents=True)
     (tmp_path / "private" / "logs").mkdir(parents=True)
-    (tmp_path / "private" / "outbox").mkdir(parents=True)
     (tmp_path / "private" / "reflections").mkdir(parents=True)
     return tmp_path
 

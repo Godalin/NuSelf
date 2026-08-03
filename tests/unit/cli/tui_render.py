@@ -8,7 +8,7 @@ from nuself.log.record import LogEvent
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.source.record import SourceDocument
-from nuself.notification.model import OutboxEntry
+from nuself.inbox.model import InboxItem
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reason.model import ReasoningStep
 from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row, render_profile_row, render_source_row
@@ -17,8 +17,8 @@ from nuself.tui.render import (
     format_display_timestamp,
     render_discussion_trace,
     render_log_event,
-    render_outbox_detail,
-    render_outbox_summary,
+    render_inbox_detail,
+    render_inbox_summary,
     render_record_block,
     render_reflection_entry_detail,
     render_reflection_entry_summary,
@@ -328,10 +328,12 @@ def test_render_discussion_log_expands_trace_metadata() -> None:
     ]
 
 
-def test_render_outbox_records_use_shared_key_value_style() -> None:
+def test_render_inbox_records_use_shared_key_value_style() -> None:
     created = format_display_timestamp("2026-05-12T10:00:00Z")
-    entry = OutboxEntry(
+    entry = InboxItem(
         id="e1",
+        kind="reflection",
+        source_id="reflection-1",
         title="Test Title",
         body="Test Body",
         status="pending",
@@ -340,11 +342,11 @@ def test_render_outbox_records_use_shared_key_value_style() -> None:
         created_at="2026-05-12T10:00:00Z",
     )
 
-    assert render_outbox_summary(entry, color=False) == (
-        f"e1 [pending] Test Title created={created} attempts=0 link=true"
+    assert render_inbox_summary(entry, color=False) == (
+        f"e1 [pending] Test Title created={created} kind=reflection link=true"
     )
-    assert render_outbox_detail(entry, color=False).splitlines() == [
-        f"e1 [pending] Test Title idempotency_key=k1 attempts=0 created_at={created} deep_link=nuself://conversation/default",
+    assert render_inbox_detail(entry, color=False).splitlines() == [
+        f"e1 [pending] Test Title idempotency_key=k1 kind=reflection source_id=reflection-1 created_at={created} deep_link=nuself://conversation/default",
         "  Test Body",
     ]
 

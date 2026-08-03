@@ -88,7 +88,7 @@ daemon:
     interval_seconds: 300
   reflection_scheduler:
     check_interval_seconds: 600
-  notification_delivery:
+  delivery:
     interval_seconds: 30
 ```
 

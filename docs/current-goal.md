@@ -21,10 +21,14 @@ No active objective.
 
 ## Last Verification
 
-- Reflection owns top-level CLI and REPL run, status, and entry-management
-  commands; no `inbox reflection` compatibility layer remains.
-- Inbox is a mixed pending-item view and retains Notification commands without
-  becoming a second Reflection API.
+- Inbox now owns durable user-attention items and source-domain references;
+  Delivery independently owns adapter plans and results.
+- Reflection always publishes an Inbox item; meaningful non-`no_change` Reason
+  steps publish one; optional external delivery remains independently tracked.
+- Old Notification source, nested commands, fixtures, and installed package
+  paths are removed; `scripts/inbox.py` previews/applies legacy data migration.
+- The project-local config uses `daemon.delivery`; its database contained zero
+  legacy Notification records and `nuself --local inbox` starts successfully.
 - `uv run --locked pyright`: 0 errors, 0 warnings.
-- `uv run pytest -q`: full suite passed.
+- `uv run pytest -q`: 2329 passed.
 - `uv build`: source distribution and wheel built successfully.

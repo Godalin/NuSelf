@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nuself.notification.deep_link import DeepLink
+from nuself.inbox.link import DeepLink
 
 
 def test_parse_open_conversation() -> None:

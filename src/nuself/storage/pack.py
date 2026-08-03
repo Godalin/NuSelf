@@ -66,9 +66,30 @@ def inspect_sqlite_thought_pack(source: Path) -> ThoughtPackInspection:
         version = _validate_thought_pack_connection(connection)
         counts = tuple(
             (name, _collection_count(connection, name))
-            for name in COLLECTION_NAMES
+            for name in _inspection_collections(connection)
         )
     return ThoughtPackInspection(version, counts)
+
+
+def _inspection_collections(connection: sqlite3.Connection) -> tuple[str, ...]:
+    """Use the validated pack's own catalog for pre-compact schemas."""
+
+    compact = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='records'"
+    ).fetchone()
+    if compact is not None:
+        return COLLECTION_NAMES
+    rows = connection.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type='table' AND name LIKE 'col_%' ORDER BY name"
+    ).fetchall()
+    return tuple(
+        name[4:]
+        for row in rows
+        if len(row) == 1
+        and isinstance((name := row[0]), str)
+        and name.startswith("col_")
+    )
 
 
 @contextmanager

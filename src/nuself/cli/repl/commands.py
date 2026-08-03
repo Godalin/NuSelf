@@ -485,12 +485,22 @@ def handle_interactive_reflection_command(
     return "\n".join(lines)
 
 
-def handle_interactive_inbox_command(project_root: Path | None) -> str:
-    sections = [
-        handle_interactive_reflection_command(project_root),
-        handle_interactive_notify_command(project_root),
-    ]
-    return "\n\n".join(sections)
+def handle_interactive_inbox_command(
+    project_root: Path | None,
+    *,
+    include_all: bool = False,
+) -> str:
+    del project_root
+    from nuself.tui.render import render_inbox_summary
+
+    inbox = cli_application().inbox
+    items = inbox.list() if include_all else inbox.list(status="pending")
+    if not items:
+        return "No Inbox items." if include_all else "Inbox is empty."
+    return "\n".join(
+        ["All Inbox items:" if include_all else "Pending Inbox items:"]
+        + [f"  {render_inbox_summary(item, index=index)}" for index, item in enumerate(items)]
+    )
 
 
 def handle_interactive_reflection_show_command(project_root: Path | None, entry_id: str) -> str:
@@ -554,98 +564,74 @@ def handle_interactive_reflection_status_command(project_root: Path | None) -> s
     )
 
 
-def handle_interactive_notify_command(
-    project_root: Path | None,
-    *,
-    include_all: bool = False,
+def handle_interactive_inbox_show_command(project_root: Path | None, item_id: str) -> str:
+    del project_root
+    from nuself.inbox.service import InboxItemNotFound
+    from nuself.tui.render import render_inbox_detail
+
+    try:
+        item = cli_application().inbox.get(item_id)
+    except InboxItemNotFound:
+        return f"Inbox item not found: {item_id}"
+    if item.status == "pending":
+        item = cli_application().inbox.mark_read(item.id)
+    return render_inbox_detail(item)
+
+
+def handle_interactive_inbox_subcommand(
+    project_root: Path | None, subcmd: str, item_id: str
 ) -> str:
-    from nuself.tui.render import render_outbox_summary
-
-    outbox = cli_application().notifications
-    entries = (
-        outbox.list()
-        if include_all
-        else outbox.list(status="pending")
-    )
-    if not entries:
-        return (
-            "No notifications."
-            if include_all
-            else "No pending notifications."
-        )
-    lines = [
-        "All notifications:"
-        if include_all
-        else "Pending notifications:"
-    ]
-    for index, entry in enumerate(entries):
-        lines.append("  " + render_outbox_summary(entry, index=index))
-    return "\n".join(lines)
-
-
-def handle_interactive_notify_show_command(project_root: Path | None, entry_id: str) -> str:
-    from nuself.notification.outbox import OutboxEntryNotFound
-    from nuself.tui.render import render_outbox_detail
-
-    try:
-        entry = cli_application().notifications.get(
-            entry_id
-        )
-    except OutboxEntryNotFound:
-        return f"Outbox entry not found: {entry_id}"
-    return render_outbox_detail(entry)
-
-
-def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    from nuself.notification.delivery import deliver_entry_once
-    from nuself.notification.outbox import OutboxEntryNotFound
-    from nuself.notification.composition import (
-        build_notification_adapters,
-    )
-
+    del project_root
     application = cli_application()
-    outbox = application.notifications
     try:
-        outbox.get(entry_id)
-    except OutboxEntryNotFound:
-        return f"Outbox entry not found: {entry_id}"
+        item = application.inbox.get(item_id)
+    except KeyError:
+        return f"Inbox item not found: {item_id}"
+    if subcmd == "read":
+        application.inbox.mark_read(item.id)
+        return f"Read: {item.id}"
+    if subcmd == "dismiss":
+        application.inbox.dismiss(item.id)
+        return f"Dismissed: {item.id}"
+    if subcmd == "resolve":
+        application.inbox.resolve(item.id)
+        return f"Resolved: {item.id}"
     if subcmd == "send":
-        updated = deliver_entry_once(
-            outbox,
-            entry_id,
-            build_notification_adapters(
+        from nuself.delivery.composition import build_delivery_adapters
+        from nuself.delivery.loop import DeliveryLoop
+
+        record = application.deliveries.request(item.id, context=item.context)
+        final = DeliveryLoop(
+            application.inbox,
+            application.deliveries,
+            build_delivery_adapters(
                 application.paths,
                 email_config=application.config.email,
                 macos_config=application.config.macos_notification,
             ),
-        )
-        if updated.status == "sent":
-            return f"Sent: {entry_id}"
-        return f"Failed to send: {entry_id}"
-    if subcmd == "dismiss":
-        outbox.dismiss(entry_id)
-        return f"Dismissed: {entry_id}"
-    return f"Unknown :inbox notify subcommand: {subcmd}"
+        ).deliver(record.id)
+        return f"Sent: {item.id}" if final.status == "sent" else f"Failed to send: {item.id}"
+    return f"Unknown :inbox subcommand: {subcmd}"
 
 
-def handle_interactive_watch_command(project_root: Path | None) -> None:
+def handle_interactive_inbox_watch_command(project_root: Path | None) -> None:
     import time
 
-    from nuself.tui.render import render_outbox_summary
+    from nuself.tui.render import render_inbox_summary
 
-    outbox = cli_application().notifications
+    inbox = cli_application().inbox
     seen: set[str] = set()
-    for entry in outbox.list():
+    for entry in inbox.list():
         seen.add(entry.id)
 
-    print("Watching outbox. Press Ctrl+C to stop.")
+    print("Watching Inbox. Press Ctrl+C to stop.")
     try:
         while True:
             time.sleep(2)
-            for entry in outbox.list():
+            for entry in inbox.list(status="pending"):
                 if entry.id not in seen:
                     seen.add(entry.id)
-                    print_ansi(render_outbox_summary(entry))
+                    print_ansi(render_inbox_summary(entry))
     except KeyboardInterrupt:
         print("\nStopped watching.")
 

@@ -21,11 +21,11 @@ def handle_status(args: argparse.Namespace) -> int:
     application = cli_application()
     conversations = application.conversations.list()
     pending = len(
-        application.notifications.list(status="pending")
+        application.inbox.list(status="pending")
     )
     print(f"daemon: {daemon.phase} pid={daemon.pid or '-'}")
     print(f"conversations: {len(conversations)}")
-    print(f"pending notifications: {pending}")
+    print(f"pending Inbox items: {pending}")
     return 0
 
 

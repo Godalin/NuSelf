@@ -16,6 +16,7 @@ from nuself.reason.service import (
 from tests.backend import owned_backend
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.inbox.service import InboxService
 
 
 class ReasonService(_ReasonService):
@@ -57,6 +58,7 @@ class ReasonService(_ReasonService):
             workspace_store=selected_workspace,
             trace_recorder=selected_trace,
             prompt_generator=prompt_generator,
+            inbox=InboxService(runtime_paths(root), backend),
         )
 
 

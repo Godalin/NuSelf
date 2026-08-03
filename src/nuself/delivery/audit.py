@@ -1,4 +1,4 @@
-"""Closed delivery-audit schemas owned by Notification."""
+"""Closed audit schemas owned by Delivery."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from nuself.runtime.audit.definition import (
 )
 from nuself.runtime.audit.catalog import AuditCatalog
 
-type NotificationAuditEvent = Literal[
-    "outbox_delivered",
+type DeliveryAuditEvent = Literal[
+    "item_delivered",
     "email_dry_run",
     "email_no_config",
     "email_failed",
@@ -41,41 +41,41 @@ def _entry_attempt(metadata: Mapping[str, object]) -> None:
 def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition(
-            "outbox", "outbox_delivered", "info", "delivered",
+            "delivery", "item_delivered", "info", "delivered",
             metadata_validator=_entry_attempt,
         ),
         AuditEventDefinition(
-            "outbox", "email_dry_run", "debug", "simulated",
+            "delivery", "email_dry_run", "debug", "simulated",
             metadata_validator=_entry_attempt,
         ),
         AuditEventDefinition(
-            "outbox", "email_no_config", "warning", "failed",
+            "delivery", "email_no_config", "warning", "failed",
             error_policy="required",
             metadata_validator=_entry_attempt,
         ),
         AuditEventDefinition(
-            "outbox", "email_failed", "warning", "failed",
+            "delivery", "email_failed", "warning", "failed",
             error_policy="required",
             metadata_validator=_entry_attempt,
         ),
         AuditEventDefinition(
-            "outbox", "macos_dry_run", "debug", "simulated",
+            "delivery", "macos_dry_run", "debug", "simulated",
             metadata_validator=_entry_attempt,
         ),
         AuditEventDefinition(
-            "outbox", "macos_unavailable", "info", "unavailable",
+            "delivery", "macos_unavailable", "info", "unavailable",
             metadata_validator=_entry_attempt,
         ),
         AuditEventDefinition(
-            "outbox", "macos_failed", "warning", "failed",
+            "delivery", "macos_failed", "warning", "failed",
             error_policy="required",
             metadata_validator=_entry_attempt,
         ),
     )
     return definitions
 
-_MESSAGES: dict[NotificationAuditEvent, str] = {
-    "outbox_delivered": "Outbox notification delivered",
+_MESSAGES: dict[DeliveryAuditEvent, str] = {
+    "item_delivered": "Inbox item delivered",
     "email_dry_run": "Email delivery simulated",
     "email_no_config": "Email delivery skipped without configuration",
     "email_failed": "Email delivery failed",
@@ -85,7 +85,7 @@ _MESSAGES: dict[NotificationAuditEvent, str] = {
 }
 
 
-NOTIFICATION_AUDIT = AuditCatalog[NotificationAuditEvent](
+DELIVERY_AUDIT = AuditCatalog[DeliveryAuditEvent](
     _definitions(),
     _MESSAGES,
 )

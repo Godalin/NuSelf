@@ -8,7 +8,8 @@ from nuself.config.settings import ReflectionSettings, RuntimePaths
 from nuself.conversation import ConversationHistoryService
 from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.memory.composition import MemoryRepositories
-from nuself.notification.outbox import NotificationOutbox
+from nuself.delivery.store import DeliveryStore
+from nuself.inbox.service import InboxService
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
@@ -60,7 +61,8 @@ def compose_reflection_scheduler(
     conversation_history: ConversationHistoryService,
     repository: ReflectionRepository,
     service: ReflectionService,
-    notifications: NotificationOutbox,
+    inbox: InboxService,
+    deliveries: DeliveryStore,
     trace_recorder: TraceRecorder,
     *,
     config: ReflectionSettings,
@@ -88,7 +90,8 @@ def compose_reflection_scheduler(
         paths.authority_root,
         config,
         repository=repository,
-        outbox=notifications,
+        inbox=inbox,
+        deliveries=deliveries,
         trace_recorder=trace_recorder,
         candidate_generator=generator,
         relevance_gate=gate,

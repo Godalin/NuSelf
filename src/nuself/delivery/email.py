@@ -1,4 +1,4 @@
-"""Email notification adapter using the unified system configuration."""
+"""Email delivery adapter using unified system configuration."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ from html import escape
 from pathlib import Path
 
 from nuself.config.settings import EmailConfig
-from nuself.notification.model import OutboxEntry
-from nuself.notification.audit import (
-    NOTIFICATION_AUDIT,
+from nuself.inbox.model import InboxItem
+from nuself.delivery.audit import (
+    DELIVERY_AUDIT,
 )
-from nuself.notification.deep_link import DeepLink
+from nuself.inbox.link import DeepLink
 
 
-class EmailNotificationAdapter:
-    """Deliver outbox entries through configured SMTP."""
+class EmailDeliveryAdapter:
+    """Deliver Inbox items through configured SMTP."""
 
     delivery_id = "email"
 
@@ -31,26 +31,26 @@ class EmailNotificationAdapter:
         self._dry_run = dry_run
         self._config = config
 
-    def send(self, entry: OutboxEntry) -> bool:
+    def send(self, entry: InboxItem, *, attempt: int) -> bool:
         if self._dry_run:
-            NOTIFICATION_AUDIT.write_strict(
+            DELIVERY_AUDIT.write_strict(
                 "email_dry_run",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "attempt": entry.attempts,
+                    "attempt": attempt,
                 },
             )
             return True
 
         if not self._config.enabled:
-            NOTIFICATION_AUDIT.failure(
+            DELIVERY_AUDIT.failure(
                 RuntimeError("email notification is disabled"),
                 event="email_no_config",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "attempt": entry.attempts,
+                    "attempt": attempt,
                 },
             )
             return False
@@ -65,13 +65,13 @@ class EmailNotificationAdapter:
                     server.login(smtp.username, smtp.password)
                 server.send_message(msg)
         except (OSError, ValueError, smtplib.SMTPException) as exc:
-            NOTIFICATION_AUDIT.failure(
+            DELIVERY_AUDIT.failure(
                 exc,
                 event="email_failed",
                 project_root=self._project_root,
                 metadata={
                     "entry_id": entry.id,
-                    "attempt": entry.attempts,
+                    "attempt": attempt,
                 },
             )
             return False
@@ -80,7 +80,7 @@ class EmailNotificationAdapter:
 
 
 def _build_email_message(
-    entry: OutboxEntry,
+    entry: InboxItem,
     config: EmailConfig,
 ) -> EmailMessage:
     msg = EmailMessage()

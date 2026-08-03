@@ -20,6 +20,7 @@ from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.inbox.service import InboxService
 
 if TYPE_CHECKING:
     from nuself.config.settings import RuntimePaths, SystemConfig
@@ -38,6 +39,7 @@ def compose_reason_resources(
     backend: StorageBackend,
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
+    inbox: InboxService,
 ) -> ReasonResources:
     """Compose Reason's authority-scoped capabilities."""
 
@@ -50,6 +52,7 @@ def compose_reason_resources(
             workspace_store=workspace,
             trace_recorder=trace_recorder,
             prompt_generator=compose_reason_prompt_generator(paths, config),
+            inbox=inbox,
         ),
         workspace=workspace,
     )

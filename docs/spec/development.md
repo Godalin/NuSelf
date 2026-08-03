@@ -232,7 +232,7 @@ Rules:
 
 ## Subsystem Service Architecture
 
-NuSelf is a multi-subservice system. Major domains such as memory, reflection, notification, trace, and reason should be implemented as clear subsystems rather than as incidental CLI helpers.
+NuSelf is a multi-subservice system. Major domains such as memory, reflection, Inbox, Delivery, trace, and reason should be implemented as clear subsystems rather than as incidental CLI helpers.
 
 Each subsystem should expose these layers when the domain is non-trivial:
 
@@ -478,8 +478,8 @@ single-use forwarding functions around those adapters.
   lifecycle handlers; REPL thread switching remains in the REPL layer.
 - `cli/commands/output.py` owns ANSI-aware printing and visible-handle error rendering
   shared by extracted command modules.
-- `cli/commands/notifications.py` owns one-shot notification list/show/stats/watch/send/
-  dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
+- `cli/commands/inbox.py` owns one-shot Inbox list/show/stats/watch/send/read/
+  dismiss/resolve/clear handlers; Inbox REPL shortcuts remain in the REPL layer.
 - `cli/commands/reason.py` owns one-shot reason list/show/start/action/delete handlers.
   The long-running terminal watch loop remains with REPL/session orchestration.
 - `cli/commands/trace.py` owns one-shot trace list/show/search/related handlers
@@ -493,7 +493,7 @@ single-use forwarding functions around those adapters.
   diagnostics. One-time migrations live under source-checkout `scripts/`.
 - `cli/commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
-- `cli/commands/eval.py` owns conversation and notification fixture evaluation
+- `cli/commands/eval.py` owns conversation fixture evaluation
   orchestration for the canonical `dev eval` route. Every
   evaluator returns one typed `EvalResult` per scenario; the command derives
   totals and exit status from those results and must not infer fixture counts

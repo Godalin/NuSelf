@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import BaseMessage
 
 from chat_fixtures import ConversationGraphRuntime
-from notification_fixtures import notification_outbox
+from inbox_fixtures import inbox_service
 from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
@@ -21,7 +21,7 @@ from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
 from nuself.log.reader import read_log_events
 from nuself.memory.observation import MemoryObservation
-from nuself.notification.model import OutboxEntry
+from nuself.inbox.model import InboxItem
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.daemon.scheduler import (
@@ -669,16 +669,15 @@ def test_daemon_handle_backstops_unexpected_error(tmp_path: Path, monkeypatch: p
     assert "kaboom" in response.error
 
 
-def test_daemon_background_reflection_scheduler_creates_outbox_entry(tmp_path: Path) -> None:
-    """End-to-end: daemon starts reflection scheduler thread, which reflects and creates an outbox entry."""
+def test_daemon_background_reflection_scheduler_creates_inbox_item(tmp_path: Path) -> None:
     state = DaemonState(tmp_path)
     reflected = threading.Event()
-    outbox = notification_outbox(tmp_path)
+    outbox = inbox_service(tmp_path)
 
     class MockScheduler:
         def reflect(self, now: object = None) -> bool:
             outbox.add(
-                OutboxEntry(
+                InboxItem(
                     id="reflection-test-001",
                     title="test reflection idea",
                     body="test body",

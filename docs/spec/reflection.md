@@ -13,7 +13,8 @@ Scheduler and relevance policy receive `ReflectionRepository`, never the raw
 saving; callers own cooldown, daily-cap, corruption reporting, and timing
 decisions.
 
-Reflection ideas are first-class domain objects. They are **not** notification intents.
+Reflection ideas are first-class domain objects. Inbox stores only references
+to them, never a second Reflection record.
 
 ## ReflectionEntry
 
@@ -61,7 +62,8 @@ reflect()
   │   └─ cycle_discussion_rejected (if !approved)
   └─ ReflectionRepository.save()   ( ReflectionEntry persisted )
        ├─ TraceRecorder.record_reflection_created()  ← kind="reflection"
-       └─ auto_notify? → NotificationOutbox.add(brief notify)
+       └─ InboxService.add(reference)
+            └─ auto_notify? → DeliveryStore.request(item)
 ```
 
 ## Trace Recording
@@ -208,23 +210,28 @@ Trace recording after reflection persistence and best-effort pending-reflection
 organization are auxiliary effects. Their `trace_recording_failed` and
 `organizer_failed` projections also use shared reporting. Failure of either
 effect or its diagnostic cannot remove the persisted reflection, interrupt
-later schedule-state/outbox/cycle completion work, or introduce a hidden
-retry. Repository, schedule-state write, and outbox failures remain
+later schedule-state/Inbox/cycle completion work, or introduce a hidden
+retry. Repository, schedule-state write, and Inbox publication failures remain
 authoritative.
 
 Within `ReflectionOrganizer`, `organizer_completed` is an auxiliary projection
 written only after merged/archived repository state. Its audit or diagnostic
 failure cannot replace the returned organization result or undo those writes.
 
-## Optional Notify Bridge
+## Inbox And Optional Delivery
 
-If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
+Every published reflection creates a concise `InboxItem` pointing to the
+authoritative Reflection entry:
 
 - `title`: `"New reflection: {reflection.title}"`
 - `body`: `"A new reflection idea is available. View it with: nuself reflection show {id}"`
-- `idempotency_key`: `"notify-{reflection.id}"`
+- `kind`: `reflection`
+- `source_id`: the Reflection ID
+- `idempotency_key`: `"reflection-{reflection.id}"`
 
-Default is `false` — no outbox entry created.
+If `reflection.auto_notify` is `true`, Reflection also creates an independent
+Delivery request for that Inbox item. The default is `false`: the Inbox item
+still exists, but no macOS/email/log delivery is requested.
 
 ## Audit Log Events
 
@@ -286,5 +293,5 @@ nuself reflection organize
   daily count without invoking a model.
 
 REPL `:reflection` lists **only pending** entries. `:reflection list` lists
-**all** entries. `:inbox` composes pending Reflection and Notification items
-but owns no Reflection mutation command.
+**all** entries. Each published reflection also creates one generic Inbox item;
+Inbox owns attention state but no Reflection mutation command.

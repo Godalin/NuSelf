@@ -86,7 +86,7 @@ explicit and limited to the selected managed authority.
 - Chat agent responses (including persona-synthesized and tool follow-up replies)
 - User-inspectable persona discussion text in logs, including participant notes, moderator notes, and synthesis summaries
 - Reflection idea titles and bodies
-- Notification texts derived from reflections
+- Inbox and Delivery text derived from reflections
 
 Internal prompts for memory curation, compression, routing, and structured decisions remain in English regardless of this setting. Persona discussion prompts may remain English, but their visible notes and summaries should ask the model to write in the configured language.
 

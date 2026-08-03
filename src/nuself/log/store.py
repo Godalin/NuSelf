@@ -698,8 +698,10 @@ def log_path(component: LogComponent, *, project_root: Path | None = None) -> Pa
     paths = runtime_paths(project_root)
     if component == "daemon":
         return paths.daemon_log_path
-    if component == "outbox":
-        return paths.outbox_log_path
+    if component == "inbox":
+        return paths.inbox_log_path
+    if component == "delivery":
+        return paths.delivery_log_path
     return paths.logs_dir / f"{component}.log"
 
 

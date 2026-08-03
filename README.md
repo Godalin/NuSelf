@@ -4,7 +4,7 @@
 
 NuSelf is a local-first AI mirror for deep personal discussion. It combines
 resumable chat, private memory, long-running reasoning, proactive reflection,
-and controlled notifications in a user-owned authority or an explicitly
+and controlled Inbox delivery in a user-owned authority or an explicitly
 selected workspace.
 
 NuSelf is CLI-first and designed for people who want to inspect and own their
@@ -36,7 +36,7 @@ locks and Unix-domain sockets.
 - Independent Markdown and plain-text external knowledge library
 - Long-run reasoning threads and traceable thought provenance
 - API-separated conversation history, memory observations, and top-level reflection controls
-- Durable notification outbox with log, email, and macOS adapters
+- Unified Inbox with independent log, email, and macOS delivery adapters
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
 - Structured diagnostics with credential redaction
@@ -97,7 +97,7 @@ uv run nuself dev config
 ```
 
 See the [configuration guide](docs/configuration.md) for failover, chat
-context, reflection, daemon, and notification settings.
+context, reflection, daemon, Inbox, and delivery settings.
 
 ### 3. Start chatting
 

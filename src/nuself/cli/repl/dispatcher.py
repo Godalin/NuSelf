@@ -15,9 +15,8 @@ from nuself.cli.repl.commands import (
     handle_interactive_history_command,
     handle_interactive_inbox_command,
     handle_interactive_memory_command,
-    handle_interactive_notify_command,
-    handle_interactive_notify_show_command,
-    handle_interactive_notify_subcommand,
+    handle_interactive_inbox_show_command,
+    handle_interactive_inbox_subcommand,
     handle_interactive_persona_command,
     handle_interactive_reason_command,
     handle_interactive_reflection_command,
@@ -28,7 +27,7 @@ from nuself.cli.repl.commands import (
     handle_interactive_restart_command,
     handle_interactive_conversations_command,
     handle_interactive_trace_command,
-    handle_interactive_watch_command,
+    handle_interactive_inbox_watch_command,
     handle_interactive_whoami_command,
 )
 from nuself.cli.repl.input import interactive_help
@@ -419,36 +418,14 @@ def _handle_inbox_command(
     print()
     if body == "":
         print_ansi(handle_interactive_inbox_command(project_root))
-    elif body == "notify":
-        print_ansi(handle_interactive_notify_command(project_root))
-    elif body.startswith("notify "):
-        parts = body.removeprefix("notify ").split(maxsplit=1)
-        if parts[0] == "list":
-            print_ansi(
-                handle_interactive_notify_command(
-                    project_root,
-                    include_all=True,
-                )
-            )
-        elif parts[0] == "show" and len(parts) == 2:
-            print_ansi(
-                handle_interactive_notify_show_command(
-                    project_root,
-                    parts[1],
-                )
-            )
-        elif parts[0] == "watch":
-            handle_interactive_watch_command(project_root)
-        elif len(parts) == 2:
-            print_ansi(
-                handle_interactive_notify_subcommand(
-                    project_root,
-                    parts[0],
-                    parts[1],
-                )
-            )
-        else:
-            print(interactive_help(":inbox notify"))
+    elif body == "list":
+        print_ansi(handle_interactive_inbox_command(project_root, include_all=True))
+    elif body == "watch":
+        handle_interactive_inbox_watch_command(project_root)
+    elif (parts := body.split(maxsplit=1))[0] == "show" and len(parts) == 2:
+        print_ansi(handle_interactive_inbox_show_command(project_root, parts[1]))
+    elif len(parts) == 2:
+        print_ansi(handle_interactive_inbox_subcommand(project_root, parts[0], parts[1]))
     else:
         print(interactive_help(original_command))
 

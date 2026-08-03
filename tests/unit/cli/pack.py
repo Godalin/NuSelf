@@ -24,7 +24,16 @@ def _create_pack_schema(path: Path, *, version: int) -> None:
             "INSERT INTO _schema_version VALUES (?)",
             (version,),
         )
-        for name in COLLECTION_NAMES:
+        collections = (
+            tuple(
+                name for name in COLLECTION_NAMES
+                if name not in {"inbox_items", "delivery_records"}
+            )
+            + ("notification_outbox",)
+            if version <= 3
+            else COLLECTION_NAMES
+        )
+        for name in collections:
             connection.execute(
                 f'CREATE TABLE "col_{name}" '
                 "(id TEXT PRIMARY KEY)"

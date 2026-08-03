@@ -9,7 +9,8 @@ _SOURCE_ROOT = Path(__file__).resolve().parents[3] / "src" / "nuself"
 _OUTER_ADAPTERS = ("nuself.cli", "nuself.daemon", "nuself.tui")
 _DOMAIN_PACKAGES = (
     "memory",
-    "notification",
+    "inbox",
+    "delivery",
     "persona",
     "profile",
     "reason",
@@ -123,7 +124,7 @@ def test_package_dependency_matrix() -> None:
 
 
 def test_domain_packages_do_not_resolve_storage_authority() -> None:
-    allowed = {"notification/eval.py"}
+    allowed: set[str] = set()
     forbidden = {
         ("nuself.config", "runtime_paths"),
         ("nuself.storage", "auto_backend"),
@@ -252,7 +253,6 @@ def test_application_composition_uses_domain_factories() -> None:
 def test_cross_domain_services_receive_foreign_capabilities() -> None:
     rules = {
         "reflection/scheduler.py": {
-            "nuself.notification.outbox",
             "nuself.persona.discussion",
             "nuself.trace.service",
         },

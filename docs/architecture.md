@@ -29,7 +29,7 @@ local daemon and direct-mode composition
         |
         +--> conversation graph and agent tools
         +--> memory, persona, reflection, reason, and trace services
-        +--> background jobs and notification delivery
+        +--> background jobs and Inbox delivery
         |
         v
 repositories, SQLite/file storage, logs, and private artifacts
@@ -85,9 +85,9 @@ resource graph. This ownership rule adds no generic composition framework or
 base-class hierarchy.
 
 Concrete execution modules use responsibility names: application lifecycle,
-Chat engine, and REPL loop. Reason owns its durable export workflow and
-Notification owns its evaluation fixtures; daemon and CLI adapters only invoke
-those APIs. The neutral `runtime` package remains the sole home for generic
+Chat engine, and REPL loop. Reason owns its durable export workflow; daemon and
+CLI adapters only invoke domain APIs. The neutral `runtime` package remains the
+sole home for generic
 execution infrastructure. Agent Skill resources and their loader are distinct
 paths, avoiding a module/package name collision.
 
@@ -118,9 +118,10 @@ domain-owned composition. Persona owns its read-only projection from Memory's
 public repository contract; neither domain opens the other's persistence or
 selects authority resources.
 Reflection also owns its CLI and REPL operations, including manual runs,
-schedule status, and entry management. Inbox is only a composite read view of
-pending items from Reflection and Notification; it does not own either
-domain's service API.
+schedule status, and entry management. Inbox owns generic user-attention
+items that reference Reflection, Reason, or future source-domain records.
+Delivery separately presents Inbox items through macOS, email, or log adapters;
+neither Inbox nor Delivery owns the referenced domain's business state.
 The daemon keeps one scheduler and one resource-serialization mechanism; a
 small closed task catalog prevents producer/handler name drift without adding
 per-domain schedulers or locks.
@@ -136,7 +137,8 @@ being forced through one generic message bus:
 | Event | zero or more subscribers | live in-process or projected activity |
 | Job | one worker with durable state | retryable background work |
 | Audit record | read-only consumers | structured diagnostics and history |
-| Notification | durable adapter fan-out | user-visible delivery |
+| Inbox | source-domain references | durable user attention |
+| Delivery | durable adapter fan-out | external presentation |
 
 The runtime package owns handler registration, message envelopes, correlation
 context, and generic execution facilities. Direct Audit contracts live in the
@@ -144,8 +146,8 @@ compact `runtime.audit` package under precise `definition`, `types`, and
 `catalog` owners rather than prefixed flat files. Event publication and Job
 wake-ups likewise live under `runtime.event` and `runtime.job`, with separate
 definition and transport/execution owners. Logs are append-only audit records,
-not a command bus. Notification outbox records are delivery state, not general
-events. See
+not a command bus. Inbox items are user-attention state; Delivery records are
+adapter-attempt state, and neither is a general event. See
 [`spec/runtime-infrastructure.md`](spec/runtime-infrastructure.md) and
 [`spec/logs.md`](spec/logs.md).
 
@@ -205,10 +207,10 @@ Major domains are:
   multi-perspective discussion, synthesis, and response presentation. See
   [`spec/agent-tools.md`](spec/agent-tools.md) and
   [`spec/persona/`](spec/persona/).
-- **Reflection and notification** — background candidate generation,
-  relevance decisions, durable outbox state, and delivery adapters. See
-  [`spec/reflection.md`](spec/reflection.md) and
-  [`spec/notification.md`](spec/notification.md).
+- **Reflection, Inbox, and Delivery** — background candidate generation,
+  user-attention references, and independent external presentation. See
+  [`spec/reflection.md`](spec/reflection.md), [`spec/inbox.md`](spec/inbox.md),
+  and [`spec/delivery.md`](spec/delivery.md).
 - **Reason, trace, and workspace** — durable long-running reasoning, thought
   provenance, and isolated agent scratch storage. See
   [`spec/reason.md`](spec/reason.md), [`spec/trace.md`](spec/trace.md), and
