@@ -403,7 +403,7 @@ class ReflectionScheduler:
             kind="reflection",
             source_id=entry.id,
             title=f"New reflection: {entry.title}",
-            body=f"A new reflection idea is available. View it with: nuself reflection show {entry.id}",
+            body=entry.body,
             idempotency_key=f"reflection-{entry.id}",
             deep_link=entry.deep_link,
         ))

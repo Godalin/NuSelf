@@ -6,6 +6,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Reflection Inbox items and their email/macOS deliveries now include the
+  complete reflection body instead of only a command telling users where to
+  inspect it.
 - Replaced the mixed Notification outbox with a generic Inbox domain and an
   independent Delivery pipeline. Reflections and meaningful Reason steps now
   publish durable Inbox items, while macOS, email, and log adapters track only

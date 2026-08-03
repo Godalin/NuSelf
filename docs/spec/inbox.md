@@ -33,8 +33,9 @@ remain available through their owning service APIs.
   storage directly.
 
 Publishing is idempotent. One source-domain occurrence maps to one Inbox item.
-Inbox stores a concise display snapshot plus source identity, not the complete
-source record.
+Inbox stores the user-facing title/body snapshot needed for direct display
+plus source identity, not the complete source-domain record. A producer must
+not replace meaningful user-facing content with a generic lookup instruction.
 
 ## Commands
 

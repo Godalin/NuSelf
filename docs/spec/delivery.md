@@ -34,4 +34,6 @@ Inbox item to read, dismissed, or resolved.
 Built-in adapters are `macos`, `email`, and `log`. macOS uses `osascript`; email
 uses validated unified email configuration; log is the fallback when no
 external adapter is enabled. Adapters receive an immutable Inbox item and
-return only delivery success. They never write Inbox or source-domain state.
+render its title and body directly, then return only delivery success. They
+never write Inbox or source-domain state. Channel UI may truncate long text;
+the adapter does not replace the body with a generic source lookup message.

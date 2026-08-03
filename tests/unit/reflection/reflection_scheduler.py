@@ -540,7 +540,7 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     inbox_items = cast(InboxService, scheduler._inbox).list()
     assert len(inbox_items) == 1
     assert inbox_items[0].title.startswith("New reflection:")
-    assert refl_entries[0].id in inbox_items[0].body
+    assert inbox_items[0].body == refl_entries[0].body
     assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
 
 

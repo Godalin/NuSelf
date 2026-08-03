@@ -220,11 +220,11 @@ failure cannot replace the returned organization result or undo those writes.
 
 ## Inbox And Optional Delivery
 
-Every published reflection creates a concise `InboxItem` pointing to the
-authoritative Reflection entry:
+Every published reflection creates an `InboxItem` pointing to the authoritative
+Reflection entry and carrying its complete user-facing text:
 
 - `title`: `"New reflection: {reflection.title}"`
-- `body`: `"A new reflection idea is available. View it with: nuself reflection show {id}"`
+- `body`: the complete published `reflection.body`
 - `kind`: `reflection`
 - `source_id`: the Reflection ID
 - `idempotency_key`: `"reflection-{reflection.id}"`
@@ -232,6 +232,10 @@ authoritative Reflection entry:
 If `reflection.auto_notify` is `true`, Reflection also creates an independent
 Delivery request for that Inbox item. The default is `false`: the Inbox item
 still exists, but no macOS/email/log delivery is requested.
+
+Email and macOS adapters display this body directly. A delivery surface may
+visually truncate long text, but NuSelf must not shorten the stored projection
+or substitute a command-only message.
 
 ## Audit Log Events
 

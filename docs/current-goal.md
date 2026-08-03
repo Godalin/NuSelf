@@ -21,14 +21,10 @@ No active objective.
 
 ## Last Verification
 
-- Inbox now owns durable user-attention items and source-domain references;
-  Delivery independently owns adapter plans and results.
-- Reflection always publishes an Inbox item; meaningful non-`no_change` Reason
-  steps publish one; optional external delivery remains independently tracked.
-- Old Notification source, nested commands, fixtures, and installed package
-  paths are removed; `scripts/inbox.py` previews/applies legacy data migration.
-- The project-local config uses `daemon.delivery`; its database contained zero
-  legacy Notification records and `nuself --local inbox` starts successfully.
-- `uv run --locked pyright`: 0 errors, 0 warnings.
+- Published Reflection Inbox items now carry the complete user-facing body;
+  email and macOS adapters render that shared projection directly.
+- Reflection remains authoritative through `source_id`/deep-link identity;
+  generation, scheduling, persistence, and delivery policy are unchanged.
 - `uv run pytest -q`: 2329 passed.
-- `uv build`: source distribution and wheel built successfully.
+- `uv run --locked pyright`: 0 errors, 0 warnings.
+- `git diff --check`: passed.
