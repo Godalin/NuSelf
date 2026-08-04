@@ -15,7 +15,8 @@ from nuself.runtime.context import RuntimeContext
 from nuself.reflection.audit import (
     REFLECTION_AUDIT,
 )
-from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.reflection.repository import ReflectionEntry
+from nuself.reflection.service import ReflectionService
 from nuself.reflection.schedule_state import (
     REFLECTION_SCHEDULE_STATE_VERSION,
     ReflectionScheduleState,
@@ -95,7 +96,7 @@ class ReflectionScheduler:
         project_root: Path,
         config: ReflectionSettings,
         *,
-        repository: ReflectionRepository,
+        service: ReflectionService,
         inbox: ReflectionPublisher,
         deliveries: DeliveryRequester,
         trace_recorder: ReflectionTraceRecorder,
@@ -106,7 +107,7 @@ class ReflectionScheduler:
     ) -> None:
         self._project_root = project_root
         self._config = config
-        self._reflection_repo = repository
+        self._reflection_service = service
         self._inbox = inbox
         self._deliveries = deliveries
         self._trace_recorder = trace_recorder
@@ -127,7 +128,7 @@ class ReflectionScheduler:
             now = datetime.now(UTC)
         block_reason = self._schedule_block_reason(now)
         try:
-            state = self._reflection_repo.schedule_state()
+            state = self._reflection_service.schedule_state()
         except ReflectionScheduleStateError:
             state = None
         return ReflectionScheduleStatus(
@@ -201,7 +202,7 @@ class ReflectionScheduler:
             discussion_approved=discussion_approved,
             discussion_trace=discussion_trace,
         )
-        self._reflection_repo.save(entry)
+        self._reflection_service.save_generated_entry(entry)
         try:
             decision_points: list[str] = [
                 f"Relevance gate passed: composite={score.composite:.2f} threshold={self._config.gate.relevance_threshold}",
@@ -277,7 +278,7 @@ class ReflectionScheduler:
         if self._in_quiet_hours(now):
             return "quiet_hours"
         try:
-            state = self._reflection_repo.schedule_state()
+            state = self._reflection_service.schedule_state()
         except ReflectionScheduleStateError as exc:
             self._report_schedule_state_corrupt(exc)
             return "state_corrupt"
@@ -339,7 +340,7 @@ class ReflectionScheduler:
         return 0
 
     def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
-        current = self._reflection_repo.schedule_state()
+        current = self._reflection_service.schedule_state()
         count = self._reflection_count_today(now, current) + 1
         state = ReflectionScheduleState(
             schema_version=REFLECTION_SCHEDULE_STATE_VERSION,
@@ -349,7 +350,7 @@ class ReflectionScheduler:
             title=title,
             body=body,
         )
-        self._reflection_repo.save_schedule_state(state)
+        self._reflection_service.save_schedule_state(state)
 
     def _report_schedule_state_corrupt(
         self,

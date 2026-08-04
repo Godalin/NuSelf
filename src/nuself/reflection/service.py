@@ -13,6 +13,7 @@ from nuself.reflection.organizer import (
     ReflectionOrganizer,
 )
 from nuself.reflection.repository import ReflectionEntry, ReflectionEntryNotFound, ReflectionRepository
+from nuself.reflection.schedule_state import ReflectionScheduleState
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
@@ -51,6 +52,21 @@ class ReflectionService:
 
     def organize_pending(self) -> ReflectionOrganizationResult:
         return self._organizer.organize_pending()
+
+    def save_generated_entry(self, entry: ReflectionEntry) -> ReflectionEntry:
+        """Persist one scheduler-generated reflection entry."""
+
+        return self._repository.save(entry)
+
+    def schedule_state(self) -> ReflectionScheduleState | None:
+        """Read the single scheduler state record."""
+
+        return self._repository.schedule_state()
+
+    def save_schedule_state(self, state: ReflectionScheduleState) -> None:
+        """Persist the single scheduler state record."""
+
+        self._repository.save_schedule_state(state)
 
     def promote_to_reason(self, id_or_index: str) -> ReasoningThread:
         entry = self.show_entry(id_or_index)

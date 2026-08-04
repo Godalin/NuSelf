@@ -167,7 +167,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         application = cli_application()
         advancer = compose_reason_advancer(
             application.paths,
-            application.reason.workspace,
+            application.reason.service,
             application.personas,
             application.trace.recorder,
             application.config,

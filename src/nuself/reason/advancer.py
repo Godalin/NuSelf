@@ -33,10 +33,10 @@ from nuself.reason.model import (
 )
 from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.errors import ReasonAdvanceError
+from nuself.reason.service import ReasonService
 from nuself.persona.service import PersonaService
 from nuself.runtime.context import current_runtime_context, runtime_context
 from nuself.trace.service import TraceRecorder
-from nuself.storage.workspace import PrivateWorkspaceStore
 
 if TYPE_CHECKING:
     from nuself.storage.workspace import ScopedWorkspace
@@ -220,7 +220,7 @@ class ReasonAdvancer:
         self,
         *,
         paths: RuntimePaths,
-        workspace_store: PrivateWorkspaceStore,
+        reason_service: ReasonService,
         persona_repository: PersonaService,
         trace_recorder: TraceRecorder,
         readonly_tools: Sequence[BaseTool] | None = None,
@@ -228,7 +228,7 @@ class ReasonAdvancer:
     ) -> None:
         self._paths = paths
         self._project_root = paths.authority_root
-        self._workspace_store = workspace_store
+        self._reason_service = reason_service
         self._persona_repository = persona_repository
         self._trace_recorder = trace_recorder
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
@@ -387,7 +387,7 @@ class ReasonAdvancer:
         from nuself.storage.workspace import ScopedWorkspace, SqliteStore
 
         thread_id = _current_reason_thread_id()
-        workspace = self._workspace_store.paths(thread_id)
+        workspace = self._reason_service.workspace_paths(thread_id)
         return ScopedWorkspace(
             SqliteStore(workspace.database),
             ("workspace", "reason", thread_id),
@@ -397,7 +397,7 @@ class ReasonAdvancer:
 def default_reason_advancer(
     *,
     paths: RuntimePaths,
-    workspace_store: PrivateWorkspaceStore,
+    reason_service: ReasonService,
     persona_repository: PersonaService,
     trace_recorder: TraceRecorder,
     readonly_tools: Sequence[BaseTool] | None = None,
@@ -406,7 +406,7 @@ def default_reason_advancer(
     """Build the default reason capability from explicit application resources."""
     return ReasonAdvancer(
         paths=paths,
-        workspace_store=workspace_store,
+        reason_service=reason_service,
         persona_repository=persona_repository,
         trace_recorder=trace_recorder,
         readonly_tools=readonly_tools,

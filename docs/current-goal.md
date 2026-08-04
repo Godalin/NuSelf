@@ -45,6 +45,11 @@ Delivery requests, Reflection publication, and background adapter transitions
 now consume `DeliveryService`; `DeliveryStore` remains inside application
 composition.
 
+Reflection scheduling and relevance now consume `ReflectionService`, while
+Reason tools, advancement, export, and recovery consume `ReasonService` for
+thread workspace capabilities. Neither `ReflectionRepository` nor
+`PrivateWorkspaceStore` remains on its domain resource snapshot.
+
 ## Exclusions
 
 - Do not add forwarding methods that merely mirror every repository operation;

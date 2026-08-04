@@ -41,7 +41,6 @@ from nuself.runtime.context import (
 )
 from nuself.storage.authority import _create_sqlite_backend
 from tests.backend import owned_backend
-from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
@@ -51,10 +50,7 @@ def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
     )
     return {
         "paths": application.paths,
-        "workspace_store": PrivateWorkspaceStore(
-            runtime_paths(project_root),
-            scope="reason",
-        ),
+        "reason_service": application.reason.service,
         "persona_repository": application.personas,
         "trace_recorder": application.trace.recorder,
     }
@@ -94,7 +90,7 @@ def test_application_reason_composition_resolves_models_from_graph_config(
 
     advancer = compose_reason_advancer(
         application.paths,
-        application.reason.workspace,
+        application.reason.service,
         application.personas,
         application.trace.recorder,
         application.config,
@@ -147,7 +143,7 @@ def test_default_reason_advancer_uses_explicit_endpoints_and_tools(
     )
 
     assert advancer._langchain_models == (endpoint,)
-    assert advancer._workspace_store is not None
+    assert advancer._reason_service is not None
     assert advancer._readonly_tools == (
         readonly_tool,
         invalid_metadata_tool,

@@ -127,10 +127,6 @@ def _chat_tool(
             ReflectionOrganizer(tmp_path, repository=repo),
         ),
         reasons=ReasonService(tmp_path),
-        reason_workspace=PrivateWorkspaceStore(
-            runtime_paths(tmp_path),
-            scope="reason",
-        ),
         traces=trace.query,
         persona_tools=(),
         job_sink=job_sink,

@@ -105,7 +105,6 @@ def reflection_scheduler() -> ReflectionScheduler:
         application.memory,
         application.sources,
         application.conversation_history,
-        application.reflection.repository,
         application.reflection.service,
         application.inbox,
         application.deliveries,

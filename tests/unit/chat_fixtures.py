@@ -43,7 +43,6 @@ from nuself.runtime.job.message import JobSink
 from nuself.runtime.frontend import ApprovalPort
 from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
-from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 class ConversationGraphRuntime(_ConversationGraphRuntime):
@@ -110,10 +109,6 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 reflections=reflections,
                 reasons=reason_service
                 or application.reason.service,
-                reason_workspace=PrivateWorkspaceStore(
-                    runtime_paths(project_root),
-                    scope="reason",
-                ),
                 traces=trace_query_service
                 or application.trace.query,
                 persona_tools=tuple(

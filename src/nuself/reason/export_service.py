@@ -40,7 +40,6 @@ from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.job.message import JobMessage
 from nuself.runtime.job.definition import JobDefinitionRegistry
 from nuself.storage.atomic import write_json_atomic
-from nuself.storage.workspace import PrivateWorkspaceStore
 
 MAX_EXPORT_ATTEMPTS = 5
 EXPORT_RETRY_BASE_SECONDS = 10
@@ -249,15 +248,14 @@ class ReasonExportService:
         project_root: Path,
         *,
         reason_service: ReasonService,
-        workspace_store: PrivateWorkspaceStore,
         task_sink: ExportTaskSink,
         language_preference: str,
         text_agent: TextAgent,
         job_definitions: JobDefinitionRegistry | None = None,
     ) -> None:
         self._project_root = project_root
+        self._reason_service = reason_service
         self._language_preference = language_preference
-        self._workspace_store = workspace_store
         self._text_agent = text_agent
         self._job_definitions = (
             job_definitions
@@ -268,7 +266,6 @@ class ReasonExportService:
         self._service = ReasonOutputService(
             project_root,
             reason_service=reason_service,
-            workspace_store=workspace_store,
         )
 
     def enqueue(self, message: JobMessage) -> None:
@@ -418,8 +415,8 @@ class ReasonExportService:
         """Rediscover incomplete durable manifests into scheduler wake-ups."""
 
         reconciled = 0
-        for owner_id in self._workspace_store.list_owners():
-            jobs_dir = self._workspace_store.paths(owner_id).root / "jobs"
+        for owner_id in self._reason_service.list_workspace_owners():
+            jobs_dir = self._reason_service.workspace_paths(owner_id).root / "jobs"
             if not jobs_dir.exists():
                 continue
             for job_dir in sorted(jobs_dir.iterdir()):

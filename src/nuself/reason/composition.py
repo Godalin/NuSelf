@@ -31,7 +31,6 @@ class ReasonResources:
     """Reason capabilities sharing one authority and workspace identity."""
 
     service: ReasonService
-    workspace: PrivateWorkspaceStore
 
 
 def compose_reason_resources(
@@ -54,7 +53,6 @@ def compose_reason_resources(
             prompt_generator=compose_reason_prompt_generator(paths, config),
             inbox=inbox,
         ),
-        workspace=workspace,
     )
 
 
@@ -86,7 +84,7 @@ def compose_reason_prompt_generator(
 
 def compose_reason_advancer(
     paths: "RuntimePaths",
-    workspace_store: PrivateWorkspaceStore,
+    reason_service: ReasonService,
     persona_repository: PersonaService,
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
@@ -98,7 +96,7 @@ def compose_reason_advancer(
 
     return default_reason_advancer(
         paths=paths,
-        workspace_store=workspace_store,
+        reason_service=reason_service,
         persona_repository=persona_repository,
         trace_recorder=trace_recorder,
         readonly_tools=readonly_tools,

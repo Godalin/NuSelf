@@ -13,7 +13,6 @@ from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.job.message import JobSink
 from nuself.trace.service import TraceQueryService
-from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.source.service import SourceService
 
 
@@ -26,7 +25,6 @@ class ToolResources:
     sources: SourceService
     reflections: ReflectionService
     reasons: ReasonService
-    reason_workspace: PrivateWorkspaceStore
     traces: TraceQueryService
     persona_tools: tuple[BaseTool, ...]
     job_sink: JobSink | None = None

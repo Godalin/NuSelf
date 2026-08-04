@@ -26,14 +26,12 @@ from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.job.message import JobSink
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.storage.workspace import PrivateWorkspaceStore
 
 
 def build_reason_tools(
     *,
     service: ReasonService,
     project_root: Path,
-    workspace_store: PrivateWorkspaceStore,
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,
     executor: FeatureExecutor | None = None,
@@ -319,7 +317,6 @@ def build_reason_tools(
             output_service = ReasonOutputService(
                 project_root,
                 reason_service=service,
-                workspace_store=workspace_store,
                 section_planner=section_planner,
             )
             manifest = output_service.plan_job(

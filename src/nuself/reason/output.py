@@ -40,7 +40,6 @@ from nuself.runtime.diagnostics import (
 from nuself.runtime.job.message import JobSink
 from nuself.storage.atomic import write_json_atomic, write_text_atomic
 from nuself.storage.filesystem import ensure_private_directory
-from nuself.storage.workspace import PrivateWorkspaceStore
 
 class ReasonOutputService:
     """Plan, compose, and persist reason-scoped long-form export jobs."""
@@ -49,12 +48,10 @@ class ReasonOutputService:
         self,
         project_root: Path,
         reason_service: ReasonService,
-        workspace_store: PrivateWorkspaceStore,
         section_planner: SectionPlanner | None = None,
     ) -> None:
         self._reason_service = reason_service
         self._project_root = project_root
-        self._workspace_store = workspace_store
         self._section_planner = section_planner
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
@@ -273,7 +270,7 @@ class ReasonOutputService:
     def job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
         _validate_segment(thread_id, "thread id")
         _validate_segment(job_id, "job id")
-        workspace = self._workspace_store.paths(thread_id)
+        workspace = self._reason_service.workspace_paths(thread_id)
         root = workspace.root / "jobs" / job_id
         return ReasonOutputPaths(
             root=root,

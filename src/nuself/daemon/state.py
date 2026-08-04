@@ -78,7 +78,6 @@ class DaemonState:
         self.reason_export_service = ReasonExportService(
             self.authority_root,
             reason_service=application.reason.service,
-            workspace_store=application.reason.workspace,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
             text_agent=LangChainTextAgent(
@@ -96,7 +95,6 @@ class DaemonState:
             application.memory.entries,
             application.reflection.service,
             application.reason.service,
-            application.reason.workspace,
             application.trace,
             application.personas,
             job_sink=self.reason_export_service.enqueue,
@@ -121,7 +119,6 @@ class DaemonState:
             application.memory,
             application.sources,
             application.conversation_history,
-            application.reflection.repository,
             application.reflection.service,
             application.inbox,
             application.deliveries,
@@ -144,7 +141,7 @@ class DaemonState:
             self.authority_root,
             advancer=compose_reason_advancer(
                 paths,
-                application.reason.workspace,
+                application.reason.service,
                 application.personas,
                 application.trace.recorder,
                 config,

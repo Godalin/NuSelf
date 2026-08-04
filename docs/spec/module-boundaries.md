@@ -520,20 +520,21 @@ workflow and imports those contracts; it must not define the durable schemas
 inline.
 
 Reason operations are composed once in `ApplicationGraph`. Process surfaces
-reuse `reason_service` so repository, workspace, and trace dependencies
+reuse `reason_service` so repository, private workspace, and trace dependencies
 originate at one application boundary; an optional model-backed advancer is a
 single-operation dependency rather than a second service graph.
 `ReasonRepository` owns persistence and decode diagnostics; it does not expose
 runtime paths so callers can reconstruct application composition from a
 repository instance.
 `ReasonService` itself receives repository, workspace store, and trace recorder
-as required dependencies for its own thread lifecycle, but it does not expose
-generic workspace paths or key-value handles as reason operations. Consumers
-that need workspace infrastructure receive the single application-owned store
-explicitly. The service stores that required recorder as a non-null capability;
+as required dependencies for its own thread lifecycle. It exposes only
+Reason-owned thread artifact paths and workspace-owner enumeration needed by
+output, export recovery, advancement, and Persona tools; consumers never
+receive `PrivateWorkspaceStore` or generic key-value handles. The service
+stores its required recorder as a non-null capability;
 trace failure isolation must not be modeled as optional composition. Reason
-scheduling and output export must receive an existing reason
-service and that workspace store.
+scheduling and output export receive the existing Reason service and do not
+receive its workspace store separately.
 The service does not retain a model advancer. An explicit advance operation
 receives either the narrow advancer protocol for that call or a structured step
 already produced by an orchestrator; dependency source must not vary between a
@@ -578,11 +579,11 @@ boundary; a one-call closure is not an application capability.
 Cooldown mutation is a reason
 service use case; scheduling must not receive or expose the repository merely
 to persist it. Daemon workers may own queues and workspace adapters, but must
-not create or infer a second reason persistence graph. Agent reason tools
-receive the export workspace capability from chat composition and never resolve
-runtime paths to construct it.
-`ReasonAdvancer` receives workspace, persona repository, trace recorder, and
-resolved paths from application composition. `ReasonScheduler` requires the
+not create or infer a second reason persistence graph. Agent reason tools use
+the Reason service's output capability and never receive a workspace store or
+resolve runtime paths to construct one.
+`ReasonAdvancer` receives the Reason service, Persona service, trace recorder,
+and resolved paths from application composition. `ReasonScheduler` requires the
 selected authority root for correctly scoped observation,
 receives the existing single-operation advancer protocol as a required
 capability, and never depends on or constructs the concrete model-backed
@@ -593,13 +594,12 @@ Reflection promotion depends only on two consumer-owned capabilities:
 `ReasonThreadStarter` and `ReflectionPromotionRecorder`. It must not require
 the complete reason service or trace recorder contract merely to start one
 thread and record one promotion.
-The reflection repository and both capabilities are mandatory constructor
-dependencies. `ReflectionService` owns user-facing list, show, status-change,
-organization, and promotion use cases; CLI, REPL, agent tools, and background
-scheduling obtain that complete service from application composition rather
-than accessing the repository or rebuilding the organizer. Reflection-owned
-candidate and relevance workflows may still receive their repository
-explicitly.
+The reflection repository and both capabilities are mandatory internal
+composition dependencies. `ReflectionService` owns user-facing list, show,
+status-change, organization, promotion, generated-entry persistence, and
+schedule-state use cases. CLI, REPL, agent tools, relevance evaluation, and
+background scheduling obtain that service from application composition rather
+than accessing the repository or rebuilding the organizer.
 
 ## Shared Infrastructure Extraction
 

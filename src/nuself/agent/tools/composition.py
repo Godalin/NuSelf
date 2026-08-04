@@ -41,7 +41,6 @@ def build_langchain_chat_tools(
         + build_reason_tools(
             service=resources.reasons,
             project_root=resources.project_root,
-            workspace_store=resources.reason_workspace,
             job_sink=resources.job_sink,
             section_planner=resources.section_planner,
             executor=executor,

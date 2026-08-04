@@ -165,7 +165,6 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
             application.memory.entries,
             application.reflection.service,
             application.reason.service,
-            application.reason.workspace,
             application.trace,
             application.personas,
             response_service=FixtureResponseService(fixture.response),

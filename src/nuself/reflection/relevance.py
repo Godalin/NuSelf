@@ -14,7 +14,8 @@ from nuself.config.settings import ReflectionSettings
 from nuself.reflection.model import IdeaCandidate, RelevanceScore
 from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.reflection.audit import REFLECTION_AUDIT
-from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
+from nuself.reflection.repository import ReflectionEntry
+from nuself.reflection.service import ReflectionService
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
@@ -40,12 +41,12 @@ class LLMRelevanceGate:
         config: ReflectionSettings,
         agent: StructuredAgent[RelevanceScoreOutput] | None = None,
         *,
-        repository: ReflectionRepository,
+        service: ReflectionService,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
         self._config = config
-        self._repository = repository
+        self._service = service
         self._agent = agent or default_structured_agent(
             RelevanceScoreOutput,
             project_root=project_root,
@@ -59,7 +60,7 @@ class LLMRelevanceGate:
             output = self._agent.invoke(
                 self._messages(
                     candidate,
-                    self._repository.list()[:3],
+                    self._service.list_entries()[:3],
                     cooldown_ok,
                 )
             )
@@ -104,7 +105,7 @@ class LLMRelevanceGate:
 
     def _cooldown_ok(self) -> bool:
         try:
-            state = self._repository.schedule_state()
+            state = self._service.schedule_state()
         except ReflectionScheduleStateError as exc:
             REFLECTION_AUDIT.failure(
                 exc,

@@ -27,7 +27,6 @@ from nuself.source.service import SourceService
 class ReflectionResources:
     """Reflection capabilities sharing one repository identity."""
 
-    repository: ReflectionRepository
     service: ReflectionService
 
 
@@ -41,7 +40,6 @@ def compose_reflection_resources(
 
     repository = ReflectionRepository(paths, backend=backend)
     return ReflectionResources(
-        repository=repository,
         service=ReflectionService(
             repository,
             reason_service,
@@ -59,7 +57,6 @@ def compose_reflection_scheduler(
     memory: MemoryRepositories,
     sources: SourceService,
     conversation_history: ConversationHistoryService,
-    repository: ReflectionRepository,
     service: ReflectionService,
     inbox: InboxService,
     deliveries: DeliveryService,
@@ -83,13 +80,13 @@ def compose_reflection_scheduler(
     gate = LLMRelevanceGate(
         paths.authority_root,
         config,
-        repository=repository,
+        service=service,
         langchain_models=langchain_models,
     )
     return ReflectionScheduler(
         paths.authority_root,
         config,
-        repository=repository,
+        service=service,
         inbox=inbox,
         deliveries=deliveries,
         trace_recorder=trace_recorder,

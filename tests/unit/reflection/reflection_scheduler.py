@@ -220,7 +220,7 @@ def _gate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        repository=application.reflection.repository,
+        service=application.reflection.service,
     )
 
 
@@ -278,7 +278,6 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         application.memory,
         application.sources,
         application.conversation_history,
-        application.reflection.repository,
         application.reflection.service,
         application.inbox,
         application.deliveries,
@@ -396,7 +395,7 @@ def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> Non
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     result = scheduler.reflect(now)
     assert result is True
-    entries = scheduler._reflection_repo.list()
+    entries = scheduler._reflection_service.list_entries()
     assert len(entries) == 1
     assert entries[0].title == "Proactive insight about memory patterns"
     assert entries[0].status == "pending"
@@ -417,7 +416,7 @@ def test_reflect_result_survives_unavailable_auxiliary_logs(
         drop_log,
     )
     assert scheduler.reflect(datetime(2024, 1, 1, 12, tzinfo=UTC)) is True
-    assert len(scheduler._reflection_repo.list()) == 1
+    assert len(scheduler._reflection_service.list_entries()) == 1
 
 
 def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
@@ -458,8 +457,8 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
         result = scheduler.reflect(now)
 
     assert result is True
-    assert len(scheduler._reflection_repo.list()) == 1
-    record = scheduler._reflection_repo._schedule_col.get("reflection")
+    assert len(scheduler._reflection_service.list_entries()) == 1
+    record = scheduler._reflection_service._repository._schedule_col.get("reflection")
     assert record is not None
     assert record["timestamp"] == "2024-01-01T12:00:00Z"
     assert read_log_events(
@@ -500,10 +499,10 @@ def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionSchedu
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler.reflect(now)
     # Clear last reflection so the second run is not blocked by novelty gate
-    scheduler._reflection_repo._schedule_col.delete("reflection")
+    scheduler._reflection_service._repository._schedule_col.delete("reflection")
     time.sleep(0.01)  # ensure unique candidate id timestamp
     scheduler.reflect(now)
-    entries = scheduler._reflection_repo.list()
+    entries = scheduler._reflection_service.list_entries()
     assert len(entries) == 2
 
 
@@ -512,12 +511,14 @@ def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: Reflect
         relevance_threshold=0.0,
         persona_discussion_threshold=1.0,
     )
-    scheduler._reflection_repo.save(_sample_reflection_entry())
+    scheduler._reflection_service.save_generated_entry(_sample_reflection_entry())
 
     result = scheduler.reflect(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC))
 
     assert result is True
-    assert len(scheduler._reflection_repo.list(status="pending")) >= 1
+    assert len(
+        scheduler._reflection_service.list_entries(status="pending")
+    ) >= 1
     events = read_log_events(project_root=scheduler._project_root, component="reflection")
     assert not any(event.event == "cycle_pending_limit_reached" for event in events)
 
@@ -535,7 +536,7 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     result = scheduler.reflect(now)
     assert result is True
     # Reflection repo has the entry
-    refl_entries = scheduler._reflection_repo.list()
+    refl_entries = scheduler._reflection_service.list_entries()
     assert len(refl_entries) == 1
     inbox_items = cast(InboxService, scheduler._inbox).list()
     assert len(inbox_items) == 1
@@ -569,7 +570,7 @@ def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionSchedu
     now = _local_datetime(2024, 1, 1, 23)
     result = scheduler.reflect(now)
     assert result is False
-    assert len(scheduler._reflection_repo.list()) == 0
+    assert len(scheduler._reflection_service.list_entries()) == 0
     events = read_log_events(project_root=scheduler._project_root, component="reflection")
     assert events[-1].event == "schedule_blocked"
     assert events[-1].status == "skipped"
@@ -593,7 +594,7 @@ def test_forced_reflection_bypasses_temporal_schedule_gates(
     )
 
     assert scheduler.reflect(_local_datetime(2024, 1, 1, 23), force=True) is True
-    assert len(scheduler._reflection_repo.list()) == 1
+    assert len(scheduler._reflection_service.list_entries()) == 1
 
 
 def test_write_last_reflection_persists_schedule_state(
@@ -601,7 +602,7 @@ def test_write_last_reflection_persists_schedule_state(
 ) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
-    record = scheduler._reflection_repo._schedule_col.get("reflection")
+    record = scheduler._reflection_service._repository._schedule_col.get("reflection")
     assert record == {
         "id": "reflection",
         "daily_count": 1,
@@ -643,7 +644,7 @@ def test_corrupt_schedule_state_fails_closed(
     scheduler: ReflectionScheduler,
     record: dict[str, object],
 ) -> None:
-    scheduler._reflection_repo._schedule_col.put("reflection", record)
+    scheduler._reflection_service._repository._schedule_col.put("reflection", record)
 
     assert scheduler.should_reflect(
         datetime(2024, 1, 2, 12, tzinfo=UTC)
@@ -667,7 +668,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    scheduler._reflection_repo._schedule_col.put(
+    scheduler._reflection_service._repository._schedule_col.put(
         "reflection",
         {"schema_version": 1},
     )
@@ -694,7 +695,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
 def test_reflect_reports_corrupt_schedule_state_as_blocked(
     scheduler: ReflectionScheduler,
 ) -> None:
-    scheduler._reflection_repo._schedule_col.put(
+    scheduler._reflection_service._repository._schedule_col.put(
         "reflection",
         {"schema_version": 1},
     )
@@ -1074,7 +1075,7 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
     config = _reflection_settings(cooldown_seconds=600)
     gate = _gate(tmp_path, config=config)
     now = datetime.now(UTC)
-    gate._repository._schedule_col.put("reflection", {
+    gate._service._repository._schedule_col.put("reflection", {
         "schema_version": 1,
         "timestamp": now.isoformat(),
         "daily_count": 1,
@@ -1088,7 +1089,7 @@ def test_relevance_gate_corrupt_state_keeps_cooldown_active(
 ) -> None:
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
-    gate._repository._schedule_col.put(
+    gate._service._repository._schedule_col.put(
         "reflection",
         {"timestamp": "not-a-date"},
     )
@@ -1108,7 +1109,7 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
         raise OSError("audit store unavailable")
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
-    gate._repository._schedule_col.put(
+    gate._service._repository._schedule_col.put(
         "reflection",
         {"timestamp": "not-a-date"},
     )

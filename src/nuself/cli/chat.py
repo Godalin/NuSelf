@@ -168,7 +168,6 @@ def send_one_shot_chat_interactive(
                 application.memory.entries,
                 application.reflection.service,
                 application.reason.service,
-                application.reason.workspace,
                 application.trace,
                 application.personas,
                 approval_port=TerminalApprovalPort(),

@@ -17,7 +17,7 @@ from nuself.reason.errors import (
 )
 from nuself.reason.repository import ReasonRepository
 from nuself.trace.service import TraceRecorder
-from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
 from nuself.inbox.model import InboxItem
 from nuself.inbox.service import InboxService
 
@@ -98,6 +98,16 @@ class ReasonService:
 
     def list_steps(self, thread_id: str) -> list[ReasoningStep]:
         return self._repository.list_steps(thread_id)
+
+    def workspace_paths(self, thread_id: str) -> PrivateWorkspacePaths:
+        """Resolve Reason-owned artifacts for one thread."""
+
+        return self._workspace_store.paths(thread_id)
+
+    def list_workspace_owners(self) -> list[str]:
+        """List thread workspaces for export recovery."""
+
+        return self._workspace_store.list_owners()
 
     # ── Write ──────────────────────────────────────────────────────
 

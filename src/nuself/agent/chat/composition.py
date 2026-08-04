@@ -28,7 +28,6 @@ from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.log.store import runtime_event_log_sink
 from nuself.trace.composition import TraceServices
-from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.source.service import SourceService
 
 __all__ = ["ChatResult", "compose_conversation_runtime"]
@@ -43,7 +42,6 @@ def compose_conversation_runtime(
     memory_entries: MemoryEntryRepository,
     reflection_service: ReflectionService,
     reason_service: ReasonService,
-    reason_workspace: PrivateWorkspaceStore,
     trace: TraceServices,
     persona_prompts: PersonaService,
     *,
@@ -71,7 +69,6 @@ def compose_conversation_runtime(
             sources=source_service,
             reflections=reflection_service,
             reasons=reason_service,
-            reason_workspace=reason_workspace,
             traces=trace.query,
             persona_tools=tuple(
                 build_persona_tools(
