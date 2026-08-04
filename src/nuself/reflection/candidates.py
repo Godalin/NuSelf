@@ -16,9 +16,9 @@ from nuself.runtime.clock import utc_now_iso
 from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
 from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.service import MemoryService
 from nuself.source.service import SourceService
-from nuself.profile.repository import ProfileItemRepository
+from nuself.profile.service import ProfileService
 from nuself.reflection.audit import REFLECTION_AUDIT
 
 
@@ -56,18 +56,18 @@ class IdeaCandidateGenerator:
         self,
         project_root: Path,
         *,
-        memory_repository: MemoryEntryRepository,
+        memory_service: MemoryService,
         source_service: SourceService,
-        profile_repository: ProfileItemRepository,
+        profile_service: ProfileService,
         conversation_history: ConversationHistoryReader,
         language_preference: str,
         agent: StructuredAgent[CandidateListOutput] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
-        self._memory_repository = memory_repository
+        self._memory_service = memory_service
         self._source_service = source_service
-        self._profile_repository = profile_repository
+        self._profile_service = profile_service
         self._conversation_history = conversation_history
         self._agent = agent or default_structured_agent(
             CandidateListOutput,
@@ -123,11 +123,11 @@ class IdeaCandidateGenerator:
             conversations=_render_history(self._conversation_history.recent()),
             memories="\n".join(
                 f"- [{entry.type}] {entry.title}: {entry.body[:120]}"
-                for entry in self._memory_repository.list()[-8:]
+                for entry in self._memory_service.list_entries()[-8:]
             ),
             profile="\n".join(
                 f"- [{item.type}] {item.title}: {item.body[:120]}"
-                for item in self._profile_repository.list()[:10]
+                for item in self._profile_service.list_items()[:10]
             ),
             sources="\n".join(
                 f"- {document.title or document.id}"

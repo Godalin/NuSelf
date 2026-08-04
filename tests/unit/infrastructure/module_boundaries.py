@@ -250,6 +250,56 @@ def test_application_composition_uses_domain_factories() -> None:
     )
 
 
+def test_application_graph_exposes_services_not_persistence() -> None:
+    path = _SOURCE_ROOT / "application" / "composition.py"
+    graph = next(
+        node
+        for node in _tree(path).body
+        if isinstance(node, ast.ClassDef)
+        and node.name == "ApplicationGraph"
+    )
+    forbidden = {
+        "ConversationStore",
+        "DeliveryStore",
+        "MemoryRepositories",
+        "MemoryEntryRepository",
+        "MemoryCandidateRepository",
+        "PersonaPromptRepository",
+        "PrivateWorkspaceStore",
+        "ProfileItemRepository",
+        "ReflectionRepository",
+    }
+    exposed = {
+        node.annotation.id
+        for node in graph.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.annotation, ast.Name)
+    }
+    assert exposed.isdisjoint(forbidden)
+
+
+def test_process_and_agent_adapters_do_not_import_persistence_types() -> None:
+    forbidden = {
+        "ConversationStore",
+        "DeliveryStore",
+        "MemoryCandidateRepository",
+        "MemoryEntryRepository",
+        "MemoryRepositories",
+        "PersonaPromptRepository",
+        "PrivateWorkspaceStore",
+        "ProfileItemRepository",
+        "ReflectionRepository",
+    }
+    paths = _package_files("cli", "daemon", "agent", "evaluation")
+    violations = [
+        f"{path.relative_to(_SOURCE_ROOT)} -> {module}.{name}"
+        for path in paths
+        for module, name in _from_imports(path)
+        if name in forbidden
+    ]
+    assert violations == []
+
+
 def test_cross_domain_services_receive_foreign_capabilities() -> None:
     rules = {
         "reflection/scheduler.py": {

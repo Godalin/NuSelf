@@ -50,6 +50,12 @@ Reason tools, advancement, export, and recovery consume `ReasonService` for
 thread workspace capabilities. Neither `ReflectionRepository` nor
 `PrivateWorkspaceStore` remains on its domain resource snapshot.
 
+`ApplicationGraph` no longer exposes `MemoryRepositories`; entry, candidate,
+profile, persona projection, Reflection context, curator, optimizer,
+observation, and recovery-plan consumers now receive Memory services. New
+architecture tests reject persistence types on the graph and in process/agent
+adapters.
+
 ## Exclusions
 
 - Do not add forwarding methods that merely mirror every repository operation;

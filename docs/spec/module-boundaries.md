@@ -207,8 +207,10 @@ all require resolved paths and the selected backend. Candidate and source
 repositories receive the concrete entry/profile/candidate collaborators they
 mutate instead of constructing them during an operation. Aggregate functions
 such as memory statistics receive repositories rather than resolving an
-authority. The application layer owns the immutable repository bundle and
-must reuse its instances for one authority.
+authority. Memory composition owns the immutable repository bundle and reuses
+its instances behind `MemoryService`, `MemoryCandidateService`,
+`ProfileService`, and `MemoryWorkflowService`; `ApplicationGraph` does not
+expose the bundle.
 `MemoryEntryRepository.compute_graph()` is the single one-shot symbolic graph
 projection used by both repository operations and external memory-query
 expansion. A private mirror with identical behavior is not a second capability.
@@ -323,8 +325,9 @@ remain domain/infrastructure workflows and may receive the repositories they
 actually coordinate; they are not routed through a universal memory facade.
 Direct and daemon chat use the same application-owned conversation factory.
 Transport-specific job sinks, planners, and event publishers are parameters;
-memory/profile/reflection/trace repositories and conversation storage always come
-from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
+Memory, Profile, Reflection, Trace, and Conversation capabilities always come
+from the supplied `ApplicationGraph` as services. Post-turn curation uses the
+Memory workflow service rather than borrowing its repositories.
 Conversation state and persistence are isolated domain infrastructure under
 `nuself.conversation`, not shared knowledge infrastructure. `ConversationStore`
 receives resolved runtime paths and the selected backend as required resources
@@ -463,11 +466,11 @@ direct typed pipeline; compression is follow-up work after commit. Wrapping
 that branch-free sequence in a second
 `StateGraph` is prohibited because it adds no checkpoint, routing, interrupt,
 or recovery boundary.
-Persona definitions are loaded from an explicitly supplied memory repository
+Persona definitions are loaded from an explicitly supplied Memory service
 at that application boundary and passed into chat persona orchestration;
 persona policy must not resolve the active authority itself.
 
-`InboxService` and `DeliveryStore` receive resolved paths and the selected
+`InboxService` and Delivery persistence receive resolved paths and the selected
 backend and never resolve authority. `DeliveryLoop` borrows both plus a frozen
 adapter plan. Inbox attention transitions and Delivery adapter transitions
 remain separate transactions and state machines.

@@ -19,6 +19,7 @@ from langchain_core.messages import BaseMessage
 from nuself.persona.definition import BUILTIN_PERSONAS
 from nuself.persona.graph import AgentBackedActivationPolicy
 from nuself.application.projection import load_personas_from_memory
+from nuself.memory.service import MemoryService
 from nuself.persona.definition import (
     PersonaActivationOutput,
     PersonaDefinition,
@@ -99,7 +100,7 @@ def test_persona_instruction_descriptor_summarizes() -> None:
 
 def test_load_persona_definitions_falls_back_to_defaults(tmp_path: Path) -> None:
     personas = load_personas_from_memory(
-        memory_entry_repository(tmp_path),
+        MemoryService(memory_entry_repository(tmp_path)),
         project_root=tmp_path,
     )
     ids = {p.id for p in personas}
@@ -123,7 +124,7 @@ def test_load_persona_definitions_from_memory(tmp_path: Path) -> None:
     )
 
     personas = load_personas_from_memory(
-        memory_entry_repository(tmp_path),
+        MemoryService(memory_entry_repository(tmp_path)),
         project_root=tmp_path,
     )
     ids = {p.id for p in personas}
@@ -142,7 +143,7 @@ def test_load_persona_definitions_observes_storage_fallback(
     monkeypatch.setattr(MemoryEntryRepository, "search", fail_search)
 
     personas = load_personas_from_memory(
-        memory_entry_repository(tmp_path),
+        MemoryService(memory_entry_repository(tmp_path)),
         project_root=tmp_path,
     )
 
@@ -179,7 +180,7 @@ def test_persona_definition_diagnostic_failure_preserves_fallback(
         match="runtime/observability_sink_failed",
     ):
         personas = load_personas_from_memory(
-        memory_entry_repository(tmp_path),
+        MemoryService(memory_entry_repository(tmp_path)),
         project_root=tmp_path,
     )
 

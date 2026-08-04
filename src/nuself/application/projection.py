@@ -8,7 +8,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 from nuself.conversation import CompletedTurn
 from nuself.memory.observation import MemoryObservation
-from nuself.memory.repository import MemoryEntryRepository, MemorySearchFilters
+from nuself.memory.repository import MemorySearchFilters
+from nuself.memory.service import MemoryService
 from nuself.persona.audit import PERSONA_AUDIT
 from nuself.persona.definition import BUILTIN_PERSONAS, PersonaDefinition
 
@@ -42,14 +43,14 @@ def publish_chat_observation(
 
 
 def load_personas_from_memory(
-    repository: MemoryEntryRepository,
+    service: MemoryService,
     *,
     project_root: Path | None = None,
 ) -> tuple[PersonaDefinition, ...]:
     """Project public Memory entries into Persona-owned definitions."""
 
     try:
-        entries = repository.search(
+        entries = service.search_entries(
             "",
             filters=MemorySearchFilters(type="persona_instruction"),
         )

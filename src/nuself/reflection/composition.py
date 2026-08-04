@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from nuself.config.settings import ReflectionSettings, RuntimePaths
 from nuself.conversation import ConversationHistoryService
 from nuself.agent.endpoint import LangChainLLMEndpoint
-from nuself.memory.composition import MemoryRepositories
+from nuself.memory.service import MemoryService
+from nuself.profile.service import ProfileService
 from nuself.delivery.service import DeliveryService
 from nuself.inbox.service import InboxService
 from nuself.reflection.candidates import IdeaCandidateGenerator
@@ -54,7 +55,8 @@ def compose_reflection_resources(
 
 def compose_reflection_scheduler(
     paths: RuntimePaths,
-    memory: MemoryRepositories,
+    memory: MemoryService,
+    profiles: ProfileService,
     sources: SourceService,
     conversation_history: ConversationHistoryService,
     service: ReflectionService,
@@ -70,9 +72,9 @@ def compose_reflection_scheduler(
 
     generator = IdeaCandidateGenerator(
         paths.authority_root,
-        memory_repository=memory.entries,
+        memory_service=memory,
         source_service=sources,
-        profile_repository=memory.profile,
+        profile_service=profiles,
         conversation_history=conversation_history,
         language_preference=language_preference,
         langchain_models=langchain_models,

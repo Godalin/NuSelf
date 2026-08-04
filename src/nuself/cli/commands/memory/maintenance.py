@@ -8,10 +8,6 @@ import sys
 from typing import cast
 
 from nuself.cli.application import cli_application
-from nuself.memory.composition import (
-    compose_memory_curator,
-    compose_memory_optimizer,
-)
 from nuself.cli.commands.memory.common import record_memory_trace
 from nuself.memory.model import MemoryEntry
 from nuself.memory.optimizer import (
@@ -21,13 +17,11 @@ from nuself.memory.optimizer import (
 
 def handle_memory_update(args: argparse.Namespace) -> int:
     application = cli_application()
-    curator = compose_memory_curator(
-        application.paths,
-        application.memory,
+    curator = application.memory_workflows.curator(
         application.trace.recorder,
         application.config,
     )
-    pending = application.memory.observations.pending()
+    pending = application.memory_workflows.pending_observations()
     for observation in pending:
         curator.run_once(observation.id)
     print(f"Memory curator: processed_observations={len(pending)}")
@@ -37,9 +31,7 @@ def handle_memory_update(args: argparse.Namespace) -> int:
 def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
     application = cli_application()
-    result = compose_memory_optimizer(
-        application.paths,
-        application.memory,
+    result = application.memory_workflows.optimizer(
         application.config,
         settings=settings,
     ).run_once()

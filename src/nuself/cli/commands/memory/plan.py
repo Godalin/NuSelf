@@ -15,9 +15,9 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_memory_plan_show(args: argparse.Namespace) -> int:
-    store = cli_application().memory.curator_plans
+    service = cli_application().memory_workflows
     try:
-        plan = store.get(args.observation_id)
+        plan = service.curator_plan(args.observation_id)
     except (MemoryCuratorPlanCorruptError, ValueError) as exc:
         print(
             "Curator plan unavailable: "
@@ -56,9 +56,9 @@ def handle_memory_plan_discard(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    store = cli_application().memory.curator_plans
+    service = cli_application().memory_workflows
     try:
-        store.discard(args.observation_id)
+        service.discard_curator_plan(args.observation_id)
     except MemoryCuratorPlanLockContended:
         print(
             "Curator plan is busy for observation: "

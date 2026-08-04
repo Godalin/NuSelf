@@ -102,7 +102,8 @@ def reflection_scheduler() -> ReflectionScheduler:
     application = cli_application()
     return compose_reflection_scheduler(
         application.paths,
-        application.memory,
+        application.memory_service,
+        application.profiles,
         application.sources,
         application.conversation_history,
         application.reflection.service,

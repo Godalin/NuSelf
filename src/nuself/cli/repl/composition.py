@@ -50,7 +50,7 @@ def run_repl(
         if daemon_activity:
             return
         application = cli_application()
-        for observation in application.memory.observations.pending():
+        for observation in application.memory_workflows.pending_observations():
             run_memory_curator(root, observation.id)
 
     def send_turn(

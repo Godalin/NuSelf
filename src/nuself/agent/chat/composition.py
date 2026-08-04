@@ -14,7 +14,6 @@ from nuself.agent.text import LangChainTextAgent
 from nuself.config.settings import RuntimePaths, SystemConfig
 from nuself.conversation import ConversationService
 from nuself.memory.service import MemoryService
-from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.tools import build_persona_tools
 from nuself.persona.service import PersonaService
 from nuself.application.projection import load_personas_from_memory
@@ -39,7 +38,6 @@ def compose_conversation_runtime(
     conversations: ConversationService,
     memory_service: MemoryService,
     source_service: SourceService,
-    memory_entries: MemoryEntryRepository,
     reflection_service: ReflectionService,
     reason_service: ReasonService,
     trace: TraceServices,
@@ -87,7 +85,7 @@ def compose_conversation_runtime(
         ),
         trace_recorder=trace.recorder,
         personas=load_personas_from_memory(
-            memory_entries,
+            memory_service,
             project_root=paths.authority_root,
         ),
         conversation_store=conversations,

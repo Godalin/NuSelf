@@ -421,7 +421,7 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    observations = state._memory_observations  # pyright: ignore[reportPrivateUsage]
+    observations = state._memory_workflows  # pyright: ignore[reportPrivateUsage]
     for source_ref in ("test:active", "test:archived"):
         observations.observe(
             MemoryObservation.create(
@@ -430,7 +430,7 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
             )
         )
     expected_ids = {
-        item.id for item in observations.pending()
+        item.id for item in observations.pending_observations()
     }
     calls: list[str] = []
 
@@ -488,8 +488,8 @@ def test_committed_chat_survives_followup_admission_failure(
 
     assert result.answer == "stubbed: hello"
     assert len(ConversationStore(tmp_path).load("default").messages) == 2
-    observations = state._memory_observations  # pyright: ignore[reportPrivateUsage]
-    assert len(observations.pending()) == 1
+    observations = state._memory_workflows  # pyright: ignore[reportPrivateUsage]
+    assert len(observations.pending_observations()) == 1
 
 
 def test_daemon_chat_fails_closed_when_scheduler_is_not_running(

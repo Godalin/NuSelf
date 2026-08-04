@@ -8,7 +8,6 @@ from pathlib import Path
 
 from nuself.agent.chat.composition import compose_conversation_runtime
 from nuself.agent.chat.engine import ConversationGraphRuntime
-from nuself.memory.composition import compose_memory_curator
 from nuself.application.projection import publish_chat_observation
 from nuself.cli.application import cli_application
 from nuself.agent.chat.audit import (
@@ -165,7 +164,6 @@ def send_one_shot_chat_interactive(
                 application.conversations,
                 application.memory_service,
                 application.sources,
-                application.memory.entries,
                 application.reflection.service,
                 application.reason.service,
                 application.trace,
@@ -179,7 +177,7 @@ def send_one_shot_chat_interactive(
             )
             application = cli_application()
             observation = publish_chat_observation(
-                application.memory.observations,
+                application.memory_workflows,
                 turn=result.require_completed_turn(),
                 source_trace_id=result.trace_id,
             )
@@ -216,9 +214,7 @@ def run_memory_curator(
 
     try:
         application = cli_application()
-        result = compose_memory_curator(
-            application.paths,
-            application.memory,
+        result = application.memory_workflows.curator(
             application.trace.recorder,
             application.config,
         ).run_once(observation_id)

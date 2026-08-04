@@ -84,7 +84,11 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 config=application.config,
             )
         )
-        entries = memory_repository or application.memory.entries
+        memory = (
+            MemoryService(memory_repository)
+            if memory_repository is not None
+            else application.memory_service
+        )
         sources = source_service or application.sources
         del profile_repository
         reflections = (
@@ -103,8 +107,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         resources = ConversationResources(
             tools=ToolResources(
                 project_root=project_root,
-                memory=memory_query_service
-                or MemoryService(entries),
+                memory=memory_query_service or memory,
                 sources=sources,
                 reflections=reflections,
                 reasons=reason_service
@@ -131,7 +134,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             or application.trace.recorder,
             personas=persona_definitions
             or load_personas_from_memory(
-                application.memory.entries,
+                memory_query_service or memory,
                 project_root=project_root,
             ),
             conversation_store=(

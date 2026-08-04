@@ -256,7 +256,7 @@ def test_one_shot_chat_runs_memory_curator_after_reply(
         return FakeChangedCurator()
 
     monkeypatch.setattr(
-        "nuself.cli.chat.compose_memory_curator",
+        "nuself.memory.composition.MemoryWorkflowService.curator",
         compose_fake_curator,
     )
 

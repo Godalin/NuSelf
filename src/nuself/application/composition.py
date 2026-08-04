@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nuself.memory.composition import (
-    MemoryRepositories,
+    MemoryWorkflowService,
     compose_memory_repositories,
 )
 from nuself.reason.composition import ReasonResources, compose_reason_resources
@@ -42,10 +42,10 @@ class ApplicationGraph:
     config: SystemConfig
     conversations: ConversationService
     conversation_history: ConversationHistoryService
-    memory: MemoryRepositories
     memory_service: MemoryService
     memory_candidates: MemoryCandidateService
     profiles: ProfileService
+    memory_workflows: MemoryWorkflowService
     sources: SourceService
     inbox: InboxService
     deliveries: DeliveryService
@@ -88,10 +88,10 @@ def compose_application(
         config=config,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
-        memory=memory,
         memory_service=MemoryService(memory.entries, memory.candidates),
         memory_candidates=MemoryCandidateService(memory.candidates),
         profiles=ProfileService(memory.profile),
+        memory_workflows=MemoryWorkflowService(paths, memory),
         sources=sources,
         inbox=inbox,
         deliveries=deliveries,

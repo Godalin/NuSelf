@@ -7,7 +7,6 @@ from dataclasses import dataclass, replace
 from uuid import uuid4
 
 from nuself.agent.chat.composition import ChatResult, compose_conversation_runtime
-from nuself.memory.composition import compose_memory_curator
 from nuself.application.projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.reflection.composition import compose_reflection_scheduler
@@ -92,7 +91,6 @@ class DaemonState:
             application.conversations,
             application.memory_service,
             application.sources,
-            application.memory.entries,
             application.reflection.service,
             application.reason.service,
             application.trace,
@@ -107,16 +105,15 @@ class DaemonState:
             langchain_models=langchain_models,
         )
 
-        self.memory_curator = compose_memory_curator(
-            paths,
-            application.memory,
+        self.memory_curator = application.memory_workflows.curator(
             application.trace.recorder,
             config,
             langchain_models=langchain_models,
         )
         self.reflection_scheduler = compose_reflection_scheduler(
             paths,
-            application.memory,
+            application.memory_service,
+            application.profiles,
             application.sources,
             application.conversation_history,
             application.reflection.service,
@@ -151,7 +148,7 @@ class DaemonState:
             interval_seconds=reason_interval,
             service=application.reason.service,
         )
-        self._memory_observations = application.memory.observations
+        self._memory_workflows = application.memory_workflows
         memory_interval = config.daemon.memory_curator.interval_seconds
         self._periodic_tasks: tuple[tuple[DaemonTaskKind, float], ...] = (
             ("memory.scan", memory_interval),
@@ -241,7 +238,7 @@ class DaemonState:
         return result
 
     def _scan_memory_observations(self, _task: DaemonTask) -> None:
-        for observation in self._memory_observations.pending():
+        for observation in self._memory_workflows.pending_observations():
             self._request_memory_curation(observation.id)
 
     def _scan_conversations(self, _task: DaemonTask) -> None:
@@ -266,7 +263,7 @@ class DaemonState:
             turn_id=payload.turn_id,
         )
         observation = publish_chat_observation(
-            self._memory_observations,
+            self._memory_workflows,
             turn=result.require_completed_turn(),
             source_trace_id=result.trace_id,
         )
