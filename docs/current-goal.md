@@ -41,6 +41,10 @@ Conversation execution, history, and management now consume one
 authority-scoped `ConversationService`; only validated data administration
 retains the underlying `ConversationStore`.
 
+Delivery requests, Reflection publication, and background adapter transitions
+now consume `DeliveryService`; `DeliveryStore` remains inside application
+composition.
+
 ## Exclusions
 
 - Do not add forwarding methods that merely mirror every repository operation;

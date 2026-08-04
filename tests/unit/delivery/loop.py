@@ -5,6 +5,7 @@ from pathlib import Path
 from nuself.config.settings import runtime_paths
 from nuself.delivery.loop import DeliveryLoop
 from nuself.delivery.store import DeliveryStore
+from nuself.delivery.service import DeliveryService
 from nuself.inbox.model import InboxItem
 from nuself.inbox.service import InboxService
 from nuself.storage.authority import auto_backend
@@ -22,10 +23,13 @@ class _Adapter:
         return True
 
 
-def _resources(root: Path) -> tuple[InboxService, DeliveryStore]:
+def _resources(root: Path) -> tuple[InboxService, DeliveryService]:
     backend = auto_backend(root)
     paths = runtime_paths(root)
-    return InboxService(paths, backend), DeliveryStore(paths, backend)
+    return (
+        InboxService(paths, backend),
+        DeliveryService(DeliveryStore(paths, backend)),
+    )
 
 
 def test_delivery_references_inbox_without_copying_content(tmp_path: Path) -> None:

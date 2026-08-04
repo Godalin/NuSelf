@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from nuself.delivery.adapters import DeliveryAdapter
 from nuself.delivery.model import DeliveryRecord
-from nuself.delivery.store import DeliveryStore
+from nuself.delivery.service import DeliveryService
 from nuself.inbox.service import InboxService
 from nuself.inbox.service import InboxItemNotFound
 from nuself.runtime.context import use_runtime_context
@@ -17,7 +17,7 @@ class DeliveryLoop:
     def __init__(
         self,
         inbox: InboxService,
-        store: DeliveryStore,
+        store: DeliveryService,
         adapters: Sequence[DeliveryAdapter],
     ) -> None:
         self._inbox = inbox

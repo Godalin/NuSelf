@@ -34,7 +34,7 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert not hasattr(graph, "_backend")
     assert not hasattr(graph, "composition_storage")
     assert graph.inbox._backend is backend
-    assert graph.deliveries._backend is backend
+    assert graph.deliveries._store._backend is backend
     assert graph.personas._repository._project_root == paths.authority_root
     assert graph.memory.curator_plans._backend is backend
     assert graph.memory_service._repository is graph.memory.entries

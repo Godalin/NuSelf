@@ -192,6 +192,11 @@ Concrete workflows belong to their domains even when an outer adapter triggers
 them. Reason owns durable output export in `reason.export_service`; daemon owns
 only scheduling and lifecycle. CLI owns only argument handling and result
 presentation for Inbox and Delivery operations.
+Delivery persistence is constructed once inside application composition and
+is exposed as `DeliveryService`. CLI, REPL, Reflection publication, and the
+background delivery loop consume that service; they must not receive
+`DeliveryStore`. The service owns durable request and adapter-attempt
+transitions, while `DeliveryLoop` owns adapter orchestration and Inbox lookup.
 Generic execution infrastructure remains in `runtime`, while concrete owners
 use responsibility names such as `application.lifecycle`, `agent.chat.engine`,
 and `cli.repl.loop`.

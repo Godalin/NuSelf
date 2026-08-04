@@ -8,7 +8,7 @@ from nuself.config.settings import ReflectionSettings, RuntimePaths
 from nuself.conversation import ConversationHistoryService
 from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.memory.composition import MemoryRepositories
-from nuself.delivery.store import DeliveryStore
+from nuself.delivery.service import DeliveryService
 from nuself.inbox.service import InboxService
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
@@ -62,7 +62,7 @@ def compose_reflection_scheduler(
     repository: ReflectionRepository,
     service: ReflectionService,
     inbox: InboxService,
-    deliveries: DeliveryStore,
+    deliveries: DeliveryService,
     trace_recorder: TraceRecorder,
     *,
     config: ReflectionSettings,
