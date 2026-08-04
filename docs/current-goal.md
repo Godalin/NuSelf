@@ -33,6 +33,10 @@ ordinary CLI/REPL use cases. Memory curator/optimizer composition, observation
 recovery, and explicit import/export remain narrow workflow work for the final
 application snapshot migration.
 
+Persona management, Chat tools, and Reason workflows now consume one
+authority-scoped `PersonaService`; the prompt repository is constructed only
+inside application or thread-local Persona composition.
+
 ## Exclusions
 
 - Do not add forwarding methods that merely mirror every repository operation;

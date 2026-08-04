@@ -33,7 +33,7 @@ from nuself.reason.model import (
 )
 from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.errors import ReasonAdvanceError
-from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.persona.service import PersonaService
 from nuself.runtime.context import current_runtime_context, runtime_context
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
@@ -221,7 +221,7 @@ class ReasonAdvancer:
         *,
         paths: RuntimePaths,
         workspace_store: PrivateWorkspaceStore,
-        persona_repository: PersonaPromptRepository,
+        persona_repository: PersonaService,
         trace_recorder: TraceRecorder,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
@@ -398,7 +398,7 @@ def default_reason_advancer(
     *,
     paths: RuntimePaths,
     workspace_store: PrivateWorkspaceStore,
-    persona_repository: PersonaPromptRepository,
+    persona_repository: PersonaService,
     trace_recorder: TraceRecorder,
     readonly_tools: Sequence[BaseTool] | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...],

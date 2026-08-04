@@ -58,7 +58,7 @@ def test_global_persona_think_uses_injected_text_agent(
     application = _persona_dependencies(tmp_path)
     tools = build_persona_tools(
         tmp_path,
-        repository=application.persona_prompts,
+        repository=application.personas,
         trace_recorder=application.trace.recorder,
         text_agent=agent,
     )
@@ -101,7 +101,7 @@ def test_persona_think_sanitizes_agent_failure(
     application = _persona_dependencies(tmp_path)
     tools = build_persona_tools(
         tmp_path,
-        repository=application.persona_prompts,
+        repository=application.personas,
         trace_recorder=application.trace.recorder,
         text_agent=_FailingTextAgent(),
     )
@@ -152,7 +152,7 @@ def test_persona_think_propagates_untyped_agent_errors(
         )
         tools = build_reason_persona_tools(
             paths=application.paths,
-            global_repository=application.persona_prompts,
+            global_repository=application.personas,
             trace_recorder=application.trace.recorder,
             get_thread_workspace=lambda: workspace,
             text_agent=_UntypedFailureAgent(),
@@ -170,7 +170,7 @@ def test_persona_think_propagates_untyped_agent_errors(
         application = _persona_dependencies(tmp_path)
         tools = build_persona_tools(
             tmp_path,
-            repository=application.persona_prompts,
+            repository=application.personas,
             trace_recorder=application.trace.recorder,
             text_agent=_UntypedFailureAgent(),
         )
@@ -204,7 +204,7 @@ def test_reason_persona_think_uses_same_injected_text_agent(
     agent = _TextAgent("thread persona conclusion")
     tools = build_reason_persona_tools(
         paths=application.paths,
-        global_repository=application.persona_prompts,
+        global_repository=application.personas,
         trace_recorder=application.trace.recorder,
         get_thread_workspace=lambda: workspace,
         text_agent=agent,

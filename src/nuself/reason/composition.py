@@ -16,7 +16,7 @@ from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
 from nuself.reason.service import ReasonService
-from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.persona.service import PersonaService
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
@@ -87,7 +87,7 @@ def compose_reason_prompt_generator(
 def compose_reason_advancer(
     paths: "RuntimePaths",
     workspace_store: PrivateWorkspaceStore,
-    persona_repository: PersonaPromptRepository,
+    persona_repository: PersonaService,
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
     *,

@@ -55,7 +55,7 @@ def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
             runtime_paths(project_root),
             scope="reason",
         ),
-        "persona_repository": application.persona_prompts,
+        "persona_repository": application.personas,
         "trace_recorder": application.trace.recorder,
     }
 
@@ -95,7 +95,7 @@ def test_application_reason_composition_resolves_models_from_graph_config(
     advancer = compose_reason_advancer(
         application.paths,
         application.reason.workspace,
-        application.persona_prompts,
+        application.personas,
         application.trace.recorder,
         application.config,
     )

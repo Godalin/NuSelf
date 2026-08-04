@@ -16,7 +16,7 @@ from nuself.conversation import ConversationStore
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.tools import build_persona_tools
-from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.persona.service import PersonaService
 from nuself.application.projection import load_personas_from_memory
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
@@ -45,7 +45,7 @@ def compose_conversation_runtime(
     reason_service: ReasonService,
     reason_workspace: PrivateWorkspaceStore,
     trace: TraceServices,
-    persona_prompts: PersonaPromptRepository,
+    persona_prompts: PersonaService,
     *,
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,

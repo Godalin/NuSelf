@@ -167,7 +167,7 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
             application.reason.service,
             application.reason.workspace,
             application.trace,
-            application.persona_prompts,
+            application.personas,
             response_service=FixtureResponseService(fixture.response),
         )
         result = agent.respond(

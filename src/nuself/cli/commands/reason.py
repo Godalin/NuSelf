@@ -100,7 +100,7 @@ def handle_reason_thread_action(args: argparse.Namespace) -> int:
         advancer = compose_reason_advancer(
             application.paths,
             application.reason.workspace,
-            application.persona_prompts,
+            application.personas,
             application.trace.recorder,
             application.config,
         )

@@ -13,7 +13,7 @@ from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
 from nuself.persona.audit import PERSONA_AUDIT
-from nuself.persona.prompt_repo import PersonaPrompt, create_persona_prompt
+from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.trace.service import TraceRecorder
 from nuself.tui.render import TerminalTheme
 
@@ -23,7 +23,7 @@ _theme = TerminalTheme()
 def list_persona_prompts(
     project_root: Path | None,
 ) -> tuple[PersonaPrompt, ...]:
-    return cli_application().persona_prompts.list()
+    return cli_application().personas.list_prompts()
 
 
 def resolve_persona_id(
@@ -66,19 +66,7 @@ def create_persona(
     prompt_text: str,
 ) -> int:
     application = cli_application()
-    repository = application.persona_prompts
-    persona = create_persona_prompt(name, prompt_text)
-    existing = repository.get_by_name(name)
-    if existing is not None:
-        persona = PersonaPrompt(
-            id=existing.id,
-            name=name,
-            prompt=prompt_text,
-            disabled=existing.disabled,
-            created_at=existing.created_at,
-            updated_at=persona.updated_at,
-        )
-    repository.save(persona)
+    persona = application.personas.create_or_replace(name, prompt_text)
     _record_lifecycle(
         application.trace.recorder,
         project_root,
@@ -100,15 +88,15 @@ def delete_personas(
     confirmed: bool = False,
 ) -> int:
     application = cli_application()
-    repository = application.persona_prompts
-    prompt_ids = _resolve_persona_ids(persona_ref, repository.list())
+    service = application.personas
+    prompt_ids = _resolve_persona_ids(persona_ref, service.list_prompts())
     if prompt_ids is None:
         return CliExitCode.FAILURE
     if not confirmed:
         names = [
             prompt.name
             for prompt in (
-                repository.get(prompt_id) for prompt_id in prompt_ids
+                service.get_prompt(prompt_id) for prompt_id in prompt_ids
             )
             if prompt is not None
         ]
@@ -124,9 +112,9 @@ def delete_personas(
             return CliExitCode.SUCCESS
     deleted: list[str] = []
     for prompt_id in prompt_ids:
-        prompt = repository.get(prompt_id)
+        prompt = service.get_prompt(prompt_id)
         if prompt is not None:
-            repository.delete(prompt_id)
+            service.delete_prompt(prompt_id)
             deleted.append(prompt.name)
     for name in deleted:
         print_ansi(
@@ -144,11 +132,11 @@ def set_persona_enabled(
     confirmed: bool = False,
 ) -> int:
     application = cli_application()
-    repository = application.persona_prompts
-    prompt_id = _resolve_persona_id(persona_ref, repository.list())
+    service = application.personas
+    prompt_id = _resolve_persona_id(persona_ref, service.list_prompts())
     if prompt_id is None:
         return CliExitCode.FAILURE
-    prompt = repository.get(prompt_id)
+    prompt = service.get_prompt(prompt_id)
     if prompt is None:
         print_ansi(
             f"{_theme.tag('[persona]', 'persona')} "
@@ -172,7 +160,7 @@ def set_persona_enabled(
         if decision is ConfirmationDecision.NO:
             print("Aborted.")
             return CliExitCode.SUCCESS
-    repository.set_disabled(prompt.id, not enabled)
+    service.set_enabled(prompt.id, enabled=enabled)
     action = "enabled" if enabled else "disabled"
     _record_lifecycle(
         application.trace.recorder,

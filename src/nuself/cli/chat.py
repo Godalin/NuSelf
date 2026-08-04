@@ -170,7 +170,7 @@ def send_one_shot_chat_interactive(
                 application.reason.service,
                 application.reason.workspace,
                 application.trace,
-                application.persona_prompts,
+                application.personas,
                 approval_port=TerminalApprovalPort(),
             )
             result = conversation_runtime.respond(

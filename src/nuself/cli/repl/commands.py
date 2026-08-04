@@ -168,7 +168,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         advancer = compose_reason_advancer(
             application.paths,
             application.reason.workspace,
-            application.persona_prompts,
+            application.personas,
             application.trace.recorder,
             application.config,
         )
@@ -281,7 +281,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = cli_application().persona_prompts
+        repo = cli_application().personas
         if command in {"", "list"}:
             prompts = list_persona_prompts(project_root)
             if not prompts:

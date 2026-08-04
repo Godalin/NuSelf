@@ -119,7 +119,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                     persona_tools
                     or build_persona_tools(
                         project_root,
-                        repository=application.persona_prompts,
+                        repository=application.personas,
                         trace_recorder=application.trace.recorder,
                         text_agent=LangChainTextAgent(
                             endpoints=effective_models,

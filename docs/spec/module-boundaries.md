@@ -241,18 +241,22 @@ they coordinate.
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records
 and per-conversation locks cannot drift across authorities. Persona prompt
-persistence likewise receives its collection and resolved paths explicitly;
-outer tools and adapters may compose those resources but the repository may
-not select them.
+persistence likewise receives its collection and resolved paths explicitly.
+The authority-scoped `PersonaService` is the boundary used by CLI, REPL, Chat
+tools, and Reason workflows; those consumers must not receive
+`PersonaPromptRepository`. Thread-local Reason persona composition constructs
+its repository inside Persona-owned tool composition and exposes only its
+thread-local service. The repository may not select authority resources.
 Memory-backed persona definition loading receives the graph-owned memory
 repository. Chat orchestration receives the resulting immutable definitions;
 neither layer may resolve storage from a project root.
-Persona agent tools receive their global prompt repository and trace recorder
+Persona agent tools receive their global prompt service and trace recorder
 as required capabilities. Reason-scoped persona tools additionally receive
 resolved runtime paths for their workspace-local repository. Tool factories
 may construct model adapters, but they must not call `runtime_paths()`, open a
 backend, or compose trace services. The application reason factory supplies
-the same graph-owned prompt and trace capabilities to every reason advancer.
+the same graph-owned Persona service and trace capabilities to every reason
+advancer.
 
 `ApplicationGraph` is constructed from one already-resolved `RuntimePaths` and
 one selected `StorageBackend`. It retains those exact resources and the shared

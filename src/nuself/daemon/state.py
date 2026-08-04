@@ -98,7 +98,7 @@ class DaemonState:
             application.reason.service,
             application.reason.workspace,
             application.trace,
-            application.persona_prompts,
+            application.personas,
             job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
                 self.authority_root,
@@ -145,7 +145,7 @@ class DaemonState:
             advancer=compose_reason_advancer(
                 paths,
                 application.reason.workspace,
-                application.persona_prompts,
+                application.personas,
                 application.trace.recorder,
                 config,
                 readonly_tools=self.conversation_runtime.readonly_tools(),

@@ -63,11 +63,11 @@ def handle_persona_create(args: argparse.Namespace) -> int:
 
 
 def handle_persona_show(args: argparse.Namespace) -> int:
-    repository = cli_application().persona_prompts
+    service = cli_application().personas
     prompt_id = resolve_persona_id(args.project_root, args.persona_id)
     if prompt_id is None:
         return 1
-    prompt = repository.get(prompt_id)
+    prompt = service.get_prompt(prompt_id)
     if prompt is None:
         print_ansi(
             f"{_theme.tag('[persona]', 'persona')} "

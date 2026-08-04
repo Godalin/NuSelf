@@ -14,6 +14,7 @@ from nuself.agent.errors import AgentError
 from nuself.agent.text import TextAgent
 from nuself.config.settings import RuntimePaths
 from nuself.persona.prompt_repo import PersonaPrompt, PersonaPromptRepository, create_persona_prompt
+from nuself.persona.service import PersonaService
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.persona.audit import PERSONA_AUDIT
@@ -24,7 +25,7 @@ from nuself.trace.service import TraceRecorder
 def build_persona_tools(
     project_root: Path | None = None,
     *,
-    repository: PersonaPromptRepository,
+    repository: PersonaService,
     trace_recorder: TraceRecorder,
     text_agent: TextAgent,
 ) -> tuple[StructuredTool, ...]:
@@ -271,7 +272,7 @@ def _record_prompt_enabled_trace(
 def build_reason_persona_tools(
     *,
     paths: RuntimePaths,
-    global_repository: PersonaPromptRepository,
+    global_repository: PersonaService,
     trace_recorder: TraceRecorder,
     get_thread_workspace: Callable[[], ScopedWorkspace],
     text_agent: TextAgent,
@@ -287,13 +288,15 @@ def build_reason_persona_tools(
     - ``persona_think`` resolves from thread first, then global.
     """
 
-    def _thread_repo() -> PersonaPromptRepository:
-        return PersonaPromptRepository(
-            WorkspaceCollection(
-                get_thread_workspace(),
-                namespace="persona_prompts",
-            ),
-            paths,
+    def _thread_repo() -> PersonaService:
+        return PersonaService(
+            PersonaPromptRepository(
+                WorkspaceCollection(
+                    get_thread_workspace(),
+                    namespace="persona_prompts",
+                ),
+                paths,
+            )
         )
 
     global_repo = global_repository

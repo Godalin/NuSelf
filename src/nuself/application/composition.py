@@ -19,6 +19,7 @@ from nuself.memory.service import MemoryService
 from nuself.memory.candidate_service import MemoryCandidateService
 from nuself.profile.service import ProfileService
 from nuself.persona.prompt_repo import PersonaPromptRepository
+from nuself.persona.service import PersonaService
 from nuself.reflection.composition import (
     ReflectionResources,
     compose_reflection_resources,
@@ -43,7 +44,7 @@ class ApplicationGraph:
     sources: SourceService
     inbox: InboxService
     deliveries: DeliveryStore
-    persona_prompts: PersonaPromptRepository
+    personas: PersonaService
     reason: ReasonResources
     reflection: ReflectionResources
     trace: TraceServices
@@ -88,9 +89,11 @@ def compose_application(
         sources=sources,
         inbox=inbox,
         deliveries=deliveries,
-        persona_prompts=PersonaPromptRepository(
-            backend.collection("persona_prompts"),
-            paths,
+        personas=PersonaService(
+            PersonaPromptRepository(
+                backend.collection("persona_prompts"),
+                paths,
+            )
         ),
         reason=reason,
         reflection=reflection,
