@@ -5,26 +5,49 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — migrating subsystem composition to service boundaries.
 
 ## Objective
 
-No active objective.
+Make services the boundary consumed by CLI, REPL, agent tools, request
+handlers, and cross-domain workflows. Keep repositories, persistence stores,
+and private workspaces inside their owning domain composition, except for
+explicit administration, projection, recovery, and migration ports.
 
 ## Next Steps
 
-1. Wait for the next explicitly approved goal.
+1. Complete Memory entry, candidate-review, profile, and maintenance services;
+   migrate ordinary adapters away from `MemoryRepositories`.
+2. Add Conversation management and Persona services/providers; remove their
+   repositories and stores from ordinary adapters.
+3. Add Delivery services and completed background workflow composition.
+4. Internalize Reflection repository and Reason workspace requirements behind
+   owner-composed services and workflows.
+5. Replace general graph borrowing with consumer-specific service/workflow
+   snapshots and enforce the boundary with architecture tests.
+6. Run full verification, delete the temporary composition audit, record any
+   unresolved follow-up in `TODOs.md`, and return this file to Idle.
 
 ## Exclusions
 
-- Do not begin unapproved feature or refactor work.
+- Do not add forwarding methods that merely mirror every repository operation;
+  service APIs represent stable user or workflow intent.
+- Do not route projection, recovery, migration, repair, or validated data
+  administration through a universal public service.
+- Do not add a service locator, common service base class, dynamic registry, or
+  duplicate authority graph.
+- Do not combine this work with retrieval, configuration, distribution, or
+  conversation crash-durability backlog items.
 
-## Last Verification
+## Completion Evidence
 
-- Published Reflection Inbox items now carry the complete user-facing body;
-  email and macOS adapters render that shared projection directly.
-- Reflection remains authoritative through `source_id`/deep-link identity;
-  generation, scheduling, persistence, and delivery policy are unchanged.
-- `uv run pytest -q`: 2329 passed.
-- `uv run --locked pyright`: 0 errors, 0 warnings.
-- `git diff --check`: passed.
+- General process adapters receive services or completed workflow snapshots,
+  not domain repositories or persistence stores.
+- `ApplicationGraph` does not expose `MemoryRepositories`, `DeliveryStore`,
+  `PersonaPromptRepository`, `ReflectionRepository`, or
+  `PrivateWorkspaceStore` to general consumers.
+- Internal curator, projection, recovery, scheduler, export, and administration
+  paths reuse the single authority-owned persistence graph.
+- Declarative architecture tests enforce the allowed exceptions.
+- `uv run --locked pytest`, `uv run --locked pyright`, and `git diff --check`
+  pass.
