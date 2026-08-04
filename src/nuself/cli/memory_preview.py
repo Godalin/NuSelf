@@ -15,7 +15,7 @@ def format_memory_preview(
     limit: int = DEFAULT_PREVIEW_LIMIT,
 ) -> str:
     normalized_limit = max(limit, 1)
-    entries = cli_application().memory.entries.list()
+    entries = cli_application().memory_service.list_entries()
     if not entries:
         return "No memory entries."
     shown = entries[:normalized_limit]

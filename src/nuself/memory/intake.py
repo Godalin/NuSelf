@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.structured import StructuredAgent
 from nuself.memory.model import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
-from nuself.profile.contracts import ProfileRepositoryPort
+from nuself.profile.contracts import ProfileQueryService
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
 
@@ -47,7 +47,7 @@ class MemoryIntakeAgent:
         self,
         *,
         agent: StructuredAgent[IntakeResultOutput],
-        profile_repository: ProfileRepositoryPort,
+        profile_repository: ProfileQueryService,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._profile_repository = profile_repository

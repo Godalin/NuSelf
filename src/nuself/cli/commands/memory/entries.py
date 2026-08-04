@@ -23,14 +23,12 @@ from nuself.memory.model import (
 )
 from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
-from nuself.memory.service import MemoryQuery
 from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryRelationFilters,
     MemoryRelationIndexRecord,
     MemorySearchFilters,
     MemoryStats,
-    memory_stats,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row
@@ -46,7 +44,7 @@ def _entries_for_list(
     sort_by: str = "updated_at",
     review_state: str | None = None,
 ) -> list[MemoryEntry]:
-    entries = cli_application().memory.entries.list()
+    entries = cli_application().memory_service.list_entries()
     if review_state is not None:
         entries = [
             entry
@@ -170,7 +168,7 @@ def handle_memory_show(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        entry = cli_application().memory.entries.get(entry_id)
+        entry = cli_application().memory_service.get_entry(entry_id)
     except MemoryEntryNotFound:
         print(
             f"Memory entry not found: {entry_id}",
@@ -194,7 +192,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
                 project_root=application.paths.authority_root,
                 component="memory",
             ),
-            profile_repository=application.memory.profile,
+            profile_repository=application.profiles,
         ).infer(
             body=args.body,
             title=args.title,
@@ -220,8 +218,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
             else inferred.importance
         ),
     )
-    repository = application.memory.entries
-    repository.save(entry)
+    application.memory_service.save_entry(entry)
     record_memory_trace(
         application.trace.recorder,
         args.project_root,
@@ -233,12 +230,12 @@ def handle_memory_add(args: argparse.Namespace) -> int:
 
 
 def handle_memory_edit(args: argparse.Namespace) -> int:
-    repository = cli_application().memory.entries
+    service = cli_application().memory_service
     entry_id = _resolve_entry_id(args)
     if entry_id is None:
         return 1
     try:
-        entry = repository.get(entry_id)
+        entry = service.get_entry(entry_id)
     except MemoryEntryNotFound:
         print(
             f"Memory entry not found: {entry_id}",
@@ -252,19 +249,19 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
         importance=args.importance,
         review_state=args.review_state,
     )
-    repository.save(updated)
+    service.save_entry(updated)
     print_ansi(render_memory_entry_row(updated))
     return 0
 
 
 def handle_memory_delete(args: argparse.Namespace) -> int:
-    repository = cli_application().memory.entries
+    service = cli_application().memory_service
     entry_ids = _resolve_entry_ids(args)
     if entry_ids is None:
         return 1
     for entry_id in entry_ids:
         try:
-            repository.delete(entry_id)
+            service.delete_entry(entry_id)
         except MemoryEntryNotFound:
             print(
                 f"Memory entry not found: {entry_id}",
@@ -278,7 +275,6 @@ def handle_memory_delete(args: argparse.Namespace) -> int:
 
 def handle_memory_search(args: argparse.Namespace) -> int:
     application = cli_application()
-    repository = application.memory.entries
     filters = MemorySearchFilters(
         type=args.type,
         tag=args.tag,
@@ -288,27 +284,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
         valid_on=args.valid_on,
         min_importance=args.min_importance,
     )
-    eligible_ids = {
-        entry.id for entry in repository.search("", filters)
-    }
-    matches = application.memory_service.search(
-        MemoryQuery(
-            text=args.query,
-            limit=max(len(eligible_ids), 1),
-            review_states=(
-                "draft",
-                "reviewed",
-                "rejected",
-                "quarantined",
-                "archived",
-            ),
-        )
-    )
-    entries = [
-        match.entry
-        for match in matches
-        if match.entry.id in eligible_ids
-    ]
+    entries = application.memory_service.search_entries(args.query, filters)
     if not entries:
         print("No matching memory entries.")
         return 0
@@ -318,17 +294,12 @@ def handle_memory_search(args: argparse.Namespace) -> int:
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
-    repositories = cli_application().memory
-    print(
-        _format_stats(
-            memory_stats(repositories.entries, repositories.candidates)
-        )
-    )
+    print(_format_stats(cli_application().memory_service.statistics()))
     return 0
 
 
 def handle_memory_relations(args: argparse.Namespace) -> int:
-    records = cli_application().memory.entries.list_relations(
+    records = cli_application().memory_service.list_relations(
         MemoryRelationFilters(
             relation=args.relation,
             source_id=args.source_id,
@@ -385,7 +356,7 @@ def handle_memory_unquarantine(
     args: argparse.Namespace,
 ) -> int:
     try:
-        cli_application().memory.entries.unquarantine(
+        cli_application().memory_service.unquarantine_entry(
             args.entry_id
         )
     except MemoryEntryNotFound:

@@ -51,7 +51,7 @@ def handle_memory_optimize(args: argparse.Namespace) -> int:
 
 
 def handle_memory_export(args: argparse.Namespace) -> int:
-    entries = cli_application().memory.entries.list()
+    entries = cli_application().memory_service.list_entries()
     data = [entry.to_wire() for entry in entries]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
@@ -80,7 +80,6 @@ def handle_memory_import(args: argparse.Namespace) -> int:
         )
         return 1
     application = cli_application()
-    repository = application.memory.entries
     data = cast(list[object], raw)
     imported = 0
     for item in data:
@@ -89,7 +88,7 @@ def handle_memory_import(args: argparse.Namespace) -> int:
         entry = MemoryEntry.from_wire(
             cast(dict[str, object], item)
         )
-        repository.save(entry)
+        application.memory_service.save_entry(entry)
         record_memory_trace(
             application.trace.recorder,
             args.project_root,

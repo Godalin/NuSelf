@@ -16,6 +16,8 @@ from nuself.conversation import ConversationHistoryService, ConversationStore
 from nuself.delivery.store import DeliveryStore
 from nuself.inbox.service import InboxService
 from nuself.memory.service import MemoryService
+from nuself.memory.candidate_service import MemoryCandidateService
+from nuself.profile.service import ProfileService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reflection.composition import (
     ReflectionResources,
@@ -36,6 +38,8 @@ class ApplicationGraph:
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
     memory_service: MemoryService
+    memory_candidates: MemoryCandidateService
+    profiles: ProfileService
     sources: SourceService
     inbox: InboxService
     deliveries: DeliveryStore
@@ -78,7 +82,9 @@ def compose_application(
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory,
-        memory_service=MemoryService(memory.entries),
+        memory_service=MemoryService(memory.entries, memory.candidates),
+        memory_candidates=MemoryCandidateService(memory.candidates),
+        profiles=ProfileService(memory.profile),
         sources=sources,
         inbox=inbox,
         deliveries=deliveries,

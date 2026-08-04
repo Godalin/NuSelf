@@ -28,6 +28,11 @@ explicit administration, projection, recovery, and migration ports.
 6. Run full verification, delete the temporary composition audit, record any
    unresolved follow-up in `TODOs.md`, and return this file to Idle.
 
+Current progress: Memory entry, candidate-review, and profile services now own
+ordinary CLI/REPL use cases. Memory curator/optimizer composition, observation
+recovery, and explicit import/export remain narrow workflow work for the final
+application snapshot migration.
+
 ## Exclusions
 
 - Do not add forwarding methods that merely mirror every repository operation;

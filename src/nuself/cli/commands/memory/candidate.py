@@ -13,8 +13,8 @@ from nuself.cli.output import (
     resolve_handle_selection,
 )
 from nuself.memory.model import MemoryCandidate
+from nuself.memory.candidate_service import MemoryCandidateService
 from nuself.memory.repository import (
-    MemoryCandidateRepository,
     MemoryCandidateNotFound,
     MemoryEntryNotFound,
 )
@@ -26,13 +26,13 @@ from nuself.tui.memory import (
 
 
 def _candidates_for_list(
-    repository: MemoryCandidateRepository,
+    service: MemoryCandidateService,
     *,
     include_reviewed: bool = False,
     review_state: str | None = None,
     sort_by: str = "updated_at",
 ) -> list[MemoryCandidate]:
-    candidates = repository.list(
+    candidates = service.list_candidates(
         include_reviewed=include_reviewed
     )
     if review_state is not None:
@@ -64,11 +64,11 @@ def _candidates_for_list(
 
 def _resolve_candidate_id(
     args: argparse.Namespace,
-    repository: MemoryCandidateRepository,
+    service: MemoryCandidateService,
 ) -> str | None:
     return resolve_handle(
         args.candidate_id,
-        _candidates_for_list(repository),
+        _candidates_for_list(service),
         label="memory candidate",
         get_id=lambda candidate: candidate.id,
     )
@@ -76,11 +76,11 @@ def _resolve_candidate_id(
 
 def _resolve_candidate_ids(
     args: argparse.Namespace,
-    repository: MemoryCandidateRepository,
+    service: MemoryCandidateService,
 ) -> list[str] | None:
     return resolve_handle_selection(
         args.candidate_id,
-        _candidates_for_list(repository),
+        _candidates_for_list(service),
         label="memory candidate",
         get_id=lambda candidate: candidate.id,
     )
@@ -89,7 +89,7 @@ def _resolve_candidate_ids(
 def handle_memory_candidate_list(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.candidates
+    repository = cli_application().memory_candidates
     candidates = _candidates_for_list(
         repository,
         include_reviewed=args.all,
@@ -120,12 +120,12 @@ def handle_memory_candidate_list(
 def handle_memory_candidate_show(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.candidates
+    repository = cli_application().memory_candidates
     candidate_id = _resolve_candidate_id(args, repository)
     if candidate_id is None:
         return 1
     try:
-        candidate = repository.get(candidate_id)
+        candidate = repository.get_candidate(candidate_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",
@@ -140,7 +140,7 @@ def handle_memory_candidate_accept(
     args: argparse.Namespace,
 ) -> int:
     application = cli_application()
-    repository = application.memory.candidates
+    repository = application.memory_candidates
     candidate_ids = _resolve_candidate_ids(args, repository)
     if candidate_ids is None:
         return 1
@@ -172,7 +172,7 @@ def handle_memory_candidate_accept(
 def handle_memory_candidate_reject(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.candidates
+    repository = cli_application().memory_candidates
     candidate_ids = _resolve_candidate_ids(args, repository)
     if candidate_ids is None:
         return 1
@@ -192,7 +192,7 @@ def handle_memory_candidate_reject(
 def handle_memory_candidate_edit(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.candidates
+    repository = cli_application().memory_candidates
     candidate_id = _resolve_candidate_id(args, repository)
     if candidate_id is None:
         return 1
@@ -222,7 +222,7 @@ def handle_memory_candidate_merge(
     args: argparse.Namespace,
 ) -> int:
     application = cli_application()
-    repository = application.memory.candidates
+    repository = application.memory_candidates
     candidate_id = _resolve_candidate_id(args, repository)
     if candidate_id is None:
         return 1

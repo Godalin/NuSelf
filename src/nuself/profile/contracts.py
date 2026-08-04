@@ -26,3 +26,9 @@ class ProfileRepositoryPort(Protocol):
         candidate: MemoryCandidate,
         item_id: str,
     ) -> ProfileItem: ...
+
+
+class ProfileQueryService(Protocol):
+    """Read-only profile capability used by interpretive workflows."""
+
+    def search(self, query: str) -> list[ProfileItem]: ...

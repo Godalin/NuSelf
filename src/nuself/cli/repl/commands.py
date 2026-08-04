@@ -56,31 +56,32 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         return "No memory-context trace is available for the last answer yet."
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
-        entries = cli_application().memory.entries.search(query)
+        entries = cli_application().memory_service.search_entries(query)
         if not entries:
             return "No matching memory entries."
         return "\n".join(
             render_memory_entry_row(entry) for entry in entries
         )
-    memory = cli_application().memory
+    application = cli_application()
+    memory = application.memory_service
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
         try:
             entry_id = resolve_visible_handle(
                 entry_id,
-                memory.entries.list(),
+                memory.list_entries(),
                 label="memory",
                 get_id=lambda entry: entry.id,
             )
         except VisibleHandleError as exc:
             return diagnostic_exception_message(exc)
         try:
-            entry = memory.entries.get(entry_id)
+            entry = memory.get_entry(entry_id)
         except MemoryEntryNotFound:
             return f"Memory entry not found: {entry_id}"
         return render_memory_entry_detail(entry)
     if command == "review":
-        candidates = memory.candidates.list()
+        candidates = application.memory_candidates.list_candidates()
         if not candidates:
             return "No memory candidates."
         return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
@@ -89,20 +90,20 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         try:
             candidate_id = resolve_visible_handle(
                 candidate_id,
-                memory.candidates.list(),
+                application.memory_candidates.list_candidates(),
                 label="memory candidate",
                 get_id=lambda candidate: candidate.id,
             )
         except VisibleHandleError as exc:
             return diagnostic_exception_message(exc)
         try:
-            candidate = memory.candidates.get(candidate_id)
+            candidate = application.memory_candidates.get_candidate(candidate_id)
         except MemoryCandidateNotFound:
             return f"Memory candidate not found: {candidate_id}"
         return render_candidate_detail(candidate)
     if command.startswith("profile "):
         query = command.removeprefix("profile ").strip()
-        items = memory.profile.search(query)
+        items = application.profiles.search_items(query)
         if not items:
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
@@ -441,8 +442,7 @@ def handle_interactive_history_command(project_root: Path | None, conversation_i
 
 
 def handle_interactive_whoami_command(project_root: Path | None) -> str:
-    repo = cli_application().memory.profile
-    items = repo.list()
+    items = cli_application().profiles.list_items()
     if not items:
         return "No profile items yet."
     lines = ["Core profile:"]

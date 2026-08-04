@@ -226,6 +226,18 @@ Custom memory type and relation registries remain repository-construction
 concerns for focused domain tests, not unused variability in the application
 composition API.
 
+Ordinary CLI and REPL Memory operations consume authority-scoped services,
+not `MemoryRepositories`. `MemoryService` owns stable entry inspection,
+deterministic and semantic search, entry mutation, relation and graph query,
+quarantine recovery, and statistics use cases. `MemoryCandidateService` owns
+candidate review and promotion, while `ProfileService` owns profile inspection
+and maintenance. Their repositories remain shared construction dependencies;
+an adapter must not recover a repository from the application graph merely to
+perform one of these user-intent operations. Curator, optimizer, observation
+recovery, import/export, trace projection, and validated data administration
+remain explicit workflows and may consume the narrow persistence capabilities
+they coordinate.
+
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records
 and per-conversation locks cannot drift across authorities. Persona prompt

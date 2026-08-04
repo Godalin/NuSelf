@@ -7,7 +7,20 @@ from dataclasses import dataclass
 import re
 
 from nuself.memory.model import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
-from nuself.memory.repository import MemoryEntryRepository, SymbolicGraphEdge, SymbolicGraphNode
+from nuself.memory.repository import (
+    MemoryCandidateRepository,
+    MemoryEntryRepository,
+    MemoryRelationFilters,
+    MemoryRelationIndexRecord,
+    MemorySearchFilters,
+    MemoryStats,
+    SymbolicGraphEdge,
+    SymbolicGraphEdgeFilters,
+    SymbolicGraphNode,
+    SymbolicGraphNodeFilters,
+    SymbolicGraphSearchResult,
+    memory_stats,
+)
 
 DEFAULT_MEMORY_LIMIT = 8
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
@@ -40,10 +53,12 @@ class MemoryService:
     def __init__(
         self,
         repository: MemoryEntryRepository,
+        candidate_repository: MemoryCandidateRepository | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._repository = repository
+        self._candidate_repository = candidate_repository
         self._relation_registry = relation_registry or repository.relation_registry
         self._registry = registry or default_memory_type_registry()
 
@@ -72,6 +87,132 @@ class MemoryService:
             self._relation_registry,
             self._repository,
         )
+
+    def list_entries(self) -> list[MemoryEntry]:
+        """List inspectable memory entries."""
+
+        return self._repository.list()
+
+    def search_entries(
+        self,
+        query: str,
+        filters: MemorySearchFilters | None = None,
+    ) -> list[MemoryEntry]:
+        """Search entries using deterministic maintenance filters."""
+
+        eligible_ids = {
+            entry.id for entry in self._repository.search("", filters)
+        }
+        if query.strip() == "":
+            return [
+                entry
+                for entry in self._repository.list()
+                if entry.id in eligible_ids
+            ]
+        matches = self.search(
+            MemoryQuery(
+                text=query,
+                limit=max(len(eligible_ids), 1),
+                review_states=(
+                    "draft",
+                    "reviewed",
+                    "rejected",
+                    "quarantined",
+                    "archived",
+                ),
+            )
+        )
+        return [
+            match.entry
+            for match in matches
+            if match.entry.id in eligible_ids
+        ]
+
+    def get_entry(self, entry_id: str) -> MemoryEntry:
+        """Get one inspectable memory entry."""
+
+        return self._repository.get(entry_id)
+
+    def save_entry(self, entry: MemoryEntry) -> MemoryEntry:
+        """Persist a complete validated memory entry."""
+
+        return self._repository.save(entry)
+
+    def delete_entry(self, entry_id: str) -> None:
+        """Delete one memory entry."""
+
+        self._repository.delete(entry_id)
+
+    def unquarantine_entry(self, entry_id: str) -> MemoryEntry:
+        """Restore one quarantined entry to draft review."""
+
+        return self._repository.unquarantine(entry_id)
+
+    def statistics(self) -> MemoryStats:
+        """Summarize memory entry and candidate state."""
+
+        if self._candidate_repository is None:
+            raise RuntimeError("memory candidate statistics are unavailable")
+        return memory_stats(self._repository, self._candidate_repository)
+
+    def list_relations(
+        self,
+        filters: MemoryRelationFilters | None = None,
+    ) -> list[MemoryRelationIndexRecord]:
+        """List the current derived relation projection."""
+
+        return self._repository.list_relations(filters)
+
+    def list_graph_nodes(
+        self,
+        filters: SymbolicGraphNodeFilters | None = None,
+    ) -> list[SymbolicGraphNode]:
+        """List nodes in the current symbolic projection."""
+
+        return self._repository.list_graph_nodes(filters)
+
+    def list_graph_edges(
+        self,
+        filters: SymbolicGraphEdgeFilters | None = None,
+    ) -> list[SymbolicGraphEdge]:
+        """List edges in the current symbolic projection."""
+
+        return self._repository.list_graph_edges(filters)
+
+    def search_graph(
+        self,
+        query: str,
+        *,
+        node_type: str | None = None,
+        limit: int = 20,
+        depth: int = 1,
+    ) -> SymbolicGraphSearchResult:
+        """Search the symbolic projection and return bounded context."""
+
+        return self._repository.search_graph(
+            query,
+            node_type=node_type,
+            limit=limit,
+            depth=depth,
+        )
+
+    def find_graph_path(
+        self,
+        from_id: str,
+        to_id: str,
+    ) -> list[SymbolicGraphEdge]:
+        """Find one path through the symbolic projection."""
+
+        return self._repository.find_path(from_id, to_id)
+
+    def graph_closure(
+        self,
+        node_id: str,
+        relation: str,
+    ) -> SymbolicGraphSearchResult:
+        """Return the transitive closure for one registered relation."""
+
+        return self._repository.transitive_closure(node_id, relation)
 
     def count(
         self,

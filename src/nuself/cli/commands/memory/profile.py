@@ -10,18 +10,18 @@ from nuself.cli.output import print_ansi, resolve_handle
 from nuself.profile.model import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,
-    ProfileItemRepository,
     ProfileSearchFilters,
 )
+from nuself.profile.service import ProfileService
 from nuself.tui.memory import render_profile_detail, render_profile_row
 
 
 def _items_for_list(
-    repository: ProfileItemRepository,
+    service: ProfileService,
     *,
     sort_by: str = "updated_at",
 ) -> list[ProfileItem]:
-    items = repository.list()
+    items = service.list_items()
     if sort_by == "importance":
         return sorted(
             items,
@@ -45,11 +45,11 @@ def _items_for_list(
 
 def _resolve_profile_id(
     args: argparse.Namespace,
-    repository: ProfileItemRepository,
+    service: ProfileService,
 ) -> str | None:
     return resolve_handle(
         args.profile_id,
-        _items_for_list(repository),
+        _items_for_list(service),
         label="profile",
         get_id=lambda item: item.id,
     )
@@ -58,7 +58,7 @@ def _resolve_profile_id(
 def handle_memory_profile_list(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.profile
+    repository = cli_application().profiles
     items = _items_for_list(
         repository, sort_by=args.sort_by
     )
@@ -73,8 +73,8 @@ def handle_memory_profile_list(
 def handle_memory_profile_search(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.profile
-    items = repository.search(
+    repository = cli_application().profiles
+    items = repository.search_items(
         args.query,
         ProfileSearchFilters(
             type=args.type,
@@ -95,12 +95,12 @@ def handle_memory_profile_search(
 def handle_memory_profile_show(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.profile
+    repository = cli_application().profiles
     profile_id = _resolve_profile_id(args, repository)
     if profile_id is None:
         return 1
     try:
-        item = repository.get(profile_id)
+        item = repository.get_item(profile_id)
     except ProfileItemNotFound:
         print(
             f"Profile item not found: {profile_id}",
@@ -114,12 +114,12 @@ def handle_memory_profile_show(
 def handle_memory_profile_delete(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory.profile
+    repository = cli_application().profiles
     profile_id = _resolve_profile_id(args, repository)
     if profile_id is None:
         return 1
     try:
-        repository.delete(profile_id)
+        repository.delete_item(profile_id)
     except ProfileItemNotFound:
         print(
             f"Profile item not found: {profile_id}",
