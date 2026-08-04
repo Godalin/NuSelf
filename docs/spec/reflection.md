@@ -63,7 +63,7 @@ reflect()
   └─ ReflectionRepository.save()   ( ReflectionEntry persisted )
        ├─ TraceRecorder.record_reflection_created()  ← kind="reflection"
        └─ InboxService.add(reference)
-            └─ auto_notify? → DeliveryStore.request(item)
+            └─ auto_notify? → DeliveryService.request(item)
 ```
 
 ## Trace Recording
