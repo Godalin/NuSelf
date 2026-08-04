@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from nuself.conversation import ConversationState, ConversationStore
+from nuself.conversation import ConversationService, ConversationState
 from nuself.cli.application import cli_application
 from nuself.cli.daemon_lifecycle import (
     start_daemon_observed,
@@ -204,7 +204,7 @@ class EntrypointController:
     def _prepare_open_conversation(
         self,
         args: argparse.Namespace,
-        store: ConversationStore,
+        store: ConversationService,
     ) -> _ConversationOpenTarget | None:
         conversation_id: str | None = args.conversation_id
         message: str | None = args.message

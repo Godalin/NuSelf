@@ -12,7 +12,11 @@ from nuself.reason.composition import ReasonResources, compose_reason_resources
 from nuself.application.data_admin import DataAdminService
 from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config.settings import ConfigSystem, RuntimePaths, SystemConfig
-from nuself.conversation import ConversationHistoryService, ConversationStore
+from nuself.conversation import (
+    ConversationHistoryService,
+    ConversationService,
+    ConversationStore,
+)
 from nuself.delivery.store import DeliveryStore
 from nuself.inbox.service import InboxService
 from nuself.memory.service import MemoryService
@@ -35,7 +39,7 @@ class ApplicationGraph:
 
     paths: RuntimePaths
     config: SystemConfig
-    conversations: ConversationStore
+    conversations: ConversationService
     conversation_history: ConversationHistoryService
     memory: MemoryRepositories
     memory_service: MemoryService
@@ -57,7 +61,8 @@ def compose_application(
 ) -> ApplicationGraph:
     """Build the application graph from already-owned authority resources."""
 
-    conversations = ConversationStore(paths, backend=backend)
+    conversation_store = ConversationStore(paths, backend=backend)
+    conversations = ConversationService(conversation_store)
     memory = compose_memory_repositories(paths, backend)
     sources = compose_source_service(paths, backend)
     trace = compose_trace_services(paths, backend)
@@ -100,7 +105,7 @@ def compose_application(
         trace=trace,
         data=DataAdminService(
             backend,
-            conversations=conversations,
+            conversations=conversation_store,
             memories=memory.entries,
         ),
     )

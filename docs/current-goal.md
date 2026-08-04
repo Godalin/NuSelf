@@ -37,6 +37,10 @@ Persona management, Chat tools, and Reason workflows now consume one
 authority-scoped `PersonaService`; the prompt repository is constructed only
 inside application or thread-local Persona composition.
 
+Conversation execution, history, and management now consume one
+authority-scoped `ConversationService`; only validated data administration
+retains the underlying `ConversationStore`.
+
 ## Exclusions
 
 - Do not add forwarding methods that merely mirror every repository operation;

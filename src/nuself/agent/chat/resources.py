@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from nuself.agent.tools.resources import ToolResources
 from nuself.config.settings import ReflectionSettings
-from nuself.conversation import ConversationStore
+from nuself.conversation import ConversationService
 from nuself.persona.definition import PersonaDefinition
 from nuself.trace.service import TraceRecorder
 
@@ -16,7 +16,7 @@ class ConversationResources:
 
     tools: ToolResources
     trace_recorder: TraceRecorder
-    conversation_store: ConversationStore
+    conversation_store: ConversationService
     personas: tuple[PersonaDefinition, ...]
     reflection_settings: ReflectionSettings
     language_preference: str = "en"

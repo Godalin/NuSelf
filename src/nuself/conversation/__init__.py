@@ -14,6 +14,7 @@ from nuself.conversation.model import (
     ConversationTurnIncompleteError,
 )
 from nuself.conversation.store import ConversationStore
+from nuself.conversation.service import ConversationService
 
 __all__ = [
     "CompletedTurn",
@@ -24,6 +25,7 @@ __all__ = [
     "ConversationRole",
     "ConversationState",
     "ConversationStore",
+    "ConversationService",
     "ConversationTurnConflictError",
     "ConversationTurnIncompleteError",
 ]

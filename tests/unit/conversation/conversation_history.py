@@ -6,6 +6,7 @@ from conversation_fixtures import ConversationStore
 from nuself.conversation import (
     ConversationHistoryService,
     ConversationMessage,
+    ConversationService,
     ConversationState,
 )
 
@@ -31,7 +32,7 @@ def test_history_api_returns_bounded_immutable_views(tmp_path: Path) -> None:
         )
     )
 
-    excerpts = ConversationHistoryService(store).recent(
+    excerpts = ConversationHistoryService(ConversationService(store)).recent(
         limit=1,
         messages_per_conversation=1,
     )

@@ -12,6 +12,7 @@ from nuself.agent.chat.engine import (
 )
 from nuself.agent.chat.types import ChatAgentSettings
 from conversation_fixtures import ConversationStore
+from nuself.conversation import ConversationService
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
@@ -138,7 +139,11 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 application.memory.entries,
                 project_root=project_root,
             ),
-            conversation_store=conversation_store or application.conversations,
+            conversation_store=(
+                ConversationService(conversation_store)
+                if conversation_store is not None
+                else application.conversations
+            ),
             reflection_settings=application.config.reflection,
             language_preference=application.config.chat.language_preference,
         )

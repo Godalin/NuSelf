@@ -323,9 +323,12 @@ from the supplied `ApplicationGraph`. Post-turn curation follows the same rule.
 Conversation state and persistence are isolated domain infrastructure under
 `nuself.conversation`, not shared knowledge infrastructure. `ConversationStore`
 receives resolved runtime paths and the selected backend as required resources
-and is constructed exactly once in `ApplicationGraph`; only the conversation
-API implementation, chat, and explicit conversation-management surfaces may
-borrow it. Memory, reflection, reason, persona, Inbox, Delivery, and trace code
+and is constructed exactly once during application composition. The
+authority-scoped `ConversationService` is the boundary for Chat's serialized
+turn execution and explicit conversation-management surfaces; the read-only
+history service also consumes it. Only validated data administration may
+retain the underlying store. Memory, reflection, reason, persona, Inbox,
+Delivery, and trace code
 must not import or query conversation state or storage. A domain that needs
 chat evidence uses the read-only conversation history API and receives bounded,
 immutable DTOs; this explicit API dependency is allowed.

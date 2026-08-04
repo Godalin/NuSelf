@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nuself.conversation.model import ConversationRole
-from nuself.conversation.store import ConversationStore
+from nuself.conversation.service import ConversationService
 
 
 @dataclass(frozen=True)
@@ -27,8 +27,8 @@ class ConversationHistoryExcerpt:
 class ConversationHistoryService:
     """Read-only API for domains that explicitly need chat evidence."""
 
-    def __init__(self, store: ConversationStore) -> None:
-        self._store = store
+    def __init__(self, service: ConversationService) -> None:
+        self._service = service
 
     def recent(
         self,
@@ -39,8 +39,8 @@ class ConversationHistoryService:
         if limit < 1 or messages_per_conversation < 1:
             raise ValueError("conversation history limits must be positive")
         excerpts: list[ConversationHistoryExcerpt] = []
-        for conversation_id in reversed(self._store.list()[-limit:]):
-            state = self._store.load(conversation_id)
+        for conversation_id in reversed(self._service.list()[-limit:]):
+            state = self._service.load(conversation_id)
             excerpts.append(
                 ConversationHistoryExcerpt(
                     id=conversation_id,

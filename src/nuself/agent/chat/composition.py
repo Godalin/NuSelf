@@ -12,7 +12,7 @@ from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import ConversationResponseService
 from nuself.agent.text import LangChainTextAgent
 from nuself.config.settings import RuntimePaths, SystemConfig
-from nuself.conversation import ConversationStore
+from nuself.conversation import ConversationService
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.persona.tools import build_persona_tools
@@ -37,7 +37,7 @@ __all__ = ["ChatResult", "compose_conversation_runtime"]
 def compose_conversation_runtime(
     paths: RuntimePaths,
     config: SystemConfig,
-    conversations: ConversationStore,
+    conversations: ConversationService,
     memory_service: MemoryService,
     source_service: SourceService,
     memory_entries: MemoryEntryRepository,
