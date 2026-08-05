@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+import threading
 
 import pytest
 
@@ -22,6 +23,12 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.log.record import LogEvent
+from nuself.runtime.frontend import (
+    ApprovalDecision,
+    ApprovalGrant,
+    ApprovalRequest,
+    current_approval_grant,
+)
 
 
 def _read_no_activity(
@@ -120,6 +127,85 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
     assert retry.source == "client"
     assert retry.request_id is None
     assert retry.job_id is None
+
+
+def test_turn_coordinator_owns_unbounded_approval_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+    owner_thread = threading.current_thread()
+    send_threads: list[threading.Thread] = []
+    grants: list[ApprovalGrant | None] = []
+    prompt_calls = 0
+
+    def send(
+        _message: str,
+        _conversation_id: str,
+        _turn_id: str | None,
+    ) -> InteractiveChatResult:
+        send_threads.append(threading.current_thread())
+        grant = current_approval_grant()
+        grants.append(grant)
+        if grant is None:
+            return InteractiveChatResult(
+                code=0,
+                approval_request=request,
+            )
+        assert grant.request == request
+        if len(grants) == 2:
+            return InteractiveChatResult(
+                code=1,
+                retryable=True,
+                error="temporary transport failure",
+            )
+        return InteractiveChatResult(code=0, reply="saved")
+
+    class ApproveOnOwnerThread:
+        def request(self, observed: ApprovalRequest) -> ApprovalDecision:
+            nonlocal prompt_calls
+            prompt_calls += 1
+            assert threading.current_thread() is owner_thread
+            assert observed == request
+            return ApprovalDecision(
+                True,
+                approver="tester",
+                input_kind="affirmative",
+            )
+
+    monkeypatch.setattr(turns, "TerminalApprovalPort", ApproveOnOwnerThread)
+    replies: list[str] = []
+
+    result = send_interactive_chat_turn(
+        send,
+        tmp_path,
+        "default",
+        "remember this",
+        session,
+        daemon_activity=False,
+        max_attempts=2,
+        poll_interval_seconds=0,
+        read_activity_events=_read_no_activity,
+        print_activity_events=_print_no_activity,
+        print_reply=replies.append,
+    )
+
+    assert result == 0
+    assert replies == ["saved"]
+    assert grants[0] is None
+    assert grants[1] is not None
+    assert grants[2] == grants[1]
+    assert prompt_calls == 1
+    assert all(thread is not owner_thread for thread in send_threads)
 
 
 def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(

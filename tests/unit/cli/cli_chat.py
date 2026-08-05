@@ -30,6 +30,7 @@ from nuself.runtime.frontend import (
     ApprovalDecision,
     ApprovalGrant,
     ApprovalRequest,
+    use_approval_grant,
 )
 from nuself.config.scope import resolve_scope
 
@@ -96,27 +97,29 @@ def test_daemon_chat_prompts_and_replays_exact_approval(
             epistemic_status="grounded",
         )
 
-    class Decide:
-        def request(self, observed: ApprovalRequest) -> ApprovalDecision:
-            assert observed == request
-            return (
-                ApprovalDecision(
-                    True,
-                    approver="tester",
-                    input_kind="affirmative",
-                )
-                if approved
-                else ApprovalDecision(False, input_kind="declined")
-            )
-
     monkeypatch.setattr(chat.client, "chat", respond)
-    monkeypatch.setattr(chat, "TerminalApprovalPort", Decide)
 
-    result = chat.send_daemon_chat_interactive(
+    challenge = chat.send_daemon_chat_interactive(
         "remember this",
         tmp_path,
         turn_id="turn-approval",
     )
+    assert challenge.approval_request == request
+    decision = (
+        ApprovalDecision(
+            True,
+            approver="tester",
+            input_kind="affirmative",
+        )
+        if approved
+        else ApprovalDecision(False, input_kind="declined")
+    )
+    with use_approval_grant(ApprovalGrant(request, decision)):
+        result = chat.send_daemon_chat_interactive(
+            "remember this",
+            tmp_path,
+            turn_id="turn-approval",
+        )
 
     assert result.reply == ("saved" if approved else "not saved")
     assert approvals[0] is None

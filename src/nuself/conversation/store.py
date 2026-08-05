@@ -50,6 +50,7 @@ class ConversationStore:
         *,
         turn_id: str | None = None,
         user_message: str | None = None,
+        resume_pending_turn: bool = False,
         commit_observer: Callable[[int], None] | None = None,
     ) -> UpdateResult:
         """Serialize one turn without holding SQLite across model execution."""
@@ -75,6 +76,7 @@ class ConversationStore:
                     state,
                     turn_id,
                     user_message,
+                    resume_pending=resume_pending_turn,
                 )
                 with self._backend.transaction():
                     self._save_unlocked(state)
@@ -260,6 +262,8 @@ def _begin_turn_attempt(
     state: ConversationState,
     turn_id: str,
     message: str,
+    *,
+    resume_pending: bool,
 ) -> ConversationState:
     attempted = PendingTurn.from_message(turn_id, message)
     for pending in state.pending_turns:
@@ -269,6 +273,8 @@ def _begin_turn_attempt(
             raise ConversationTurnConflictError(
                 f"turn ID {turn_id!r} is already bound to different input"
             )
+        if resume_pending:
+            return state
         raise ConversationTurnIncompleteError(
             f"turn ID {turn_id!r} has an unfinished prior execution"
         )

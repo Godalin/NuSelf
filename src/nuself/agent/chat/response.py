@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Protocol, cast
+from uuid import uuid4
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
@@ -15,6 +16,8 @@ from langchain_core.messages import (
     SystemMessage,
 )
 from langchain_core.tools import BaseTool
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command, GraphOutput
 
 from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.chat.types import (
@@ -38,6 +41,12 @@ from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     redacted_llm_diagnostic,
+)
+from nuself.runtime.context import current_runtime_context
+from nuself.runtime.frontend import (
+    ApprovalRequest,
+    ApprovalRequired,
+    current_approval_grant,
 )
 class ConversationResponseService(Protocol):
     """Typed response capability consumed by the conversation pipeline."""
@@ -71,6 +80,7 @@ class ConversationResponseSynthesizer:
         self._tools = tuple(tools)
         self._log_tool_outcome = log_tool_outcome
         self._report_tool_log_failure = report_tool_log_failure
+        self._pending: dict[str, _LangChainChatSupervisor] = {}
 
     def complete(
         self,
@@ -97,6 +107,25 @@ class ConversationResponseSynthesizer:
         self,
         prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
+        checkpoint_key = _checkpoint_key()
+        grant = current_approval_grant()
+        pending = self._pending.get(checkpoint_key)
+        if pending is not None:
+            if grant is None:
+                raise ApprovalRequired(pending.require_approval_request())
+            if pending.approval_request != grant.request:
+                raise ApprovalRequired(pending.require_approval_request())
+            try:
+                completed = pending.complete(
+                    prompt,
+                )
+            except ApprovalRequired:
+                raise
+            else:
+                self._pending.pop(checkpoint_key, None)
+                return completed
+        if grant is not None:
+            raise RuntimeError("chat approval checkpoint is unavailable")
         retry_suppressed = False
         failed_endpoint = self._langchain_models[0]
 
@@ -113,6 +142,9 @@ class ConversationResponseSynthesizer:
             )
             try:
                 return supervisor.complete(prompt)
+            except ApprovalRequired:
+                self._pending[checkpoint_key] = supervisor
+                raise
             except Exception:
                 if supervisor.has_mutating_tool_outcomes:
                     retry_suppressed = True
@@ -126,17 +158,21 @@ class ConversationResponseSynthesizer:
                 component="chat",
                 attempts_per_endpoint=2,
                 retry_if=lambda exc: (
-                    not retry_suppressed
+                    not isinstance(exc, ApprovalRequired)
+                    and not retry_suppressed
                     and is_recoverable_agent_failure(exc)
                 ),
                 failover_if=lambda exc: (
-                    not retry_suppressed
+                    not isinstance(exc, ApprovalRequired)
+                    and not retry_suppressed
                     and is_recoverable_agent_failure(exc)
                     and is_endpoint_availability_error(exc)
                 ),
                 on_retry=self._log_retry,
                 retry_delay_seconds=0.25,
             )
+        except ApprovalRequired:
+            raise
         except Exception as exc:
             if retry_suppressed:
                 self._log_retry_suppressed(
@@ -195,6 +231,19 @@ class _LangChainChatSupervisor:
         self._log_tool_outcome = log_tool_outcome
         self._report_tool_log_failure = report_tool_log_failure
         self._tool_outcomes: list[ToolOutcome] = []
+        self._checkpointer = InMemorySaver()
+        self._agent: Any | None = None
+        self._approval_request: ApprovalRequest | None = None
+
+    @property
+    def approval_request(self) -> ApprovalRequest | None:
+        return self._approval_request
+
+    def require_approval_request(self) -> ApprovalRequest:
+        request = self._approval_request
+        if request is None:
+            raise RuntimeError("chat checkpoint has no approval request")
+        return request
 
     @property
     def has_mutating_tool_outcomes(self) -> bool:
@@ -212,25 +261,59 @@ class _LangChainChatSupervisor:
         self,
         prompt: list[BaseMessage],
     ) -> ChatStructuredOutput:
-        system_prompt, messages = _split_prompt(prompt)
-        middleware = ToolCaptureMiddleware(
-            log_callback=self._log_tool_outcome,
-            log_error_callback=self._report_tool_log_failure,
-            captured=self._tool_outcomes,
-            cache={},
+        checkpoint_key = _checkpoint_key()
+        approval = current_approval_grant()
+        if self._agent is None:
+            system_prompt, messages = _split_prompt(prompt)
+            middleware = ToolCaptureMiddleware(
+                log_callback=self._log_tool_outcome,
+                log_error_callback=self._report_tool_log_failure,
+                captured=self._tool_outcomes,
+                cache={},
+            )
+            create_agent = cast(Any, _create_agent)
+            self._agent = create_agent(
+                model=self._endpoint.model,
+                tools=list(self._tools),
+                system_prompt=system_prompt,
+                response_format=_ToolStrategy(
+                    schema=ChatStructuredOutput
+                ),
+                middleware=[middleware],
+                checkpointer=self._checkpointer,
+            )
+            graph_input: object = {"messages": messages}
+        else:
+            if approval is None:
+                raise RuntimeError("chat checkpoint resume requires approval")
+            graph_input = Command(resume=approval)
+        agent = cast(Any, self._agent)
+        raw = agent.invoke(
+            graph_input,
+            {"configurable": {"thread_id": checkpoint_key}},
+            version="v2",
         )
-        create_agent = cast(Any, _create_agent)
-        agent = create_agent(
-            model=self._endpoint.model,
-            tools=list(self._tools),
-            system_prompt=system_prompt,
-            response_format=_ToolStrategy(
-                schema=ChatStructuredOutput
-            ),
-            middleware=[middleware],
-        )
-        result = agent.invoke({"messages": messages})
-        return _structured_output_from_state(result)
+        if not isinstance(raw, GraphOutput):
+            raise TypeError("chat agent returned an invalid graph output")
+        output = cast(GraphOutput[object], raw)
+        if output.interrupts:
+            if len(output.interrupts) != 1:
+                raise RuntimeError("chat turn produced multiple approval interrupts")
+            request = output.interrupts[0].value
+            if not isinstance(request, ApprovalRequest):
+                raise TypeError("chat approval interrupt has an invalid payload")
+            self._approval_request = request
+            raise ApprovalRequired(request)
+        self._approval_request = None
+        self._checkpointer.delete_thread(checkpoint_key)
+        return _structured_output_from_state(output.value)
+
+
+def _checkpoint_key() -> str:
+    context = current_runtime_context()
+    if context.turn_id is None:
+        return f"chat:ephemeral:{uuid4().hex}"
+    return f"chat:{context.conversation_id}:{context.turn_id}"
 
 
 def _endpoint_metadata(

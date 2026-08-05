@@ -38,3 +38,13 @@ with the user's exact decision without another model generation.
   rejection Tool result; neither path regenerates Tool arguments.
 - One turn and at most one approved mutation are committed.
 - Full pytest, Pyright, and `git diff --check` pass.
+
+## Progress
+
+- Replaced whole-model replay with LangGraph `interrupt()` plus an in-memory
+  per-turn checkpoint resumed through `Command(resume=...)`.
+- Moved the approval prompt to the REPL owner thread with no deadline and kept
+  the exact grant across transport retries.
+- Added approve/decline, unchanged Tool arguments, single mutation, uncommitted
+  pause, owner-thread prompt, and retry-reuse regression coverage.
+- Related 355-test suite and Pyright pass; full-suite verification remains.

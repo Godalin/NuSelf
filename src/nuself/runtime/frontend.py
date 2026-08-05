@@ -8,6 +8,8 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from langgraph.types import interrupt
+
 
 @dataclass(frozen=True)
 class ApprovalRequest:
@@ -94,14 +96,31 @@ def use_approval_grant(
         _CURRENT_APPROVAL_GRANT.reset(token)
 
 
+def current_approval_grant() -> ApprovalGrant | None:
+    """Return the decision bound to the active request, if any."""
+
+    return _CURRENT_APPROVAL_GRANT.get()
+
+
 class RequestApprovalPort:
-    """Resolve approval from the current cross-process request context."""
+    """Interrupt and resume the current graph at the exact Tool call."""
 
     def request(self, request: ApprovalRequest) -> ApprovalDecision:
         grant = _CURRENT_APPROVAL_GRANT.get()
-        if grant is None or grant.request != request:
+        if grant is not None:
+            if grant.request != request:
+                raise ApprovalRequired(request)
+            return grant.decision
+        try:
+            resumed = interrupt(request)
+        except RuntimeError as exc:
+            # A non-graph caller has no checkpoint capable of resuming.
+            raise ApprovalRequired(request) from exc
+        if not isinstance(resumed, ApprovalGrant):
+            raise TypeError("approval checkpoint resumed without a typed grant")
+        if resumed.request != request:
             raise ApprovalRequired(request)
-        return grant.decision
+        return resumed.decision
 
 
 class RejectUnavailableApprovalPort:

@@ -56,6 +56,13 @@ from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.runtime.frontend import (
+    ApprovalDecision,
+    ApprovalGrant,
+    ApprovalRequest,
+    ApprovalRequired,
+    use_approval_grant,
+)
 from nuself.tui.approval import TerminalApprovalPort
 from nuself.agent.tools.resources import ToolResources
 
@@ -786,6 +793,103 @@ def test_chat_agent_preserves_conversation_state_when_graph_driver_fails(tmp_pat
     assert "conversation graph node 'respond' failed" in lifecycle[-1].error
     assert lifecycle[-1].conversation_id == "default"
     assert lifecycle[-1].source == "chat_runtime"
+
+
+def test_chat_agent_propagates_approval_pause_without_failure_or_commit(
+    tmp_path: Path,
+) -> None:
+    request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+
+    class PausingResponseService(FakeResponseService):
+        def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
+            self.calls.append(prompt)
+            raise ApprovalRequired(request)
+
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(ConversationState.empty("default"))
+    agent = ConversationGraphRuntime(
+        tmp_path,
+        response_service=PausingResponseService(),
+        conversation_store=conversation_store,
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
+    )
+
+    with pytest.raises(ApprovalRequired) as paused:
+        agent.respond(
+            "remember this",
+            turn_id="turn-approval",
+        )
+
+    assert paused.value.request == request
+    state = conversation_store.load("default")
+    assert state.messages == []
+    assert [pending.turn_id for pending in state.pending_turns] == [
+        "turn-approval"
+    ]
+    lifecycle = [
+        event.event
+        for event in read_log_events(project_root=tmp_path, component="chat")
+        if event.event.startswith("turn.")
+    ]
+    assert lifecycle == ["turn.started"]
+
+
+def test_chat_agent_resumes_pending_approval_turn_and_commits_once(
+    tmp_path: Path,
+) -> None:
+    request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+
+    class ResumeResponseService(FakeResponseService):
+        def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
+            self.calls.append(prompt)
+            if len(self.calls) == 1:
+                raise ApprovalRequired(request)
+            return ChatStructuredOutput(answer="saved")
+
+    response = ResumeResponseService()
+    runtime = ConversationGraphRuntime(
+        tmp_path,
+        response_service=response,
+    )
+
+    with pytest.raises(ApprovalRequired):
+        runtime.respond("remember this", turn_id="turn-approval")
+    grant = ApprovalGrant(
+        request,
+        ApprovalDecision(
+            True,
+            approver="tester",
+            input_kind="affirmative",
+        ),
+    )
+    with use_approval_grant(grant):
+        result = runtime.respond(
+            "remember this",
+            turn_id="turn-approval",
+        )
+
+    assert result.answer == "saved"
+    assert len(response.calls) == 2
+    state = ConversationStore(tmp_path).load("default")
+    assert [message.content for message in state.messages] == [
+        "remember this",
+        "saved",
+    ]
+    assert state.pending_turns == ()
 
 
 def test_chat_completed_event_is_published_after_conversation_persistence(

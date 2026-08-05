@@ -9,6 +9,7 @@ from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
 )
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 
 from nuself.agent.middleware import ToolOutcome
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
@@ -26,10 +27,147 @@ from nuself.agent.endpoint import (
     LLMSettings,
     LangChainLLMEndpoint,
 )
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import (
+    component,
+    mutating,
+    requires_confirmation,
+    tool,
+)
+from nuself.runtime.context import runtime_context
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
+from nuself.runtime.frontend import (
+    ApprovalDecision,
+    ApprovalGrant,
+    ApprovalRequired,
+    RequestApprovalPort,
+    use_approval_grant,
+)
 
 
 def _ignore_tool_outcome(_outcome: ToolOutcome) -> None:
     return None
+
+
+class _ToolCallingFakeChatModel(GenericFakeChatModel):
+    def bind_tools(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return self
+
+
+@pytest.mark.parametrize("approved", [True, False])
+def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
+    approved: bool,
+) -> None:
+    mutations: list[str] = []
+    events = EventPublisher()
+    captured: list[RuntimeEnvelope] = []
+    events.attach_projection(captured.append)
+
+    @tool(name="memory_create", description="Create one memory.")
+    @component("memory")
+    @mutating
+    @requires_confirmation(
+        action="create",
+        resource="memory",
+        summary=lambda _args, kwargs: f"Create {kwargs['title']}",
+    )
+    def create_memory(title: str) -> str:
+        mutations.append(title)
+        return f"created {title}"
+
+    framework_tool = materialize_tool(
+        create_memory,
+        executor=FeatureExecutor(
+            approvals=RequestApprovalPort(),
+            events=events,
+        ),
+    )
+    model = _ToolCallingFakeChatModel(
+        messages=iter(
+            [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "memory_create",
+                            "args": {"title": "exact"},
+                            "id": "memory-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "ChatStructuredOutput",
+                            "args": {
+                                "answer": "done",
+                                "evidence_references": [],
+                                "confidence": 1.0,
+                                "epistemic_status": "grounded",
+                            },
+                            "id": "response-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+            ]
+        )
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://example.invalid",
+            api_key="test",
+            model="test-model",
+        ),
+        model=model,
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=None,
+        langchain_models=(endpoint,),
+        tools=(framework_tool,),
+        log_tool_outcome=_ignore_tool_outcome,
+        report_tool_log_failure=None,
+    )
+    prompt: list[BaseMessage] = [HumanMessage(content="remember this")]
+
+    with runtime_context(
+        conversation_id="default",
+        turn_id="turn-checkpoint",
+    ):
+        with pytest.raises(ApprovalRequired) as paused:
+            synthesizer.complete(prompt)
+        request = paused.value.request
+        decision = (
+            ApprovalDecision(
+                True,
+                approver="tester",
+                input_kind="affirmative",
+            )
+            if approved
+            else ApprovalDecision(False, input_kind="declined")
+        )
+        with use_approval_grant(ApprovalGrant(request, decision)):
+            result = synthesizer.complete(prompt)
+
+    assert result.answer == "done"
+    assert mutations == (["exact"] if approved else [])
+    payloads = [
+        RuntimeLogEventPayload.from_mapping(event.payload)
+        for event in captured
+    ]
+    assert [
+        payload.metadata["frontend_event"]
+        for payload in payloads
+        if payload.metadata is not None
+        and "frontend_event" in payload.metadata
+    ] == ["approval_requested", "approval_decided"]
 
 
 def test_structured_output_state_is_authoritative() -> None:

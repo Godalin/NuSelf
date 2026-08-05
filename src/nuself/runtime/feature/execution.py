@@ -16,6 +16,7 @@ from nuself.runtime.frontend import (
     ApprovalRequired,
     ApprovalRequest,
     RejectUnavailableApprovalPort,
+    current_approval_grant,
 )
 
 @dataclass(frozen=True)
@@ -134,17 +135,19 @@ class FeatureExecutor:
             risk=policy.risk,
             summary=summary,
         )
-        self._publish_secondary(
-            "approval_requested",
-            component,
-            operation,
-            {
-                "action": policy.action,
-                "resource": policy.resource,
-                "risk": policy.risk,
-                "summary": summary,
-            },
-        )
+        grant = current_approval_grant()
+        if grant is None or grant.request != request:
+            self._publish_secondary(
+                "approval_requested",
+                component,
+                operation,
+                {
+                    "action": policy.action,
+                    "resource": policy.resource,
+                    "risk": policy.risk,
+                    "summary": summary,
+                },
+            )
         decision = self._approvals.request(request)
         self._publish_secondary(
             "approval_decided",

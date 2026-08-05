@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
+
+from nuself.runtime.frontend import ApprovalRequest
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class InteractiveChatResult:
     failure_phase: str | None = None
     request_id: str | None = None
     request_may_have_completed: bool = False
+    approval_request: ApprovalRequest | None = None
     after_reply: Callable[[], None] | None = field(
         default=None,
         compare=False,

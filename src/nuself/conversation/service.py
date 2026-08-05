@@ -30,6 +30,7 @@ class ConversationService:
         *,
         turn_id: str | None = None,
         user_message: str | None = None,
+        resume_pending_turn: bool = False,
         commit_observer: Callable[[int], None] | None = None,
     ) -> UpdateResult:
         return self._store.update(
@@ -37,6 +38,7 @@ class ConversationService:
             update,
             turn_id=turn_id,
             user_message=user_message,
+            resume_pending_turn=resume_pending_turn,
             commit_observer=commit_observer,
         )
 

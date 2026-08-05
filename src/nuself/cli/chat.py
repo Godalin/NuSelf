@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from uuid import uuid4
 
 from nuself.agent.chat.composition import compose_conversation_runtime
 from nuself.agent.chat.engine import ConversationGraphRuntime
@@ -24,7 +25,11 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
 from nuself.tui.approval import TerminalApprovalPort
-from nuself.runtime.frontend import ApprovalGrant
+from nuself.runtime.frontend import (
+    ApprovalGrant,
+    current_approval_grant,
+    use_approval_grant,
+)
 
 type ReplyPrinter = Callable[[str], None]
 
@@ -40,11 +45,23 @@ def send_daemon_chat(
 ) -> int:
     """Send one daemon-backed message and present its one-shot result."""
 
-    result = send_daemon_chat_interactive(
-        message,
-        project_root,
-        conversation_id,
-    )
+    turn_id = f"turn-{uuid4().hex}"
+    approval: ApprovalGrant | None = None
+    while True:
+        with use_approval_grant(approval):
+            result = send_daemon_chat_interactive(
+                message,
+                project_root,
+                conversation_id,
+                turn_id=turn_id,
+            )
+        request = result.approval_request
+        if request is None:
+            break
+        approval = ApprovalGrant(
+            request,
+            TerminalApprovalPort().request(request),
+        )
     if result.reply is not None:
         print_reply(result.reply)
     if result.error is not None:
@@ -67,27 +84,17 @@ def send_daemon_chat_interactive(
         source="client",
     ):
         try:
-            approval: ApprovalGrant | None = None
-            for _attempt in range(4):
-                response = client.chat(
-                    message,
-                    conversation_id=conversation_id,
-                    turn_id=turn_id,
-                    project_root=project_root,
-                    timeout=(
-                        cli_application()
-                        .config.chat.request_timeout_seconds
-                    ),
-                    approval=approval,
-                )
-                if not isinstance(response, ChatApprovalRequiredPayload):
-                    break
-                decision = TerminalApprovalPort().request(response.request)
-                approval = ApprovalGrant(response.request, decision)
-            else:
-                raise RuntimeError(
-                    "daemon chat approval request did not stabilize"
-                )
+            response = client.chat(
+                message,
+                conversation_id=conversation_id,
+                turn_id=turn_id,
+                project_root=project_root,
+                timeout=(
+                    cli_application()
+                    .config.chat.request_timeout_seconds
+                ),
+                approval=current_approval_grant(),
+            )
         except client.DaemonConnectionError as exc:
             cancellation = current_cancellation()
             if cancellation is not None and cancellation.cancelled:
@@ -123,6 +130,11 @@ def send_daemon_chat_interactive(
             return InteractiveChatResult(
                 code=CliExitCode.FAILURE,
                 error=error,
+            )
+        if isinstance(response, ChatApprovalRequiredPayload):
+            return InteractiveChatResult(
+                code=CliExitCode.SUCCESS,
+                approval_request=response.request,
             )
         with runtime_context(conversation_id=response.conversation_id):
             CHAT_AUDIT.write(
