@@ -3,6 +3,7 @@ from typing import cast
 
 import pytest
 
+from nuself.agent.chat.types import ChatResult
 from nuself.daemon import request_handlers
 from nuself.daemon.protocol import (
     REQUEST_TYPES,
@@ -26,6 +27,15 @@ from nuself.runtime.handlers import (
     HandlerRegistryCoverageError,
     UnknownHandlerError,
 )
+from nuself.runtime.frontend import (
+    ApprovalGrant,
+    ApprovalRequest,
+    ApprovalRequired,
+)
+from nuself.daemon.payloads import (
+    ChatApprovalRequiredPayload,
+    decode_chat_payload,
+)
 
 
 class RecordingActivityBroker:
@@ -40,6 +50,46 @@ class MiddlewareState:
     def __init__(self, authority_root: Path) -> None:
         self.authority_root = authority_root
         self.activity_broker = RecordingActivityBroker()
+
+
+def test_chat_handler_returns_typed_approval_challenge(tmp_path: Path) -> None:
+    approval_request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+
+    class ApprovalState(MiddlewareState):
+        def run_chat(
+            self,
+            message: str,
+            *,
+            conversation_id: str,
+            turn_id: str | None,
+            approval: ApprovalGrant | None,
+        ) -> ChatResult:
+            del message, conversation_id, turn_id, approval
+            raise ApprovalRequired(approval_request)
+
+    response = handle_request(
+        DaemonRequest(
+            type="chat",
+            payload={
+                "message": "remember this",
+                "conversation_id": "default",
+                "turn_id": "turn-1",
+            },
+        ),
+        cast(DaemonRequestState, ApprovalState(tmp_path)),
+    )
+
+    assert response.status == "ok"
+    payload = decode_chat_payload(response.payload)
+    assert isinstance(payload, ChatApprovalRequiredPayload)
+    assert payload.request == approval_request
 
 
 def test_daemon_request_registry_uses_shared_catalog_coverage(

@@ -13,6 +13,7 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
 from nuself.runtime.messages import encode_json_value, freeze_json_value
+from nuself.runtime.frontend import ApprovalRequired
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.warning import (
     TerminalWarningDefinition,
@@ -220,6 +221,8 @@ class ToolCaptureMiddleware(AgentMiddleware):
 
         try:
             result = handler(request)
+        except ApprovalRequired:
+            raise
         except Exception as exc:
             self._capture_and_log(
                 name,

@@ -28,7 +28,11 @@ from nuself.runtime.feature.policy import (
 )
 from nuself.runtime.frontend import (
     ApprovalDecision,
+    ApprovalGrant,
+    ApprovalRequired,
     ApprovalRequest,
+    RequestApprovalPort,
+    use_approval_grant,
 )
 from nuself.log.reader import read_log_events
 from nuself.log.store import runtime_event_log_sink
@@ -58,6 +62,41 @@ class Decline:
     def request(self, request: ApprovalRequest) -> ApprovalDecision:
         del request
         return ApprovalDecision(False, input_kind="declined")
+
+
+def test_request_approval_port_challenges_and_matches_exact_grant() -> None:
+    request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+    port = RequestApprovalPort()
+
+    with pytest.raises(ApprovalRequired) as missing:
+        port.request(request)
+    assert missing.value.request == request
+
+    decision = ApprovalDecision(
+        True,
+        approver="tester",
+        input_kind="affirmative",
+    )
+    with use_approval_grant(ApprovalGrant(request, decision)):
+        assert port.request(request) == decision
+        changed = ApprovalRequest(
+            component=request.component,
+            operation=request.operation,
+            action=request.action,
+            resource=request.resource,
+            risk=request.risk,
+            summary="Changed memory",
+        )
+        with pytest.raises(ApprovalRequired) as mismatched:
+            port.request(changed)
+        assert mismatched.value.request == changed
 
 
 def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
@@ -224,6 +263,20 @@ def test_declined_confirmation_does_not_call_feature() -> None:
         FeatureExecutor(approvals=Decline()).invoke(archive)
 
     assert called is False
+
+
+def test_missing_approval_frontend_is_not_reported_as_user_decline() -> None:
+    @tool
+    @component("memory")
+    @mutating
+    @requires_confirmation(action="create", resource="memory")
+    def create() -> str:
+        return "created"
+
+    with pytest.raises(ApprovalRequired) as captured:
+        FeatureExecutor().invoke(create)
+
+    assert captured.value.request.operation == "create"
 
 
 def test_materialized_tool_preserves_framework_boundary() -> None:

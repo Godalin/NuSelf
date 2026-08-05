@@ -1090,8 +1090,9 @@ def test_conversation_runtime_tools_declare_service_ownership(
         "reason": "reasoning",
         "trace": "trace",
         "selves": "selves",
-        "persona": "persona",
-    }
+            "persona": "persona",
+            "runtime": "runtime",
+        }
 
     assert tool_service_component(tools["load_skill"]) == "skill"
     for name, tool in tools.items():

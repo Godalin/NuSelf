@@ -11,13 +11,20 @@ from nuself.daemon.payloads import (
     ActivityOpenRequestPayload,
     ActivitySubscriptionPayload,
     ChatRequestPayload,
+    ChatApprovalRequiredPayload,
     ChatResponsePayload,
     DaemonIdentityPayload,
     EmptyPayload,
     SchedulerHealthPayload,
+    decode_chat_payload,
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.log.record import LogEvent
+from nuself.runtime.frontend import (
+    ApprovalDecision,
+    ApprovalGrant,
+    ApprovalRequest,
+)
 
 
 def test_chat_request_payload_validates_and_defaults() -> None:
@@ -28,6 +35,35 @@ def test_chat_request_payload_validates_and_defaults() -> None:
     )
 
     assert payload == ChatRequestPayload(message="hello")
+
+
+def test_chat_approval_payloads_round_trip_exact_request_and_decision() -> None:
+    request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create memory A",
+    )
+    grant = ApprovalGrant(
+        request,
+        ApprovalDecision(
+            True,
+            approver="tester",
+            input_kind="affirmative",
+        ),
+    )
+    chat_request = ChatRequestPayload(
+        message="remember this",
+        conversation_id="default",
+        turn_id="turn-1",
+        approval=grant,
+    )
+    challenge = ChatApprovalRequiredPayload("default", request)
+
+    assert ChatRequestPayload.from_wire(chat_request.to_wire()) == chat_request
+    assert decode_chat_payload(challenge.to_wire()) == challenge
 
 
 def test_chat_request_payload_requires_message() -> None:

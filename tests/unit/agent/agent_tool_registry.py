@@ -11,12 +11,14 @@ from memory_fixtures import (
 # pyright: reportPrivateUsage=false
 
 from pathlib import Path
+from datetime import UTC, datetime
 
 from nuself.agent.tools.memory import build_memory_tool_set
 from nuself.agent.tools.reason import build_reason_tools
 from nuself.agent.tools.reflection import build_reflection_tools
 from nuself.agent.tools.selves import build_selves_tools
 from nuself.agent.tools.trace import build_trace_tools
+from nuself.agent.tools.time import build_time_tools
 from nuself.agent.tools.workspace import build_workspace_tools_from_provider
 from nuself.application.composition import compose_application
 from nuself.config.settings import runtime_paths
@@ -114,6 +116,18 @@ def test_subsystem_tool_builders_own_their_registries(
         )
     ) == {"selves_consult"}
     assert build_selves_tools(None, executor=FeatureExecutor()) == ()
+    time_tools = build_time_tools(
+        executor=FeatureExecutor(),
+        clock=lambda: datetime(2026, 8, 5, 6, 7, tzinfo=UTC),
+    )
+    assert _names(time_tools) == {"runtime_time"}
+    assert time_tools[0].invoke({}) == (
+        "Local time: "
+        f"{datetime(2026, 8, 5, 6, 7, tzinfo=UTC).astimezone().isoformat()}\n"
+        "UTC time: 2026-08-05T06:07:00+00:00"
+    )
+    assert time_tools[0].metadata is not None
+    assert time_tools[0].metadata["confirmation_required"] is False
 
 
 def test_memory_create_requires_approval_and_reports_decline(

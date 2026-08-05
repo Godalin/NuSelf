@@ -13,6 +13,7 @@ from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.frontend import (
     ApprovalPort,
+    ApprovalRequired,
     ApprovalRequest,
     RejectUnavailableApprovalPort,
 )
@@ -155,6 +156,8 @@ class FeatureExecutor:
                 "input_kind": decision.input_kind,
             },
         )
+        if not decision.approved and decision.input_kind == "unavailable":
+            raise ApprovalRequired(request)
         if not decision.approved:
             raise FeatureConfirmationDeclined(
                 f"{operation} was not approved"

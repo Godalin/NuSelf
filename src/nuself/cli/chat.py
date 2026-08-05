@@ -17,12 +17,14 @@ from nuself.cli.output import print_ansi
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
+from nuself.daemon.payloads import ChatApprovalRequiredPayload
 from nuself.memory.audit import MEMORY_AUDIT
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
 from nuself.tui.approval import TerminalApprovalPort
+from nuself.runtime.frontend import ApprovalGrant
 
 type ReplyPrinter = Callable[[str], None]
 
@@ -65,16 +67,27 @@ def send_daemon_chat_interactive(
         source="client",
     ):
         try:
-            response = client.chat(
-                message,
-                conversation_id=conversation_id,
-                turn_id=turn_id,
-                project_root=project_root,
-                timeout=(
-                    cli_application()
-                    .config.chat.request_timeout_seconds
-                ),
-            )
+            approval: ApprovalGrant | None = None
+            for _attempt in range(4):
+                response = client.chat(
+                    message,
+                    conversation_id=conversation_id,
+                    turn_id=turn_id,
+                    project_root=project_root,
+                    timeout=(
+                        cli_application()
+                        .config.chat.request_timeout_seconds
+                    ),
+                    approval=approval,
+                )
+                if not isinstance(response, ChatApprovalRequiredPayload):
+                    break
+                decision = TerminalApprovalPort().request(response.request)
+                approval = ApprovalGrant(response.request, decision)
+            else:
+                raise RuntimeError(
+                    "daemon chat approval request did not stabilize"
+                )
         except client.DaemonConnectionError as exc:
             cancellation = current_cancellation()
             if cancellation is not None and cancellation.cancelled:

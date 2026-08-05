@@ -37,6 +37,12 @@ from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.observability import publish_observed_event
 from nuself.runtime.job.message import JobMessage
+from nuself.runtime.frontend import (
+    ApprovalGrant,
+    ApprovalRequired,
+    RequestApprovalPort,
+    use_approval_grant,
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +50,7 @@ class _ChatTaskPayload:
     message: str
     conversation_id: str
     turn_id: str | None
+    approval: ApprovalGrant | None
 
 
 class DaemonUnavailableError(RuntimeError):
@@ -103,6 +110,7 @@ class DaemonState:
             ),
             event_publisher=self.event_publisher,
             langchain_models=langchain_models,
+            approval_port=RequestApprovalPort(),
         )
 
         self.memory_curator = application.memory_workflows.curator(
@@ -212,6 +220,7 @@ class DaemonState:
         *,
         conversation_id: str,
         turn_id: str | None,
+        approval: ApprovalGrant | None = None,
     ) -> ChatResult:
         """Run chat through its conversation resource lane in a live daemon."""
 
@@ -228,11 +237,18 @@ class DaemonState:
                 "chat.turn",
                 identity,
                 f"conversation:{conversation_id}",
-                payload=_ChatTaskPayload(message, conversation_id, turn_id),
+                payload=_ChatTaskPayload(
+                    message,
+                    conversation_id,
+                    turn_id,
+                    approval,
+                ),
                 priority=10,
             )
         )
         result = completion.result()
+        if isinstance(result, ApprovalRequired):
+            raise result
         if not isinstance(result, ChatResult):
             raise TypeError("chat task returned an invalid result")
         return result
@@ -253,15 +269,22 @@ class DaemonState:
             raise TypeError("memory curator task requires an observation ID")
         self.memory_curator.run_once(observation_id)
 
-    def _run_chat_task(self, task: DaemonTask) -> ChatResult:
+    def _run_chat_task(
+        self,
+        task: DaemonTask,
+    ) -> ChatResult | ApprovalRequired:
         payload = task.payload
         if not isinstance(payload, _ChatTaskPayload):
             raise TypeError("chat task requires a typed payload")
-        result = self.conversation_runtime.respond(
-            payload.message,
-            conversation_id=payload.conversation_id,
-            turn_id=payload.turn_id,
-        )
+        try:
+            with use_approval_grant(payload.approval):
+                result = self.conversation_runtime.respond(
+                    payload.message,
+                    conversation_id=payload.conversation_id,
+                    turn_id=payload.turn_id,
+                )
+        except ApprovalRequired as exc:
+            return exc
         observation = publish_chat_observation(
             self._memory_workflows,
             turn=result.require_completed_turn(),

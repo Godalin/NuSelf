@@ -38,3 +38,11 @@ rejection, and expose current local/UTC time through one read-only Tool.
   is not reported as a user decline.
 - Chat exposes `runtime_time` with local timezone and UTC timestamps.
 - Full pytest, Pyright, and `git diff --check` pass.
+
+## Progress
+
+- Specified the typed daemon approval challenge and `runtime_time` contract.
+- Implemented exact approval-grant replay without committing or reporting the
+  paused first attempt as a failed turn.
+- Added the read-only `runtime_time` Tool and runtime Skill guidance.
+- Verified 2344 unit tests, Pyright, and `git diff --check` successfully.

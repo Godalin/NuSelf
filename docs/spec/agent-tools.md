@@ -717,7 +717,7 @@ The detailed tool catalog above should be read as grouped capability blocks, not
 
 | Family                         | Typical tools                                                                                                                                                                                     | Decorator need       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Read-only discovery            | `memory_search`, `memory_count`, `source_search`, `source_get`, `source_list`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
+| Read-only discovery            | `runtime_time`, `memory_search`, `memory_count`, `source_search`, `source_get`, `source_list`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
 | Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_create`, `memory_archive`, `memory_update_importance`                                                                                         | sometimes `approval` |
 | Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `approval`           |
 

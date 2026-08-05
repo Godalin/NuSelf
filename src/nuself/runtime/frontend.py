@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -52,6 +55,53 @@ class ApprovalPort(Protocol):
     """Replaceable interaction boundary for confirmation."""
 
     def request(self, request: ApprovalRequest) -> ApprovalDecision: ...
+
+
+@dataclass(frozen=True)
+class ApprovalGrant:
+    """One frontend decision bound to the exact request it answered."""
+
+    request: ApprovalRequest
+    decision: ApprovalDecision
+
+
+class ApprovalRequired(Exception):
+    """Execution paused because the active frontend must decide."""
+
+    def __init__(self, request: ApprovalRequest) -> None:
+        super().__init__(
+            f"frontend approval required for {request.operation}"
+        )
+        self.request = request
+
+
+_CURRENT_APPROVAL_GRANT: ContextVar[ApprovalGrant | None] = ContextVar(
+    "nuself_approval_grant",
+    default=None,
+)
+
+
+@contextmanager
+def use_approval_grant(
+    grant: ApprovalGrant | None,
+) -> Generator[None, None, None]:
+    """Install one request-scoped approval grant."""
+
+    token: Token[ApprovalGrant | None] = _CURRENT_APPROVAL_GRANT.set(grant)
+    try:
+        yield
+    finally:
+        _CURRENT_APPROVAL_GRANT.reset(token)
+
+
+class RequestApprovalPort:
+    """Resolve approval from the current cross-process request context."""
+
+    def request(self, request: ApprovalRequest) -> ApprovalDecision:
+        grant = _CURRENT_APPROVAL_GRANT.get()
+        if grant is None or grant.request != request:
+            raise ApprovalRequired(request)
+        return grant.decision
 
 
 class RejectUnavailableApprovalPort:

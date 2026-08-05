@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Daemon-backed Chat now returns typed approval challenges to the interactive
+  client instead of treating a missing daemon frontend as user rejection. The
+  client binds each decision to the exact request and safely retries the same
+  uncommitted turn. Chat also exposes read-only local and UTC current time.
 - Reflection Inbox items and their email/macOS deliveries now include the
   complete reflection body instead of only a command telling users where to
   inspect it.

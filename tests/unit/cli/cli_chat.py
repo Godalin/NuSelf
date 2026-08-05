@@ -14,7 +14,10 @@ from nuself.daemon.client import (
     DaemonApplicationError,
     DaemonConnectionError,
 )
-from nuself.daemon.payloads import ChatResponsePayload
+from nuself.daemon.payloads import (
+    ChatApprovalRequiredPayload,
+    ChatResponsePayload,
+)
 from nuself.log.reader import read_log_events
 from nuself.log.store import write_log_event
 from nuself.runtime.context import (
@@ -23,6 +26,11 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.runtime.execution import CancellationToken, use_cancellation
+from nuself.runtime.frontend import (
+    ApprovalDecision,
+    ApprovalGrant,
+    ApprovalRequest,
+)
 from nuself.config.scope import resolve_scope
 
 
@@ -54,6 +62,65 @@ def _chat_result(
             turn_id=turn_id,
         ),
     )
+
+
+@pytest.mark.parametrize("approved", [True, False])
+def test_daemon_chat_prompts_and_replays_exact_approval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    approved: bool,
+) -> None:
+    request = ApprovalRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+    approvals: list[object] = []
+
+    def respond(*args: object, **kwargs: object):
+        del args
+        approvals.append(kwargs.get("approval"))
+        if len(approvals) == 1:
+            return ChatApprovalRequiredPayload("default", request)
+        grant = kwargs.get("approval")
+        assert isinstance(grant, ApprovalGrant)
+        assert grant.request == request
+        assert grant.decision.approved is approved
+        return ChatResponsePayload(
+            answer="saved" if approved else "not saved",
+            conversation_id="default",
+            evidence_references=(),
+            epistemic_status="grounded",
+        )
+
+    class Decide:
+        def request(self, observed: ApprovalRequest) -> ApprovalDecision:
+            assert observed == request
+            return (
+                ApprovalDecision(
+                    True,
+                    approver="tester",
+                    input_kind="affirmative",
+                )
+                if approved
+                else ApprovalDecision(False, input_kind="declined")
+            )
+
+    monkeypatch.setattr(chat.client, "chat", respond)
+    monkeypatch.setattr(chat, "TerminalApprovalPort", Decide)
+
+    result = chat.send_daemon_chat_interactive(
+        "remember this",
+        tmp_path,
+        turn_id="turn-approval",
+    )
+
+    assert result.reply == ("saved" if approved else "not saved")
+    assert approvals[0] is None
+    assert approvals[1] is not None
 
 
 class _StubConversationRuntime:

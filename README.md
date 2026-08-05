@@ -30,7 +30,8 @@ locks and Unix-domain sockets.
 
 ## Features
 
-- Memory-aware one-shot and daemon-backed chat
+- Memory-aware one-shot and daemon-backed chat with interactive approval for
+  durable memory creation and read-only local/UTC time access
 - Persisted, resumable, branchable conversations
 - Durable memory with review, search, relations, and symbolic graph views
 - Independent Markdown and plain-text external knowledge library

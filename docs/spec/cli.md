@@ -648,7 +648,7 @@ must use the daemon request protocol or a durable typed job contract. One-shot
 mode cannot perform an interactive approval unless its invoked tool wrapper has
 an input channel capable of obtaining that approval.
 
-Daemon-backed Chat uses a typed two-attempt approval exchange. When an
+Daemon-backed Chat uses a typed challenge/retry approval exchange. When an
 approval-gated Tool has no decision in the current daemon request, execution
 raises an approval challenge before the Tool function runs and the Chat turn
 is not committed. The daemon returns the complete `ApprovalRequest` as a typed

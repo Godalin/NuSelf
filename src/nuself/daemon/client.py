@@ -15,9 +15,10 @@ from nuself.daemon.payloads import (
     ActivityEventsResponsePayload,
     ActivitySubscriptionPayload,
     ChatRequestPayload,
-    ChatResponsePayload,
+    DaemonChatPayload,
     EmptyPayload,
     SchedulerHealthPayload,
+    decode_chat_payload,
 )
 from nuself.daemon.protocol import (
     DaemonRequest,
@@ -30,6 +31,7 @@ from nuself.daemon.transport import read_socket_frame
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
+from nuself.runtime.frontend import ApprovalGrant
 
 type DaemonConnectionPhase = Literal[
     "connect",
@@ -252,13 +254,15 @@ def chat(
     turn_id: str | None = None,
     project_root: Path | None = None,
     timeout: float,
-) -> ChatResponsePayload:
+    approval: ApprovalGrant | None = None,
+) -> DaemonChatPayload:
     """Run one chat request and decode its complete success payload."""
 
     payload = ChatRequestPayload(
         message=message,
         conversation_id=conversation_id,
         turn_id=turn_id,
+        approval=approval,
     )
     return _decode_response(
         _request(
@@ -267,7 +271,7 @@ def chat(
             project_root=project_root,
             timeout=timeout,
         ),
-        ChatResponsePayload.from_wire,
+        decode_chat_payload,
         operation="chat",
     )
 

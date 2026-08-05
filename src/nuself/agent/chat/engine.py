@@ -51,6 +51,7 @@ from nuself.runtime.event.payload import (
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.runtime.frontend import ApprovalPort
+from nuself.runtime.frontend import ApprovalRequired
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
     publish_observed_event,
@@ -223,6 +224,8 @@ class ConversationGraphRuntime:
                     user_message=(message if turn_id is not None else None),
                     commit_observer=observe_commit,
                 )
+            except ApprovalRequired:
+                raise
             except Exception as exc:
                 self._publish_turn_event(
                     event="turn.failed",
