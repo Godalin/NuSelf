@@ -222,7 +222,7 @@ class ReasonAdvancer:
         *,
         paths: RuntimePaths,
         reason_service: ReasonService,
-        persona_repository: PersonaService,
+        persona_service: PersonaService,
         trace_recorder: TraceRecorder,
         feature_executor: FeatureExecutor,
         readonly_tools: Sequence[BaseTool] | None = None,
@@ -231,7 +231,7 @@ class ReasonAdvancer:
         self._paths = paths
         self._project_root = paths.authority_root
         self._reason_service = reason_service
-        self._persona_repository = persona_repository
+        self._persona_service = persona_service
         self._trace_recorder = trace_recorder
         self._feature_executor = feature_executor
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
@@ -377,7 +377,7 @@ class ReasonAdvancer:
 
         return build_reason_persona_tools(
             paths=self._paths,
-            global_repository=self._persona_repository,
+            global_service=self._persona_service,
             trace_recorder=self._trace_recorder,
             get_thread_workspace=self._thread_workspace,
             text_agent=LangChainTextAgent(
@@ -405,7 +405,7 @@ def default_reason_advancer(
     *,
     paths: RuntimePaths,
     reason_service: ReasonService,
-    persona_repository: PersonaService,
+    persona_service: PersonaService,
     trace_recorder: TraceRecorder,
     readonly_tools: Sequence[BaseTool] | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...],
@@ -414,7 +414,7 @@ def default_reason_advancer(
     return ReasonAdvancer(
         paths=paths,
         reason_service=reason_service,
-        persona_repository=persona_repository,
+        persona_service=persona_service,
         trace_recorder=trace_recorder,
         feature_executor=FeatureExecutor(),
         readonly_tools=readonly_tools,

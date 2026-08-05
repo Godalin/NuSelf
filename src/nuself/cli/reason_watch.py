@@ -21,7 +21,7 @@ def watch_reason_steps(
     thread_ref: str | None = None,
 ) -> None:
     """Watch reasoning steps, optionally restricted to one thread."""
-    service = cli_application().reason.service
+    service = cli_application().reason
     threads = service.list_threads(status="all")
     if thread_ref is not None:
         try:

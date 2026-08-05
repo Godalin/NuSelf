@@ -15,11 +15,12 @@ Persona Tool builders consistently accept `service=`.
 
 ## Next Steps
 
-1. Update the governing boundary specification.
-2. Flatten Memory, Reason, and Reflection Service fields in `ApplicationGraph`.
-3. Rename Persona Tool builder service parameters and migrate all callers.
-4. Add architecture guards and run full verification.
-5. Commit in stages and return this file to Idle.
+1. Completed: updated the governing boundary specification.
+2. Completed: flattened Memory, Reason, and Reflection Service fields in
+   `ApplicationGraph`.
+3. Completed: renamed Persona Tool and Reason advancer Service dependencies.
+4. Completed: architecture guards and full verification.
+5. In progress: commit the implementation and return this file to Idle.
 
 ## Exclusions
 
@@ -36,4 +37,8 @@ Persona Tool builders consistently accept `service=`.
 - No process adapter uses `memory_service`, `reason.service`, or
   `reflection.service` graph access.
 - Persona Tool builders and callers use `service=` terminology.
-- Architecture tests, full pytest, Pyright, and `git diff --check` pass.
+- Architecture guards cover direct graph Service names and Persona builder
+  parameters.
+- `uv run --locked pytest`: 2,335 passed.
+- `uv run --locked pyright`: 0 errors, 0 warnings.
+- `git diff --check`: passed.

@@ -8,7 +8,7 @@ from nuself.memory.composition import (
     MemoryWorkflowService,
     compose_memory_repositories,
 )
-from nuself.reason.composition import ReasonResources, compose_reason_resources
+from nuself.reason.composition import compose_reason_service
 from nuself.application.data_admin import DataAdminService
 from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config.settings import ConfigSystem, RuntimePaths, SystemConfig
@@ -25,10 +25,9 @@ from nuself.memory.candidate_service import MemoryCandidateService
 from nuself.profile.service import ProfileService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.service import PersonaService
-from nuself.reflection.composition import (
-    ReflectionResources,
-    compose_reflection_resources,
-)
+from nuself.reflection.composition import compose_reflection_service
+from nuself.reflection.service import ReflectionService
+from nuself.reason.service import ReasonService
 from nuself.storage.contract import StorageBackend
 from nuself.source.composition import compose_source_service
 from nuself.source.service import SourceService
@@ -42,7 +41,7 @@ class ApplicationGraph:
     config: SystemConfig
     conversations: ConversationService
     conversation_history: ConversationHistoryService
-    memory_service: MemoryService
+    memory: MemoryService
     memory_candidates: MemoryCandidateService
     profiles: ProfileService
     memory_workflows: MemoryWorkflowService
@@ -50,8 +49,8 @@ class ApplicationGraph:
     inbox: InboxService
     deliveries: DeliveryService
     personas: PersonaService
-    reason: ReasonResources
-    reflection: ReflectionResources
+    reason: ReasonService
+    reflection: ReflectionService
     trace: TraceServices
     data: DataAdminService
 
@@ -70,17 +69,17 @@ def compose_application(
     config = ConfigSystem.load_scope(paths.scope)
     inbox = InboxService(paths, backend)
     deliveries = DeliveryService(DeliveryStore(paths, backend))
-    reason = compose_reason_resources(
+    reason = compose_reason_service(
         paths,
         backend,
         trace.recorder,
         config,
         inbox,
     )
-    reflection = compose_reflection_resources(
+    reflection = compose_reflection_service(
         paths,
         backend,
-        reason.service,
+        reason,
         trace.recorder,
     )
     return ApplicationGraph(
@@ -88,7 +87,7 @@ def compose_application(
         config=config,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
-        memory_service=MemoryService(memory.entries, memory.candidates),
+        memory=MemoryService(memory.entries, memory.candidates),
         memory_candidates=MemoryCandidateService(memory.candidates),
         profiles=ProfileService(memory.profile),
         memory_workflows=MemoryWorkflowService(paths, memory),

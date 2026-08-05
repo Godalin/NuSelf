@@ -51,8 +51,8 @@ def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
     )
     return {
         "paths": application.paths,
-        "reason_service": application.reason.service,
-        "persona_repository": application.personas,
+        "reason_service": application.reason,
+        "persona_service": application.personas,
         "trace_recorder": application.trace.recorder,
     }
 
@@ -91,7 +91,7 @@ def test_application_reason_composition_resolves_models_from_graph_config(
 
     advancer = compose_reason_advancer(
         application.paths,
-        application.reason.service,
+        application.reason,
         application.personas,
         application.trace.recorder,
         application.config,

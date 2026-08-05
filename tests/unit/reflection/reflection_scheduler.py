@@ -198,7 +198,7 @@ def _generator(
     return IdeaCandidateGenerator(
         project_root,
         agent=agent,  # type: ignore[arg-type]
-        memory_service=application.memory_service,
+        memory_service=application.memory,
         source_service=application.sources,
         profile_service=application.profiles,
         conversation_history=application.conversation_history,
@@ -220,7 +220,7 @@ def _gate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        service=application.reflection.service,
+        service=application.reflection,
     )
 
 
@@ -275,11 +275,11 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     )
     return compose_reflection_scheduler(
         application.paths,
-        application.memory_service,
+        application.memory,
         application.profiles,
         application.sources,
         application.conversation_history,
-        application.reflection.service,
+        application.reflection,
         application.inbox,
         application.deliveries,
         application.trace.recorder,
@@ -893,7 +893,7 @@ def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     gen = IdeaCandidateGenerator(
         tmp_path,
         agent=agent,
-        memory_service=application.memory_service,
+        memory_service=application.memory,
         source_service=application.sources,
         profile_service=application.profiles,
         conversation_history=application.conversation_history,

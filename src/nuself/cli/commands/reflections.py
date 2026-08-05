@@ -20,7 +20,7 @@ from nuself.tui.render import (
 
 
 def handle_reflection_list(args: argparse.Namespace) -> int:
-    entries = cli_application().reflection.service.list_entries(
+    entries = cli_application().reflection.list_entries(
         status=args.status
     )
     if not entries:
@@ -39,7 +39,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
 
 def handle_reflection_show(args: argparse.Namespace) -> int:
     try:
-        entry = cli_application().reflection.service.show_entry(args.entry_id)
+        entry = cli_application().reflection.show_entry(args.entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
@@ -54,7 +54,7 @@ def _change_status(
     args: argparse.Namespace, *, action: str, past_tense: str
 ) -> int:
     try:
-        entry = getattr(cli_application().reflection.service, action)(args.entry_id)
+        entry = getattr(cli_application().reflection, action)(args.entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
@@ -76,7 +76,7 @@ def handle_reflection_archive(args: argparse.Namespace) -> int:
 
 def handle_reflection_promote(args: argparse.Namespace) -> int:
     try:
-        thread = cli_application().reflection.service.promote_to_reason(args.entry_id)
+        thread = cli_application().reflection.promote_to_reason(args.entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
         print(
             f"Error: {diagnostic_exception_message(exc)}",
@@ -89,7 +89,7 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_organize(args: argparse.Namespace) -> int:
-    result = cli_application().reflection.service.organize_pending()
+    result = cli_application().reflection.organize_pending()
     print(
         "Organized reflections: "
         f"merged_groups={result.merged_groups} "
@@ -102,11 +102,11 @@ def reflection_scheduler() -> ReflectionScheduler:
     application = cli_application()
     return compose_reflection_scheduler(
         application.paths,
-        application.memory_service,
+        application.memory,
         application.profiles,
         application.sources,
         application.conversation_history,
-        application.reflection.service,
+        application.reflection,
         application.inbox,
         application.deliveries,
         application.trace.recorder,

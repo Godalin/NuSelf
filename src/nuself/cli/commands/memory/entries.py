@@ -44,7 +44,7 @@ def _entries_for_list(
     sort_by: str = "updated_at",
     review_state: str | None = None,
 ) -> list[MemoryEntry]:
-    entries = cli_application().memory_service.list_entries()
+    entries = cli_application().memory.list_entries()
     if review_state is not None:
         entries = [
             entry
@@ -168,7 +168,7 @@ def handle_memory_show(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        entry = cli_application().memory_service.get_entry(entry_id)
+        entry = cli_application().memory.get_entry(entry_id)
     except MemoryEntryNotFound:
         print(
             f"Memory entry not found: {entry_id}",
@@ -218,7 +218,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
             else inferred.importance
         ),
     )
-    application.memory_service.save_entry(entry)
+    application.memory.save_entry(entry)
     record_memory_trace(
         application.trace.recorder,
         args.project_root,
@@ -230,7 +230,7 @@ def handle_memory_add(args: argparse.Namespace) -> int:
 
 
 def handle_memory_edit(args: argparse.Namespace) -> int:
-    service = cli_application().memory_service
+    service = cli_application().memory
     entry_id = _resolve_entry_id(args)
     if entry_id is None:
         return 1
@@ -255,7 +255,7 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
 
 
 def handle_memory_delete(args: argparse.Namespace) -> int:
-    service = cli_application().memory_service
+    service = cli_application().memory
     entry_ids = _resolve_entry_ids(args)
     if entry_ids is None:
         return 1
@@ -284,7 +284,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
         valid_on=args.valid_on,
         min_importance=args.min_importance,
     )
-    entries = application.memory_service.search_entries(args.query, filters)
+    entries = application.memory.search_entries(args.query, filters)
     if not entries:
         print("No matching memory entries.")
         return 0
@@ -294,12 +294,12 @@ def handle_memory_search(args: argparse.Namespace) -> int:
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
-    print(_format_stats(cli_application().memory_service.statistics()))
+    print(_format_stats(cli_application().memory.statistics()))
     return 0
 
 
 def handle_memory_relations(args: argparse.Namespace) -> int:
-    records = cli_application().memory_service.list_relations(
+    records = cli_application().memory.list_relations(
         MemoryRelationFilters(
             relation=args.relation,
             source_id=args.source_id,
@@ -356,7 +356,7 @@ def handle_memory_unquarantine(
     args: argparse.Namespace,
 ) -> int:
     try:
-        cli_application().memory_service.unquarantine_entry(
+        cli_application().memory.unquarantine_entry(
             args.entry_id
         )
     except MemoryEntryNotFound:

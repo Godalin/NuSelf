@@ -38,16 +38,16 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert graph.personas._repository._project_root == paths.authority_root
     memory = graph.memory_workflows._repositories
     assert memory.curator_plans._backend is backend
-    assert graph.memory_service._repository is memory.entries
+    assert graph.memory._repository is memory.entries
     assert memory.candidates._entry_repository is memory.entries
     assert memory.candidates._profile_repository is memory.profile
     assert not hasattr(graph.sources._repository, "_candidate_repository")
     assert not hasattr(graph.sources._repository, "_profile_repository")
     assert not hasattr(graph, "reason_service")
     assert not hasattr(graph, "reason_workspace")
-    assert graph.reason.service._workspace_store is not None
-    assert graph.reflection.service._repository is not None
-    assert graph.reflection.service._reason_service is graph.reason.service
+    assert graph.reason._workspace_store is not None
+    assert graph.reflection._repository is not None
+    assert graph.reflection._reason_service is graph.reason
     assert not hasattr(graph.trace, "repository")
     assert graph.trace.recorder._repository is graph.trace.query._repository
 
@@ -114,7 +114,7 @@ def test_reason_prompt_models_are_composed_lazily(
     graph = compose_application(paths, backend)
     assert model_calls == 0
 
-    thread = graph.reason.service.start_thread("Composed topic")
+    thread = graph.reason.start_thread("Composed topic")
 
     assert thread.reasoning_prompt == "Composed prompt."
     assert model_calls == 1

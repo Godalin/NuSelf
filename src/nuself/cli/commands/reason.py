@@ -25,7 +25,7 @@ REASON_VERBS: dict[str, tuple[str, str]] = {
 
 
 def handle_reason_list(args: argparse.Namespace) -> int:
-    threads = cli_application().reason.service.list_threads(
+    threads = cli_application().reason.list_threads(
         status=args.status
     )
     if not threads:
@@ -40,7 +40,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
 
 
 def handle_reason_show(args: argparse.Namespace) -> int:
-    service = cli_application().reason.service
+    service = cli_application().reason
     try:
         thread = service.show_thread(args.thread_id)
     except ReasonNotFound:
@@ -64,7 +64,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
 
 
 def handle_reason_start(args: argparse.Namespace) -> int:
-    service = cli_application().reason.service
+    service = cli_application().reason
     mandates = tuple(getattr(args, "mandate", None) or [])
     try:
         thread = service.start_thread(
@@ -94,12 +94,12 @@ def handle_reason_watch(args: argparse.Namespace) -> int:
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
     application = cli_application()
-    service = application.reason.service
+    service = application.reason
     advancer = None
     if args.action == "advance":
         advancer = compose_reason_advancer(
             application.paths,
-            application.reason.service,
+            application.reason,
             application.personas,
             application.trace.recorder,
             application.config,
@@ -129,7 +129,7 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         print("Use --yes to confirm deletion.", file=sys.stderr)
         return 1
     try:
-        thread_id = cli_application().reason.service.delete_thread(
+        thread_id = cli_application().reason.delete_thread(
             args.thread_id
         )
     except ReasonError as exc:

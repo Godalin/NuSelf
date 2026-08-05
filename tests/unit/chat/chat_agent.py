@@ -123,7 +123,7 @@ def _chat_tool(
         sources=application.sources,
         reflections=ReflectionService(
             repo,
-            application.reason.service,
+            application.reason,
             trace.recorder,
             ReflectionOrganizer(tmp_path, repository=repo),
         ),

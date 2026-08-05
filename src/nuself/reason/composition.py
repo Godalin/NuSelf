@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
@@ -26,33 +25,24 @@ if TYPE_CHECKING:
     from nuself.config.settings import RuntimePaths, SystemConfig
 
 
-@dataclass(frozen=True)
-class ReasonResources:
-    """Reason capabilities sharing one authority and workspace identity."""
-
-    service: ReasonService
-
-
-def compose_reason_resources(
+def compose_reason_service(
     paths: "RuntimePaths",
     backend: StorageBackend,
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
     inbox: InboxService,
-) -> ReasonResources:
-    """Compose Reason's authority-scoped capabilities."""
+) -> ReasonService:
+    """Compose Reason's authority-scoped service."""
 
     repository = ReasonRepository(paths, backend=backend)
     workspace = PrivateWorkspaceStore(paths, scope="reason")
-    return ReasonResources(
-        service=ReasonService(
-            paths.authority_root,
-            repository=repository,
-            workspace_store=workspace,
-            trace_recorder=trace_recorder,
-            prompt_generator=compose_reason_prompt_generator(paths, config),
-            inbox=inbox,
-        ),
+    return ReasonService(
+        paths.authority_root,
+        repository=repository,
+        workspace_store=workspace,
+        trace_recorder=trace_recorder,
+        prompt_generator=compose_reason_prompt_generator(paths, config),
+        inbox=inbox,
     )
 
 
@@ -85,7 +75,7 @@ def compose_reason_prompt_generator(
 def compose_reason_advancer(
     paths: "RuntimePaths",
     reason_service: ReasonService,
-    persona_repository: PersonaService,
+    persona_service: PersonaService,
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
     *,
@@ -97,7 +87,7 @@ def compose_reason_advancer(
     return default_reason_advancer(
         paths=paths,
         reason_service=reason_service,
-        persona_repository=persona_repository,
+        persona_service=persona_service,
         trace_recorder=trace_recorder,
         readonly_tools=readonly_tools,
         langchain_models=(

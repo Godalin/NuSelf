@@ -25,14 +25,14 @@ from nuself.trace.service import TraceRecorder
 def build_persona_tools(
     project_root: Path | None = None,
     *,
-    repository: PersonaService,
+    service: PersonaService,
     trace_recorder: TraceRecorder,
     text_agent: TextAgent,
     executor: FeatureExecutor,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
-    repo = repository
+    persona_service = service
     persona_agent = text_agent
 
     @tool(
@@ -60,7 +60,7 @@ def build_persona_tools(
             return "Error: name must be 40 characters or fewer"
 
         persona = create_persona_prompt(name, prompt)
-        existing = repo.get_by_name(name)
+        existing = persona_service.get_by_name(name)
         if existing is not None:
             persona = PersonaPrompt(
                 id=existing.id,
@@ -69,7 +69,7 @@ def build_persona_tools(
                 created_at=existing.created_at,
                 updated_at=persona.updated_at,
             )
-        repo.save(persona)
+        persona_service.save(persona)
         _record_prompt_trace(
             persona,
             project_root=project_root,
@@ -87,7 +87,7 @@ def build_persona_tools(
     @observed
     def persona_list(include_disabled: bool = False) -> str:
         """List available thinking personas with id and name. Pass include_disabled=True to show disabled ones."""
-        all_prompts = repo.list()
+        all_prompts = persona_service.list()
         prompts = all_prompts if include_disabled else [p for p in all_prompts if not p.disabled]
         if not prompts:
             if all_prompts:
@@ -122,9 +122,9 @@ def build_persona_tools(
         if not question:
             return "Error: question must be a non-empty string"
 
-        prompt = repo.resolve(persona)
+        prompt = persona_service.resolve(persona)
         if prompt is None:
-            existing = repo.list()
+            existing = persona_service.list()
             names = [p.name for p in existing]
             if names:
                 return f"No persona found for '{persona}'. Available: {', '.join(names)}"
@@ -159,12 +159,12 @@ def build_persona_tools(
         persona = persona.strip()
         if not persona:
             return "Error: persona must be a non-empty string (name or id)"
-        prompt = repo.resolve(persona)
+        prompt = persona_service.resolve(persona)
         if prompt is None:
             return f"No persona found for '{persona}'."
         if prompt.disabled:
             return f"Persona '{prompt.name}' is already disabled."
-        repo.set_disabled(prompt.id, True)
+        persona_service.set_disabled(prompt.id, True)
         _record_prompt_disabled_trace(
             prompt,
             project_root=project_root,
@@ -184,12 +184,12 @@ def build_persona_tools(
         persona = persona.strip()
         if not persona:
             return "Error: persona must be a non-empty string (name or id)"
-        prompt = repo.resolve(persona)
+        prompt = persona_service.resolve(persona)
         if prompt is None:
             return f"No persona found for '{persona}'."
         if not prompt.disabled:
             return f"Persona '{prompt.name}' is already enabled."
-        repo.set_disabled(prompt.id, False)
+        persona_service.set_disabled(prompt.id, False)
         _record_prompt_enabled_trace(
             prompt,
             project_root=project_root,
@@ -271,7 +271,7 @@ def _record_prompt_enabled_trace(
 def build_reason_persona_tools(
     *,
     paths: RuntimePaths,
-    global_repository: PersonaService,
+    global_service: PersonaService,
     trace_recorder: TraceRecorder,
     get_thread_workspace: Callable[[], ScopedWorkspace],
     text_agent: TextAgent,
@@ -288,7 +288,7 @@ def build_reason_persona_tools(
     - ``persona_think`` resolves from thread first, then global.
     """
 
-    def _thread_repo() -> PersonaService:
+    def _thread_service() -> PersonaService:
         return PersonaService(
             PersonaPromptRepository(
                 WorkspaceCollection(
@@ -299,7 +299,7 @@ def build_reason_persona_tools(
             )
         )
 
-    global_repo = global_repository
+    global_persona_service = global_service
     persona_agent = text_agent
     @tool(
         name="persona_craft",
@@ -318,9 +318,9 @@ def build_reason_persona_tools(
         if len(name) > 40:
             return "Error: name must be 40 characters or fewer"
 
-        repo = _thread_repo()
+        local_service = _thread_service()
         persona = create_persona_prompt(name, prompt)
-        existing = repo.get_by_name(name)
+        existing = local_service.get_by_name(name)
         if existing is not None:
             persona = PersonaPrompt(
                 id=existing.id,
@@ -329,7 +329,7 @@ def build_reason_persona_tools(
                 created_at=existing.created_at,
                 updated_at=persona.updated_at,
             )
-        repo.save(persona)
+        local_service.save(persona)
         _record_prompt_trace(
             persona,
             project_root=paths.authority_root,
@@ -346,9 +346,9 @@ def build_reason_persona_tools(
     @readonly
     @observed
     def _list(scope: str = "", include_disabled: bool = False) -> str:
-        repo = _thread_repo()
-        thread_prompts = repo.list()
-        raw_global = global_repo.list()
+        local_service = _thread_service()
+        thread_prompts = local_service.list()
+        raw_global = global_persona_service.list()
         global_prompts = [p for p in raw_global if include_disabled or not p.disabled]
         local_list = thread_prompts if scope in ("", "local") else ()
         global_list = global_prompts if scope in ("", "global") else ()
@@ -361,7 +361,11 @@ def build_reason_persona_tools(
         else:
             lines = ["Available thinking personas:"]
             for p in all_prompts:
-                tag = " [local]" if scope == "" and repo.get(p.id) is not None else ""
+                tag = (
+                    " [local]"
+                    if scope == "" and local_service.get(p.id) is not None
+                    else ""
+                )
                 tag += " [disabled]" if p.disabled else ""
                 lines.append(f"  - {p.name} (id={p.id}){tag}")
             result = "\n".join(lines)
@@ -382,18 +386,18 @@ def build_reason_persona_tools(
         if not question:
             return "Error: question must be a non-empty string"
 
-        thread_repo_inst = _thread_repo()
+        thread_service = _thread_service()
         prompt: PersonaPrompt | None = None
         if scope in ("", "local"):
-            prompt = thread_repo_inst.resolve(persona)
+            prompt = thread_service.resolve(persona)
         if prompt is None and scope in ("", "global"):
-            prompt = global_repo.resolve(persona)
+            prompt = global_persona_service.resolve(persona)
         if prompt is not None and prompt.disabled and scope in ("", "global"):
             return f"Persona '{prompt.name}' is disabled. Use persona_enable tool or CLI to reactivate it."
         if prompt is None:
             available: list[str] = []
-            available.extend(p.name for p in global_repo.list())
-            available.extend(p.name for p in thread_repo_inst.list())
+            available.extend(p.name for p in global_persona_service.list())
+            available.extend(p.name for p in thread_service.list())
             if available:
                 return f"No persona found for '{persona}'. Available: {', '.join(available)}"
             return f"No persona found for '{persona}'. Use persona_craft to create one first."
@@ -423,12 +427,12 @@ def build_reason_persona_tools(
         persona = persona.strip()
         if not persona:
             return "Error: persona must be a non-empty string (name or id)"
-        prompt = global_repo.resolve(persona)
+        prompt = global_persona_service.resolve(persona)
         if prompt is None:
             return f"No global persona found for '{persona}'."
         if prompt.disabled:
             return f"Persona '{prompt.name}' is already disabled."
-        global_repo.set_disabled(prompt.id, True)
+        global_persona_service.set_disabled(prompt.id, True)
         _record_prompt_disabled_trace(
             prompt,
             project_root=paths.authority_root,
@@ -448,12 +452,12 @@ def build_reason_persona_tools(
         persona = persona.strip()
         if not persona:
             return "Error: persona must be a non-empty string (name or id)"
-        prompt = global_repo.resolve(persona)
+        prompt = global_persona_service.resolve(persona)
         if prompt is None:
             return f"No global persona found for '{persona}'."
         if not prompt.disabled:
             return f"Persona '{prompt.name}' is already enabled."
-        global_repo.set_disabled(prompt.id, False)
+        global_persona_service.set_disabled(prompt.id, False)
         _record_prompt_enabled_trace(
             prompt,
             project_root=paths.authority_root,

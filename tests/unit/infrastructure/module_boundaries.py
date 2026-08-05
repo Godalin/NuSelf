@@ -304,6 +304,52 @@ def test_application_graph_exposes_services_not_persistence() -> None:
     assert exposed.isdisjoint(forbidden)
 
 
+def test_application_graph_names_single_services_by_domain() -> None:
+    graph = next(
+        node
+        for node in _tree(_SOURCE_ROOT / "application" / "composition.py").body
+        if isinstance(node, ast.ClassDef) and node.name == "ApplicationGraph"
+    )
+    fields = {
+        node.target.id: node.annotation.id
+        for node in graph.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and isinstance(node.annotation, ast.Name)
+    }
+    assert {
+        name: fields[name]
+        for name in ("memory", "reason", "reflection")
+    } == {
+        "memory": "MemoryService",
+        "reason": "ReasonService",
+        "reflection": "ReflectionService",
+    }
+    assert {"memory_service", "reason_service", "reflection_service"}.isdisjoint(
+        fields
+    )
+
+
+def test_persona_tool_builders_name_service_dependencies() -> None:
+    functions = {
+        node.name: node
+        for node in _tree(_SOURCE_ROOT / "persona" / "tools.py").body
+        if isinstance(node, ast.FunctionDef)
+    }
+    global_names = {
+        argument.arg
+        for argument in functions["build_persona_tools"].args.kwonlyargs
+    }
+    reason_names = {
+        argument.arg
+        for argument in functions["build_reason_persona_tools"].args.kwonlyargs
+    }
+    assert "service" in global_names
+    assert "repository" not in global_names
+    assert "global_service" in reason_names
+    assert "global_repository" not in reason_names
+
+
 def test_process_and_agent_adapters_do_not_import_persistence_types() -> None:
     forbidden = {
         "ConversationStore",

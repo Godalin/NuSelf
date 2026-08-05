@@ -76,7 +76,7 @@ class DaemonState:
         )
         self.reason_export_service = ReasonExportService(
             self.authority_root,
-            reason_service=application.reason.service,
+            reason_service=application.reason,
             task_sink=self._schedule_reason_export,
             language_preference=config.chat.language_preference,
             text_agent=LangChainTextAgent(
@@ -89,10 +89,10 @@ class DaemonState:
             paths,
             config,
             application.conversations,
-            application.memory_service,
+            application.memory,
             application.sources,
-            application.reflection.service,
-            application.reason.service,
+            application.reflection,
+            application.reason,
             application.trace,
             application.personas,
             job_sink=self.reason_export_service.enqueue,
@@ -112,11 +112,11 @@ class DaemonState:
         )
         self.reflection_scheduler = compose_reflection_scheduler(
             paths,
-            application.memory_service,
+            application.memory,
             application.profiles,
             application.sources,
             application.conversation_history,
-            application.reflection.service,
+            application.reflection,
             application.inbox,
             application.deliveries,
             application.trace.recorder,
@@ -138,7 +138,7 @@ class DaemonState:
             self.authority_root,
             advancer=compose_reason_advancer(
                 paths,
-                application.reason.service,
+                application.reason,
                 application.personas,
                 application.trace.recorder,
                 config,
@@ -146,7 +146,7 @@ class DaemonState:
                 langchain_models=langchain_models,
             ),
             interval_seconds=reason_interval,
-            service=application.reason.service,
+            service=application.reason,
         )
         self._memory_workflows = application.memory_workflows
         memory_interval = config.daemon.memory_curator.interval_seconds

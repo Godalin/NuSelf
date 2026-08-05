@@ -53,7 +53,7 @@ def build_langchain_chat_tools(
         + build_selves_tools(selves_consult, executor=executor)
         + build_persona_tools(
             resources.project_root,
-            repository=resources.personas,
+            service=resources.personas,
             trace_recorder=resources.trace_recorder,
             text_agent=resources.persona_agent,
             executor=executor,

@@ -153,16 +153,16 @@ def run_fixture(project_root: Path, fixture: EvalFixture) -> EvalResult:
     with open_application_runtime(project_root) as runtime:
         application = runtime.application
         for entry in fixture.memory_entries:
-            application.memory_service.save_entry(entry.to_domain())
+            application.memory.save_entry(entry.to_domain())
 
         agent = compose_conversation_runtime(
             application.paths,
             application.config,
             application.conversations,
-            application.memory_service,
+            application.memory,
             application.sources,
-            application.reflection.service,
-            application.reason.service,
+            application.reflection,
+            application.reason,
             application.trace,
             application.personas,
             response_service=FixtureResponseService(fixture.response),

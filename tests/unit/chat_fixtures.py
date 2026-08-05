@@ -83,16 +83,16 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         memory = (
             MemoryService(memory_repository)
             if memory_repository is not None
-            else application.memory_service
+            else application.memory
         )
         sources = source_service or application.sources
         del profile_repository
         reflections = (
-            application.reflection.service
+            application.reflection
             if reflection_repository is None
             else ReflectionService(
                 reflection_repository,
-                application.reason.service,
+                application.reason,
                 application.trace.recorder,
                 ReflectionOrganizer(
                     project_root,
@@ -107,7 +107,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 sources=sources,
                 reflections=reflections,
                 reasons=reason_service
-                or application.reason.service,
+                or application.reason,
                 traces=trace_query_service
                 or application.trace.query,
                 personas=application.personas,

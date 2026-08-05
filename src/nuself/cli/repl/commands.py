@@ -56,14 +56,14 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         return "No memory-context trace is available for the last answer yet."
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
-        entries = cli_application().memory_service.search_entries(query)
+        entries = cli_application().memory.search_entries(query)
         if not entries:
             return "No matching memory entries."
         return "\n".join(
             render_memory_entry_row(entry) for entry in entries
         )
     application = cli_application()
-    memory = application.memory_service
+    memory = application.memory
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
         try:
@@ -137,7 +137,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
 
 
 def handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
-    service = cli_application().reason.service
+    service = cli_application().reason
     if command == "":
         return interactive_reason_help()
     if command == "list":
@@ -167,7 +167,7 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
         application = cli_application()
         advancer = compose_reason_advancer(
             application.paths,
-            application.reason.service,
+            application.reason,
             application.personas,
             application.trace.recorder,
             application.config,
@@ -460,7 +460,7 @@ def handle_interactive_reflection_command(
 ) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = cli_application().reflection.service.list_entries(
+    entries = cli_application().reflection.list_entries(
         status=None if include_all else "pending"
     )
     if not entries:
@@ -507,14 +507,14 @@ def handle_interactive_reflection_show_command(project_root: Path | None, entry_
     from nuself.tui.render import render_reflection_entry_detail
 
     try:
-        entry = cli_application().reflection.service.show_entry(entry_id)
+        entry = cli_application().reflection.show_entry(entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
         return diagnostic_exception_message(exc)
     return render_reflection_entry_detail(entry)
 
 
 def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    service = cli_application().reflection.service
+    service = cli_application().reflection
     try:
         service.show_entry(entry_id)
     except (ReflectionEntryNotFound, ValueError) as exc:
