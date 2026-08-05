@@ -208,9 +208,8 @@ repositories receive the concrete entry/profile/candidate collaborators they
 mutate instead of constructing them during an operation. Aggregate functions
 such as memory statistics receive repositories rather than resolving an
 authority. Memory composition owns the immutable repository bundle and reuses
-its instances behind `MemoryService`, `MemoryCandidateService`,
-`ProfileService`, and `MemoryWorkflowService`; `ApplicationGraph` does not
-expose the bundle.
+its instances behind `MemoryService`, `ProfileService`, and
+`MemoryWorkflowService`; `ApplicationGraph` does not expose the bundle.
 `MemoryEntryRepository.compute_graph()` is the single one-shot symbolic graph
 projection used by both repository operations and external memory-query
 expansion. A private mirror with identical behavior is not a second capability.
@@ -235,15 +234,17 @@ composition API.
 
 Ordinary CLI and REPL Memory operations consume authority-scoped services,
 not `MemoryRepositories`. `MemoryService` owns stable entry inspection,
-deterministic and semantic search, entry mutation, relation and graph query,
-quarantine recovery, and statistics use cases. `MemoryCandidateService` owns
-candidate review and promotion, while `ProfileService` owns profile inspection
-and maintenance. Their repositories remain shared construction dependencies;
-an adapter must not recover a repository from the application graph merely to
-perform one of these user-intent operations. Curator, optimizer, observation
-recovery, import/export, trace projection, and validated data administration
-remain explicit workflows and may consume the narrow persistence capabilities
-they coordinate.
+deterministic and semantic search, entry mutation, candidate review and
+promotion, relation and graph query, quarantine recovery, and statistics use
+cases. Candidate review is not a parallel Service: it shares the Memory domain,
+authority, user-intent boundary, and execution policy and adds no independent
+lifecycle. `ProfileService` remains the public boundary of the separate
+Profile domain. Their repositories remain construction dependencies; an
+adapter must not recover a repository from the application graph merely to
+perform one of these operations. Curator, optimizer, observation recovery,
+import/export, trace projection, and validated data administration remain
+explicit workflows and may consume the narrow persistence capabilities they
+coordinate.
 
 Curator recovery plans are part of that memory persistence graph. Their store
 receives the same resolved paths and selected backend so its durable records
@@ -416,6 +417,13 @@ An `ApplicationGraph` field is named for its domain rather than repeating its
 concrete type: a domain with one public authority-scoped Service exposes that
 Service directly as `memory`, `reason`, or `reflection`, never as
 `memory_service` or a single-field `reason.service` resource wrapper.
+A same-domain Service is separate only when it owns an independently meaningful
+capability boundary: narrower authority or immutable projection, workflow/job
+orchestration, durable state, retry/recovery policy, or external adapter
+coordination. A class that only forwards one Repository's operations and shares
+the domain Service's authority, lifecycle, and user intent is merged into that
+domain Service. Delegation alone does not justify either merging across domain
+packages or splitting within one domain.
 Resource snapshots remain valid only when a domain exposes multiple distinct
 public capabilities that must preserve shared authority or internal identity.
 Such a snapshot contains concrete capabilities but performs no lookup,

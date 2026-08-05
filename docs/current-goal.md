@@ -5,27 +5,38 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — auditing and normalizing Service boundaries.
 
 ## Objective
 
-No active objective.
+Merge same-domain forwarding Services into their domain Service, retain
+Services that enforce a real domain/capability/workflow boundary, and normalize
+the affected modules to single-word filenames.
 
 ## Next Steps
 
-1. Wait for the next explicitly approved goal.
+1. Define and record the Service retention criteria.
+2. Merge candidate review into `MemoryService` and remove its parallel graph
+   field and module.
+3. Remove duplicate Persona Service aliases and migrate callers.
+4. Rename remaining compound Service modules where package context is enough.
+5. Add architecture guards, run full verification, commit in stages, and
+   return this file to Idle.
 
 ## Exclusions
 
-- Do not begin unapproved feature or refactor work.
+- Do not merge Services across independent domain packages merely because an
+  implementation currently delegates to one Repository.
+- Do not merge capability projections that enforce narrower access, such as
+  bounded conversation history or Trace query/recording separation.
+- Do not merge workflow/job Services that own orchestration, durable state,
+  retries, recovery, or external adapters.
 
-## Last Verification
+## Completion Evidence
 
-- `ApplicationGraph` exposes `memory`, `reason`, and `reflection` directly as
-  Services; `trace` remains a real query/recorder capability group.
-- Persona Tool builders and Reason advancement name `PersonaService`
-  dependencies as services rather than repositories.
-- Architecture tests guard the graph field and builder parameter conventions.
-- `uv run --locked pytest`: 2,335 passed.
-- `uv run --locked pyright`: 0 errors, 0 warnings.
-- `git diff --check`: passed.
+- `MemoryService` owns candidate review; `MemoryCandidateService`, its graph
+  field, and `candidate_service.py` no longer exist.
+- Persona exposes one non-duplicated method vocabulary.
+- Retained secondary Services have an explicit capability or workflow reason.
+- Affected compound Service modules use single-word filenames.
+- Architecture tests, full pytest, Pyright, and `git diff --check` pass.
