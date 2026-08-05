@@ -505,6 +505,7 @@ Direct service-status queries, such as asking how many memory/reflection/reason/
 | ---------------- | --------------------------------------------------------------------- |
 | `memory_search`  | Query personal durable memory.                                        |
 | `memory_count`   | Count durable memory entries with optional type/tag filters.          |
+| `memory_create`  | Create a draft durable memory after explicit user approval.           |
 | `source_search`  | Search external document chunks on demand.                            |
 | `source_get`     | Read a selected external document or chunk.                           |
 | `source_list`    | List available external documents.                                    |
@@ -588,8 +589,27 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 
 | Tool                       | Purpose                                                                                                |
 | -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `memory_create`            | Create a new draft memory only after explicit frontend approval.                                       |
 | `memory_archive`           | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
 | `memory_update_importance` | Adjust the importance score (0.0-1.0) of a memory entry.                                               |
+
+#### `memory_create`
+
+- **Args**: `title: str`, `body: str`, `memory_type: str = "belief"`,
+  `tags: list[str] | None = None`, `importance: float = 0.5`.
+- **Behavior**: Requests approval through the runtime's injected
+  `ApprovalPort`. Only an affirmative decision constructs and saves one
+  `MemoryEntry` through `MemoryService`, always initially using
+  `review_state="draft"`.
+- **Returns after approval**: A confirmation containing the created entry id,
+  title, and resulting review state.
+- **Returns after rejection**: `"Action was not approved; no changes were
+  made."` The adapter returns this as the normal LangChain Tool result, so the
+  Chat Agent receives it in its tool loop and can tell the user that nothing
+  was saved.
+- **When to use**: When information stated in the current conversation is
+  plausibly useful as durable personal context. Tool availability is not
+  permission: every proposed write still goes through frontend approval.
 
 #### `memory_archive`
 
@@ -686,7 +706,7 @@ The detailed tool catalog above should be read as grouped capability blocks, not
 | Family                         | Typical tools                                                                                                                                                                                     | Decorator need       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | Read-only discovery            | `memory_search`, `memory_count`, `source_search`, `source_get`, `source_list`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
-| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | sometimes `approval` |
+| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_create`, `memory_archive`, `memory_update_importance`                                                                                         | sometimes `approval` |
 | Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `approval`           |
 
 | Internal synthesis      | `selves_consult`                                                                                                                                                                                  | `log` only                   |
