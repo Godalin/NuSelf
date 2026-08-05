@@ -5,28 +5,35 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — unifying application Service exposure names.
 
 ## Objective
 
-No active objective.
+Expose each domain's single public Service directly under its domain name,
+retain resource snapshots only for genuine multi-capability domains, and make
+Persona Tool builders consistently accept `service=`.
 
 ## Next Steps
 
-1. Wait for the next explicitly approved goal.
+1. Update the governing boundary specification.
+2. Flatten Memory, Reason, and Reflection Service fields in `ApplicationGraph`.
+3. Rename Persona Tool builder service parameters and migrate all callers.
+4. Add architecture guards and run full verification.
+5. Commit in stages and return this file to Idle.
 
 ## Exclusions
 
-- Do not begin unapproved feature or refactor work.
+- Do not flatten `trace`, whose query and recorder are distinct public
+  capabilities sharing one authority.
+- Do not rename internal constructor parameters where `_service` distinguishes
+  a dependency from other state.
+- Do not add compatibility aliases or a service-locator API.
 
-## Last Verification
+## Completion Evidence
 
-- Domain Tool builders accept services/providers and an explicitly injected
-  `FeatureExecutor`; none silently creates its own execution environment.
-- Chat and Reason share their caller-owned executor across all Tool builders,
-  including Persona, Selves, and Workspace.
-- `ToolResources` contains no materialized LangChain tools, and
-  `materialize_tool()` accepts string-returning feature callables.
-- `uv run --locked pytest`: 2,333 passed.
-- `uv run --locked pyright`: 0 errors, 0 warnings.
-- `git diff --check`: passed.
+- `ApplicationGraph` exposes `memory`, `reason`, and `reflection` directly as
+  their Service types.
+- No process adapter uses `memory_service`, `reason.service`, or
+  `reflection.service` graph access.
+- Persona Tool builders and callers use `service=` terminology.
+- Architecture tests, full pytest, Pyright, and `git diff --check` pass.

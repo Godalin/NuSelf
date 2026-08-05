@@ -412,15 +412,16 @@ only one place; moving unique wiring behind another factory is not
 simplification. Neither case justifies a facade, provider registry, or plugin
 mechanism. Adapter-local helpers that merely discard arguments and return one
 `ApplicationGraph` field are forbidden; adapters borrow that field directly.
-Resource snapshots remain valid when they preserve shared repository identity
-or form a real consumer-specific capability boundary.
-When one domain exposes multiple authority-scoped capabilities that must share
-internal identity, `ApplicationGraph` exposes one immutable domain-owned
-resource snapshot rather than parallel flat fields. The snapshot contains
-concrete capabilities but performs no lookup, dispatch, forwarding, or
-lifecycle work. Reason groups its service and workspace; Reflection groups its
-repository and service. Callers name the capability explicitly through that
-domain resource and no flat compatibility aliases are retained.
+An `ApplicationGraph` field is named for its domain rather than repeating its
+concrete type: a domain with one public authority-scoped Service exposes that
+Service directly as `memory`, `reason`, or `reflection`, never as
+`memory_service` or a single-field `reason.service` resource wrapper.
+Resource snapshots remain valid only when a domain exposes multiple distinct
+public capabilities that must preserve shared authority or internal identity.
+Such a snapshot contains concrete capabilities but performs no lookup,
+dispatch, forwarding, or lifecycle work. Trace therefore groups its query and
+recorder capabilities; callers name each explicitly through `trace.query` and
+`trace.recorder`. No flat compatibility aliases are retained during a rename.
 
 Shared runtime files require either multiple consumers or an independently
 testable protocol, codec, policy, or schema boundary. A helper used by exactly
