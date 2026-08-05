@@ -5,37 +5,28 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — adding approval-gated conversational memory creation.
+Idle — no active implementation goal.
 
 ## Objective
 
-Let the Chat Agent propose and create a draft durable memory during the current
-conversation, but execute the write only after explicit frontend approval and
-return a clear no-write Tool result after rejection.
+No active objective.
 
 ## Next Steps
 
-1. Completed: specified Tool input, draft persistence, and approval results.
-2. Completed: implemented `memory_create` through the decorated boundary.
-3. Completed: tested approval, declined no-op, and Agent-visible refusal.
-4. In progress: commit the verified implementation and return this file to
-   Idle.
+1. Wait for the next explicitly approved goal.
 
 ## Exclusions
 
-- Do not bypass `MemoryService` or write directly to a Repository.
-- Do not treat conversational creation as curator auto-acceptance or create a
-  reviewed memory without a separate policy decision.
-- Do not change confirmation requirements of existing Memory mutation Tools.
+- Do not begin unapproved feature or refactor work.
 
-## Completion Evidence
+## Last Verification
 
-- Chat's Tool registry includes `memory_create` as a write Tool with required
-  confirmation metadata.
-- Approval creates exactly one draft Memory entry through `MemoryService`.
-- Rejection creates no entry and returns an explicit Tool result visible to the
-  Agent loop.
-- Memory Skill explains when to propose creation and how to handle rejection.
+- Chat exposes `memory_create` for durable preferences, beliefs, goals,
+  episodes, and facts found in the current conversation.
+- The Tool creates one draft Memory entry through `MemoryService` only after an
+  affirmative `ApprovalPort` decision.
+- Rejection performs no write and returns an explicit Tool result to the Agent;
+  Memory Skill policy requires a no-save response without automatic retry.
 - `uv run --locked pytest`: 2,338 passed.
 - `uv run --locked pyright`: 0 errors, 0 warnings.
 - `git diff --check`: passed.
