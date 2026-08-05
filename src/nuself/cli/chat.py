@@ -18,18 +18,14 @@ from nuself.cli.output import print_ansi
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.daemon import client
-from nuself.daemon.payloads import ChatApprovalRequiredPayload
+from nuself.daemon.payloads import ChatToolEffectPayload
 from nuself.memory.audit import MEMORY_AUDIT
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
-from nuself.tui.approval import TerminalApprovalPort
-from nuself.runtime.frontend import (
-    ApprovalGrant,
-    current_approval_grant,
-    use_approval_grant,
-)
+from nuself.tui.effect import TerminalToolEffectPort
+from nuself.runtime.feature.effect import ToolEffectResolution
 
 type ReplyPrinter = Callable[[str], None]
 
@@ -46,22 +42,19 @@ def send_daemon_chat(
     """Send one daemon-backed message and present its one-shot result."""
 
     turn_id = f"turn-{uuid4().hex}"
-    approval: ApprovalGrant | None = None
+    effect_resolution: ToolEffectResolution | None = None
     while True:
-        with use_approval_grant(approval):
-            result = send_daemon_chat_interactive(
-                message,
-                project_root,
-                conversation_id,
-                turn_id=turn_id,
-            )
-        request = result.approval_request
+        result = send_daemon_chat_interactive(
+            message,
+            project_root,
+            conversation_id,
+            turn_id=turn_id,
+            effect_resolution=effect_resolution,
+        )
+        request = result.tool_effect_request
         if request is None:
             break
-        approval = ApprovalGrant(
-            request,
-            TerminalApprovalPort().request(request),
-        )
+        effect_resolution = TerminalToolEffectPort().resolve(request)
     if result.reply is not None:
         print_reply(result.reply)
     if result.error is not None:
@@ -75,6 +68,7 @@ def send_daemon_chat_interactive(
     conversation_id: str = "default",
     *,
     turn_id: str | None = None,
+    effect_resolution: ToolEffectResolution | None = None,
 ) -> InteractiveChatResult:
     """Translate one typed daemon chat operation to the REPL result contract."""
 
@@ -93,7 +87,7 @@ def send_daemon_chat_interactive(
                     cli_application()
                     .config.chat.request_timeout_seconds
                 ),
-                approval=current_approval_grant(),
+                effect_resolution=effect_resolution,
             )
         except client.DaemonConnectionError as exc:
             cancellation = current_cancellation()
@@ -131,10 +125,10 @@ def send_daemon_chat_interactive(
                 code=CliExitCode.FAILURE,
                 error=error,
             )
-        if isinstance(response, ChatApprovalRequiredPayload):
+        if isinstance(response, ChatToolEffectPayload):
             return InteractiveChatResult(
                 code=CliExitCode.SUCCESS,
-                approval_request=response.request,
+                tool_effect_request=response.request,
             )
         with runtime_context(conversation_id=response.conversation_id):
             CHAT_AUDIT.write(
@@ -173,9 +167,14 @@ def send_one_shot_chat_interactive(
     conversation_id: str = "default",
     *,
     turn_id: str | None = None,
+    effect_resolution: ToolEffectResolution | None = None,
 ) -> InteractiveChatResult:
     """Run one local chat operation and translate expected runtime failure."""
 
+    if effect_resolution is not None:
+        raise RuntimeError(
+            "one-shot Chat has no suspended Tool effect checkpoint"
+        )
     with runtime_context(
         conversation_id=conversation_id,
         turn_id=turn_id,
@@ -193,7 +192,7 @@ def send_one_shot_chat_interactive(
                 application.reason,
                 application.trace,
                 application.personas,
-                approval_port=TerminalApprovalPort(),
+                effect_port=TerminalToolEffectPort(),
             )
             result = conversation_runtime.respond(
                 message,

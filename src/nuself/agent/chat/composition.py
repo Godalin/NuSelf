@@ -9,7 +9,10 @@ from nuself.agent.chat.types import (
 from nuself.agent.chat.engine import ConversationGraphRuntime
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
-from nuself.agent.chat.response import ConversationResponseService
+from nuself.agent.chat.response import (
+    BasicConversationResponseService,
+    ConversationResponseService,
+)
 from nuself.agent.text import LangChainTextAgent
 from nuself.config.settings import RuntimePaths, SystemConfig
 from nuself.conversation import ConversationService
@@ -20,7 +23,7 @@ from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.event.publisher import EventPublisher
-from nuself.runtime.frontend import ApprovalPort
+from nuself.runtime.feature.effect import ToolEffectPort
 from nuself.runtime.job.message import JobSink
 from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.agent.endpoint import LangChainLLMEndpoint
@@ -45,8 +48,10 @@ def compose_conversation_runtime(
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,
     event_publisher: EventPublisher | None = None,
-    response_service: ConversationResponseService | None = None,
-    approval_port: ApprovalPort | None = None,
+    response_service: (
+        ConversationResponseService | BasicConversationResponseService | None
+    ) = None,
+    effect_port: ToolEffectPort | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> ConversationGraphRuntime:
     """Build chat from one authority graph plus surface-owned adapters."""
@@ -104,5 +109,5 @@ def compose_conversation_runtime(
         ),
         event_publisher=publisher,
         response_service=response_service,
-        approval_port=approval_port,
+        effect_port=effect_port,
     )

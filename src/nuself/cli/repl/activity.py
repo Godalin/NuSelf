@@ -17,9 +17,13 @@ from nuself.log.reader import InteractiveLogCursor
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall
+from nuself.runtime.feature.effect import ToolEffectResolution
 from nuself.tui.render import render_log_event
 
-type SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+type SendMessage = Callable[
+    [str, str, str | None, ToolEffectResolution | None],
+    InteractiveChatResult,
+]
 type ActivityTransportStage = Literal["open", "poll", "drain", "close"]
 
 
@@ -88,6 +92,7 @@ def run_live_activity_send(
     project_root: Path | None,
     log_cursor: InteractiveLogCursor,
     *,
+    effect_resolution: ToolEffectResolution | None = None,
     printed_logs: bool,
     daemon_activity: bool,
     poll_interval_seconds: float,
@@ -103,7 +108,12 @@ def run_live_activity_send(
     )
     send_call = OwnedCall(
         name="nuself-interactive-send",
-        target=lambda: send_message(message, conversation_id, turn_id),
+        target=lambda: send_message(
+            message,
+            conversation_id,
+            turn_id,
+            effect_resolution,
+        ),
     )
     captured_events: list[LogEvent] = []
     new_events: list[LogEvent] = []

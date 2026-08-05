@@ -636,7 +636,10 @@ def test_interactive_turn_prints_activity_events_while_waiting(
         original_print_events(events)
 
     def fake_send(
-        message: str, conversation_id: str, turn_id: str | None
+        message: str,
+        conversation_id: str,
+        turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         assert turn_id is not None
         publisher.publish(
@@ -722,6 +725,7 @@ def test_interactive_turn_interrupt_cancels_owned_send_before_return(
         message: str,
         conversation_id: str,
         turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         del message, conversation_id, turn_id
         cancellation = current_cancellation()
@@ -772,6 +776,7 @@ def test_daemon_interactive_turn_uses_activity_transport_not_log_polling(
         message: str,
         conversation_id: str,
         turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         del message
         assert turn_id is not None
@@ -867,7 +872,10 @@ def test_interactive_turn_hides_background_activity_events(
     ConversationStore(_authority(tmp_path)).save(ConversationState.empty("default"))
 
     def fake_send(
-        message: str, conversation_id: str, turn_id: str | None
+        message: str,
+        conversation_id: str,
+        turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         assert turn_id is not None
         write_log_event(
@@ -931,7 +939,10 @@ def test_interactive_turn_binds_exact_context_to_send_conversation(
     observed: list[RuntimeContext] = []
 
     def fake_send(
-        message: str, conversation_id: str, turn_id: str | None
+        message: str,
+        conversation_id: str,
+        turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         assert message == "hello"
         assert conversation_id == "default"

@@ -36,16 +36,15 @@ from nuself.decorators import (
 )
 from nuself.runtime.context import runtime_context
 from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.agent.effect import GraphToolEffectPort
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ToolEffectRequired,
+    ToolEffectResolution,
+)
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalGrant,
-    ApprovalRequired,
-    RequestApprovalPort,
-    use_approval_grant,
-)
 
 
 def _ignore_tool_outcome(_outcome: ToolOutcome) -> None:
@@ -82,7 +81,7 @@ def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
     framework_tool = materialize_tool(
         create_memory,
         executor=FeatureExecutor(
-            approvals=RequestApprovalPort(),
+            effects=GraphToolEffectPort(),
             events=events,
         ),
     )
@@ -141,20 +140,22 @@ def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
         conversation_id="default",
         turn_id="turn-checkpoint",
     ):
-        with pytest.raises(ApprovalRequired) as paused:
+        with pytest.raises(ToolEffectRequired) as paused:
             synthesizer.complete(prompt)
         request = paused.value.request
         decision = (
-            ApprovalDecision(
+            ApprovalEffectDecision(
                 True,
                 approver="tester",
                 input_kind="affirmative",
             )
             if approved
-            else ApprovalDecision(False, input_kind="declined")
+            else ApprovalEffectDecision(False, input_kind="declined")
         )
-        with use_approval_grant(ApprovalGrant(request, decision)):
-            result = synthesizer.complete(prompt)
+        result = synthesizer.complete(
+            prompt,
+            effect_resolution=ToolEffectResolution(request, decision),
+        )
 
     assert result.answer == "done"
     assert mutations == (["exact"] if approved else [])

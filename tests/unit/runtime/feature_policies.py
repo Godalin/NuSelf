@@ -8,14 +8,24 @@ import pytest
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.runtime.feature.execution import (
     FeatureAuditRecord,
-    FeatureConfirmationDeclined,
     FeatureExecutor,
+    ToolEffectDeclined,
+)
+from nuself.agent.effect import GraphToolEffectPort
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ToolEffectRequired,
+    ToolEffectResolution,
 )
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.messages import RuntimeEnvelope
 from nuself.runtime.feature.policy import (
+    ApprovalEffectPolicy,
+    AuditEffectPolicy,
     FeaturePolicyConflictError,
+    ObservationEffectPolicy,
     audited,
     compact,
     component,
@@ -25,14 +35,6 @@ from nuself.runtime.feature.policy import (
     readonly,
     requires_confirmation,
     tool,
-)
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalGrant,
-    ApprovalRequired,
-    ApprovalRequest,
-    RequestApprovalPort,
-    use_approval_grant,
 )
 from nuself.log.reader import read_log_events
 from nuself.log.store import runtime_event_log_sink
@@ -49,23 +51,34 @@ class Audits:
 
 
 class Approve:
-    def request(self, request: ApprovalRequest) -> ApprovalDecision:
+    def resolve(
+        self,
+        request: ApprovalEffectRequest,
+    ) -> ToolEffectResolution:
         assert request.action == "archive"
-        return ApprovalDecision(
-            True,
-            approver="tester",
-            input_kind="affirmative",
+        return ToolEffectResolution(
+            request,
+            ApprovalEffectDecision(
+                True,
+                approver="tester",
+                input_kind="affirmative",
+            ),
         )
 
 
 class Decline:
-    def request(self, request: ApprovalRequest) -> ApprovalDecision:
-        del request
-        return ApprovalDecision(False, input_kind="declined")
+    def resolve(
+        self,
+        request: ApprovalEffectRequest,
+    ) -> ToolEffectResolution:
+        return ToolEffectResolution(
+            request,
+            ApprovalEffectDecision(False, input_kind="declined"),
+        )
 
 
-def test_request_approval_port_challenges_and_matches_exact_grant() -> None:
-    request = ApprovalRequest(
+def test_graph_effect_port_challenges_outside_a_graph() -> None:
+    request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -73,30 +86,11 @@ def test_request_approval_port_challenges_and_matches_exact_grant() -> None:
         risk="reversible",
         summary="Create exact memory",
     )
-    port = RequestApprovalPort()
+    port = GraphToolEffectPort()
 
-    with pytest.raises(ApprovalRequired) as missing:
-        port.request(request)
+    with pytest.raises(ToolEffectRequired) as missing:
+        port.resolve(request)
     assert missing.value.request == request
-
-    decision = ApprovalDecision(
-        True,
-        approver="tester",
-        input_kind="affirmative",
-    )
-    with use_approval_grant(ApprovalGrant(request, decision)):
-        assert port.request(request) == decision
-        changed = ApprovalRequest(
-            component=request.component,
-            operation=request.operation,
-            action=request.action,
-            resource=request.resource,
-            risk=request.risk,
-            summary="Changed memory",
-        )
-        with pytest.raises(ApprovalRequired) as mismatched:
-            port.request(changed)
-        assert mismatched.value.request == changed
 
 
 def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
@@ -119,11 +113,38 @@ def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
     assert spec.tool is not None
     assert spec.tool.name == "memory_archive"
     assert spec.component == "memory"
-    assert spec.effect == "mutating"
-    assert spec.confirmation is not None
-    assert spec.observation is not None
+    assert spec.execution == "mutating"
+    assert any(isinstance(effect, ApprovalEffectPolicy) for effect in spec.effects)
+    assert any(isinstance(effect, ObservationEffectPolicy) for effect in spec.effects)
     assert spec.compact is not None
-    assert spec.audit is not None
+    assert any(isinstance(effect, AuditEffectPolicy) for effect in spec.effects)
+
+
+def test_effect_collection_is_canonical_across_decorator_order() -> None:
+    def first() -> None:
+        pass
+
+    def second() -> None:
+        pass
+
+    observed(audited("changed")(
+        requires_confirmation(action="change", resource="memory")(first)
+    ))
+    audited("changed")(requires_confirmation(
+        action="change",
+        resource="memory",
+    )(observed(second)))
+
+    assert tuple(type(effect) for effect in feature_spec(first).effects) == (
+        ApprovalEffectPolicy,
+        ObservationEffectPolicy,
+        AuditEffectPolicy,
+    )
+    assert tuple(type(effect) for effect in feature_spec(second).effects) == (
+        ApprovalEffectPolicy,
+        ObservationEffectPolicy,
+        AuditEffectPolicy,
+    )
 
 
 def test_conflicting_effect_declarations_fail_at_composition() -> None:
@@ -154,7 +175,7 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
         return f"archived {secret}"
 
     result = FeatureExecutor(
-        approvals=Approve(),
+        effects=Approve(),
         events=events,
         audits=audits,
     ).invoke(archive, "private-value")
@@ -259,8 +280,8 @@ def test_declined_confirmation_does_not_call_feature() -> None:
         nonlocal called
         called = True
 
-    with pytest.raises(FeatureConfirmationDeclined):
-        FeatureExecutor(approvals=Decline()).invoke(archive)
+    with pytest.raises(ToolEffectDeclined):
+        FeatureExecutor(effects=Decline()).invoke(archive)
 
     assert called is False
 
@@ -273,7 +294,7 @@ def test_missing_approval_frontend_is_not_reported_as_user_decline() -> None:
     def create() -> str:
         return "created"
 
-    with pytest.raises(ApprovalRequired) as captured:
+    with pytest.raises(ToolEffectRequired) as captured:
         FeatureExecutor().invoke(create)
 
     assert captured.value.request.operation == "create"
@@ -296,7 +317,7 @@ def test_materialized_tool_preserves_framework_boundary() -> None:
     assert framework_tool.tags == ["readonly"]
     assert framework_tool.metadata == {
         "service_component": "memory",
-        "effect": "readonly",
+        "execution": "readonly",
         "confirmation_required": False,
         "observed": False,
         "compact": False,

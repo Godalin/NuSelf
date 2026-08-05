@@ -53,7 +53,9 @@ class RecordingCallbacks:
         conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: object | None = None,
     ) -> InteractiveChatResult:
+        del effect_resolution
         self.calls.append(
             ("daemon-interactive", message, project_root, conversation_id, turn_id)
         )
@@ -75,7 +77,9 @@ class RecordingCallbacks:
         conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: object | None = None,
     ) -> InteractiveChatResult:
+        del effect_resolution
         self.calls.append(
             ("one-shot-interactive", message, project_root, conversation_id, turn_id)
         )
@@ -92,7 +96,9 @@ class RecordingCallbacks:
         self.calls.append(
             ("interactive", project_root, initial_conversation_id, daemon_activity)
         )
-        result = send_message("interactive message", initial_conversation_id, "turn-1")
+        result = send_message(
+            "interactive message", initial_conversation_id, "turn-1", None
+        )
         self.calls.append(("interactive-result", result.reply))
         return result.code
 

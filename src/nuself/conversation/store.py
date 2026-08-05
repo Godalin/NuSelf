@@ -50,7 +50,7 @@ class ConversationStore:
         *,
         turn_id: str | None = None,
         user_message: str | None = None,
-        resume_pending_turn: bool = False,
+        continue_pending_turn: bool = False,
         commit_observer: Callable[[int], None] | None = None,
     ) -> UpdateResult:
         """Serialize one turn without holding SQLite across model execution."""
@@ -76,7 +76,7 @@ class ConversationStore:
                     state,
                     turn_id,
                     user_message,
-                    resume_pending=resume_pending_turn,
+                    resume_pending=continue_pending_turn,
                 )
                 with self._backend.transaction():
                     self._save_unlocked(state)

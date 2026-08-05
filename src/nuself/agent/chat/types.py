@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.conversation import CompletedTurn, ConversationMessage, ConversationState
+from nuself.runtime.feature.effect import ToolEffectResolution
 
 type ConversationNodeName = Literal[
     "prepare_context",
@@ -87,6 +88,7 @@ class ConversationTurnState:
     persisted_state: ConversationState
     user_message: str
     turn_id: str | None = None
+    effect_resolution: ToolEffectResolution | None = None
     base_messages: tuple[ConversationMessage, ...] = ()
     active_messages: tuple[ConversationMessage, ...] = ()
     final_response: ChatStructuredOutput | None = None
@@ -105,12 +107,14 @@ class ConversationTurnState:
         conversation_id: str,
         *,
         turn_id: str | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ConversationTurnState:
         return cls(
             conversation_id=conversation_id,
             persisted_state=state,
             user_message=message,
             turn_id=turn_id,
+            effect_resolution=effect_resolution,
         )
 
 

@@ -23,11 +23,10 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.log.record import LogEvent
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalGrant,
-    ApprovalRequest,
-    current_approval_grant,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ToolEffectResolution,
 )
 
 
@@ -60,6 +59,7 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
         _message: str,
         conversation_id: str,
         turn_id: str | None,
+        _effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         observed.append(current_runtime_context())
         turn_ids.append(turn_id)
@@ -135,7 +135,7 @@ def test_turn_coordinator_owns_unbounded_approval_prompt(
 ) -> None:
     ConversationStore(tmp_path).save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
-    request = ApprovalRequest(
+    request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -145,24 +145,24 @@ def test_turn_coordinator_owns_unbounded_approval_prompt(
     )
     owner_thread = threading.current_thread()
     send_threads: list[threading.Thread] = []
-    grants: list[ApprovalGrant | None] = []
+    resolutions: list[ToolEffectResolution | None] = []
     prompt_calls = 0
 
     def send(
         _message: str,
         _conversation_id: str,
         _turn_id: str | None,
+        effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         send_threads.append(threading.current_thread())
-        grant = current_approval_grant()
-        grants.append(grant)
-        if grant is None:
+        resolutions.append(effect_resolution)
+        if effect_resolution is None:
             return InteractiveChatResult(
                 code=0,
-                approval_request=request,
+                tool_effect_request=request,
             )
-        assert grant.request == request
-        if len(grants) == 2:
+        assert effect_resolution.request == request
+        if len(resolutions) == 2:
             return InteractiveChatResult(
                 code=1,
                 retryable=True,
@@ -170,19 +170,29 @@ def test_turn_coordinator_owns_unbounded_approval_prompt(
             )
         return InteractiveChatResult(code=0, reply="saved")
 
-    class ApproveOnOwnerThread:
-        def request(self, observed: ApprovalRequest) -> ApprovalDecision:
+    class ResolveOnOwnerThread:
+        def resolve(
+            self,
+            observed: ApprovalEffectRequest,
+        ) -> ToolEffectResolution:
             nonlocal prompt_calls
             prompt_calls += 1
             assert threading.current_thread() is owner_thread
             assert observed == request
-            return ApprovalDecision(
-                True,
-                approver="tester",
-                input_kind="affirmative",
+            return ToolEffectResolution(
+                observed,
+                ApprovalEffectDecision(
+                    True,
+                    approver="tester",
+                    input_kind="affirmative",
+                ),
             )
 
-    monkeypatch.setattr(turns, "TerminalApprovalPort", ApproveOnOwnerThread)
+    monkeypatch.setattr(
+        turns,
+        "TerminalToolEffectPort",
+        ResolveOnOwnerThread,
+    )
     replies: list[str] = []
 
     result = send_interactive_chat_turn(
@@ -201,9 +211,9 @@ def test_turn_coordinator_owns_unbounded_approval_prompt(
 
     assert result == 0
     assert replies == ["saved"]
-    assert grants[0] is None
-    assert grants[1] is not None
-    assert grants[2] == grants[1]
+    assert resolutions[0] is None
+    assert resolutions[1] is not None
+    assert resolutions[2] == resolutions[1]
     assert prompt_calls == 1
     assert all(thread is not owner_thread for thread in send_threads)
 
@@ -220,6 +230,7 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
         _message: str,
         _conversation_id: str,
         _turn_id: str | None,
+        _effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         nonlocal attempts
         attempts += 1
@@ -270,6 +281,7 @@ def test_failed_retry_offer_reuses_original_turn_id(
         _message: str,
         _conversation_id: str,
         turn_id: str | None,
+        _effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         turn_ids.append(turn_id)
         return InteractiveChatResult(

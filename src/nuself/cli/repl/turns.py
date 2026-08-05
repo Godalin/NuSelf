@@ -24,11 +24,14 @@ from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.log.reader import InteractiveLogCursor
 from nuself.log.record import LogEvent
 from nuself.runtime.context import RuntimeContext, use_runtime_context
-from nuself.runtime.frontend import ApprovalGrant, use_approval_grant
-from nuself.tui.approval import TerminalApprovalPort
+from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.tui.effect import TerminalToolEffectPort
 from nuself.tui.render import TerminalTheme
 
-type SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
+type SendMessage = Callable[
+    [str, str, str | None, ToolEffectResolution | None],
+    InteractiveChatResult,
+]
 type ActivityPrinter = Callable[[list[LogEvent]], None]
 type ReplyPrinter = Callable[[str], None]
 
@@ -72,7 +75,7 @@ def send_interactive_chat_turn(
             print_activity_events=print_activity_events,
         )
 
-    approval: ApprovalGrant | None = None
+    effect_resolution: ToolEffectResolution | None = None
     for attempt in range(1, max_attempts + 1):
         events: list[LogEvent] = []
         with use_runtime_context(
@@ -104,28 +107,27 @@ def send_interactive_chat_turn(
                     f"({attempt}/{max_attempts})..."
                 )
             while True:
-                with use_approval_grant(approval):
-                    result, request_events, printed_logs = (
-                        run_live_activity_send(
-                            send_message,
-                            message,
-                            conversation_id,
-                            turn_id,
-                            project_root,
-                            log_cursor,
-                            printed_logs=printed_logs,
-                            daemon_activity=daemon_activity,
-                            poll_interval_seconds=poll_interval_seconds,
-                            read_events=read_activity_events,
-                            present_events=present_events,
-                        )
+                result, request_events, printed_logs = (
+                    run_live_activity_send(
+                        send_message,
+                        message,
+                        conversation_id,
+                        turn_id,
+                        project_root,
+                        log_cursor,
+                        effect_resolution=effect_resolution,
+                        printed_logs=printed_logs,
+                        daemon_activity=daemon_activity,
+                        poll_interval_seconds=poll_interval_seconds,
+                        read_events=read_activity_events,
+                        present_events=present_events,
                     )
+                )
                 events.extend(request_events)
-                request = result.approval_request
+                request = result.tool_effect_request
                 if request is None:
                     break
-                decision = TerminalApprovalPort().request(request)
-                approval = ApprovalGrant(request, decision)
+                effect_resolution = TerminalToolEffectPort().resolve(request)
         _capture_turn_output(
             session,
             project_root,

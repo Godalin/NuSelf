@@ -17,12 +17,13 @@ from nuself.cli.daemon_lifecycle import (
 from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.runtime.feature.effect import ToolEffectResolution
 from nuself.daemon import lifecycle
 from nuself.inbox.link import DeepLink
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
 type InteractiveSender = Callable[
-    [str, str, str | None],
+    [str, str, str | None, ToolEffectResolution | None],
     InteractiveChatResult,
 ]
 
@@ -44,6 +45,7 @@ class SendInteractiveChat(Protocol):
         conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> InteractiveChatResult: ...
 
 
@@ -248,12 +250,13 @@ class EntrypointController:
         initial_conversation_id: str = "default",
     ) -> int:
         return self._callbacks.run_interactive(
-            lambda message, conversation_id, turn_id: (
+            lambda message, conversation_id, turn_id, effect_resolution: (
                 self._callbacks.send_daemon_chat_interactive(
                     message,
                     project_root,
                     conversation_id,
                     turn_id=turn_id,
+                    effect_resolution=effect_resolution,
                 )
             ),
             project_root,
@@ -268,12 +271,13 @@ class EntrypointController:
         initial_conversation_id: str = "default",
     ) -> int:
         return self._callbacks.run_interactive(
-            lambda message, conversation_id, turn_id: (
+            lambda message, conversation_id, turn_id, effect_resolution: (
                 self._callbacks.send_one_shot_chat_interactive(
                     message,
                     project_root,
                     conversation_id,
                     turn_id=turn_id,
+                    effect_resolution=effect_resolution,
                 )
             ),
             project_root,

@@ -27,13 +27,13 @@ from nuself.runtime.handlers import (
     HandlerRegistryCoverageError,
     UnknownHandlerError,
 )
-from nuself.runtime.frontend import (
-    ApprovalGrant,
-    ApprovalRequest,
-    ApprovalRequired,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectRequest,
+    ToolEffectRequired,
+    ToolEffectResolution,
 )
 from nuself.daemon.payloads import (
-    ChatApprovalRequiredPayload,
+    ChatToolEffectPayload,
     decode_chat_payload,
 )
 
@@ -52,8 +52,8 @@ class MiddlewareState:
         self.activity_broker = RecordingActivityBroker()
 
 
-def test_chat_handler_returns_typed_approval_challenge(tmp_path: Path) -> None:
-    approval_request = ApprovalRequest(
+def test_chat_handler_returns_typed_tool_effect(tmp_path: Path) -> None:
+    effect_request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -69,10 +69,10 @@ def test_chat_handler_returns_typed_approval_challenge(tmp_path: Path) -> None:
             *,
             conversation_id: str,
             turn_id: str | None,
-            approval: ApprovalGrant | None,
+            effect_resolution: ToolEffectResolution | None,
         ) -> ChatResult:
-            del message, conversation_id, turn_id, approval
-            raise ApprovalRequired(approval_request)
+            del message, conversation_id, turn_id, effect_resolution
+            raise ToolEffectRequired(effect_request)
 
     response = handle_request(
         DaemonRequest(
@@ -88,8 +88,8 @@ def test_chat_handler_returns_typed_approval_challenge(tmp_path: Path) -> None:
 
     assert response.status == "ok"
     payload = decode_chat_payload(response.payload)
-    assert isinstance(payload, ChatApprovalRequiredPayload)
-    assert payload.request == approval_request
+    assert isinstance(payload, ChatToolEffectPayload)
+    assert payload.request == effect_request
 
 
 def test_daemon_request_registry_uses_shared_catalog_coverage(

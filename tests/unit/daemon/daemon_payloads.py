@@ -11,7 +11,7 @@ from nuself.daemon.payloads import (
     ActivityOpenRequestPayload,
     ActivitySubscriptionPayload,
     ChatRequestPayload,
-    ChatApprovalRequiredPayload,
+    ChatToolEffectPayload,
     ChatResponsePayload,
     DaemonIdentityPayload,
     EmptyPayload,
@@ -20,10 +20,10 @@ from nuself.daemon.payloads import (
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.log.record import LogEvent
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalGrant,
-    ApprovalRequest,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ToolEffectResolution,
 )
 
 
@@ -37,8 +37,8 @@ def test_chat_request_payload_validates_and_defaults() -> None:
     assert payload == ChatRequestPayload(message="hello")
 
 
-def test_chat_approval_payloads_round_trip_exact_request_and_decision() -> None:
-    request = ApprovalRequest(
+def test_chat_effect_payloads_round_trip_exact_request_and_decision() -> None:
+    request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -46,9 +46,9 @@ def test_chat_approval_payloads_round_trip_exact_request_and_decision() -> None:
         risk="reversible",
         summary="Create memory A",
     )
-    grant = ApprovalGrant(
+    resolution = ToolEffectResolution(
         request,
-        ApprovalDecision(
+        ApprovalEffectDecision(
             True,
             approver="tester",
             input_kind="affirmative",
@@ -58,9 +58,9 @@ def test_chat_approval_payloads_round_trip_exact_request_and_decision() -> None:
         message="remember this",
         conversation_id="default",
         turn_id="turn-1",
-        approval=grant,
+        effect_resolution=resolution,
     )
-    challenge = ChatApprovalRequiredPayload("default", request)
+    challenge = ChatToolEffectPayload("default", request)
 
     assert ChatRequestPayload.from_wire(chat_request.to_wire()) == chat_request
     assert decode_chat_payload(challenge.to_wire()) == challenge

@@ -30,7 +30,11 @@ from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.frontend import ApprovalDecision, ApprovalRequest
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ToolEffectResolution,
+)
 from nuself.storage.workspace import PrivateWorkspaceStore
 
 
@@ -138,23 +142,29 @@ def test_memory_create_requires_approval_and_reports_decline(
     class Approval:
         def __init__(self, approved: bool) -> None:
             self.approved = approved
-            self.requests: list[ApprovalRequest] = []
+            self.requests: list[ApprovalEffectRequest] = []
 
-        def request(self, request: ApprovalRequest) -> ApprovalDecision:
+        def resolve(
+            self,
+            request: ApprovalEffectRequest,
+        ) -> ToolEffectResolution:
             self.requests.append(request)
-            if self.approved:
-                return ApprovalDecision(
+            decision = (
+                ApprovalEffectDecision(
                     True,
                     approver="test",
                     input_kind="affirmative",
                 )
-            return ApprovalDecision(False, input_kind="declined")
+                if self.approved
+                else ApprovalEffectDecision(False, input_kind="declined")
+            )
+            return ToolEffectResolution(request, decision)
 
     def create_tool(approval: Approval):
         tools = build_memory_tool_set(
             service=MemoryService(repository),
             project_root=tmp_path,
-            executor=FeatureExecutor(approvals=approval),
+            executor=FeatureExecutor(effects=approval),
         )
         return next(tool for tool in tools.write if tool.name == "memory_create")
 

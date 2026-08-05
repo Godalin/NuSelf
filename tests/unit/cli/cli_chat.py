@@ -15,7 +15,7 @@ from nuself.daemon.client import (
     DaemonConnectionError,
 )
 from nuself.daemon.payloads import (
-    ChatApprovalRequiredPayload,
+    ChatToolEffectPayload,
     ChatResponsePayload,
 )
 from nuself.log.reader import read_log_events
@@ -26,11 +26,10 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.runtime.execution import CancellationToken, use_cancellation
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalGrant,
-    ApprovalRequest,
-    use_approval_grant,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ToolEffectResolution,
 )
 from nuself.config.scope import resolve_scope
 
@@ -66,12 +65,12 @@ def _chat_result(
 
 
 @pytest.mark.parametrize("approved", [True, False])
-def test_daemon_chat_prompts_and_replays_exact_approval(
+def test_daemon_chat_transports_exact_tool_effect_resolution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     approved: bool,
 ) -> None:
-    request = ApprovalRequest(
+    request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -79,17 +78,17 @@ def test_daemon_chat_prompts_and_replays_exact_approval(
         risk="reversible",
         summary="Create exact memory",
     )
-    approvals: list[object] = []
+    resolutions: list[object] = []
 
     def respond(*args: object, **kwargs: object):
         del args
-        approvals.append(kwargs.get("approval"))
-        if len(approvals) == 1:
-            return ChatApprovalRequiredPayload("default", request)
-        grant = kwargs.get("approval")
-        assert isinstance(grant, ApprovalGrant)
-        assert grant.request == request
-        assert grant.decision.approved is approved
+        resolutions.append(kwargs.get("effect_resolution"))
+        if len(resolutions) == 1:
+            return ChatToolEffectPayload("default", request)
+        resolution = kwargs.get("effect_resolution")
+        assert isinstance(resolution, ToolEffectResolution)
+        assert resolution.request == request
+        assert resolution.decision.approved is approved
         return ChatResponsePayload(
             answer="saved" if approved else "not saved",
             conversation_id="default",
@@ -104,26 +103,26 @@ def test_daemon_chat_prompts_and_replays_exact_approval(
         tmp_path,
         turn_id="turn-approval",
     )
-    assert challenge.approval_request == request
+    assert challenge.tool_effect_request == request
     decision = (
-        ApprovalDecision(
+        ApprovalEffectDecision(
             True,
             approver="tester",
             input_kind="affirmative",
         )
         if approved
-        else ApprovalDecision(False, input_kind="declined")
+        else ApprovalEffectDecision(False, input_kind="declined")
     )
-    with use_approval_grant(ApprovalGrant(request, decision)):
-        result = chat.send_daemon_chat_interactive(
-            "remember this",
-            tmp_path,
-            turn_id="turn-approval",
-        )
+    result = chat.send_daemon_chat_interactive(
+        "remember this",
+        tmp_path,
+        turn_id="turn-approval",
+        effect_resolution=ToolEffectResolution(request, decision),
+    )
 
     assert result.reply == ("saved" if approved else "not saved")
-    assert approvals[0] is None
-    assert approvals[1] is not None
+    assert resolutions[0] is None
+    assert resolutions[1] is not None
 
 
 class _StubConversationRuntime:

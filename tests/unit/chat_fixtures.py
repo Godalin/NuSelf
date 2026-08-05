@@ -11,7 +11,10 @@ from nuself.agent.chat.engine import (
 from nuself.agent.chat.types import ChatAgentSettings
 from conversation_fixtures import ConversationStore
 from nuself.conversation import ConversationService
-from nuself.agent.chat.response import ConversationResponseService
+from nuself.agent.chat.response import (
+    BasicConversationResponseService,
+    ConversationResponseService,
+)
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.text import LangChainTextAgent, TextAgent
@@ -37,7 +40,7 @@ from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.job.message import JobSink
-from nuself.runtime.frontend import ApprovalPort
+from nuself.runtime.feature.effect import ToolEffectPort
 from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
 
@@ -56,7 +59,9 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
         event_publisher: EventPublisher | None = None,
-        response_service: ConversationResponseService | None = None,
+        response_service: (
+            ConversationResponseService | BasicConversationResponseService | None
+        ) = None,
         compression_agent: TextAgent | None = None,
         memory_repository: MemoryEntryRepository | None = None,
         source_service: SourceService | None = None,
@@ -66,7 +71,7 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         reason_service: ReasonService | None = None,
         trace_query_service: TraceQueryService | None = None,
         persona_definitions: tuple[PersonaDefinition, ...] | None = None,
-        approval_port: ApprovalPort | None = None,
+        effect_port: ToolEffectPort | None = None,
     ) -> None:
         application = compose_application(
             runtime_paths(project_root),
@@ -156,5 +161,5 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
             event_publisher=publisher,
             response_service=response_service,
             compression_agent=compression_agent,
-            approval_port=approval_port,
+            effect_port=effect_port,
         )

@@ -6,6 +6,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+- Tool 副作用现由正交装饰器声明、`ToolSpec` 规范化组合，并由统一的
+  生命周期解释器执行。审批是可暂停/恢复的交互 effect，观察与审计是
+  独立投影 effect；Chat、daemon 与 CLI 传递通用的类型化 effect
+  request/resolution，不再维护审批专用 ContextVar 或跨层协议。
 - Daemon-backed Chat now returns typed approval challenges to the interactive
   client instead of treating a missing daemon frontend as user rejection. The
   REPL presents them on its terminal-owner thread without a deadline, and the

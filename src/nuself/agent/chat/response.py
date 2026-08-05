@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from threading import RLock
 from typing import Any, Protocol, cast
 from uuid import uuid4
 
@@ -43,18 +44,55 @@ from nuself.agent.endpoint import (
     redacted_llm_diagnostic,
 )
 from nuself.runtime.context import current_runtime_context
-from nuself.runtime.frontend import (
-    ApprovalRequest,
-    ApprovalRequired,
-    current_approval_grant,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectRequest,
+    ToolEffectRequest,
+    ToolEffectRequired,
+    ToolEffectResolution,
 )
+
+
+class _ContinuationRegistry:
+    """Own ephemeral agent continuations without leaking partial failures."""
+
+    def __init__(self) -> None:
+        self._lock = RLock()
+        self._values: dict[str, _LangChainChatSupervisor] = {}
+
+    def get(self, key: str) -> _LangChainChatSupervisor | None:
+        with self._lock:
+            return self._values.get(key)
+
+    def put(self, key: str, value: _LangChainChatSupervisor) -> None:
+        with self._lock:
+            self._values[key] = value
+
+    def take(self, key: str) -> _LangChainChatSupervisor | None:
+        with self._lock:
+            return self._values.pop(key, None)
+
+
 class ConversationResponseService(Protocol):
     """Typed response capability consumed by the conversation pipeline."""
 
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput: ...
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput: ...
+
+
+class BasicConversationResponseService(Protocol):
+    """Response service that does not own resumable Tool continuations."""
+
+    def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput: ...
 
     def finalize(
         self,
@@ -80,14 +118,19 @@ class ConversationResponseSynthesizer:
         self._tools = tuple(tools)
         self._log_tool_outcome = log_tool_outcome
         self._report_tool_log_failure = report_tool_log_failure
-        self._pending: dict[str, _LangChainChatSupervisor] = {}
+        self._continuations = _ContinuationRegistry()
 
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput:
         if self._langchain_models:
-            return self._complete_with_langchain_tools(prompt)
+            return self._complete_with_langchain_tools(
+                prompt,
+                effect_resolution=effect_resolution,
+            )
         return _local_response_output(prompt)
 
     def finalize(
@@ -106,26 +149,28 @@ class ConversationResponseSynthesizer:
     def _complete_with_langchain_tools(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None,
     ) -> ChatStructuredOutput:
         checkpoint_key = _checkpoint_key()
-        grant = current_approval_grant()
-        pending = self._pending.get(checkpoint_key)
+        pending = self._continuations.get(checkpoint_key)
         if pending is not None:
-            if grant is None:
-                raise ApprovalRequired(pending.require_approval_request())
-            if pending.approval_request != grant.request:
-                raise ApprovalRequired(pending.require_approval_request())
+            if effect_resolution is None:
+                raise ToolEffectRequired(pending.require_effect_request())
+            if pending.effect_request != effect_resolution.request:
+                raise ToolEffectRequired(pending.require_effect_request())
+            pending = self._continuations.take(checkpoint_key)
+            assert pending is not None
             try:
-                completed = pending.complete(
+                return pending.complete(
                     prompt,
+                    effect_resolution=effect_resolution,
                 )
-            except ApprovalRequired:
+            except ToolEffectRequired:
+                self._continuations.put(checkpoint_key, pending)
                 raise
-            else:
-                self._pending.pop(checkpoint_key, None)
-                return completed
-        if grant is not None:
-            raise RuntimeError("chat approval checkpoint is unavailable")
+        if effect_resolution is not None:
+            raise RuntimeError("chat Tool effect checkpoint is unavailable")
         retry_suppressed = False
         failed_endpoint = self._langchain_models[0]
 
@@ -142,8 +187,8 @@ class ConversationResponseSynthesizer:
             )
             try:
                 return supervisor.complete(prompt)
-            except ApprovalRequired:
-                self._pending[checkpoint_key] = supervisor
+            except ToolEffectRequired:
+                self._continuations.put(checkpoint_key, supervisor)
                 raise
             except Exception:
                 if supervisor.has_mutating_tool_outcomes:
@@ -158,12 +203,12 @@ class ConversationResponseSynthesizer:
                 component="chat",
                 attempts_per_endpoint=2,
                 retry_if=lambda exc: (
-                    not isinstance(exc, ApprovalRequired)
+                    not isinstance(exc, ToolEffectRequired)
                     and not retry_suppressed
                     and is_recoverable_agent_failure(exc)
                 ),
                 failover_if=lambda exc: (
-                    not isinstance(exc, ApprovalRequired)
+                    not isinstance(exc, ToolEffectRequired)
                     and not retry_suppressed
                     and is_recoverable_agent_failure(exc)
                     and is_endpoint_availability_error(exc)
@@ -171,7 +216,7 @@ class ConversationResponseSynthesizer:
                 on_retry=self._log_retry,
                 retry_delay_seconds=0.25,
             )
-        except ApprovalRequired:
+        except ToolEffectRequired:
             raise
         except Exception as exc:
             if retry_suppressed:
@@ -233,16 +278,16 @@ class _LangChainChatSupervisor:
         self._tool_outcomes: list[ToolOutcome] = []
         self._checkpointer = InMemorySaver()
         self._agent: Any | None = None
-        self._approval_request: ApprovalRequest | None = None
+        self._effect_request: ToolEffectRequest | None = None
 
     @property
-    def approval_request(self) -> ApprovalRequest | None:
-        return self._approval_request
+    def effect_request(self) -> ToolEffectRequest | None:
+        return self._effect_request
 
-    def require_approval_request(self) -> ApprovalRequest:
-        request = self._approval_request
+    def require_effect_request(self) -> ToolEffectRequest:
+        request = self._effect_request
         if request is None:
-            raise RuntimeError("chat checkpoint has no approval request")
+            raise RuntimeError("chat checkpoint has no Tool effect request")
         return request
 
     @property
@@ -260,9 +305,10 @@ class _LangChainChatSupervisor:
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput:
         checkpoint_key = _checkpoint_key()
-        approval = current_approval_grant()
         if self._agent is None:
             system_prompt, messages = _split_prompt(prompt)
             middleware = ToolCaptureMiddleware(
@@ -284,9 +330,11 @@ class _LangChainChatSupervisor:
             )
             graph_input: object = {"messages": messages}
         else:
-            if approval is None:
-                raise RuntimeError("chat checkpoint resume requires approval")
-            graph_input = Command(resume=approval)
+            if effect_resolution is None:
+                raise RuntimeError(
+                    "chat checkpoint resume requires a Tool effect resolution"
+                )
+            graph_input = Command(resume=effect_resolution)
         agent = cast(Any, self._agent)
         raw = agent.invoke(
             graph_input,
@@ -300,11 +348,11 @@ class _LangChainChatSupervisor:
             if len(output.interrupts) != 1:
                 raise RuntimeError("chat turn produced multiple approval interrupts")
             request = output.interrupts[0].value
-            if not isinstance(request, ApprovalRequest):
-                raise TypeError("chat approval interrupt has an invalid payload")
-            self._approval_request = request
-            raise ApprovalRequired(request)
-        self._approval_request = None
+            if not isinstance(request, ApprovalEffectRequest):
+                raise TypeError("chat Tool effect interrupt has an invalid payload")
+            self._effect_request = request
+            raise ToolEffectRequired(request)
+        self._effect_request = None
         self._checkpointer.delete_thread(checkpoint_key)
         return _structured_output_from_state(output.value)
 

@@ -12,6 +12,7 @@ from nuself.application.composition import ApplicationGraph
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.reason.composition import compose_reason_advancer
 from nuself.agent.text import LangChainTextAgent
+from nuself.agent.effect import GraphToolEffectPort
 from nuself.daemon.activity import ActivityBroker
 from nuself.reason.export import (
     ReasonExportService,
@@ -37,11 +38,9 @@ from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.observability import publish_observed_event
 from nuself.runtime.job.message import JobMessage
-from nuself.runtime.frontend import (
-    ApprovalGrant,
-    ApprovalRequired,
-    RequestApprovalPort,
-    use_approval_grant,
+from nuself.runtime.feature.effect import (
+    ToolEffectRequired,
+    ToolEffectResolution,
 )
 
 
@@ -50,7 +49,7 @@ class _ChatTaskPayload:
     message: str
     conversation_id: str
     turn_id: str | None
-    approval: ApprovalGrant | None
+    effect_resolution: ToolEffectResolution | None
 
 
 class DaemonUnavailableError(RuntimeError):
@@ -110,7 +109,7 @@ class DaemonState:
             ),
             event_publisher=self.event_publisher,
             langchain_models=langchain_models,
-            approval_port=RequestApprovalPort(),
+            effect_port=GraphToolEffectPort(),
         )
 
         self.memory_curator = application.memory_workflows.curator(
@@ -220,7 +219,7 @@ class DaemonState:
         *,
         conversation_id: str,
         turn_id: str | None,
-        approval: ApprovalGrant | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatResult:
         """Run chat through its conversation resource lane in a live daemon."""
 
@@ -241,13 +240,13 @@ class DaemonState:
                     message,
                     conversation_id,
                     turn_id,
-                    approval,
+                    effect_resolution,
                 ),
                 priority=10,
             )
         )
         result = completion.result()
-        if isinstance(result, ApprovalRequired):
+        if isinstance(result, ToolEffectRequired):
             raise result
         if not isinstance(result, ChatResult):
             raise TypeError("chat task returned an invalid result")
@@ -272,18 +271,18 @@ class DaemonState:
     def _run_chat_task(
         self,
         task: DaemonTask,
-    ) -> ChatResult | ApprovalRequired:
+    ) -> ChatResult | ToolEffectRequired:
         payload = task.payload
         if not isinstance(payload, _ChatTaskPayload):
             raise TypeError("chat task requires a typed payload")
         try:
-            with use_approval_grant(payload.approval):
-                result = self.conversation_runtime.respond(
-                    payload.message,
-                    conversation_id=payload.conversation_id,
-                    turn_id=payload.turn_id,
-                )
-        except ApprovalRequired as exc:
+            result = self.conversation_runtime.respond(
+                payload.message,
+                conversation_id=payload.conversation_id,
+                turn_id=payload.turn_id,
+                effect_resolution=payload.effect_resolution,
+            )
+        except ToolEffectRequired as exc:
             return exc
         observation = publish_chat_observation(
             self._memory_workflows,

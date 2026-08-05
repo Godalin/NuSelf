@@ -56,14 +56,13 @@ from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalGrant,
-    ApprovalRequest,
-    ApprovalRequired,
-    use_approval_grant,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ToolEffectRequired,
+    ToolEffectResolution,
 )
-from nuself.tui.approval import TerminalApprovalPort
+from nuself.tui.effect import TerminalToolEffectPort
 from nuself.agent.tools.resources import ToolResources
 
 
@@ -148,7 +147,7 @@ def _chat_tool(
     tools = build_langchain_chat_tools(
         resources=resources,
         feature_executor=FeatureExecutor(
-            approvals=TerminalApprovalPort(),
+            effects=TerminalToolEffectPort(),
         ),
     )
     return {tool.name: tool for tool in tools}[name]
@@ -798,7 +797,7 @@ def test_chat_agent_preserves_conversation_state_when_graph_driver_fails(tmp_pat
 def test_chat_agent_propagates_approval_pause_without_failure_or_commit(
     tmp_path: Path,
 ) -> None:
-    request = ApprovalRequest(
+    request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -810,7 +809,7 @@ def test_chat_agent_propagates_approval_pause_without_failure_or_commit(
     class PausingResponseService(FakeResponseService):
         def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
             self.calls.append(prompt)
-            raise ApprovalRequired(request)
+            raise ToolEffectRequired(request)
 
     conversation_store = ConversationStore(tmp_path)
     conversation_store.save(ConversationState.empty("default"))
@@ -821,7 +820,7 @@ def test_chat_agent_propagates_approval_pause_without_failure_or_commit(
         memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
-    with pytest.raises(ApprovalRequired) as paused:
+    with pytest.raises(ToolEffectRequired) as paused:
         agent.respond(
             "remember this",
             turn_id="turn-approval",
@@ -844,7 +843,7 @@ def test_chat_agent_propagates_approval_pause_without_failure_or_commit(
 def test_chat_agent_resumes_pending_approval_turn_and_commits_once(
     tmp_path: Path,
 ) -> None:
-    request = ApprovalRequest(
+    request = ApprovalEffectRequest(
         component="memory",
         operation="memory_create",
         action="create",
@@ -854,10 +853,16 @@ def test_chat_agent_resumes_pending_approval_turn_and_commits_once(
     )
 
     class ResumeResponseService(FakeResponseService):
-        def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput:
+        def complete(
+            self,
+            prompt: list[BaseMessage],
+            *,
+            effect_resolution: ToolEffectResolution | None = None,
+        ) -> ChatStructuredOutput:
+            del effect_resolution
             self.calls.append(prompt)
             if len(self.calls) == 1:
-                raise ApprovalRequired(request)
+                raise ToolEffectRequired(request)
             return ChatStructuredOutput(answer="saved")
 
     response = ResumeResponseService()
@@ -866,21 +871,21 @@ def test_chat_agent_resumes_pending_approval_turn_and_commits_once(
         response_service=response,
     )
 
-    with pytest.raises(ApprovalRequired):
+    with pytest.raises(ToolEffectRequired):
         runtime.respond("remember this", turn_id="turn-approval")
-    grant = ApprovalGrant(
+    resolution = ToolEffectResolution(
         request,
-        ApprovalDecision(
+        ApprovalEffectDecision(
             True,
             approver="tester",
             input_kind="affirmative",
         ),
     )
-    with use_approval_grant(grant):
-        result = runtime.respond(
-            "remember this",
-            turn_id="turn-approval",
-        )
+    result = runtime.respond(
+        "remember this",
+        turn_id="turn-approval",
+        effect_resolution=resolution,
+    )
 
     assert result.answer == "saved"
     assert len(response.calls) == 2

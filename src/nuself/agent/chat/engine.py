@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 import time
+from typing import cast
 
 from langchain_core.messages import (
     AIMessage,
@@ -26,6 +27,7 @@ from nuself.agent.chat.types import (
 from nuself.agent.chat.context import ConversationContextPreparer
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.agent.chat.response import (
+    BasicConversationResponseService,
     ConversationResponseService,
     ConversationResponseSynthesizer,
 )
@@ -50,10 +52,10 @@ from nuself.runtime.event.payload import (
 )
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.frontend import (
-    ApprovalPort,
-    ApprovalRequired,
-    current_approval_grant,
+from nuself.runtime.feature.effect import (
+    ToolEffectPort,
+    ToolEffectRequired,
+    ToolEffectResolution,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_chain
 from nuself.runtime.observability import (
@@ -92,9 +94,11 @@ class ConversationGraphRuntime:
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         settings: ChatAgentSettings,
         event_publisher: EventPublisher,
-        response_service: ConversationResponseService | None = None,
+        response_service: (
+            ConversationResponseService | BasicConversationResponseService | None
+        ) = None,
         compression_agent: TextAgent | None = None,
-        approval_port: ApprovalPort | None = None,
+        effect_port: ToolEffectPort | None = None,
     ) -> None:
         project_root = resources.tools.project_root
         self._langchain_models = langchain_models
@@ -137,7 +141,7 @@ class ConversationGraphRuntime:
             resources=resources.tools,
             selves_consult=self._consult_selves_tool,
             feature_executor=FeatureExecutor(
-                approvals=approval_port,
+                effects=effect_port,
                 events=self._event_publisher,
             ),
             event_publisher=self._event_publisher,
@@ -169,6 +173,7 @@ class ConversationGraphRuntime:
         conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatResult:
         started_at = time.monotonic()
         reused = False
@@ -198,6 +203,7 @@ class ConversationGraphRuntime:
                 message,
                 conversation_id,
                 turn_id=turn_id,
+                effect_resolution=effect_resolution,
                 metrics_observer=observe_turn_metrics,
             )
             return state, result
@@ -225,10 +231,10 @@ class ConversationGraphRuntime:
                     update,
                     turn_id=turn_id,
                     user_message=(message if turn_id is not None else None),
-                    resume_pending_turn=current_approval_grant() is not None,
+                    continue_pending_turn=effect_resolution is not None,
                     commit_observer=observe_commit,
                 )
-            except ApprovalRequired:
+            except ToolEffectRequired:
                 raise
             except Exception as exc:
                 self._publish_turn_event(
@@ -305,6 +311,7 @@ class ConversationGraphRuntime:
         conversation_id: str,
         *,
         turn_id: str | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
         metrics_observer: Callable[
             [tuple[tuple[str, int], ...], dict[str, object]], None
         ]
@@ -320,6 +327,7 @@ class ConversationGraphRuntime:
                 message,
                 conversation_id,
                 turn_id=turn_id,
+                effect_resolution=effect_resolution,
                 metrics_observer=metrics_observer,
             )
 
@@ -330,6 +338,7 @@ class ConversationGraphRuntime:
         conversation_id: str,
         *,
         turn_id: str | None,
+        effect_resolution: ToolEffectResolution | None,
         metrics_observer: Callable[
             [tuple[tuple[str, int], ...], dict[str, object]], None
         ]
@@ -340,6 +349,7 @@ class ConversationGraphRuntime:
             message,
             conversation_id,
             turn_id=turn_id,
+            effect_resolution=effect_resolution,
         )
         turn_state = self._run_node(
             "prepare_context", turn_state, self.prepare_context_node
@@ -434,7 +444,7 @@ class ConversationGraphRuntime:
             )
         except ConversationGraphRuntimeError:
             raise
-        except ApprovalRequired:
+        except ToolEffectRequired:
             raise
         except Exception as exc:
             raise ConversationGraphRuntimeError(
@@ -452,7 +462,17 @@ class ConversationGraphRuntime:
 
     def respond_node(self, state: ConversationTurnState) -> ConversationNodeResult:
         prompt = self._build_prompt(state)
-        response = self._response_synthesizer.complete(prompt)
+        response = (
+            self._response_synthesizer.complete(prompt)
+            if state.effect_resolution is None
+            else cast(
+                ConversationResponseService,
+                self._response_synthesizer,
+            ).complete(
+                prompt,
+                effect_resolution=state.effect_resolution,
+            )
+        )
         final = self._response_synthesizer.finalize(state, response)
         saved = (
             *state.active_messages,

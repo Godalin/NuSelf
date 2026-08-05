@@ -14,6 +14,7 @@ from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
+from nuself.runtime.feature.effect import ToolEffectResolution
 from nuself.memory.model import MemoryEntry
 
 
@@ -133,7 +134,10 @@ class FixtureResponseService:
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput:
+        del effect_resolution
         self.calls.append(list(prompt))
         return self.response
 

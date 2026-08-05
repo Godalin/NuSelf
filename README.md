@@ -40,7 +40,7 @@ locks and Unix-domain sockets.
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
 - Structured diagnostics with credential redaction
-- Typed activity/approval events and one bounded daemon scheduler with
+- Composable typed Tool effects (approval, observation, and audit) and one bounded daemon scheduler with
   recoverable maintenance wake-ups and resource-lane serialization
 
 ## Quick Start

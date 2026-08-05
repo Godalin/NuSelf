@@ -31,7 +31,7 @@ from nuself.daemon.transport import read_socket_frame
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
-from nuself.runtime.frontend import ApprovalGrant
+from nuself.runtime.feature.effect import ToolEffectResolution
 
 type DaemonConnectionPhase = Literal[
     "connect",
@@ -254,7 +254,7 @@ def chat(
     turn_id: str | None = None,
     project_root: Path | None = None,
     timeout: float,
-    approval: ApprovalGrant | None = None,
+    effect_resolution: ToolEffectResolution | None = None,
 ) -> DaemonChatPayload:
     """Run one chat request and decode its complete success payload."""
 
@@ -262,7 +262,7 @@ def chat(
         message=message,
         conversation_id=conversation_id,
         turn_id=turn_id,
-        approval=approval,
+        effect_resolution=effect_resolution,
     )
     return _decode_response(
         _request(

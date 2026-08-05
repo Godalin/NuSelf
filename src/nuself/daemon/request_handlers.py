@@ -21,7 +21,7 @@ from nuself.daemon.payloads import (
     ActivitySubscriptionPayload,
     ChatRequestPayload,
     ChatResponsePayload,
-    ChatApprovalRequiredPayload,
+    ChatToolEffectPayload,
     EmptyPayload,
     SchedulerHealthPayload,
 )
@@ -42,7 +42,10 @@ from nuself.log.store import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.frontend import ApprovalGrant, ApprovalRequired
+from nuself.runtime.feature.effect import (
+    ToolEffectRequired,
+    ToolEffectResolution,
+)
 
 class DaemonRequestPayloadError(ProtocolError):
     """A direct request-specific payload codec rejected its input."""
@@ -61,7 +64,7 @@ class DaemonRequestState(Protocol):
         *,
         conversation_id: str,
         turn_id: str | None,
-        approval: ApprovalGrant | None,
+        effect_resolution: ToolEffectResolution | None,
     ) -> ChatResult: ...
 
 
@@ -176,12 +179,12 @@ def _handle_chat(
                 chat_request.message,
                 conversation_id=chat_request.conversation_id,
                 turn_id=chat_request.turn_id,
-                approval=chat_request.approval,
+                effect_resolution=chat_request.effect_resolution,
             )
-        except ApprovalRequired as exc:
+        except ToolEffectRequired as exc:
             return DaemonResponse.ok(
                 request,
-                ChatApprovalRequiredPayload(
+                ChatToolEffectPayload(
                     conversation_id=chat_request.conversation_id,
                     request=exc.request,
                 ).to_wire(),

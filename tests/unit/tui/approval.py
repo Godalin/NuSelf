@@ -6,12 +6,12 @@ import pytest
 from _pytest.capture import CaptureFixture
 from _pytest.monkeypatch import MonkeyPatch
 
-from nuself.runtime.frontend import ApprovalRequest
+from nuself.runtime.feature.effect import ApprovalEffectRequest
 from nuself.tui.approval import TerminalApprovalPort
 
 
-def _request() -> ApprovalRequest:
-    return ApprovalRequest(
+def _request() -> ApprovalEffectRequest:
+    return ApprovalEffectRequest(
         component="reasoning",
         operation="reason_export",
         action="export",

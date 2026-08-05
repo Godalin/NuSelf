@@ -15,6 +15,7 @@ from nuself.cli.repl.loop import (
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.log.reader import read_log_events
+from nuself.runtime.feature.effect import ToolEffectResolution
 
 
 class FakeInteractiveInput:
@@ -68,7 +69,7 @@ def _callbacks(
 
     def send_turn(
         send_message: Callable[
-            [str, str, str | None],
+            [str, str, str | None, ToolEffectResolution | None],
             InteractiveChatResult,
         ],
         project_root: Path | None,
@@ -96,8 +97,9 @@ def _unused_send(
     message: str,
     conversation_id: str,
     turn_id: str | None,
+    effect_resolution: ToolEffectResolution | None,
 ) -> InteractiveChatResult:
-    del message, conversation_id, turn_id
+    del message, conversation_id, turn_id, effect_resolution
     raise AssertionError("send callback must not run")
 
 

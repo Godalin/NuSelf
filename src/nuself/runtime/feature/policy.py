@@ -6,8 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Literal, overload
 
-type Effect = Literal["readonly", "mutating"]
-type Risk = Literal["reversible", "destructive", "external"]
+from nuself.runtime.feature.effect import ApprovalRisk
+
+type Execution = Literal["readonly", "mutating"]
 type SummaryBuilder = Callable[[tuple[object, ...], dict[str, object]], str]
 
 _SPEC_ATTRIBUTE = "__nuself_feature_spec__"
@@ -26,12 +27,12 @@ class ToolPolicy:
 
 
 @dataclass(frozen=True)
-class ConfirmationPolicy:
-    """Declarative confirmation requirement."""
+class ApprovalEffectPolicy:
+    """Declarative approval interaction effect."""
 
     action: str
     resource: str
-    risk: Risk = "reversible"
+    risk: ApprovalRisk = "reversible"
     summary: SummaryBuilder | None = None
 
     def __post_init__(self) -> None:
@@ -42,8 +43,8 @@ class ConfirmationPolicy:
 
 
 @dataclass(frozen=True)
-class ObservationPolicy:
-    """Marker for privacy-safe outcome observation."""
+class ObservationEffectPolicy:
+    """Privacy-safe lifecycle projection effect."""
 
 
 @dataclass(frozen=True)
@@ -52,8 +53,8 @@ class CompactPolicy:
 
 
 @dataclass(frozen=True)
-class AuditPolicy:
-    """Stable domain audit identity."""
+class AuditEffectPolicy:
+    """Stable domain audit projection effect."""
 
     event: str
 
@@ -62,17 +63,20 @@ class AuditPolicy:
             raise ValueError("audit event must not be blank")
 
 
+type FeatureEffectPolicy = (
+    ApprovalEffectPolicy | ObservationEffectPolicy | AuditEffectPolicy
+)
+
+
 @dataclass(frozen=True)
 class FeatureSpec:
     """Immutable policy set attached to a normal Python callable."""
 
     tool: ToolPolicy | None = None
     component: str | None = None
-    effect: Effect | None = None
-    confirmation: ConfirmationPolicy | None = None
-    observation: ObservationPolicy | None = None
+    execution: Execution | None = None
+    effects: tuple[FeatureEffectPolicy, ...] = ()
     compact: CompactPolicy | None = None
-    audit: AuditPolicy | None = None
 
 
 type FeatureCallable[**P, R] = Callable[P, R]
@@ -99,10 +103,34 @@ def _attach[**P, R](
 def _validate(spec: FeatureSpec) -> None:
     if spec.component is not None and not spec.component.strip():
         raise ValueError("feature component must not be blank")
-    if spec.confirmation is not None and spec.effect == "readonly":
+    effect_types = [type(effect) for effect in spec.effects]
+    if len(effect_types) != len(set(effect_types)):
+        raise FeaturePolicyConflictError(
+            "feature effect policies may be declared only once"
+        )
+    if any(
+        isinstance(effect, ApprovalEffectPolicy)
+        for effect in spec.effects
+    ) and spec.execution == "readonly":
         raise FeaturePolicyConflictError(
             "readonly feature cannot require confirmation"
         )
+
+
+def _append_effect[**P, R](
+    target: FeatureCallable[P, R],
+    effect: FeatureEffectPolicy,
+) -> FeatureCallable[P, R]:
+    priorities = {
+        ApprovalEffectPolicy: 0,
+        ObservationEffectPolicy: 1,
+        AuditEffectPolicy: 2,
+    }
+    effects = (*feature_spec(target).effects, effect)
+    return _attach(target, effects=tuple(sorted(
+        effects,
+        key=lambda declared: priorities[type(declared)],
+    )))
 
 
 @overload
@@ -163,11 +191,11 @@ def readonly[**P, R](
     """Declare a side-effect-free feature."""
 
     current = feature_spec(function)
-    if current.effect == "mutating":
+    if current.execution == "mutating":
         raise FeaturePolicyConflictError(
             "feature cannot be both readonly and mutating"
         )
-    return _attach(function, effect="readonly")
+    return _attach(function, execution="readonly")
 
 
 def mutating[**P, R](
@@ -176,23 +204,23 @@ def mutating[**P, R](
     """Declare a state-changing feature."""
 
     current = feature_spec(function)
-    if current.effect == "readonly":
+    if current.execution == "readonly":
         raise FeaturePolicyConflictError(
             "feature cannot be both readonly and mutating"
         )
-    return _attach(function, effect="mutating")
+    return _attach(function, execution="mutating")
 
 
 def requires_confirmation[**P, R](
     *,
     action: str,
     resource: str,
-    risk: Risk = "reversible",
+    risk: ApprovalRisk = "reversible",
     summary: SummaryBuilder | None = None,
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]:
     """Declare confirmation without selecting a frontend."""
 
-    policy = ConfirmationPolicy(
+    policy = ApprovalEffectPolicy(
         action=action,
         resource=resource,
         risk=risk,
@@ -200,7 +228,7 @@ def requires_confirmation[**P, R](
     )
 
     def decorate(target: FeatureCallable[P, R]) -> FeatureCallable[P, R]:
-        return _attach(target, confirmation=policy)
+        return _append_effect(target, policy)
 
     return decorate
 
@@ -224,10 +252,7 @@ def observed[**P, R](
     """Declare safe lifecycle observation."""
 
     def decorate(target: FeatureCallable[P, R]) -> FeatureCallable[P, R]:
-        return _attach(
-            target,
-            observation=ObservationPolicy(),
-        )
+        return _append_effect(target, ObservationEffectPolicy())
 
     return decorate(function) if function is not None else decorate
 
@@ -243,10 +268,10 @@ def audited[**P, R](
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]:
     """Declare one stable audit identity."""
 
-    policy = AuditPolicy(event)
+    policy = AuditEffectPolicy(event)
 
     def decorate(target: FeatureCallable[P, R]) -> FeatureCallable[P, R]:
-        return _attach(target, audit=policy)
+        return _append_effect(target, policy)
 
     return decorate
 
@@ -259,9 +284,12 @@ def require_tool_spec(function: Callable[..., object]) -> FeatureSpec:
         raise ValueError("feature function is not declared as a tool")
     if spec.component is None:
         raise ValueError("tool feature requires a component")
-    if spec.effect is None:
-        raise ValueError("tool feature requires an effect declaration")
-    if spec.confirmation is not None and spec.effect != "mutating":
+    if spec.execution is None:
+        raise ValueError("tool feature requires an execution declaration")
+    if any(
+        isinstance(effect, ApprovalEffectPolicy)
+        for effect in spec.effects
+    ) and spec.execution != "mutating":
         raise FeaturePolicyConflictError(
             "confirmation requires a mutating feature"
         )

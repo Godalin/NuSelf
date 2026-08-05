@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import getpass
 
-from nuself.runtime.frontend import (
-    ApprovalDecision,
-    ApprovalRequest,
+from nuself.runtime.feature.effect import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
 )
 from nuself.tui.render import render_approval_prompt
 
@@ -14,7 +14,10 @@ from nuself.tui.render import render_approval_prompt
 class TerminalApprovalPort:
     """Request one safe-default decision from the active terminal."""
 
-    def request(self, request: ApprovalRequest) -> ApprovalDecision:
+    def request(
+        self,
+        request: ApprovalEffectRequest,
+    ) -> ApprovalEffectDecision:
         prompt = render_approval_prompt(
             request.component,  # pyright: ignore[reportArgumentType]
             request.summary,
@@ -26,13 +29,13 @@ class TerminalApprovalPort:
             response = input()
         except EOFError:
             print()
-            return ApprovalDecision(False, input_kind="eof")
+            return ApprovalEffectDecision(False, input_kind="eof")
         except KeyboardInterrupt:
             print()
-            return ApprovalDecision(False, input_kind="interrupt")
+            return ApprovalEffectDecision(False, input_kind="interrupt")
         if response.strip().lower() not in {"y", "yes"}:
-            return ApprovalDecision(False, input_kind="declined")
-        return ApprovalDecision(
+            return ApprovalEffectDecision(False, input_kind="declined")
+        return ApprovalEffectDecision(
             True,
             approver=getpass.getuser(),
             input_kind="affirmative",

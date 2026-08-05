@@ -9,10 +9,15 @@ from typing import cast
 from langchain_core.tools import StructuredTool
 
 from nuself.runtime.feature.execution import (
-    FeatureConfirmationDeclined,
     FeatureExecutor,
+    ToolEffectDeclined,
 )
-from nuself.runtime.feature.policy import require_tool_spec
+from nuself.runtime.feature.policy import (
+    ApprovalEffectPolicy,
+    AuditEffectPolicy,
+    ObservationEffectPolicy,
+    require_tool_spec,
+)
 
 def materialize_tool[**P](
     function: Callable[P, str],
@@ -24,26 +29,39 @@ def materialize_tool[**P](
     spec = require_tool_spec(function)
     assert spec.tool is not None
     assert spec.component is not None
-    assert spec.effect is not None
+    assert spec.execution is not None
 
     @wraps(function)
     def invoke(*args: P.args, **kwargs: P.kwargs) -> str:
         try:
             return executor.invoke(function, *args, **kwargs)
-        except FeatureConfirmationDeclined:
+        except ToolEffectDeclined:
             return "Action was not approved; no changes were made."
 
     name = spec.tool.name or function.__name__
     description = spec.tool.description or function.__doc__
-    tags = ("readonly" if spec.effect == "readonly" else "write",)
+    tags = ("readonly" if spec.execution == "readonly" else "write",)
     metadata = {
         "service_component": spec.component,
-        "effect": spec.effect,
-        "confirmation_required": spec.confirmation is not None,
-        "observed": spec.observation is not None,
+        "execution": spec.execution,
+        "confirmation_required": any(
+            isinstance(effect, ApprovalEffectPolicy)
+            for effect in spec.effects
+        ),
+        "observed": any(
+            isinstance(effect, ObservationEffectPolicy)
+            for effect in spec.effects
+        ),
         "compact": spec.compact is not None,
         "audit_event": (
-            spec.audit.event if spec.audit is not None else None
+            next(
+                (
+                    effect.event
+                    for effect in spec.effects
+                    if isinstance(effect, AuditEffectPolicy)
+                ),
+                None,
+            )
         ),
     }
     factory = cast(Callable[..., StructuredTool], StructuredTool.from_function)
@@ -53,5 +71,8 @@ def materialize_tool[**P](
         description=description,
         tags=tags,
         metadata=metadata,
-        handle_tool_error=spec.confirmation is not None,
+        handle_tool_error=any(
+            isinstance(effect, ApprovalEffectPolicy)
+            for effect in spec.effects
+        ),
     )

@@ -67,8 +67,8 @@ The generic Tool effect protocol, not an approval-specific ContextVar, carries
 the decision across execution layers.
 
 One LangChain adapter reads the composed specification and produces the
-framework tool. Shared execution middleware interprets policies. Confirmation
-uses an injected approval port; terminal, daemon, test, and future web
+framework tool. Shared execution middleware interprets policies. Interaction
+effects use an injected Tool effect port; terminal, daemon, test, and future web
 frontends provide different adapters without changing feature functions.
 Observation publishes safe lifecycle events and one tool outcome event. Audit
 writes durable records through an injected sink. Observed tool outcomes include
@@ -82,6 +82,16 @@ For an `@observed` function, the shared executor publishes
 failure payload may contain the exception type but never arguments, results,
 or the raw exception message. Functions without `@observed` publish none of
 these lifecycle events. Event publication remains secondary to execution.
+
+Agent continuations are ephemeral and keyed by the exact conversation and turn
+context. A matching resolution takes ownership of its saved continuation
+before resume. Another suspension returns the updated continuation to the
+registry; completion, failure, or cancellation removes it. A mismatched
+resolution leaves the expected continuation intact and is challenged again.
+After process restart no in-memory continuation exists, so a supplied
+resolution fails closed and cannot authorize a fresh Tool invocation. The
+durable unfinished-turn marker remains recovery evidence rather than authority
+to reconstruct or replay a possibly effectful agent run.
 
 An approval decorator that calls `input()`, imports terminal rendering, writes
 audit records, or JSON-wraps the domain result is forbidden. Type-checking

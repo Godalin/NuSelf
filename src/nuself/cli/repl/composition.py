@@ -28,6 +28,7 @@ from nuself.cli.repl.turns import (
     send_interactive_chat_turn as _run_interactive_chat_turn,
 )
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.runtime.feature.effect import ToolEffectResolution
 
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1
@@ -36,7 +37,10 @@ type MemoryCuratorRunner = Callable[[Path | None, str], object]
 
 
 def run_repl(
-    send_message: Callable[[str, str, str | None], InteractiveChatResult],
+    send_message: Callable[
+        [str, str, str | None, ToolEffectResolution | None],
+        InteractiveChatResult,
+    ],
     project_root: Path | None,
     *,
     run_memory_curator: MemoryCuratorRunner,
@@ -55,7 +59,7 @@ def run_repl(
 
     def send_turn(
         turn_sender: Callable[
-            [str, str, str | None],
+            [str, str, str | None, ToolEffectResolution | None],
             InteractiveChatResult,
         ],
         turn_project_root: Path | None,
@@ -96,7 +100,10 @@ def run_repl(
 
 
 def send_interactive_chat_turn(
-    send_message: Callable[[str, str, str | None], InteractiveChatResult],
+    send_message: Callable[
+        [str, str, str | None, ToolEffectResolution | None],
+        InteractiveChatResult,
+    ],
     project_root: Path | None,
     conversation_id: str,
     message: str,
