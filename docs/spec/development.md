@@ -3,6 +3,11 @@
 ## Code Standard
 
 - Standard Python project managed by `uv`.
+- Prefer one descriptive word for repository-owned Python module filenames;
+  package context should carry the surrounding domain meaning. Use a compound
+  `snake_case` filename only when one word would be ambiguous or misleading,
+  or when an external framework contract fixes the name. Do not preserve a
+  compound filename merely to repeat its package, layer, or primary type.
 - The declared minimum Python version is the language baseline. Prefer stable
   language and standard-library features available across every supported
   version instead of retaining compatibility syntax for older, unsupported
