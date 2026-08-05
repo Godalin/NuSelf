@@ -506,6 +506,7 @@ Direct service-status queries, such as asking how many memory/reflection/reason/
 | `memory_search`  | Query personal durable memory.                                        |
 | `memory_count`   | Count durable memory entries with optional type/tag filters.          |
 | `memory_create`  | Create a draft durable memory after explicit user approval.           |
+| `runtime_time`   | Read current local-timezone and UTC timestamps.                        |
 | `source_search`  | Search external document chunks on demand.                            |
 | `source_get`     | Read a selected external document or chunk.                           |
 | `source_list`    | List available external documents.                                    |
@@ -528,6 +529,16 @@ modules; Chat-only aggregation lives in `agent.tools.composition`. Consumers
 import the owning builder or composition module directly. Subsystem builders
 receive their service dependencies explicitly and do not construct unrelated
 repositories or services.
+
+#### `runtime_time`
+
+- **Args**: none.
+- **Behavior**: Reads the injected runtime clock once and renders the same
+  instant in the host's current local timezone and UTC.
+- **Returns**: ISO-8601 local and UTC timestamps including timezone offsets.
+- **When to use**: When the user asks for the current date/time or when an
+  answer depends materially on what “now”, “today”, or a relative date means.
+- **Effect**: Read-only; no approval is required.
 
 Tools that emit durable operational logs, such as export flows and other long-running side effects, should include a `log` tag in addition to their behavioral tag(s) so log-oriented tooling can classify them consistently.
 
