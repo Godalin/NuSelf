@@ -189,7 +189,7 @@ remain in the scheduler/gate; the repository only decodes and saves the typed
 state.
 
 Concrete workflows belong to their domains even when an outer adapter triggers
-them. Reason owns durable output export in `reason.export_service`; daemon owns
+them. Reason owns durable output export in `reason.export`; daemon owns
 only scheduling and lifecycle. CLI owns only argument handling and result
 presentation for Inbox and Delivery operations.
 Delivery persistence is constructed once inside application composition and

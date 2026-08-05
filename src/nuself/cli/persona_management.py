@@ -23,7 +23,7 @@ _theme = TerminalTheme()
 def list_persona_prompts(
     project_root: Path | None,
 ) -> tuple[PersonaPrompt, ...]:
-    return cli_application().personas.list_prompts()
+    return cli_application().personas.list()
 
 
 def resolve_persona_id(
@@ -89,14 +89,14 @@ def delete_personas(
 ) -> int:
     application = cli_application()
     service = application.personas
-    prompt_ids = _resolve_persona_ids(persona_ref, service.list_prompts())
+    prompt_ids = _resolve_persona_ids(persona_ref, service.list())
     if prompt_ids is None:
         return CliExitCode.FAILURE
     if not confirmed:
         names = [
             prompt.name
             for prompt in (
-                service.get_prompt(prompt_id) for prompt_id in prompt_ids
+                service.get(prompt_id) for prompt_id in prompt_ids
             )
             if prompt is not None
         ]
@@ -112,9 +112,9 @@ def delete_personas(
             return CliExitCode.SUCCESS
     deleted: list[str] = []
     for prompt_id in prompt_ids:
-        prompt = service.get_prompt(prompt_id)
+        prompt = service.get(prompt_id)
         if prompt is not None:
-            service.delete_prompt(prompt_id)
+            service.delete(prompt_id)
             deleted.append(prompt.name)
     for name in deleted:
         print_ansi(
@@ -133,10 +133,10 @@ def set_persona_enabled(
 ) -> int:
     application = cli_application()
     service = application.personas
-    prompt_id = _resolve_persona_id(persona_ref, service.list_prompts())
+    prompt_id = _resolve_persona_id(persona_ref, service.list())
     if prompt_id is None:
         return CliExitCode.FAILURE
-    prompt = service.get_prompt(prompt_id)
+    prompt = service.get(prompt_id)
     if prompt is None:
         print_ansi(
             f"{_theme.tag('[persona]', 'persona')} "
@@ -160,7 +160,7 @@ def set_persona_enabled(
         if decision is ConfirmationDecision.NO:
             print("Aborted.")
             return CliExitCode.SUCCESS
-    service.set_enabled(prompt.id, enabled=enabled)
+    service.set_disabled(prompt.id, not enabled)
     action = "enabled" if enabled else "disabled"
     _record_lifecycle(
         application.trace.recorder,

@@ -81,7 +81,7 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
             return f"Memory entry not found: {entry_id}"
         return render_memory_entry_detail(entry)
     if command == "review":
-        candidates = application.memory_candidates.list_candidates()
+        candidates = application.memory.list_candidates()
         if not candidates:
             return "No memory candidates."
         return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
@@ -90,14 +90,14 @@ def handle_interactive_memory_command(command: str, project_root: Path | None) -
         try:
             candidate_id = resolve_visible_handle(
                 candidate_id,
-                application.memory_candidates.list_candidates(),
+                application.memory.list_candidates(),
                 label="memory candidate",
                 get_id=lambda candidate: candidate.id,
             )
         except VisibleHandleError as exc:
             return diagnostic_exception_message(exc)
         try:
-            candidate = application.memory_candidates.get_candidate(candidate_id)
+            candidate = application.memory.get_candidate(candidate_id)
         except MemoryCandidateNotFound:
             return f"Memory candidate not found: {candidate_id}"
         return render_candidate_detail(candidate)

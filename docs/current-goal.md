@@ -15,13 +15,13 @@ the affected modules to single-word filenames.
 
 ## Next Steps
 
-1. Define and record the Service retention criteria.
-2. Merge candidate review into `MemoryService` and remove its parallel graph
-   field and module.
-3. Remove duplicate Persona Service aliases and migrate callers.
-4. Rename remaining compound Service modules where package context is enough.
-5. Add architecture guards, run full verification, commit in stages, and
-   return this file to Idle.
+1. Completed: defined and recorded the Service retention criteria.
+2. Completed: merged candidate review into `MemoryService` and removed its
+   parallel graph field and module.
+3. Completed: removed duplicate Persona Service aliases and migrated callers.
+4. Completed: renamed affected compound Service modules.
+5. In progress: commit the verified implementation and return this file to
+   Idle.
 
 ## Exclusions
 
@@ -39,4 +39,9 @@ the affected modules to single-word filenames.
 - Persona exposes one non-duplicated method vocabulary.
 - Retained secondary Services have an explicit capability or workflow reason.
 - Affected compound Service modules use single-word filenames.
-- Architecture tests, full pytest, Pyright, and `git diff --check` pass.
+- The closed API audit document is removed; governing conclusions live in the
+  specification and executable tests.
+- Architecture guards cover graph ownership and Service module filenames.
+- `uv run --locked pytest`: 2,337 passed.
+- `uv run --locked pyright`: 0 errors, 0 warnings.
+- `git diff --check`: passed.

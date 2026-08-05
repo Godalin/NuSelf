@@ -6,7 +6,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 import re
 
-from nuself.memory.model import MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
+from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
+from nuself.profile.model import ProfileItem
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -151,9 +152,77 @@ class MemoryService:
     def statistics(self) -> MemoryStats:
         """Summarize memory entry and candidate state."""
 
+        return memory_stats(self._repository, self._candidates())
+
+    def list_candidates(
+        self,
+        *,
+        include_reviewed: bool = False,
+    ) -> list[MemoryCandidate]:
+        """List candidate memories awaiting or completing review."""
+
+        return self._candidates().list(include_reviewed=include_reviewed)
+
+    def get_candidate(self, candidate_id: str) -> MemoryCandidate:
+        """Get one candidate memory."""
+
+        return self._candidates().get(candidate_id)
+
+    def accept_candidate(self, candidate_id: str) -> MemoryEntry | ProfileItem:
+        """Promote one candidate into its canonical destination."""
+
+        return self._candidates().accept(candidate_id)
+
+    def reject_candidate(self, candidate_id: str) -> MemoryCandidate:
+        """Reject one candidate memory."""
+
+        return self._candidates().reject(candidate_id)
+
+    def edit_candidate(
+        self,
+        candidate_id: str,
+        *,
+        title: str | None = None,
+        body: str | None = None,
+        tags: list[str] | None = None,
+        importance: float | None = None,
+        observed_at: str | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
+        temporal_note: str | None = None,
+    ) -> MemoryCandidate:
+        """Edit a candidate before review."""
+
+        return self._candidates().edit(
+            candidate_id,
+            title=title,
+            body=body,
+            tags=tags,
+            importance=importance,
+            observed_at=observed_at,
+            valid_from=valid_from,
+            valid_until=valid_until,
+            temporal_note=temporal_note,
+        )
+
+    def merge_candidate(
+        self,
+        candidate_id: str,
+        entry_id: str,
+    ) -> MemoryEntry | ProfileItem:
+        """Merge one candidate into an existing memory or profile item."""
+
+        return self._candidates().merge(candidate_id, entry_id)
+
+    def delete_candidate(self, candidate_id: str) -> None:
+        """Delete one candidate memory."""
+
+        self._candidates().delete(candidate_id)
+
+    def _candidates(self) -> MemoryCandidateRepository:
         if self._candidate_repository is None:
-            raise RuntimeError("memory candidate statistics are unavailable")
-        return memory_stats(self._repository, self._candidate_repository)
+            raise RuntimeError("memory candidate operations are unavailable")
+        return self._candidate_repository
 
     def list_relations(
         self,

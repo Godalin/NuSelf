@@ -13,7 +13,7 @@ from nuself.cli.output import (
     resolve_handle_selection,
 )
 from nuself.memory.model import MemoryCandidate
-from nuself.memory.candidate_service import MemoryCandidateService
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryEntryNotFound,
@@ -26,7 +26,7 @@ from nuself.tui.memory import (
 
 
 def _candidates_for_list(
-    service: MemoryCandidateService,
+    service: MemoryService,
     *,
     include_reviewed: bool = False,
     review_state: str | None = None,
@@ -64,7 +64,7 @@ def _candidates_for_list(
 
 def _resolve_candidate_id(
     args: argparse.Namespace,
-    service: MemoryCandidateService,
+    service: MemoryService,
 ) -> str | None:
     return resolve_handle(
         args.candidate_id,
@@ -76,7 +76,7 @@ def _resolve_candidate_id(
 
 def _resolve_candidate_ids(
     args: argparse.Namespace,
-    service: MemoryCandidateService,
+    service: MemoryService,
 ) -> list[str] | None:
     return resolve_handle_selection(
         args.candidate_id,
@@ -89,9 +89,9 @@ def _resolve_candidate_ids(
 def handle_memory_candidate_list(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory_candidates
+    service = cli_application().memory
     candidates = _candidates_for_list(
-        repository,
+        service,
         include_reviewed=args.all,
         review_state=args.review_state,
         sort_by=args.sort_by,
@@ -120,12 +120,12 @@ def handle_memory_candidate_list(
 def handle_memory_candidate_show(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory_candidates
-    candidate_id = _resolve_candidate_id(args, repository)
+    service = cli_application().memory
+    candidate_id = _resolve_candidate_id(args, service)
     if candidate_id is None:
         return 1
     try:
-        candidate = repository.get_candidate(candidate_id)
+        candidate = service.get_candidate(candidate_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",
@@ -140,13 +140,13 @@ def handle_memory_candidate_accept(
     args: argparse.Namespace,
 ) -> int:
     application = cli_application()
-    repository = application.memory_candidates
-    candidate_ids = _resolve_candidate_ids(args, repository)
+    service = application.memory
+    candidate_ids = _resolve_candidate_ids(args, service)
     if candidate_ids is None:
         return 1
     for candidate_id in candidate_ids:
         try:
-            entry = repository.accept(candidate_id)
+            entry = service.accept_candidate(candidate_id)
         except MemoryCandidateNotFound:
             print(
                 f"Memory candidate not found: {candidate_id}",
@@ -172,13 +172,13 @@ def handle_memory_candidate_accept(
 def handle_memory_candidate_reject(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory_candidates
-    candidate_ids = _resolve_candidate_ids(args, repository)
+    service = cli_application().memory
+    candidate_ids = _resolve_candidate_ids(args, service)
     if candidate_ids is None:
         return 1
     for candidate_id in candidate_ids:
         try:
-            repository.reject(candidate_id)
+            service.reject_candidate(candidate_id)
         except MemoryCandidateNotFound:
             print(
                 f"Memory candidate not found: {candidate_id}",
@@ -192,12 +192,12 @@ def handle_memory_candidate_reject(
 def handle_memory_candidate_edit(
     args: argparse.Namespace,
 ) -> int:
-    repository = cli_application().memory_candidates
-    candidate_id = _resolve_candidate_id(args, repository)
+    service = cli_application().memory
+    candidate_id = _resolve_candidate_id(args, service)
     if candidate_id is None:
         return 1
     try:
-        updated = repository.edit(
+        updated = service.edit_candidate(
             candidate_id,
             title=args.title,
             body=args.body,
@@ -222,12 +222,12 @@ def handle_memory_candidate_merge(
     args: argparse.Namespace,
 ) -> int:
     application = cli_application()
-    repository = application.memory_candidates
-    candidate_id = _resolve_candidate_id(args, repository)
+    service = application.memory
+    candidate_id = _resolve_candidate_id(args, service)
     if candidate_id is None:
         return 1
     try:
-        entry = repository.merge(candidate_id, args.entry_id)
+        entry = service.merge_candidate(candidate_id, args.entry_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",

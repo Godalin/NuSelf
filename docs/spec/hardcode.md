@@ -57,9 +57,9 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `MAX_EXPORT_ATTEMPTS` | `reason/export_service.py` | 5 | Max export job composition retries |
-| `EXPORT_RETRY_BASE_SECONDS` | `reason/export_service.py` | 10 s | Export retry base backoff |
-| `EXPORT_RETRY_MAX_SECONDS` | `reason/export_service.py` | 600 s | Export retry max backoff |
+| `MAX_EXPORT_ATTEMPTS` | `reason/export.py` | 5 | Max export job composition retries |
+| `EXPORT_RETRY_BASE_SECONDS` | `reason/export.py` | 10 s | Export retry base backoff |
+| `EXPORT_RETRY_MAX_SECONDS` | `reason/export.py` | 600 s | Export retry max backoff |
 | startup readiness timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for a spawned daemon to become ready |
 | startup poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and child-exit checks |
 | shutdown ownership timeout | `daemon/lifecycle.py` | 30 s | Maximum monotonic wait for request delivery, cleanup, and instance-lock release |

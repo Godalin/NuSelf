@@ -328,6 +328,21 @@ def test_application_graph_names_single_services_by_domain() -> None:
     assert {"memory_service", "reason_service", "reflection_service"}.isdisjoint(
         fields
     )
+    assert "memory_candidates" not in fields
+
+
+def test_service_classes_live_in_single_word_modules() -> None:
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in _SOURCE_ROOT.rglob("*.py")
+        if "_" in path.stem
+        and any(
+            isinstance(node, ast.ClassDef)
+            and (node.name.endswith("Service") or node.name.endswith("Services"))
+            for node in _tree(path).body
+        )
+    ]
+    assert violations == []
 
 
 def test_persona_tool_builders_name_service_dependencies() -> None:

@@ -10,8 +10,30 @@ from memory_fixtures import (
 
 from pathlib import Path
 
-from nuself.memory.model import MemoryEntry
+from nuself.memory.model import MemoryCandidate, MemoryEntry
 from nuself.memory.service import MemoryQuery, MemoryService
+
+
+def test_memory_service_owns_candidate_review(tmp_path: Path) -> None:
+    entries = memory_entry_repository(tmp_path)
+    candidates = memory_candidate_repository(
+        tmp_path,
+        entry_repository=entries,
+    )
+    candidate = candidates.save(
+        MemoryCandidate(
+            type="belief",
+            title="One memory boundary",
+            body="Candidate review belongs to MemoryService.",
+        )
+    )
+    service = MemoryService(entries, candidates)
+
+    assert service.list_candidates() == [candidate]
+    accepted = service.accept_candidate(candidate.id)
+
+    assert accepted.title == "One memory boundary"
+    assert service.get_candidate(candidate.id).review_state == "accepted"
 
 
 def test_memory_query_ranks_relevant_entries_with_reasons(tmp_path: Path) -> None:

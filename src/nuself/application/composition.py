@@ -9,7 +9,7 @@ from nuself.memory.composition import (
     compose_memory_repositories,
 )
 from nuself.reason.composition import compose_reason_service
-from nuself.application.data_admin import DataAdminService
+from nuself.application.data import DataAdminService
 from nuself.trace.composition import TraceServices, compose_trace_services
 from nuself.config.settings import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import (
@@ -21,7 +21,6 @@ from nuself.delivery.store import DeliveryStore
 from nuself.delivery.service import DeliveryService
 from nuself.inbox.service import InboxService
 from nuself.memory.service import MemoryService
-from nuself.memory.candidate_service import MemoryCandidateService
 from nuself.profile.service import ProfileService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.service import PersonaService
@@ -42,7 +41,6 @@ class ApplicationGraph:
     conversations: ConversationService
     conversation_history: ConversationHistoryService
     memory: MemoryService
-    memory_candidates: MemoryCandidateService
     profiles: ProfileService
     memory_workflows: MemoryWorkflowService
     sources: SourceService
@@ -88,7 +86,6 @@ def compose_application(
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=MemoryService(memory.entries, memory.candidates),
-        memory_candidates=MemoryCandidateService(memory.candidates),
         profiles=ProfileService(memory.profile),
         memory_workflows=MemoryWorkflowService(paths, memory),
         sources=sources,
