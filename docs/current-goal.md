@@ -5,39 +5,28 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — implementation complete; finalizing commits.
+Idle — no active implementation goal.
 
 ## Objective
 
-Make every agent Tool builder consume resolved services/providers and one
-caller-owned `FeatureExecutor`, then materialize string-returning decorated
-functions through the single LangChain adapter.
+No active objective.
 
 ## Next Steps
 
-1. Completed: `ToolResources` now holds services/providers, and central Chat
-   composition materializes Persona Tools.
-2. Completed: every domain Tool builder requires explicit executor injection.
-3. Completed: Reason shares one executor across workspace and Persona Tools.
-4. Completed: the string-returning materialization contract and architecture
-   guards are executable.
-5. In progress: commit the verified change, then return this file to Idle.
+1. Wait for the next explicitly approved goal.
 
 ## Exclusions
 
-- Do not change which Tool operations require confirmation without a separate
-  product-policy decision.
-- Do not decorate domain Service methods directly or move Agent rendering into
-  services.
-- Do not introduce a Tool registry, Tool base class, or parallel LangChain
-  execution protocol.
+- Do not begin unapproved feature or refactor work.
 
-## Completion Evidence
+## Last Verification
 
-- No domain Tool builder constructs its own `FeatureExecutor`.
-- `ToolResources` contains no pre-materialized `BaseTool` collection.
-- Chat and Reason each inject one executor into all tools they construct.
-- `materialize_tool()` accepts only string-returning feature callables.
-- Architecture tests pass as part of 2,333 passing unit tests.
-- `uv run --locked pyright` reports zero errors and warnings.
-- `git diff --check` passes.
+- Domain Tool builders accept services/providers and an explicitly injected
+  `FeatureExecutor`; none silently creates its own execution environment.
+- Chat and Reason share their caller-owned executor across all Tool builders,
+  including Persona, Selves, and Workspace.
+- `ToolResources` contains no materialized LangChain tools, and
+  `materialize_tool()` accepts string-returning feature callables.
+- `uv run --locked pytest`: 2,333 passed.
+- `uv run --locked pyright`: 0 errors, 0 warnings.
+- `git diff --check`: passed.
