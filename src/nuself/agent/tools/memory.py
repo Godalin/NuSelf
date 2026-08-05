@@ -8,7 +8,15 @@ from pathlib import Path
 from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
-from nuself.decorators import component, mutating, observed, readonly, tool
+from nuself.decorators import (
+    component,
+    mutating,
+    observed,
+    readonly,
+    requires_confirmation,
+    tool,
+)
+from nuself.memory.model import MemoryEntry, MemoryEntryType
 from nuself.memory.service import MemoryMatch, MemoryQuery, MemoryService
 from nuself.memory.repository import MemoryEntryNotFound
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -38,6 +46,21 @@ def _format_match(match: MemoryMatch) -> str:
         f"- {entry.title} [id={entry.id} type={entry.type} "
         f"confidence={entry.confidence:.2f}{tags}{relation_text} "
         f"match={','.join(match.reasons)}]: {entry.body}"
+    )
+
+
+def _create_memory_summary(
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> str:
+    title = kwargs.get("title", args[0] if args else "")
+    body = kwargs.get("body", args[1] if len(args) > 1 else "")
+    memory_type = kwargs.get("memory_type", "belief")
+    tags: object = kwargs.get("tags", ())
+    importance = kwargs.get("importance", 0.5)
+    return (
+        f'Create durable memory "{title}" '
+        f"(type={memory_type}, tags={tags}, importance={importance}): {body}"
     )
 
 
@@ -129,6 +152,66 @@ def build_memory_tool_set(
         return f"Memory entries: {count} total{suffix}"
 
     @tool(
+        name="memory_create",
+        description=(
+            "Create a draft personal memory from the current conversation. "
+            "Use for durable preferences, beliefs, episodes, goals, or facts. "
+            "The user must approve the exact write before it is saved."
+        ),
+    )
+    @component("memory")
+    @mutating
+    @requires_confirmation(
+        action="create",
+        resource="memory",
+        summary=_create_memory_summary,
+    )
+    @observed
+    def create_memory(
+        title: str,
+        body: str,
+        memory_type: MemoryEntryType = "belief",
+        tags: list[str] | None = None,
+        importance: float = 0.5,
+    ) -> str:
+        """Create one user-approved draft durable memory."""
+
+        title = title.strip()
+        body = body.strip()
+        if not title:
+            return "Error: title must be a non-empty string"
+        if not body:
+            return "Error: body must be a non-empty string"
+        if not memory_type.strip():
+            return "Error: memory_type must be a non-empty string"
+        try:
+            importance_value = float(importance)
+        except (TypeError, ValueError):
+            return "Error: importance must be a number"
+        if not 0.0 <= importance_value <= 1.0:
+            return "Error: importance must be between 0.0 and 1.0"
+        try:
+            entry = service.save_entry(
+                MemoryEntry(
+                    type=memory_type,
+                    title=title,
+                    body=body,
+                    tags=tags or (),
+                    importance=importance_value,
+                    review_state="draft",
+                )
+            )
+        except ValueError as exc:
+            return (
+                "Error: could not create memory: "
+                f"{diagnostic_exception_message(exc)}"
+            )
+        return (
+            f'Created memory "{entry.title}" '
+            f"(id={entry.id}, review_state={entry.review_state})."
+        )
+
+    @tool(
         name="memory_archive",
         description=(
             "Archive a memory entry so it is excluded from default search and chat context. "
@@ -197,6 +280,7 @@ def build_memory_tool_set(
             materialize_tool(count_memory, executor=execution),
         ),
         write=(
+            materialize_tool(create_memory, executor=execution),
             materialize_tool(archive_memory_by_id, executor=execution),
             materialize_tool(
                 update_memory_importance_by_id,

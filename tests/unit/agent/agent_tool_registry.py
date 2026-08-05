@@ -28,6 +28,7 @@ from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.runtime.frontend import ApprovalDecision, ApprovalRequest
 from nuself.storage.workspace import PrivateWorkspaceStore
 
 
@@ -48,6 +49,7 @@ def test_subsystem_tool_builders_own_their_registries(
     assert _names((*memory_tools.readonly, *memory_tools.write)) == {
         "memory_search",
         "memory_count",
+        "memory_create",
         "memory_archive",
         "memory_update_importance",
     }
@@ -112,6 +114,71 @@ def test_subsystem_tool_builders_own_their_registries(
         )
     ) == {"selves_consult"}
     assert build_selves_tools(None, executor=FeatureExecutor()) == ()
+
+
+def test_memory_create_requires_approval_and_reports_decline(
+    tmp_path: Path,
+) -> None:
+    repository = memory_entry_repository(tmp_path)
+
+    class Approval:
+        def __init__(self, approved: bool) -> None:
+            self.approved = approved
+            self.requests: list[ApprovalRequest] = []
+
+        def request(self, request: ApprovalRequest) -> ApprovalDecision:
+            self.requests.append(request)
+            if self.approved:
+                return ApprovalDecision(
+                    True,
+                    approver="test",
+                    input_kind="affirmative",
+                )
+            return ApprovalDecision(False, input_kind="declined")
+
+    def create_tool(approval: Approval):
+        tools = build_memory_tool_set(
+            service=MemoryService(repository),
+            project_root=tmp_path,
+            executor=FeatureExecutor(approvals=approval),
+        )
+        return next(tool for tool in tools.write if tool.name == "memory_create")
+
+    approved = Approval(True)
+    approved_tool = create_tool(approved)
+    result = approved_tool.invoke(
+        {
+            "title": "Direct answers",
+            "body": "The user prefers direct answers.",
+            "memory_type": "belief",
+            "tags": ["preference"],
+            "importance": 0.8,
+        }
+    )
+
+    assert "Created memory" in str(result)
+    assert approved_tool.metadata is not None
+    assert approved_tool.metadata["confirmation_required"] is True
+    assert len(repository.list()) == 1
+    assert repository.list()[0].review_state == "draft"
+    assert approved.requests[0].operation == "memory_create"
+    assert approved.requests[0].summary == (
+        'Create durable memory "Direct answers" '
+        "(type=belief, tags=['preference'], importance=0.8): "
+        "The user prefers direct answers."
+    )
+
+    declined = Approval(False)
+    declined_result = create_tool(declined).invoke(
+        {
+            "title": "Not saved",
+            "body": "This write should be declined.",
+        }
+    )
+
+    assert declined_result == "Action was not approved; no changes were made."
+    assert len(repository.list()) == 1
+    assert declined.requests[0].operation == "memory_create"
 
 
 def test_workspace_tool_builder_owns_workspace_registry(

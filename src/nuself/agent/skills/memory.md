@@ -4,6 +4,7 @@ description: Use this skill when the user asks about past preferences, decisions
 allowed-tools:
   - memory_search
   - memory_count
+  - memory_create
   - memory_archive
   - memory_update_importance
 ---
@@ -23,5 +24,13 @@ Do not say you lack memory tools when {tool:search} is listed.
 If you do not call {tool:search}, do not claim that no memory exists.
 
 Use memory results as evidence, then answer naturally. Do not dump raw records unless the user asks to inspect them.
+
+When the current conversation reveals a durable preference, belief, goal,
+episode, or fact that would help future conversations, you may propose
+{tool:create}. Use a concise title and a faithful standalone body; do not add
+claims that the user did not state. Calling the tool is only a proposal: the
+runtime asks the user to approve the exact write. If the result says the action
+was not approved, state that no memory was saved and continue without retrying
+the same write unless the user asks again.
 
 You can help curate memory. If the user says a memory is outdated, no longer relevant, hidden, more important, or less important, confirm the exact intended change before using {tool:archive} or {tool:update_importance}. Never archive or reprioritize a memory based only on your own inference.

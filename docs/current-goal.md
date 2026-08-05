@@ -15,10 +15,11 @@ return a clear no-write Tool result after rejection.
 
 ## Next Steps
 
-1. Specify the Tool input, draft persistence, and approval-result contract.
-2. Implement `memory_create` through the decorated feature boundary.
-3. Test approved creation, declined no-op behavior, and Agent-visible refusal.
-4. Run full verification, commit in stages, and return this file to Idle.
+1. Completed: specified Tool input, draft persistence, and approval results.
+2. Completed: implemented `memory_create` through the decorated boundary.
+3. Completed: tested approval, declined no-op, and Agent-visible refusal.
+4. In progress: commit the verified implementation and return this file to
+   Idle.
 
 ## Exclusions
 
@@ -34,4 +35,7 @@ return a clear no-write Tool result after rejection.
 - Approval creates exactly one draft Memory entry through `MemoryService`.
 - Rejection creates no entry and returns an explicit Tool result visible to the
   Agent loop.
-- Relevant tests, full pytest, Pyright, and `git diff --check` pass.
+- Memory Skill explains when to propose creation and how to handle rejection.
+- `uv run --locked pytest`: 2,338 passed.
+- `uv run --locked pyright`: 0 errors, 0 warnings.
+- `git diff --check`: passed.

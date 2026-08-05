@@ -18,6 +18,7 @@ def test_load_agent_skills_from_flat_markdown_files() -> None:
     assert "memory_search" not in skills["memory"].instructions
     assert "{tool:search}" in skills["memory"].instructions
     assert "memory_search" in skills["memory"].allowed_tools
+    assert "memory_create" in skills["memory"].allowed_tools
     assert "reflection_list_pending" in skills["reflection"].allowed_tools
     assert "selves_consult" in skills["selves"].allowed_tools
     assert "trace_search" in skills["trace"].allowed_tools

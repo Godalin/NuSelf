@@ -595,8 +595,9 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 
 #### `memory_create`
 
-- **Args**: `title: str`, `body: str`, `memory_type: str = "belief"`,
-  `tags: list[str] | None = None`, `importance: float = 0.5`.
+- **Args**: `title: str`, `body: str`,
+  `memory_type: MemoryEntryType = "belief"`, `tags: list[str] | None = None`,
+  `importance: float = 0.5`.
 - **Behavior**: Requests approval through the runtime's injected
   `ApprovalPort`. Only an affirmative decision constructs and saves one
   `MemoryEntry` through `MemoryService`, always initially using
