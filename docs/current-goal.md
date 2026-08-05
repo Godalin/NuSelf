@@ -5,27 +5,36 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — repairing resumable daemon Chat approval.
 
 ## Objective
 
-No active objective.
+Make daemon-backed Chat pause at the exact LangGraph Tool call, present the
+approval on the REPL owner thread without a timeout, and resume that checkpoint
+with the user's exact decision without another model generation.
 
 ## Next Steps
 
-1. Wait for the next explicitly approved goal.
+1. Correct the approval-resume specification from whole-turn replay to native
+   graph checkpoint continuation.
+2. Preserve the original Tool call across the daemon challenge and decision.
+3. Move terminal approval input out of the background activity worker.
+4. Add integrated regression coverage for approve, decline, no timeout, and no
+   duplicate model/Tool execution.
+5. Run the full verification gates, commit in stages, and return to Idle.
 
 ## Exclusions
 
-- Do not begin unapproved feature or refactor work.
+- Do not weaken exact request matching.
+- Do not impose an approval deadline.
+- Do not let daemon workers read terminal input.
+- Do not rerun the model to reconstruct an interrupted Tool call.
 
-## Last Verification
+## Completion Evidence
 
-- Daemon Chat returns typed approval challenges; CLI/REPL decisions are bound
-  to the exact request and replay the same uncommitted turn.
-- Missing approval infrastructure is distinct from an actual user decline, and
-  approval pauses are not logged as failed Tool calls or turns.
-- Chat exposes read-only `runtime_time` with local timezone and UTC timestamps.
-- `uv run --locked pytest`: 2,344 passed.
-- `uvx pyright`: 0 errors, 0 warnings.
-- `git diff --check`: passed.
+- The first daemon request returns one typed challenge without retrying the LLM.
+- REPL presents that challenge on its input-owning thread and waits indefinitely.
+- Approval resumes the exact checkpointed Tool call; decline resumes with a
+  rejection Tool result; neither path regenerates Tool arguments.
+- One turn and at most one approved mutation are committed.
+- Full pytest, Pyright, and `git diff --check` pass.
