@@ -192,10 +192,15 @@ used by other domains. Role files are created only for real responsibilities;
 NuSelf does not stamp every domain from an empty package template.
 
 Feature functions declare cross-cutting behavior through orthogonal decorators
-for tool identity, component ownership, effects, confirmation, observation,
-compact observation presentation, and audit. `runtime.feature.policy` owns those inert declarations while
-`runtime.feature.execution` interprets them through injected ports. Domain
-functions remain directly testable callables.
+for Tool identity, component ownership, execution classification, structured
+effects, and presentation. `runtime.feature.policy` owns those inert
+declarations while `runtime.feature.execution` interprets one canonical effect
+collection through injected handlers. Approval is a suspending interaction
+effect; observation and audit are projection effects; read/write is an
+execution classification rather than another control path. LangGraph, daemon,
+and frontend adapters transport generic Tool effect requests and resolutions
+without moving behavior into domain functions. Domain functions remain
+directly testable service-boundary callables.
 
 Major domains are:
 

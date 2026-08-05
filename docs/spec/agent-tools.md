@@ -38,10 +38,33 @@ Decorators never read terminal input, render output, write logs, open storage,
 dispatch work, or translate results. Composition rejects conflicts such as
 simultaneous `readonly` and `mutating` policies.
 
-The initial dimensions are tool identity, component, effect classification,
-confirmation, observation, observation presentation, and domain audit. Retry, idempotency, timeout, and
-capability may be added independently when their execution contracts exist;
-they must not enlarge one catch-all decorator.
+The initial dimensions are Tool identity, component, execution classification,
+structured effects, and presentation. `readonly` / `mutating` classifies the
+service call; it is not itself an effect. Confirmation is an interaction effect,
+observation and domain audit are projection effects, and compact output is a
+presentation policy. Retry, idempotency, timeout, and capability may be added
+independently when their execution contracts exist; they must not enlarge one
+catch-all decorator.
+
+Every effect decorator appends one immutable policy to the ToolSpec's canonical
+effect collection. Decorator order cannot change execution semantics. The
+shared interpreter runs effects by declared phase:
+
+1. interaction gates may return a typed suspension before the service call;
+2. lifecycle projections observe start without becoming execution authority;
+3. the service function executes exactly once;
+4. success/failure projections observe the authoritative outcome.
+
+Effect handlers are registered by policy type. Adding another interaction or
+projection effect extends the policy union and its handler; it does not add a
+new Chat, daemon, Conversation, or CLI control path.
+
+A suspending effect is transported as a discriminated `ToolEffectRequest` and
+answered by an exactly bound `ToolEffectResolution`. Approval currently uses
+`kind="approval"`; future effect kinds use the same continuation protocol.
+LangGraph maps the request to `interrupt()` and resumes it with the resolution.
+The generic Tool effect protocol, not an approval-specific ContextVar, carries
+the decision across execution layers.
 
 One LangChain adapter reads the composed specification and produces the
 framework tool. Shared execution middleware interprets policies. Confirmation

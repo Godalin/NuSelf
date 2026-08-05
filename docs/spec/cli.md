@@ -648,21 +648,22 @@ must use the daemon request protocol or a durable typed job contract. One-shot
 mode cannot perform an interactive approval unless its invoked tool wrapper has
 an input channel capable of obtaining that approval.
 
-Daemon-backed Chat uses a typed checkpoint/resume approval exchange. When an
-approval-gated Tool has no decision, LangGraph interrupts after the model has
-produced the Tool call and before the Tool function runs. The uncommitted graph
-checkpoint retains that exact Tool name, arguments, and call id; the daemon
-returns the complete `ApprovalRequest` as a typed success payload without
-retrying the model.
+Daemon-backed Chat uses a typed Tool-effect checkpoint/resume exchange. When a
+Tool emits a suspending `ToolEffectRequest`, LangGraph interrupts after the
+model has produced the Tool call and before the service function runs. The
+uncommitted graph checkpoint retains that exact Tool name, arguments, and call
+id; the daemon returns the complete discriminated effect request as a typed
+success payload without retrying the model.
 
 The active CLI/REPL frontend must present the challenge on the thread that owns
-terminal input, outside any background activity-polling call. Approval has no
-deadline: the frontend waits until the user approves, declines, or explicitly
-interrupts input. It then resumes the same conversation and `turn_id` with an
-`ApprovalDecision` bound to the exact request. The daemon accepts the decision
-only when component, operation, action, resource, risk, and summary all match
-the checkpointed request. It resumes that checkpoint rather than rebuilding
-the turn or asking the model to generate another Tool call.
+terminal input, outside any background activity-polling call. Approval effects
+have no deadline: the frontend waits until the user approves, declines, or
+explicitly interrupts input. It then resumes the same conversation and
+`turn_id` with a `ToolEffectResolution` bound to the exact request. The daemon
+accepts a resolution only for the checkpointed effect request and resumes that
+checkpoint rather than rebuilding the turn or asking the model to generate
+another Tool call. CLI routing is by the effect discriminant, not by Tool or
+domain name; logs remain non-executable projections.
 
 Approval executes the checkpointed call at most once. Decline injects a normal
 no-write Tool result so the Agent can respond naturally. Neither path appends a
