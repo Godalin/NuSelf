@@ -13,6 +13,7 @@ from nuself.agent.tools.resources import ToolResources
 from nuself.agent.tools.selves import build_selves_tools
 from nuself.agent.tools.source import build_source_tools
 from nuself.agent.tools.trace import build_trace_tools
+from nuself.persona.tools import build_persona_tools
 from nuself.runtime.feature.execution import FeatureExecutor
 
 
@@ -50,5 +51,11 @@ def build_langchain_chat_tools(
             executor=executor,
         )
         + build_selves_tools(selves_consult, executor=executor)
-        + resources.persona_tools
+        + build_persona_tools(
+            resources.project_root,
+            repository=resources.personas,
+            trace_recorder=resources.trace_recorder,
+            text_agent=resources.persona_agent,
+            executor=executor,
+        )
     )

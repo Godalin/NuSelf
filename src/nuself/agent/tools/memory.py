@@ -53,10 +53,10 @@ def build_memory_tool_set(
     *,
     service: MemoryService,
     project_root: Path | None,
-    executor: FeatureExecutor | None = None,
+    executor: FeatureExecutor,
 ) -> MemoryToolSet:
     """Build memory tools grouped for the public chat composition order."""
-    execution = executor or FeatureExecutor()
+    execution = executor
     @tool(
         name="memory_search",
         description=(

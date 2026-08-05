@@ -36,6 +36,7 @@ from nuself.reason.errors import ReasonAdvanceError
 from nuself.reason.service import ReasonService
 from nuself.persona.service import PersonaService
 from nuself.runtime.context import current_runtime_context, runtime_context
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.trace.service import TraceRecorder
 
 if TYPE_CHECKING:
@@ -223,6 +224,7 @@ class ReasonAdvancer:
         reason_service: ReasonService,
         persona_repository: PersonaService,
         trace_recorder: TraceRecorder,
+        feature_executor: FeatureExecutor,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
@@ -231,6 +233,7 @@ class ReasonAdvancer:
         self._reason_service = reason_service
         self._persona_repository = persona_repository
         self._trace_recorder = trace_recorder
+        self._feature_executor = feature_executor
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
         self._captured: list[ToolOutcome] = []
@@ -363,7 +366,10 @@ class ReasonAdvancer:
             build_workspace_tools_from_provider,
         )
 
-        return build_workspace_tools_from_provider(self._thread_workspace)
+        return build_workspace_tools_from_provider(
+            self._thread_workspace,
+            executor=self._feature_executor,
+        )
 
     def _build_persona_tools(self) -> tuple[BaseTool, ...]:
         """Build thread-scoped persona tools that resolve the current thread."""
@@ -379,6 +385,7 @@ class ReasonAdvancer:
                 project_root=self._paths.authority_root,
                 component="persona",
             ),
+            executor=self._feature_executor,
         )
 
     def _thread_workspace(self) -> ScopedWorkspace:
@@ -409,6 +416,7 @@ def default_reason_advancer(
         reason_service=reason_service,
         persona_repository=persona_repository,
         trace_recorder=trace_recorder,
+        feature_executor=FeatureExecutor(),
         readonly_tools=readonly_tools,
         langchain_models=langchain_models,
     )

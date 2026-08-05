@@ -16,10 +16,10 @@ from nuself.storage.workspace import ScopedWorkspace
 
 def build_workspace_tools_from_provider(
     workspace_provider: Callable[[], ScopedWorkspace],
+    *,
+    executor: FeatureExecutor,
 ) -> tuple[BaseTool, ...]:
     """Build workspace tools that resolve the active workspace lazily."""
-    executor = FeatureExecutor()
-
     @tool(name="workspace_put", description="Store a JSON value under the given key in the thread's workspace.")
     @component("workspace")
     @mutating

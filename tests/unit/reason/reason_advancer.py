@@ -39,6 +39,7 @@ from nuself.runtime.context import (
     current_runtime_context,
     runtime_context,
 )
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.storage.authority import _create_sqlite_backend
 from tests.backend import owned_backend
 
@@ -247,7 +248,10 @@ def _advancer_with_agent(
     project_root: Path,
     agent: Any,
 ) -> ReasonAdvancer:
-    advancer = ReasonAdvancer(**_advancer_dependencies(project_root))
+    advancer = ReasonAdvancer(
+        **_advancer_dependencies(project_root),
+        feature_executor=FeatureExecutor(),
+    )
     dynamic = cast(Any, advancer)
     endpoint = LangChainLLMEndpoint(
         index=0,
@@ -267,7 +271,10 @@ def _advancer_with_agents(
     project_root: Path,
     agents: tuple[Any, ...],
 ) -> ReasonAdvancer:
-    advancer = ReasonAdvancer(**_advancer_dependencies(project_root))
+    advancer = ReasonAdvancer(
+        **_advancer_dependencies(project_root),
+        feature_executor=FeatureExecutor(),
+    )
     dynamic = cast(Any, advancer)
     dynamic._agents = tuple(
         (
@@ -595,6 +602,7 @@ def test_workspace_tools_route_by_shared_reason_thread_context(
     _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     advancer = ReasonAdvancer(
         **_advancer_dependencies(tmp_path),
+        feature_executor=FeatureExecutor(),
     )
     tools = cast(Any, advancer)._build_workspace_tools()
     tool_map = {tool.name: tool for tool in tools}

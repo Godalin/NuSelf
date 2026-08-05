@@ -14,8 +14,8 @@ from nuself.runtime.feature.execution import (
 )
 from nuself.runtime.feature.policy import require_tool_spec
 
-def materialize_tool[**P, R](
-    function: Callable[P, R],
+def materialize_tool[**P](
+    function: Callable[P, str],
     *,
     executor: FeatureExecutor,
 ) -> StructuredTool:
@@ -27,14 +27,11 @@ def materialize_tool[**P, R](
     assert spec.effect is not None
 
     @wraps(function)
-    def invoke(*args: P.args, **kwargs: P.kwargs) -> R:
+    def invoke(*args: P.args, **kwargs: P.kwargs) -> str:
         try:
             return executor.invoke(function, *args, **kwargs)
         except FeatureConfirmationDeclined:
-            return cast(
-                R,
-                "Action was not approved; no changes were made.",
-            )
+            return "Action was not approved; no changes were made."
 
     name = spec.tool.name or function.__name__
     description = spec.tool.description or function.__doc__

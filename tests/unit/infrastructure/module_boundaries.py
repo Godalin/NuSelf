@@ -181,6 +181,32 @@ def test_langchain_tool_materialization_has_one_owner() -> None:
     assert owners == ["agent/tools/decorated.py"]
 
 
+def test_domain_tool_builders_do_not_construct_feature_executors() -> None:
+    builder_paths = tuple(
+        path
+        for path in (_SOURCE_ROOT / "agent" / "tools").glob("*.py")
+        if path.stem
+        not in {"__init__", "composition", "decorated", "resources"}
+    ) + (_SOURCE_ROOT / "persona" / "tools.py",)
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in builder_paths
+        if any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "FeatureExecutor"
+            for node in ast.walk(_tree(path))
+        )
+    ]
+    assert violations == []
+
+
+def test_tool_resources_contains_no_materialized_langchain_tools() -> None:
+    resources = _SOURCE_ROOT / "agent" / "tools" / "resources.py"
+    assert not _module_matches("langchain_core.tools", _imports(resources))
+    assert "BaseTool" not in resources.read_text(encoding="utf-8")
+
+
 def test_chat_uses_framework_agent_and_bounded_composition() -> None:
     engine = _SOURCE_ROOT / "agent" / "chat" / "engine.py"
     response = _SOURCE_ROOT / "agent" / "chat" / "response.py"

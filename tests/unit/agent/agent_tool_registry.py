@@ -27,6 +27,7 @@ from nuself.storage.workspace import ScopedWorkspace, SqliteStore
 from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.storage.workspace import PrivateWorkspaceStore
 
 
@@ -42,6 +43,7 @@ def test_subsystem_tool_builders_own_their_registries(
     memory_tools = build_memory_tool_set(
         service=MemoryService(memory_repository),
         project_root=tmp_path,
+        executor=FeatureExecutor(),
     )
     assert _names((*memory_tools.readonly, *memory_tools.write)) == {
         "memory_search",
@@ -54,7 +56,8 @@ def test_subsystem_tool_builders_own_their_registries(
             compose_application(
                 runtime_paths(tmp_path),
                 owned_backend(tmp_path),
-            ).reflection.service
+            ).reflection.service,
+            executor=FeatureExecutor(),
         )
     ) == {
         "reflection_list_pending",
@@ -75,12 +78,14 @@ def test_subsystem_tool_builders_own_their_registries(
         build_reason_tools(
             service=reason_service,
             project_root=tmp_path,
+            executor=FeatureExecutor(),
         )
     ) == base_reason_tools
     assert _names(
         build_reason_tools(
             service=reason_service,
             project_root=tmp_path,
+            executor=FeatureExecutor(),
             job_sink=lambda _message: None,
         )
     ) == {*base_reason_tools, "reason_export"}
@@ -91,7 +96,8 @@ def test_subsystem_tool_builders_own_their_registries(
                     runtime_paths(tmp_path),
                     backend=owned_backend(tmp_path),
                 )
-            )
+            ),
+            executor=FeatureExecutor(),
         )
     ) == {
         "trace_search",
@@ -101,10 +107,11 @@ def test_subsystem_tool_builders_own_their_registries(
     }
     assert _names(
         build_selves_tools(
-            lambda topic, mode, context: f"{topic}:{mode}:{context}"
+            lambda topic, mode, context: f"{topic}:{mode}:{context}",
+            executor=FeatureExecutor(),
         )
     ) == {"selves_consult"}
-    assert build_selves_tools(None) == ()
+    assert build_selves_tools(None, executor=FeatureExecutor()) == ()
 
 
 def test_workspace_tool_builder_owns_workspace_registry(
@@ -119,7 +126,12 @@ def test_workspace_tool_builder_owns_workspace_registry(
         ("thread",),
     )
 
-    assert _names(build_workspace_tools_from_provider(lambda: workspace)) == {
+    assert _names(
+        build_workspace_tools_from_provider(
+            lambda: workspace,
+            executor=FeatureExecutor(),
+        )
+    ) == {
         "workspace_put",
         "workspace_get",
         "workspace_search",

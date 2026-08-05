@@ -14,7 +14,6 @@ from nuself.agent.text import LangChainTextAgent
 from nuself.config.settings import RuntimePaths, SystemConfig
 from nuself.conversation import ConversationService
 from nuself.memory.service import MemoryService
-from nuself.persona.tools import build_persona_tools
 from nuself.persona.service import PersonaService
 from nuself.application.projection import load_personas_from_memory
 from nuself.reason.output_contracts import SectionPlanner
@@ -68,18 +67,13 @@ def compose_conversation_runtime(
             reflections=reflection_service,
             reasons=reason_service,
             traces=trace.query,
-            persona_tools=tuple(
-                build_persona_tools(
-                    paths.authority_root,
-                    repository=persona_prompts,
-                    trace_recorder=trace.recorder,
-                    text_agent=LangChainTextAgent(
-                        endpoints=models,
-                        project_root=paths.authority_root,
-                        component="persona",
-                    ),
-                )
+            personas=persona_prompts,
+            persona_agent=LangChainTextAgent(
+                endpoints=models,
+                project_root=paths.authority_root,
+                component="persona",
             ),
+            trace_recorder=trace.recorder,
             job_sink=job_sink,
             section_planner=section_planner,
         ),

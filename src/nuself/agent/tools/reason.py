@@ -34,10 +34,10 @@ def build_reason_tools(
     project_root: Path,
     job_sink: JobSink | None = None,
     section_planner: SectionPlanner | None = None,
-    executor: FeatureExecutor | None = None,
+    executor: FeatureExecutor,
 ) -> tuple[BaseTool, ...]:
     """Build the reason service's chat tools."""
-    execution = executor or FeatureExecutor()
+    execution = executor
 
     @tool(
         name="reason_list_active",

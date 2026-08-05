@@ -155,6 +155,18 @@ mutation cannot alter an already-issued tuple; tool objects themselves are
 shared by identity. Configured endpoints remain owned by application/daemon
 composition, which already supplies the same tuple to chat and Reason.
 
+`ToolResources` contains unresolved service and provider capabilities only; it
+must not contain a pre-materialized `BaseTool` tuple. The central Chat tool
+composition passes its one caller-owned `FeatureExecutor` to every domain Tool
+builder, including Persona and Selves. A domain builder must not silently
+construct a separate executor, because that would drop the runtime's approval,
+event, and audit ports. Reason likewise creates one executor for its workspace
+and thread-scoped Persona tools and injects it into both builders.
+
+Every feature callable materialized for LangChain returns `str`. Domain DTOs
+are converted at the Tool adapter boundary; confirmation rejection therefore
+also returns a normal string without a generic result cast.
+
 Daemon reason-scheduler composition consumes this public tuple. It must not
 use `getattr` against `_tools` or `_langchain_models`, silently treat missing
 private fields as empty capabilities, or repeat tag filtering outside the

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
 
-from langchain_core.tools import BaseTool
 
 from nuself.agent.chat.engine import (
     ConversationGraphRuntime as _ConversationGraphRuntime,
@@ -28,7 +26,6 @@ from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
 from nuself.source.service import SourceService
-from nuself.persona.tools import build_persona_tools
 from nuself.persona.definition import (
     PersonaDefinition,
 )
@@ -68,7 +65,6 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         trace_recorder: TraceRecorder | None = None,
         reason_service: ReasonService | None = None,
         trace_query_service: TraceQueryService | None = None,
-        persona_tools: Sequence[BaseTool] | None = None,
         persona_definitions: tuple[PersonaDefinition, ...] | None = None,
         approval_port: ApprovalPort | None = None,
     ) -> None:
@@ -114,19 +110,13 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
                 or application.reason.service,
                 traces=trace_query_service
                 or application.trace.query,
-                persona_tools=tuple(
-                    persona_tools
-                    or build_persona_tools(
-                        project_root,
-                        repository=application.personas,
-                        trace_recorder=application.trace.recorder,
-                        text_agent=LangChainTextAgent(
-                            endpoints=effective_models,
-                            project_root=project_root,
-                            component="persona",
-                        ),
-                    )
+                personas=application.personas,
+                persona_agent=LangChainTextAgent(
+                    endpoints=effective_models,
+                    project_root=project_root,
+                    component="persona",
                 ),
+                trace_recorder=application.trace.recorder,
                 job_sink=job_sink,
                 section_planner=section_planner,
             ),

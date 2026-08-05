@@ -28,13 +28,12 @@ def build_persona_tools(
     repository: PersonaService,
     trace_recorder: TraceRecorder,
     text_agent: TextAgent,
+    executor: FeatureExecutor,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools that any agent (chat, reason) can use."""
 
     repo = repository
     persona_agent = text_agent
-
-    executor = FeatureExecutor()
 
     @tool(
         name="persona_craft",
@@ -276,6 +275,7 @@ def build_reason_persona_tools(
     trace_recorder: TraceRecorder,
     get_thread_workspace: Callable[[], ScopedWorkspace],
     text_agent: TextAgent,
+    executor: FeatureExecutor,
 ) -> tuple[StructuredTool, ...]:
     """Build persona tools scoped to a reason thread.
 
@@ -301,8 +301,6 @@ def build_reason_persona_tools(
 
     global_repo = global_repository
     persona_agent = text_agent
-    executor = FeatureExecutor()
-
     @tool(
         name="persona_craft",
         description="Create or update a thinking persona scoped to the current reason thread.",

@@ -22,10 +22,10 @@ from nuself.runtime.feature.execution import FeatureExecutor
 def build_reflection_tools(
     service: ReflectionService,
     *,
-    executor: FeatureExecutor | None = None,
+    executor: FeatureExecutor,
 ) -> tuple[BaseTool, ...]:
     """Build the reflection service's chat tools."""
-    execution = executor or FeatureExecutor()
+    execution = executor
 
     @tool(
         name="reflection_count",

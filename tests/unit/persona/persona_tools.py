@@ -17,6 +17,7 @@ from nuself.persona.tools import (
     build_persona_tools,
     build_reason_persona_tools,
 )
+from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.storage.workspace import ScopedWorkspace, SqliteStore
 from nuself.storage.authority import _create_sqlite_backend
 from tests.backend import owned_backend
@@ -61,6 +62,7 @@ def test_global_persona_think_uses_injected_text_agent(
         repository=application.personas,
         trace_recorder=application.trace.recorder,
         text_agent=agent,
+        executor=FeatureExecutor(),
     )
     _invoke_tool(
         _tool(tools, "persona_craft"),
@@ -104,6 +106,7 @@ def test_persona_think_sanitizes_agent_failure(
         repository=application.personas,
         trace_recorder=application.trace.recorder,
         text_agent=_FailingTextAgent(),
+        executor=FeatureExecutor(),
     )
     _invoke_tool(
         _tool(tools, "persona_craft"),
@@ -156,6 +159,7 @@ def test_persona_think_propagates_untyped_agent_errors(
             trace_recorder=application.trace.recorder,
             get_thread_workspace=lambda: workspace,
             text_agent=_UntypedFailureAgent(),
+            executor=FeatureExecutor(),
         )
         craft_args: dict[str, object] = {
             "name": "local-reviewer",
@@ -173,6 +177,7 @@ def test_persona_think_propagates_untyped_agent_errors(
             repository=application.personas,
             trace_recorder=application.trace.recorder,
             text_agent=_UntypedFailureAgent(),
+            executor=FeatureExecutor(),
         )
         craft_args = {
             "name": "reviewer",
@@ -208,6 +213,7 @@ def test_reason_persona_think_uses_same_injected_text_agent(
         trace_recorder=application.trace.recorder,
         get_thread_workspace=lambda: workspace,
         text_agent=agent,
+        executor=FeatureExecutor(),
     )
     _invoke_tool(
         _tool(tools, "persona_craft"),

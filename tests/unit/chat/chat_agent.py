@@ -40,6 +40,7 @@ from nuself.config.settings import runtime_paths
 from nuself.memory.model import MemoryEntry
 from nuself.profile.model import ProfileItem
 from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.agent.text import LangChainTextAgent
 from nuself.log.reader import read_log_events
 from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService
@@ -128,7 +129,13 @@ def _chat_tool(
         ),
         reasons=ReasonService(tmp_path),
         traces=trace.query,
-        persona_tools=(),
+        personas=application.personas,
+        persona_agent=LangChainTextAgent(
+            endpoints=(),
+            project_root=tmp_path,
+            component="persona",
+        ),
+        trace_recorder=trace.recorder,
         job_sink=job_sink,
     )
     tools = build_langchain_chat_tools(

@@ -16,10 +16,10 @@ from nuself.trace.service import TraceQueryService
 def build_trace_tools(
     service: TraceQueryService,
     *,
-    executor: FeatureExecutor | None = None,
+    executor: FeatureExecutor,
 ) -> tuple[BaseTool, ...]:
     """Build the trace service's chat tools."""
-    execution = executor or FeatureExecutor()
+    execution = executor
 
     @tool(
         name="trace_search",

@@ -5,30 +5,39 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — implementation complete; finalizing commits.
 
 ## Objective
 
-No active objective.
+Make every agent Tool builder consume resolved services/providers and one
+caller-owned `FeatureExecutor`, then materialize string-returning decorated
+functions through the single LangChain adapter.
 
 ## Next Steps
 
-1. Wait for the next explicitly approved goal.
+1. Completed: `ToolResources` now holds services/providers, and central Chat
+   composition materializes Persona Tools.
+2. Completed: every domain Tool builder requires explicit executor injection.
+3. Completed: Reason shares one executor across workspace and Persona Tools.
+4. Completed: the string-returning materialization contract and architecture
+   guards are executable.
+5. In progress: commit the verified change, then return this file to Idle.
 
 ## Exclusions
 
-- Do not begin unapproved feature or refactor work.
+- Do not change which Tool operations require confirmation without a separate
+  product-policy decision.
+- Do not decorate domain Service methods directly or move Agent rendering into
+  services.
+- Do not introduce a Tool registry, Tool base class, or parallel LangChain
+  execution protocol.
 
-## Last Verification
+## Completion Evidence
 
-- CLI, REPL, Chat, daemon, evaluation, and cross-domain workflows consume
-  authority-scoped services instead of repositories, persistence stores, or
-  private workspace stores.
-- `ApplicationGraph` exposes Memory, Conversation, Persona, Delivery,
-  Reflection, Reason, Source, Inbox, Trace, Profile, workflow, and
-  administration services; persistence construction remains internal.
-- Architecture tests reject persistence types on `ApplicationGraph` and in
-  process/agent adapters.
-- `uv run --locked pytest -q`: 2331 passed.
-- `uv run --locked pyright`: 0 errors, 0 warnings.
-- `git diff --check`: passed.
+- No domain Tool builder constructs its own `FeatureExecutor`.
+- `ToolResources` contains no pre-materialized `BaseTool` collection.
+- Chat and Reason each inject one executor into all tools they construct.
+- `materialize_tool()` accepts only string-returning feature callables.
+- Architecture tests pass as part of 2,333 passing unit tests.
+- `uv run --locked pyright` reports zero errors and warnings.
+- `git diff --check` passes.

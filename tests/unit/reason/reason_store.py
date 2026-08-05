@@ -292,9 +292,13 @@ def test_workspace_delete(tmp_path: Path) -> None:
 
 def test_build_workspace_tools_put_get(tmp_path: Path) -> None:
     from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
-    tools = build_workspace_tools_from_provider(lambda: ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_put"]).invoke({"key": "k1", "value": '{"msg": "hello"}'})
@@ -306,11 +310,15 @@ def test_build_workspace_tools_put_get(tmp_path: Path) -> None:
 
 def test_build_workspace_tools_search(tmp_path: Path) -> None:
     from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
     ws.put("a", {"type": "hypothesis", "text": "h1"})
     ws.put("b", {"type": "evidence", "text": "e1"})
-    tools = build_workspace_tools_from_provider(lambda: ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_search"]).invoke({"filter_json": '{"type": "hypothesis"}'})
@@ -319,10 +327,14 @@ def test_build_workspace_tools_search(tmp_path: Path) -> None:
 
 def test_build_workspace_tools_delete(tmp_path: Path) -> None:
     from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
     ws.put("k", {"v": 1})
-    tools = build_workspace_tools_from_provider(lambda: ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_delete"]).invoke({"key": "k"})
@@ -332,9 +344,13 @@ def test_build_workspace_tools_delete(tmp_path: Path) -> None:
 
 def test_build_workspace_tools_put_invalid_json(tmp_path: Path) -> None:
     from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
-    tools = build_workspace_tools_from_provider(lambda: ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_put"]).invoke({"key": "k", "value": "not json"})
