@@ -15,7 +15,7 @@ from nuself.cli.repl.loop import (
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.log.reader import read_log_events
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 
 class FakeInteractiveInput:

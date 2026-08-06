@@ -56,9 +56,13 @@ from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceRecorder
 from nuself.storage.workspace import PrivateWorkspaceStore
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequest,
     ToolEffectRequired,
     ToolEffectResolution,
 )
@@ -873,7 +877,7 @@ def test_chat_agent_resumes_pending_approval_turn_and_commits_once(
 
     with pytest.raises(ToolEffectRequired):
         runtime.respond("remember this", turn_id="turn-approval")
-    resolution = ToolEffectResolution(
+    resolution = ApprovalEffectResolution(
         request,
         ApprovalEffectDecision(
             True,

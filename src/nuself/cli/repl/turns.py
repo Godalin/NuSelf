@@ -24,7 +24,7 @@ from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.log.reader import InteractiveLogCursor
 from nuself.log.record import LogEvent
 from nuself.runtime.context import RuntimeContext, use_runtime_context
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 from nuself.tui.effect import TerminalToolEffectPort
 from nuself.tui.render import TerminalTheme
 
@@ -127,7 +127,10 @@ def send_interactive_chat_turn(
                 request = result.tool_effect_request
                 if request is None:
                     break
-                effect_resolution = TerminalToolEffectPort().resolve(request)
+                effect_resolution = TerminalToolEffectPort().resolve(
+                    request,
+                    on_requested=lambda: None,
+                )
         _capture_turn_output(
             session,
             project_root,

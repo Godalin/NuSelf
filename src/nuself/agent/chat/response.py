@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from pathlib import Path
 from threading import RLock
 from typing import Any, Protocol, cast
@@ -33,9 +33,8 @@ from nuself.agent.failover import (
     is_recoverable_agent_failure,
 )
 from nuself.agent.middleware import (
+    ExecutedTool,
     ToolCaptureMiddleware,
-    ToolOutcome,
-    ToolOutcomeLogger,
 )
 from nuself.agent.structured import require_structured_response
 from nuself.agent.endpoint import (
@@ -44,8 +43,7 @@ from nuself.agent.endpoint import (
     redacted_llm_diagnostic,
 )
 from nuself.runtime.context import current_runtime_context
-from nuself.runtime.feature.effect import (
-    ApprovalEffectRequest,
+from nuself.runtime.feature.protocol import (
     ToolEffectRequest,
     ToolEffectRequired,
     ToolEffectResolution,
@@ -110,14 +108,10 @@ class ConversationResponseSynthesizer:
         project_root: Path | None,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         tools: Iterable[BaseTool],
-        log_tool_outcome: ToolOutcomeLogger,
-        report_tool_log_failure: Callable[[Exception], None] | None = None,
     ) -> None:
         self._project_root = project_root
         self._langchain_models = langchain_models
         self._tools = tuple(tools)
-        self._log_tool_outcome = log_tool_outcome
-        self._report_tool_log_failure = report_tool_log_failure
         self._continuations = _ContinuationRegistry()
 
     def complete(
@@ -182,8 +176,6 @@ class ConversationResponseSynthesizer:
             supervisor = _LangChainChatSupervisor(
                 endpoint=endpoint,
                 tools=self._tools,
-                log_tool_outcome=self._log_tool_outcome,
-                report_tool_log_failure=self._report_tool_log_failure,
             )
             try:
                 return supervisor.complete(prompt)
@@ -268,14 +260,10 @@ class _LangChainChatSupervisor:
         *,
         endpoint: LangChainLLMEndpoint,
         tools: Iterable[BaseTool],
-        log_tool_outcome: ToolOutcomeLogger,
-        report_tool_log_failure: Callable[[Exception], None] | None,
     ) -> None:
         self._endpoint = endpoint
         self._tools = tuple(tools)
-        self._log_tool_outcome = log_tool_outcome
-        self._report_tool_log_failure = report_tool_log_failure
-        self._tool_outcomes: list[ToolOutcome] = []
+        self._tool_outcomes: list[ExecutedTool] = []
         self._checkpointer = InMemorySaver()
         self._agent: Any | None = None
         self._effect_request: ToolEffectRequest | None = None
@@ -292,13 +280,8 @@ class _LangChainChatSupervisor:
 
     @property
     def has_mutating_tool_outcomes(self) -> bool:
-        readonly_names = {
-            tool.name
-            for tool in self._tools
-            if "readonly" in (tool.tags or ())
-        }
         return any(
-            outcome.name not in readonly_names
+            outcome.execution == "mutating"
             for outcome in self._tool_outcomes
         )
 
@@ -312,8 +295,6 @@ class _LangChainChatSupervisor:
         if self._agent is None:
             system_prompt, messages = _split_prompt(prompt)
             middleware = ToolCaptureMiddleware(
-                log_callback=self._log_tool_outcome,
-                log_error_callback=self._report_tool_log_failure,
                 captured=self._tool_outcomes,
                 cache={},
             )
@@ -346,9 +327,9 @@ class _LangChainChatSupervisor:
         output = cast(GraphOutput[object], raw)
         if output.interrupts:
             if len(output.interrupts) != 1:
-                raise RuntimeError("chat turn produced multiple approval interrupts")
+                raise RuntimeError("chat turn produced multiple Tool effect interrupts")
             request = output.interrupts[0].value
-            if not isinstance(request, ApprovalEffectRequest):
+            if not isinstance(request, ToolEffectRequest):
                 raise TypeError("chat Tool effect interrupt has an invalid payload")
             self._effect_request = request
             raise ToolEffectRequired(request)

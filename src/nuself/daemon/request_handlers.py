@@ -42,7 +42,7 @@ from nuself.log.store import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.protocol import (
     ToolEffectRequired,
     ToolEffectResolution,
 )

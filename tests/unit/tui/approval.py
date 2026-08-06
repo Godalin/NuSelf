@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import builtins
+from dataclasses import dataclass
 
 import pytest
 from _pytest.capture import CaptureFixture
 from _pytest.monkeypatch import MonkeyPatch
 
-from nuself.runtime.feature.effect import ApprovalEffectRequest
+from nuself.runtime.feature.approval import ApprovalEffectRequest
+from nuself.runtime.feature.protocol import ToolEffectRequest
 from nuself.tui.approval import TerminalApprovalPort
+from nuself.tui.effect import TerminalToolEffectPort
+
+
+@dataclass(frozen=True)
+class UnsupportedRequest(ToolEffectRequest):
+    @property
+    def kind(self) -> str:
+        return "unsupported"
 
 
 def _request() -> ApprovalEffectRequest:
@@ -56,3 +66,19 @@ def test_terminal_approval_control_exit_is_safe_decline(
 
     assert decision.approved is False
     assert decision.input_kind == input_kind
+
+
+def test_terminal_effect_router_fails_fast_for_unknown_request() -> None:
+    requested = False
+
+    def observe_requested() -> None:
+        nonlocal requested
+        requested = True
+
+    with pytest.raises(TypeError, match="does not support"):
+        TerminalToolEffectPort().resolve(
+            UnsupportedRequest("test", "choose"),
+            on_requested=observe_requested,
+        )
+
+    assert requested is False

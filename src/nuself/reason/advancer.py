@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from threading import Lock
 from typing import TYPE_CHECKING, Any, cast
 
@@ -16,12 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.text import LangChainTextAgent
-from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
-from nuself.agent.tool_audit import ToolOutcomeProjection
+from nuself.agent.middleware import ExecutedTool, ToolCaptureMiddleware
 from nuself.agent.structured import require_structured_response
-from nuself.agent.tool_utils import (
-    index_tool_service_components,
-)
 from nuself.config.settings import RuntimePaths
 
 from nuself.agent.endpoint import LangChainLLMEndpoint
@@ -37,6 +32,8 @@ from nuself.reason.service import ReasonService
 from nuself.persona.service import PersonaService
 from nuself.runtime.context import current_runtime_context, runtime_context
 from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.log.store import runtime_event_log_sink
 from nuself.trace.service import TraceRecorder
 
 if TYPE_CHECKING:
@@ -50,23 +47,19 @@ def _current_reason_thread_id() -> str:
     return thread_id
 
 
-def _log_tool_outcome(
-    outcome: ToolOutcome,
-    *,
-    tool_service_map: dict[str, str] | None = None,
-    project_root: Path | None,
-) -> ToolOutcomeProjection:
-    """Emit a service_tool_called log event for a reasoning tool invocation."""
-    service_component = (
-        (tool_service_map or {}).get(outcome.name) or "reason_advancer"
-    )
-    projection = ToolOutcomeProjection(
-        component="reasoning",
-        service_component=service_component,
-        outcome=outcome,
-    )
-    projection.write_observed(project_root=project_root)
-    return projection
+def _execution_snapshot(outcome: ExecutedTool) -> dict[str, object]:
+    """Return safe Agent execution evidence for one Reason step."""
+
+    return {
+        "component": "reasoning",
+        "event": "tool.executed",
+        "message": "Tool execution tracked",
+        "status": "completed" if outcome.succeeded else "failed",
+        "metadata": {
+            "tool": outcome.name,
+            "execution": outcome.execution,
+        },
+    }
 
 
 class TrackedItemOutput(BaseModel):
@@ -236,7 +229,7 @@ class ReasonAdvancer:
         self._feature_executor = feature_executor
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
-        self._captured: list[ToolOutcome] = []
+        self._captured: list[ExecutedTool] = []
         self._invoke_lock = Lock()
         self._middleware = ToolCaptureMiddleware(captured=self._captured)
         self._agents = self._build_agents()
@@ -251,7 +244,6 @@ class ReasonAdvancer:
         persona_tools = self._build_persona_tools()
         all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
         create_agent = cast(Any, _create_agent)
-        self._tool_service_map = index_tool_service_components(all_tools)
         return tuple(
             (
                 endpoint,
@@ -352,12 +344,7 @@ class ReasonAdvancer:
     ) -> tuple[dict[str, object], ...]:
         snapshots: list[dict[str, object]] = []
         for outcome in self._captured:
-            projection = _log_tool_outcome(
-                outcome,
-                project_root=self._project_root,
-                tool_service_map=self._tool_service_map,
-            )
-            snapshots.append(projection.to_snapshot())
+            snapshots.append(_execution_snapshot(outcome))
         return tuple(snapshots)
 
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
@@ -411,12 +398,17 @@ def default_reason_advancer(
     langchain_models: tuple[LangChainLLMEndpoint, ...],
 ) -> ReasonAdvancer:
     """Build the default reason capability from explicit application resources."""
+    events = EventPublisher()
+    events.attach_projection(runtime_event_log_sink(paths.authority_root))
     return ReasonAdvancer(
         paths=paths,
         reason_service=reason_service,
         persona_service=persona_service,
         trace_recorder=trace_recorder,
-        feature_executor=FeatureExecutor(),
+        feature_executor=FeatureExecutor(
+            producer="reasoning",
+            events=events,
+        ),
         readonly_tools=readonly_tools,
         langchain_models=langchain_models,
     )

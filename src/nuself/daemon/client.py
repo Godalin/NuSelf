@@ -31,7 +31,7 @@ from nuself.daemon.transport import read_socket_frame
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 type DaemonConnectionPhase = Literal[
     "connect",

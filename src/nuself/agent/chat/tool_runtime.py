@@ -1,4 +1,4 @@
-"""Tool registration, skill loading, prompt metadata, and call logging."""
+"""Tool registration, skill loading, and prompt metadata."""
 
 from __future__ import annotations
 
@@ -11,21 +11,11 @@ from nuself.agent.skill_loader import (
     load_agent_skills,
     render_tool_placeholders,
 )
-from nuself.agent.middleware import ToolOutcome
-from nuself.agent.tool_audit import ToolOutcomeProjection
-from nuself.agent.tool_utils import (
-    tool_service_component,
-)
 from nuself.agent.tools.composition import build_langchain_chat_tools
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.agent.tools.resources import ToolResources
 from nuself.decorators import component, observed, readonly, tool
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.observability import (
-    report_observability_projection_failure,
-)
-from nuself.runtime.event.publisher import EventPublisher
-from nuself.runtime.event.payload import RuntimeLogEventPayload
 
 
 class ConversationToolRuntime:
@@ -37,11 +27,8 @@ class ConversationToolRuntime:
         resources: ToolResources,
         selves_consult: Callable[..., str],
         feature_executor: FeatureExecutor | None = None,
-        event_publisher: EventPublisher | None = None,
     ) -> None:
-        self._project_root = resources.project_root
         self._feature_executor = feature_executor or FeatureExecutor()
-        self._event_publisher = event_publisher
         tools = build_langchain_chat_tools(
             resources=resources,
             selves_consult=selves_consult,
@@ -96,65 +83,6 @@ class ConversationToolRuntime:
             for tool in self._tools.values()
         )
         return lines
-
-    def log_outcome(self, outcome: ToolOutcome) -> None:
-        """Project one immutable middleware tool outcome."""
-
-        tool = self._tools.get(outcome.name)
-        if tool is None:
-            return
-        metadata = tool.metadata or {}
-        service_component = tool_service_component(tool)
-        if service_component is None:
-            return
-        if metadata.get("observed") is True:
-            if self._event_publisher is not None:
-                projection = ToolOutcomeProjection(
-                    component="chat",
-                    service_component=service_component,
-                    outcome=outcome,
-                )
-                activity_metadata: dict[str, object] = {
-                    "service_component": service_component,
-                    "operation": outcome.name,
-                }
-                if metadata.get("compact") is not True:
-                    activity_metadata.update(projection.metadata)
-                self._event_publisher.publish(
-                    producer="chat",
-                    name="tool.activity",
-                    payload=RuntimeLogEventPayload(
-                        message="Tool outcome observed",
-                        level=(
-                            "error"
-                            if outcome.error is not None
-                            else "info"
-                        ),
-                        status=(
-                            "failed"
-                            if outcome.error is not None
-                            else "completed"
-                        ),
-                        error=outcome.error,
-                        metadata=activity_metadata,
-                    ).to_mapping(),
-                )
-            return
-        ToolOutcomeProjection(
-            component="chat",
-            service_component=service_component,
-            outcome=outcome,
-        ).write(project_root=self._project_root)
-
-    def report_log_failure(self, exc: Exception) -> None:
-        """Report a failed tool-log projection without changing tool execution."""
-
-        report_observability_projection_failure(
-            exc,
-            component="chat",
-            failed_event="service_tool_called",
-            project_root=self._project_root,
-        )
 
     def _build_skill_loader(self) -> BaseTool:
         skill_lines = "\n".join(

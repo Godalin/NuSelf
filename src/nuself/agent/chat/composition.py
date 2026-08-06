@@ -23,7 +23,7 @@ from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.event.publisher import EventPublisher
-from nuself.runtime.feature.effect import ToolEffectPort
+from nuself.runtime.feature.protocol import ToolEffectPort
 from nuself.runtime.job.message import JobSink
 from nuself.agent.endpoint import configured_langchain_chat_models
 from nuself.agent.endpoint import LangChainLLMEndpoint

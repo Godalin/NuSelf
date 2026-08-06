@@ -13,7 +13,7 @@ from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 type SendMessage = Callable[
     [str, str, str | None, ToolEffectResolution | None],

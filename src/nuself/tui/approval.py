@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import getpass
 
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
 )

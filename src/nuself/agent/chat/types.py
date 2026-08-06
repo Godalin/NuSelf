@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.conversation import CompletedTurn, ConversationMessage, ConversationState
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 type ConversationNodeName = Literal[
     "prepare_context",

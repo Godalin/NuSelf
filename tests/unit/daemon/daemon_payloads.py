@@ -20,10 +20,10 @@ from nuself.daemon.payloads import (
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
 from nuself.log.record import LogEvent
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
-    ToolEffectResolution,
+    ApprovalEffectResolution,
 )
 
 
@@ -46,7 +46,7 @@ def test_chat_effect_payloads_round_trip_exact_request_and_decision() -> None:
         risk="reversible",
         summary="Create memory A",
     )
-    resolution = ToolEffectResolution(
+    resolution = ApprovalEffectResolution(
         request,
         ApprovalEffectDecision(
             True,

@@ -1,34 +1,44 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
 
 from nuself.agent.tools.decorated import materialize_tool
-from nuself.runtime.feature.execution import (
-    FeatureAuditRecord,
-    FeatureExecutor,
-    ToolEffectDeclined,
-)
-from nuself.agent.effect import GraphToolEffectPort
 from nuself.runtime.feature.effect import (
+    BoundFeatureEffect,
+    EffectEnvironment,
+    FeatureAuditRecord,
+    FeatureEffect,
+    FeatureEffectRejected,
+    FeatureInvocation,
+)
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.agent.effect import GraphToolEffectPort
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequest,
     ToolEffectRequired,
     ToolEffectResolution,
 )
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.messages import RuntimeEnvelope
+from nuself.runtime.feature.approval import ApprovalEffect
+from nuself.runtime.feature.audit import AuditEffect
+from nuself.runtime.feature.observation import ObservationEffect
 from nuself.runtime.feature.policy import (
-    ApprovalEffectPolicy,
-    AuditEffectPolicy,
     FeaturePolicyConflictError,
-    ObservationEffectPolicy,
     audited,
     compact,
     component,
+    effect,
     feature_spec,
     mutating,
     observed,
@@ -53,10 +63,14 @@ class Audits:
 class Approve:
     def resolve(
         self,
-        request: ApprovalEffectRequest,
+        request: ToolEffectRequest,
+        *,
+        on_requested: Callable[[], None],
     ) -> ToolEffectResolution:
+        on_requested()
+        assert isinstance(request, ApprovalEffectRequest)
         assert request.action == "archive"
-        return ToolEffectResolution(
+        return ApprovalEffectResolution(
             request,
             ApprovalEffectDecision(
                 True,
@@ -69,12 +83,78 @@ class Approve:
 class Decline:
     def resolve(
         self,
-        request: ApprovalEffectRequest,
+        request: ToolEffectRequest,
+        *,
+        on_requested: Callable[[], None],
     ) -> ToolEffectResolution:
-        return ToolEffectResolution(
+        on_requested()
+        assert isinstance(request, ApprovalEffectRequest)
+        return ApprovalEffectResolution(
             request,
             ApprovalEffectDecision(False, input_kind="declined"),
         )
+
+
+@dataclass(frozen=True)
+class LateEffect(FeatureEffect):
+    trace: list[str]
+
+    def bind(self, environment: EffectEnvironment) -> BoundFeatureEffect:
+        del environment
+        self.trace.append("bind:late")
+        return LateBound(self.trace)
+
+
+class LateBound(BoundFeatureEffect):
+    before_priority = 20
+    after_priority = 10
+    failure_priority = 20
+
+    def __init__(self, trace: list[str]) -> None:
+        self._trace = trace
+
+    def before(self, invocation: FeatureInvocation) -> None:
+        del invocation
+        self._trace.append("before:late")
+
+    def after(self, invocation: FeatureInvocation, result: object) -> None:
+        del invocation, result
+        self._trace.append("after:late")
+
+    def failed(self, invocation: FeatureInvocation, error: Exception) -> None:
+        del invocation, error
+        self._trace.append("failed:late")
+
+
+@dataclass(frozen=True)
+class EarlyEffect(FeatureEffect):
+    trace: list[str]
+
+    def bind(self, environment: EffectEnvironment) -> BoundFeatureEffect:
+        del environment
+        self.trace.append("bind:early")
+        return EarlyBound(self.trace)
+
+
+class EarlyBound(BoundFeatureEffect):
+    before_priority = 10
+    after_priority = 20
+    failure_priority = 10
+
+    def __init__(self, trace: list[str]) -> None:
+        self._trace = trace
+
+    def before(self, invocation: FeatureInvocation) -> None:
+        del invocation
+        self._trace.append("before:early")
+
+    def after(self, invocation: FeatureInvocation, result: object) -> None:
+        del invocation, result
+        self._trace.append("after:early")
+
+    def failed(self, invocation: FeatureInvocation, error: Exception) -> None:
+        del invocation, error
+        self._trace.append("failed:early")
 
 
 def test_graph_effect_port_challenges_outside_a_graph() -> None:
@@ -87,10 +167,16 @@ def test_graph_effect_port_challenges_outside_a_graph() -> None:
         summary="Create exact memory",
     )
     port = GraphToolEffectPort()
+    requested = False
+
+    def observe_requested() -> None:
+        nonlocal requested
+        requested = True
 
     with pytest.raises(ToolEffectRequired) as missing:
-        port.resolve(request)
+        port.resolve(request, on_requested=observe_requested)
     assert missing.value.request == request
+    assert requested is True
 
 
 def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
@@ -114,10 +200,10 @@ def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
     assert spec.tool.name == "memory_archive"
     assert spec.component == "memory"
     assert spec.execution == "mutating"
-    assert any(isinstance(effect, ApprovalEffectPolicy) for effect in spec.effects)
-    assert any(isinstance(effect, ObservationEffectPolicy) for effect in spec.effects)
+    assert any(isinstance(effect, ApprovalEffect) for effect in spec.effects)
+    assert any(isinstance(effect, ObservationEffect) for effect in spec.effects)
     assert spec.compact is not None
-    assert any(isinstance(effect, AuditEffectPolicy) for effect in spec.effects)
+    assert any(isinstance(effect, AuditEffect) for effect in spec.effects)
 
 
 def test_effect_collection_is_canonical_across_decorator_order() -> None:
@@ -135,16 +221,65 @@ def test_effect_collection_is_canonical_across_decorator_order() -> None:
         resource="memory",
     )(observed(second)))
 
-    assert tuple(type(effect) for effect in feature_spec(first).effects) == (
-        ApprovalEffectPolicy,
-        ObservationEffectPolicy,
-        AuditEffectPolicy,
-    )
-    assert tuple(type(effect) for effect in feature_spec(second).effects) == (
-        ApprovalEffectPolicy,
-        ObservationEffectPolicy,
-        AuditEffectPolicy,
-    )
+    assert set(type(effect) for effect in feature_spec(first).effects) == {
+        ApprovalEffect,
+        ObservationEffect,
+        AuditEffect,
+    }
+    assert set(type(effect) for effect in feature_spec(second).effects) == {
+        ApprovalEffect,
+        ObservationEffect,
+        AuditEffect,
+    }
+
+
+def test_bound_effect_priorities_control_lifecycle_not_decorator_order() -> None:
+    trace: list[str] = []
+
+    @effect(EarlyEffect(trace))
+    @effect(LateEffect(trace))
+    def operation() -> str:
+        trace.append("service")
+        return "done"
+
+    assert operation() == "done"
+    assert trace == ["service"]
+
+    trace.clear()
+    executor = FeatureExecutor()
+    assert executor.invoke(operation) == "done"
+    assert trace == [
+        "bind:late",
+        "bind:early",
+        "before:early",
+        "before:late",
+        "service",
+        "after:late",
+        "after:early",
+    ]
+
+    trace.clear()
+    assert executor.invoke(operation) == "done"
+    assert trace[:2] == ["bind:late", "bind:early"]
+
+
+def test_failed_hooks_run_only_after_service_failure() -> None:
+    trace: list[str] = []
+
+    @effect(EarlyEffect(trace))
+    @effect(LateEffect(trace))
+    def operation() -> None:
+        trace.append("service")
+        raise LookupError("failed")
+
+    with pytest.raises(LookupError, match="failed"):
+        FeatureExecutor().invoke(operation)
+
+    assert trace[-3:] == [
+        "service",
+        "failed:early",
+        "failed:late",
+    ]
 
 
 def test_conflicting_effect_declarations_fail_at_composition() -> None:
@@ -175,6 +310,7 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
         return f"archived {secret}"
 
     result = FeatureExecutor(
+        producer="chat",
         effects=Approve(),
         events=events,
         audits=audits,
@@ -225,19 +361,27 @@ def test_observed_feature_publishes_safe_failure_lifecycle() -> None:
         raise RuntimeError(secret)
 
     with pytest.raises(RuntimeError, match="private-value"):
-        FeatureExecutor(events=events).invoke(fail, "private-value")
+        FeatureExecutor(producer="chat", events=events).invoke(
+            fail,
+            "private-value",
+        )
 
     assert [event.name for event in captured] == [
         "feature.started",
         "feature.failed",
+        "tool.activity",
     ]
     assert "private-value" not in repr(captured)
     failed = RuntimeLogEventPayload.from_mapping(captured[-1].payload)
+    assert failed.metadata is not None
     assert failed.metadata == {
         "service_component": "memory",
         "operation": "fail",
+        "execution": None,
+        "duration_ms": failed.metadata["duration_ms"],
         "error_type": "RuntimeError",
     }
+    assert isinstance(failed.metadata["duration_ms"], int)
 
 
 def test_unobserved_feature_publishes_no_lifecycle() -> None:
@@ -261,12 +405,12 @@ def test_observed_feature_uses_the_normal_log_projection(tmp_path: Path) -> None
     def feature() -> None:
         pass
 
-    FeatureExecutor(events=events).invoke(feature)
+    FeatureExecutor(producer="chat", events=events).invoke(feature)
 
     assert [
         event.event
         for event in read_log_events(project_root=tmp_path, component="chat")
-    ] == ["feature.started", "feature.completed"]
+    ] == ["feature.started", "feature.completed", "tool.activity"]
 
 
 def test_declined_confirmation_does_not_call_feature() -> None:
@@ -280,7 +424,7 @@ def test_declined_confirmation_does_not_call_feature() -> None:
         nonlocal called
         called = True
 
-    with pytest.raises(ToolEffectDeclined):
+    with pytest.raises(FeatureEffectRejected):
         FeatureExecutor(effects=Decline()).invoke(archive)
 
     assert called is False
@@ -318,10 +462,7 @@ def test_materialized_tool_preserves_framework_boundary() -> None:
     assert framework_tool.metadata == {
         "service_component": "memory",
         "execution": "readonly",
-        "confirmation_required": False,
-        "observed": False,
         "compact": False,
-        "audit_event": None,
     }
 
 

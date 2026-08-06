@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,9 +24,13 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.log.record import LogEvent
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequest,
     ToolEffectResolution,
 )
 
@@ -173,13 +178,17 @@ def test_turn_coordinator_owns_unbounded_approval_prompt(
     class ResolveOnOwnerThread:
         def resolve(
             self,
-            observed: ApprovalEffectRequest,
+            observed: ToolEffectRequest,
+            *,
+            on_requested: Callable[[], None],
         ) -> ToolEffectResolution:
             nonlocal prompt_calls
+            on_requested()
             prompt_calls += 1
             assert threading.current_thread() is owner_thread
+            assert isinstance(observed, ApprovalEffectRequest)
             assert observed == request
-            return ToolEffectResolution(
+            return ApprovalEffectResolution(
                 observed,
                 ApprovalEffectDecision(
                     True,

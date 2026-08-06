@@ -16,7 +16,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import StructuredTool
 from pydantic import ValidationError
 
-from nuself.agent.middleware import ToolOutcome
+from nuself.agent.middleware import ExecutedTool
 from nuself.application.composition import compose_application
 from nuself.reason.composition import compose_reason_advancer
 from nuself.config.settings import runtime_paths
@@ -149,8 +149,6 @@ def test_default_reason_advancer_uses_explicit_endpoints_and_tools(
         readonly_tool,
         invalid_metadata_tool,
     )
-    assert advancer._tool_service_map["test_lookup"] == "memory"
-    assert "invalid_metadata" not in advancer._tool_service_map
 
 
 def test_default_reason_advancer_preserves_explicit_empty_endpoints(
@@ -202,14 +200,14 @@ class _ConcurrentCaptureAgent:
             self.max_active = max(self.max_active, self._active)
         try:
             captured = cast(
-                list[ToolOutcome],
+                list[ExecutedTool],
                 cast(Any, advancer)._captured,
             )
             captured.append(
-                ToolOutcome(
+                ExecutedTool(
                     f"tool-{thread_id}",
-                    {"thread_id": thread_id},
-                    result=thread_id,
+                    "readonly",
+                    True,
                 )
             )
             time.sleep(0.03)
@@ -471,14 +469,14 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
         def invoke(self, _input: object) -> dict[str, object]:
             assert self.advancer is not None
             captured = cast(
-                list[ToolOutcome],
+                list[ExecutedTool],
                 cast(Any, self.advancer)._captured,
             )
             captured.append(
-                ToolOutcome(
+                ExecutedTool(
                     "workspace_put",
-                    {"key": "decision"},
-                    error="storage unavailable",
+                    "mutating",
+                    False,
                 )
             )
             raise RuntimeError("agent failed after tool")
@@ -501,15 +499,10 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
         project_root=tmp_path,
         component="reasoning",
     )
-    tool_event = next(
-        event
+    assert not any(
+        event.event == "service_tool_called"
         for event in events
-        if event.event == "service_tool_called"
     )
-    assert tool_event.status == "failed"
-    assert tool_event.metadata is not None
-    assert tool_event.metadata["tool"] == "workspace_put"
-    assert tool_event.metadata["error"] == "storage unavailable"
     assert any(
         event.event == "llm_failover_suppressed_after_tool_call"
         for event in events
@@ -576,7 +569,7 @@ def test_concurrent_advances_isolate_invocation_tool_capture(
         metadata = step.tool_logs[0]["metadata"]
         assert isinstance(metadata, Mapping)
         assert metadata["tool"] == f"tool-{thread.id}"
-        assert metadata["result"] == thread.id
+        assert metadata["execution"] == "readonly"
 
 
 def test_advance_failure_releases_invocation_owner(

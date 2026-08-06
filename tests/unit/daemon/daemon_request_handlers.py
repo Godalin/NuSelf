@@ -27,8 +27,10 @@ from nuself.runtime.handlers import (
     HandlerRegistryCoverageError,
     UnknownHandlerError,
 )
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectRequest,
+)
+from nuself.runtime.feature.protocol import (
     ToolEffectRequired,
     ToolEffectResolution,
 )

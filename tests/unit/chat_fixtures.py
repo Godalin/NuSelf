@@ -40,7 +40,7 @@ from nuself.reflection.organizer import ReflectionOrganizer
 from nuself.reflection.service import ReflectionService
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.job.message import JobSink
-from nuself.runtime.feature.effect import ToolEffectPort
+from nuself.runtime.feature.protocol import ToolEffectPort
 from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
 

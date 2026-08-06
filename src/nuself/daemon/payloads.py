@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import cast
 
 from nuself.daemon.protocol import JsonValue, ProtocolError
-from nuself.runtime.feature.effect import (
-    ApprovalEffectDecision,
-    ApprovalEffectRequest,
+from nuself.runtime.feature.codec import (
+    ToolEffectCodecError,
+    decode_effect_request,
+    decode_effect_resolution,
+    encode_effect_request,
+    encode_effect_resolution,
+)
+from nuself.runtime.feature.protocol import (
     ToolEffectRequest,
     ToolEffectResolution,
 )
@@ -77,8 +82,9 @@ class ChatRequestPayload:
         if self.turn_id is not None:
             payload["turn_id"] = self.turn_id
         if self.effect_resolution is not None:
-            payload["effect_resolution"] = _effect_resolution_to_wire(
-                self.effect_resolution
+            payload["effect_resolution"] = cast(
+                dict[str, JsonValue],
+                encode_effect_resolution(self.effect_resolution),
             )
         return payload
 
@@ -120,7 +126,7 @@ class ChatRequestPayload:
             conversation_id=conversation_id,
             turn_id=turn_id,
             effect_resolution=(
-                _effect_resolution_from_wire(payload["effect_resolution"])
+                _decode_effect_resolution(payload["effect_resolution"])
                 if "effect_resolution" in payload
                 else None
             ),
@@ -303,7 +309,10 @@ class ChatToolEffectPayload:
     def to_wire(self) -> dict[str, JsonValue]:
         return {
             "conversation_id": self.conversation_id,
-            "tool_effect": _effect_request_to_wire(self.request),
+            "tool_effect": cast(
+                dict[str, JsonValue],
+                encode_effect_request(self.request),
+            ),
         }
 
     @classmethod
@@ -321,7 +330,7 @@ class ChatToolEffectPayload:
                 "conversation_id",
                 context="chat Tool effect response",
             ),
-            request=_effect_request_from_wire(payload["tool_effect"]),
+            request=_decode_effect_request(payload["tool_effect"]),
         )
 
 
@@ -336,118 +345,18 @@ def decode_chat_payload(payload: dict[str, JsonValue]) -> DaemonChatPayload:
     return ChatResponsePayload.from_wire(payload)
 
 
-def _effect_request_to_wire(
-    request: ToolEffectRequest,
-) -> dict[str, JsonValue]:
-    return {
-        "kind": request.kind,
-        "component": request.component,
-        "operation": request.operation,
-        "action": request.action,
-        "resource": request.resource,
-        "risk": request.risk,
-        "summary": request.summary,
-    }
-
-
-def _effect_request_from_wire(value: JsonValue) -> ToolEffectRequest:
-    if not isinstance(value, dict):
-        raise ProtocolError("Tool effect request must be an object")
-    payload = cast(dict[str, JsonValue], value)
-    _expect_fields(
-        payload,
-        required=frozenset(
-            {
-                "kind",
-                "component",
-                "operation",
-                "action",
-                "resource",
-                "risk",
-                "summary",
-            }
-        ),
-    )
-    kind = _required_string(payload, "kind", context="Tool effect request")
-    if kind != "approval":
-        raise ProtocolError("Tool effect kind is invalid")
-    risk = _required_string(payload, "risk", context="Tool effect request")
-    if risk not in {"reversible", "destructive", "external"}:
-        raise ProtocolError("approval request risk is invalid")
-    return ApprovalEffectRequest(
-        component=_required_string(payload, "component", context="Tool effect request"),
-        operation=_required_string(payload, "operation", context="Tool effect request"),
-        action=_required_string(payload, "action", context="Tool effect request"),
-        resource=_required_string(payload, "resource", context="Tool effect request"),
-        risk=cast(Literal["reversible", "destructive", "external"], risk),
-        summary=_required_string(payload, "summary", context="Tool effect request"),
-    )
-
-
-def _effect_resolution_to_wire(
-    resolution: ToolEffectResolution,
-) -> dict[str, JsonValue]:
-    return {
-        "request": _effect_request_to_wire(resolution.request),
-        "decision": {
-            "approved": resolution.decision.approved,
-            "approver": resolution.decision.approver,
-            "input_kind": resolution.decision.input_kind,
-        },
-    }
-
-
-def _effect_resolution_from_wire(value: JsonValue) -> ToolEffectResolution:
-    if not isinstance(value, dict):
-        raise ProtocolError("Tool effect resolution must be an object")
-    payload = cast(dict[str, JsonValue], value)
-    _expect_fields(payload, required=frozenset({"request", "decision"}))
-    decision_value = payload["decision"]
-    if not isinstance(decision_value, dict):
-        raise ProtocolError("approval decision must be an object")
-    decision_payload = cast(dict[str, JsonValue], decision_value)
-    _expect_fields(
-        decision_payload,
-        required=frozenset({"approved", "approver", "input_kind"}),
-    )
-    approved = _required_bool(
-        decision_payload,
-        "approved",
-        context="approval decision",
-    )
-    approver = _required_nullable_string(
-        decision_payload,
-        "approver",
-        context="approval decision",
-    )
-    input_kind = _required_string(
-        decision_payload,
-        "input_kind",
-        context="approval decision",
-    )
-    if input_kind not in {"affirmative", "declined", "eof", "interrupt", "unavailable"}:
-        raise ProtocolError("approval decision input_kind is invalid")
+def _decode_effect_request(value: JsonValue) -> ToolEffectRequest:
     try:
-        decision = ApprovalEffectDecision(
-            approved=approved,
-            approver=approver,
-            input_kind=cast(
-                Literal[
-                    "affirmative",
-                    "declined",
-                    "eof",
-                    "interrupt",
-                    "unavailable",
-                ],
-                input_kind,
-            ),
-        )
-    except ValueError as exc:
+        return decode_effect_request(value)
+    except ToolEffectCodecError as exc:
         raise ProtocolError(diagnostic_exception_message(exc)) from exc
-    return ToolEffectResolution(
-        request=_effect_request_from_wire(payload["request"]),
-        decision=decision,
-    )
+
+
+def _decode_effect_resolution(value: JsonValue) -> ToolEffectResolution:
+    try:
+        return decode_effect_resolution(value)
+    except ToolEffectCodecError as exc:
+        raise ProtocolError(diagnostic_exception_message(exc)) from exc
 
 
 @dataclass(frozen=True)

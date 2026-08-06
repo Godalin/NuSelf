@@ -5,7 +5,7 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — closing Tool effects for the 0.4.0 release boundary.
+Active — Tool effect implementation complete; preparing the 0.4.0 release.
 
 ## Objective
 
@@ -17,16 +17,11 @@ verified result as NuSelf 0.4.0.
 
 ## Next Steps
 
-1. Specify declaration binding, lifecycle ordering, generic interaction
-   protocol, observation ownership, and release boundaries.
-2. Implement `FeatureEffect`, `BoundFeatureEffect`, `EffectEnvironment`, and
-   invocation-scoped lifecycle execution without a central effect union.
-3. Move interaction codecs to `runtime.feature`; remove approval knowledge
-   from daemon and LangGraph supervision, and make terminal dispatch explicit.
-4. Move Tool outcome observation into the observed effect and reduce Agent
-   middleware to retry safety and invocation-local execution tracking.
-5. Add architecture/protocol tests, update version and changelog to 0.4.0,
-   run full test/type/build/wheel verification, and create the release PR.
+1. Update package version and reorganize the accumulated changelog as 0.4.0.
+2. Run full pytest, Pyright, build, clean-wheel smoke, release-gate, and diff
+   verification.
+3. Commit release metadata, restore this board to Idle, and create the 0.4.0
+   release PR to `main` without tagging an unmerged release.
 
 ## Exclusions
 

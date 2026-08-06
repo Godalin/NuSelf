@@ -32,7 +32,7 @@ NuSelf 仍在激进开发中。v0.3 系列建立了运行时、存储、Agent �
 - 本地 SQLite authority、迁移工具和可移植 thought pack
 - 瞬时重试及有序 OpenAI-compatible / Anthropic 端点切换
 - 自动隐藏凭据的结构化诊断
-- 可组合的类型化 Tool 副作用（审批、观察与审计）；单一有界 daemon 调度器支持可恢复的维护唤醒和资源 lane 串行化
+- 每次调用独立绑定的类型化 Tool effect（审批、观察与审计）及通用暂停运输；单一有界 daemon 调度器支持可恢复的维护唤醒和资源 lane 串行化
 
 ## 快速开始
 

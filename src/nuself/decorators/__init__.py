@@ -1,15 +1,13 @@
 """Public spelling for inert, orthogonal feature declarations."""
 
 from nuself.runtime.feature.policy import (
-    ApprovalEffectPolicy,
-    AuditEffectPolicy,
     CompactPolicy,
     FeaturePolicyConflictError,
     FeatureSpec,
-    ObservationEffectPolicy,
     audited,
     component,
     compact,
+    effect,
     feature_spec,
     mutating,
     observed,
@@ -19,15 +17,13 @@ from nuself.runtime.feature.policy import (
 )
 
 __all__ = [
-    "ApprovalEffectPolicy",
-    "AuditEffectPolicy",
     "CompactPolicy",
     "FeaturePolicyConflictError",
     "FeatureSpec",
-    "ObservationEffectPolicy",
     "audited",
     "component",
     "compact",
+    "effect",
     "feature_spec",
     "mutating",
     "observed",

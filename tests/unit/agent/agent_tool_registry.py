@@ -2,6 +2,8 @@ from __future__ import annotations
 
 # pyright: reportUnusedImport=false
 
+from collections.abc import Callable
+
 from memory_fixtures import (
     memory_candidate_repository,
     memory_entry_repository,
@@ -30,9 +32,14 @@ from tests.backend import owned_backend
 from nuself.trace.repository import TraceRepository
 from nuself.trace.service import TraceQueryService
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequest,
+    ToolEffectRequired,
     ToolEffectResolution,
 )
 from nuself.storage.workspace import PrivateWorkspaceStore
@@ -131,7 +138,7 @@ def test_subsystem_tool_builders_own_their_registries(
         "UTC time: 2026-08-05T06:07:00+00:00"
     )
     assert time_tools[0].metadata is not None
-    assert time_tools[0].metadata["confirmation_required"] is False
+    assert time_tools[0].metadata["execution"] == "readonly"
 
 
 def test_memory_create_requires_approval_and_reports_decline(
@@ -146,8 +153,12 @@ def test_memory_create_requires_approval_and_reports_decline(
 
         def resolve(
             self,
-            request: ApprovalEffectRequest,
+            request: ToolEffectRequest,
+            *,
+            on_requested: Callable[[], None],
         ) -> ToolEffectResolution:
+            on_requested()
+            assert isinstance(request, ApprovalEffectRequest)
             self.requests.append(request)
             decision = (
                 ApprovalEffectDecision(
@@ -158,7 +169,7 @@ def test_memory_create_requires_approval_and_reports_decline(
                 if self.approved
                 else ApprovalEffectDecision(False, input_kind="declined")
             )
-            return ToolEffectResolution(request, decision)
+            return ApprovalEffectResolution(request, decision)
 
     def create_tool(approval: Approval):
         tools = build_memory_tool_set(
@@ -182,7 +193,7 @@ def test_memory_create_requires_approval_and_reports_decline(
 
     assert "Created memory" in str(result)
     assert approved_tool.metadata is not None
-    assert approved_tool.metadata["confirmation_required"] is True
+    assert approved_tool.metadata["execution"] == "mutating"
     assert len(repository.list()) == 1
     assert repository.list()[0].review_state == "draft"
     assert approved.requests[0].operation == "memory_create"

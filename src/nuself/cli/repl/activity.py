@@ -17,7 +17,7 @@ from nuself.log.reader import InteractiveLogCursor
 from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 from nuself.tui.render import render_log_event
 
 type SendMessage = Callable[

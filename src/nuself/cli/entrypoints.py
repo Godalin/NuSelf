@@ -17,7 +17,7 @@ from nuself.cli.daemon_lifecycle import (
 from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 from nuself.daemon import lifecycle
 from nuself.inbox.link import DeepLink
 from nuself.runtime.diagnostics import diagnostic_exception_message

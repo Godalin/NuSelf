@@ -28,7 +28,7 @@ from nuself.cli.repl.turns import (
     send_interactive_chat_turn as _run_interactive_chat_turn,
 )
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 INTERACTIVE_CHAT_ATTEMPTS = 2
 INTERACTIVE_LOG_POLL_INTERVAL_SECONDS = 0.1

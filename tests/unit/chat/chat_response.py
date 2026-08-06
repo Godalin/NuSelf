@@ -11,7 +11,6 @@ from langchain_core.messages import (
 )
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 
-from nuself.agent.middleware import ToolOutcome
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
@@ -37,18 +36,16 @@ from nuself.decorators import (
 from nuself.runtime.context import runtime_context
 from nuself.runtime.feature.execution import FeatureExecutor
 from nuself.agent.effect import GraphToolEffectPort
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
     ToolEffectRequired,
-    ToolEffectResolution,
 )
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
-
-
-def _ignore_tool_outcome(_outcome: ToolOutcome) -> None:
-    return None
 
 
 class _ToolCallingFakeChatModel(GenericFakeChatModel):
@@ -81,6 +78,7 @@ def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
     framework_tool = materialize_tool(
         create_memory,
         executor=FeatureExecutor(
+            producer="chat",
             effects=GraphToolEffectPort(),
             events=events,
         ),
@@ -131,8 +129,6 @@ def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
         project_root=None,
         langchain_models=(endpoint,),
         tools=(framework_tool,),
-        log_tool_outcome=_ignore_tool_outcome,
-        report_tool_log_failure=None,
     )
     prompt: list[BaseMessage] = [HumanMessage(content="remember this")]
 
@@ -154,7 +150,7 @@ def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
         )
         result = synthesizer.complete(
             prompt,
-            effect_resolution=ToolEffectResolution(request, decision),
+            effect_resolution=ApprovalEffectResolution(request, decision),
         )
 
     assert result.answer == "done"
@@ -298,7 +294,6 @@ def test_endpoint_state_failure_retries_then_reports_configured_failure(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -346,7 +341,6 @@ def test_protocol_failure_retries_same_endpoint_without_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -415,7 +409,6 @@ def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     with pytest.raises(type(error)) as caught:
@@ -465,7 +458,6 @@ def test_availability_failure_uses_shared_endpoint_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -544,7 +536,6 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     if uses_fallback:
@@ -607,7 +598,6 @@ def test_readonly_tool_outcome_allows_transient_retry(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete([HumanMessage(content="remember")])
@@ -662,7 +652,6 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     with pytest.warns(RuntimeWarning) as captured:
@@ -706,7 +695,6 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
         project_root=tmp_path,
         langchain_models=(),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
     state = ConversationTurnState.start(
         ConversationState.empty("thread-1"),

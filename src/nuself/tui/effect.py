@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from nuself.runtime.feature.effect import (
+from collections.abc import Callable
+
+from nuself.runtime.feature.approval import (
+    ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
     ToolEffectPort,
     ToolEffectRequest,
     ToolEffectResolution,
@@ -16,6 +22,16 @@ class TerminalToolEffectPort(ToolEffectPort):
     def resolve(
         self,
         request: ToolEffectRequest,
+        *,
+        on_requested: Callable[[], None],
     ) -> ToolEffectResolution:
-        decision = TerminalApprovalPort().request(request)
-        return ToolEffectResolution(request, decision)
+        match request:
+            case ApprovalEffectRequest():
+                on_requested()
+                decision = TerminalApprovalPort().request(request)
+                return ApprovalEffectResolution(request, decision)
+            case _:
+                raise TypeError(
+                    "terminal does not support Tool effect request "
+                    f"{type(request).__name__}"
+                )

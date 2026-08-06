@@ -181,6 +181,44 @@ def test_langchain_tool_materialization_has_one_owner() -> None:
     assert owners == ["agent/tools/decorated.py"]
 
 
+def test_tool_effect_transport_and_agent_boundaries_are_approval_neutral() -> None:
+    checked = (
+        *_package_files("daemon"),
+        _SOURCE_ROOT / "agent" / "chat" / "response.py",
+        _SOURCE_ROOT / "agent" / "tools" / "decorated.py",
+    )
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in checked
+        if _module_matches(
+            "nuself.runtime.feature.approval",
+            _imports(path),
+        )
+    ]
+    assert violations == []
+
+
+def test_feature_executor_and_agent_middleware_do_not_own_effect_logging() -> None:
+    executor = _SOURCE_ROOT / "runtime" / "feature" / "execution.py"
+    executor_names = {
+        node.id
+        for node in ast.walk(_tree(executor))
+        if isinstance(node, ast.Name)
+    }
+    assert not executor_names & {
+        "ApprovalEffect",
+        "ObservationEffect",
+        "AuditEffect",
+    }
+
+    middleware = _SOURCE_ROOT / "agent" / "middleware.py"
+    assert not any(
+        module.startswith("nuself.log")
+        or module.startswith("nuself.runtime.event")
+        for module in _imports(middleware)
+    )
+
+
 def test_domain_tool_builders_do_not_construct_feature_executors() -> None:
     builder_paths = tuple(
         path

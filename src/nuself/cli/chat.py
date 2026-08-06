@@ -25,7 +25,7 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
 from nuself.tui.render import TerminalTheme
 from nuself.tui.effect import TerminalToolEffectPort
-from nuself.runtime.feature.effect import ToolEffectResolution
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 type ReplyPrinter = Callable[[str], None]
 
@@ -54,7 +54,10 @@ def send_daemon_chat(
         request = result.tool_effect_request
         if request is None:
             break
-        effect_resolution = TerminalToolEffectPort().resolve(request)
+        effect_resolution = TerminalToolEffectPort().resolve(
+            request,
+            on_requested=lambda: None,
+        )
     if result.reply is not None:
         print_reply(result.reply)
     if result.error is not None:

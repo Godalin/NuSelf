@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from nuself.runtime.feature.effect import ToolEffectRequest
+from nuself.runtime.feature.protocol import ToolEffectRequest
 
 
 @dataclass(frozen=True)

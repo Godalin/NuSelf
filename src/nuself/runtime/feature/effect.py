@@ -1,99 +1,133 @@
-"""Structured requests and resolutions emitted by Tool effects."""
+"""Declaration and invocation abstractions for composable Tool effects."""
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Literal, Protocol
+import time
+from typing import ClassVar, Literal, Protocol
 
-type ToolEffectKind = Literal["approval"]
-type ApprovalRisk = Literal["reversible", "destructive", "external"]
-type ApprovalInput = Literal[
-    "affirmative",
-    "declined",
-    "eof",
-    "interrupt",
-    "unavailable",
-]
+from langchain_core.tools import ToolException
+
+from nuself.runtime.feature.protocol import ToolEffectPort
+
+type Execution = Literal["readonly", "mutating"]
+
+
+class FeatureEventPublisher(Protocol):
+    """Runtime event capability consumed by projection effects."""
+
+    def publish(
+        self,
+        *,
+        name: str,
+        producer: str,
+        payload: Mapping[str, object] | None = None,
+    ) -> object: ...
 
 
 @dataclass(frozen=True)
-class ApprovalEffectRequest:
-    """One approval interaction emitted before a Tool service call."""
+class FeatureAuditRecord:
+    """Payload-safe outcome for a declared domain audit."""
+
+    component: str
+    event: str
+    operation: str
+    outcome: str
+    error_type: str | None = None
+
+
+class FeatureAuditSink(Protocol):
+    """Durable audit adapter boundary."""
+
+    def write(self, record: FeatureAuditRecord) -> None: ...
+
+
+class FeatureEffectRejected(ToolException):
+    """A suspending effect was resolved without permission to execute."""
+
+
+@dataclass(frozen=True)
+class EffectEnvironment:
+    """Explicit runtime capabilities available while binding effects."""
+
+    producer: str
+    effect_port: ToolEffectPort
+    events: FeatureEventPublisher | None = None
+    audits: FeatureAuditSink | None = None
+
+    def __post_init__(self) -> None:
+        if not self.producer.strip():
+            raise ValueError("Tool effect producer must not be blank")
+
+
+@dataclass(frozen=True)
+class FeatureInvocation:
+    """One immutable feature call shared with bound effects."""
 
     component: str
     operation: str
-    action: str
-    resource: str
-    risk: ApprovalRisk
-    summary: str
-    kind: Literal["approval"] = "approval"
+    execution: Execution | None
+    args: tuple[object, ...]
+    kwargs: Mapping[str, object]
+    started_at: float
 
-
-type ToolEffectRequest = ApprovalEffectRequest
-
-
-@dataclass(frozen=True)
-class ApprovalEffectDecision:
-    """Frontend decision for an approval interaction."""
-
-    approved: bool
-    approver: str | None = None
-    input_kind: ApprovalInput = "unavailable"
-
-    def __post_init__(self) -> None:
-        if self.approved:
-            if self.input_kind != "affirmative":
-                raise ValueError(
-                    "approved decision requires affirmative input"
-                )
-            if self.approver is None or not self.approver.strip():
-                raise ValueError(
-                    "approved decision requires an approver"
-                )
-        elif self.input_kind == "affirmative":
-            raise ValueError(
-                "declined decision cannot have affirmative input"
-            )
-
-
-type ToolEffectDecision = ApprovalEffectDecision
-
-
-@dataclass(frozen=True)
-class ToolEffectResolution:
-    """One frontend decision exactly bound to its effect request."""
-
-    request: ToolEffectRequest
-    decision: ToolEffectDecision
-
-
-class ToolEffectPort(Protocol):
-    """Resolve a structured Tool effect through one runtime adapter."""
-
-    def resolve(
-        self,
-        request: ToolEffectRequest,
-    ) -> ToolEffectResolution: ...
-
-
-class ToolEffectRequired(Exception):
-    """Execution suspended until a frontend resolves one Tool effect."""
-
-    def __init__(self, request: ToolEffectRequest) -> None:
-        super().__init__(
-            f"frontend effect resolution required for {request.operation}"
+    @classmethod
+    def from_call(
+        cls,
+        function: Callable[..., object],
+        *,
+        component: str | None,
+        operation: str | None,
+        execution: Execution | None,
+        args: tuple[object, ...],
+        kwargs: Mapping[str, object],
+    ) -> FeatureInvocation:
+        return cls(
+            component=component or "runtime",
+            operation=operation or function.__name__,
+            execution=execution,
+            args=args,
+            kwargs=dict(kwargs),
+            started_at=time.monotonic(),
         )
-        self.request = request
+
+    @property
+    def duration_ms(self) -> int:
+        return max(0, int((time.monotonic() - self.started_at) * 1000))
 
 
-class RejectUnavailableEffectPort:
-    """Safe adapter for a runtime without an interactive frontend."""
+class FeatureEffect(ABC):
+    """Immutable declaration attached to a feature function."""
 
-    def resolve(
-        self,
-        request: ToolEffectRequest,
-    ) -> ToolEffectResolution:
-        return ToolEffectResolution(
-            request,
-            ApprovalEffectDecision(False, input_kind="unavailable"),
-        )
+    cardinality_key: ClassVar[str | None] = None
+
+    @abstractmethod
+    def bind(self, environment: EffectEnvironment) -> BoundFeatureEffect:
+        """Bind this declaration to fresh invocation runtime state."""
+
+
+class ExecutionConstraint(ABC):
+    """Optional declaration capability for execution compatibility."""
+
+    @abstractmethod
+    def validate_execution(self, execution: Execution | None) -> None:
+        """Reject an incompatible execution classification."""
+
+
+class BoundFeatureEffect(ABC):
+    """Invocation-scoped runtime implementation of one effect."""
+
+    before_priority: ClassVar[int] = 100
+    after_priority: ClassVar[int] = 100
+    failure_priority: ClassVar[int] = 100
+
+    def before(self, invocation: FeatureInvocation) -> None:
+        del invocation
+
+    def after(self, invocation: FeatureInvocation, result: object) -> None:
+        del invocation, result
+
+    def failed(self, invocation: FeatureInvocation, error: Exception) -> None:
+        del invocation, error

@@ -26,10 +26,10 @@ from nuself.runtime.context import (
     runtime_context,
 )
 from nuself.runtime.execution import CancellationToken, use_cancellation
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.approval import (
     ApprovalEffectDecision,
     ApprovalEffectRequest,
-    ToolEffectResolution,
+    ApprovalEffectResolution,
 )
 from nuself.config.scope import resolve_scope
 
@@ -86,7 +86,7 @@ def test_daemon_chat_transports_exact_tool_effect_resolution(
         if len(resolutions) == 1:
             return ChatToolEffectPayload("default", request)
         resolution = kwargs.get("effect_resolution")
-        assert isinstance(resolution, ToolEffectResolution)
+        assert isinstance(resolution, ApprovalEffectResolution)
         assert resolution.request == request
         assert resolution.decision.approved is approved
         return ChatResponsePayload(
@@ -117,7 +117,7 @@ def test_daemon_chat_transports_exact_tool_effect_resolution(
         "remember this",
         tmp_path,
         turn_id="turn-approval",
-        effect_resolution=ToolEffectResolution(request, decision),
+        effect_resolution=ApprovalEffectResolution(request, decision),
     )
 
     assert result.reply == ("saved" if approved else "not saved")

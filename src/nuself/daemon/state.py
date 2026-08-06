@@ -38,7 +38,7 @@ from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.event.payload import RuntimeLogEventPayload
 from nuself.runtime.observability import publish_observed_event
 from nuself.runtime.job.message import JobMessage
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.protocol import (
     ToolEffectRequired,
     ToolEffectResolution,
 )

@@ -220,6 +220,30 @@ CORE_EVENT_DEFINITIONS: tuple[RuntimeEventDefinition, ...] = (
         description="An agent tool emitted live activity.",
         payload_validator=validate_runtime_log_event_payload,
     ),
+    RuntimeEventDefinition(
+        producer="reasoning",
+        name="feature.started",
+        description="A declared Reason Tool feature started.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="reasoning",
+        name="feature.completed",
+        description="A declared Reason Tool feature completed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="reasoning",
+        name="feature.failed",
+        description="A declared Reason Tool feature failed.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
+    RuntimeEventDefinition(
+        producer="reasoning",
+        name="tool.activity",
+        description="A Reason Tool emitted live activity.",
+        payload_validator=validate_runtime_log_event_payload,
+    ),
 )
 
 

@@ -52,7 +52,7 @@ from nuself.runtime.event.payload import (
 )
 from nuself.runtime.event.publisher import EventPublisher
 from nuself.runtime.feature.execution import FeatureExecutor
-from nuself.runtime.feature.effect import (
+from nuself.runtime.feature.protocol import (
     ToolEffectPort,
     ToolEffectRequired,
     ToolEffectResolution,
@@ -141,10 +141,10 @@ class ConversationGraphRuntime:
             resources=resources.tools,
             selves_consult=self._consult_selves_tool,
             feature_executor=FeatureExecutor(
+                producer="chat",
                 effects=effect_port,
                 events=self._event_publisher,
             ),
-            event_publisher=self._event_publisher,
         )
         tools = self._tool_runtime.tools
         self._response_synthesizer = (
@@ -154,8 +154,6 @@ class ConversationGraphRuntime:
                 project_root=project_root,
                 langchain_models=self._langchain_models,
                 tools=tools.values(),
-                log_tool_outcome=self._tool_runtime.log_outcome,
-                report_tool_log_failure=self._tool_runtime.report_log_failure,
             )
         )
     def readonly_tools(self) -> tuple[BaseTool, ...]:
