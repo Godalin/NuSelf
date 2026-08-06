@@ -68,9 +68,11 @@
 
 - `main` is the stable, releasable branch.
 - `dev/v0.4.x` is the active optimization branch for the current minor line.
-- `feature/*` branches are isolated experimental work for a single feature or fix.
-- Each `feature/*` branch should merge back into `dev/v0.4.x` before anything is promoted toward `main`.
-- Release work should land on the stabilization or stable branch first, then be tagged from the release commit.
+- `feature/*` branches are short-lived boundaries for one independently
+  meaningful or higher-risk change. Feature PRs merge into the active minor
+  development branch; they do not bypass it to target `main`.
+- Release PRs promote the active minor development branch into `main`. The
+  merged release commit is tagged only after it is present on `main`.
 - CI runs for pushes to `main` and every `dev/**` development branch. Pull
   requests targeting either `main` or `dev/**` run the same validation matrix,
   so ordinary development is verified before and after integration rather than
@@ -78,6 +80,41 @@
 - Repository-owned workflows use maintained GitHub-hosted action generations
   that run on the current Node action runtime. CI and release must not retain an
   action major that GitHub reports as runtime-deprecated.
+
+## Pull Request Policy
+
+NuSelf uses Pull Requests even while maintained by one person when a change has
+independent semantics or elevated risk. A PR is not simulated group approval;
+it is the reviewable and revertible boundary that presents the complete diff,
+design motivation, scope limits, test evidence, and CI state in one place.
+
+The following changes require a short-lived feature branch and PR into the
+active minor development branch:
+
+- refactoring across package boundaries;
+- changing architectural ownership or dependency boundaries;
+- changing persisted formats, schemas, or migration behavior;
+- changing daemon, CLI, or other wire protocols;
+- changing a public API;
+- adding a subsystem;
+- changing execution semantics or safety behavior.
+
+Every version release requires a release PR from the active minor development
+branch into `main`. Spelling, comments, formatting, and obvious low-risk small
+fixes may be committed directly to the current development branch when they do
+not conceal an independent semantic change.
+
+Before merge, every required PR must have:
+
+- a clear description of motivation, impact, and exclusions;
+- a controlled diff containing one coherent change boundary;
+- relevant tests and the required CI matrix passing;
+- one completed diff review by Codex or a human, with actionable findings
+  resolved or explicitly moved out of scope.
+
+Single-maintainer development does not require CODEOWNERS, mandatory external
+reviewers, or enterprise-style approval rules. The evidence above is the merge
+gate; authorship and review may belong to the same maintainer-assisted workflow.
 
 ## Commit And Push Policy
 
@@ -109,8 +146,11 @@ Versioning and changelog rules live in [`versioning.md`](versioning.md). Release
    `git diff --check`.
 5. Confirm `uv run nuself --version` prints the intended version.
 6. Commit the release metadata with message `release: <version>`.
-7. Create an annotated git tag: `git tag -a v<version> -m "Release <version>"`.
-8. Push the release commit and tag together when the user asks to publish: `git push && git push origin v<version>`.
+7. Open a release PR from the active minor development branch into `main` and
+   satisfy the Pull Request Policy review and CI gates.
+8. Merge the release PR, then create an annotated tag on the merged release
+   commit: `git tag -a v<version> -m "Release <version>"`.
+9. Push the tag when the user asks to publish: `git push origin v<version>`.
 
 Do not tag unreleased feature commits directly. Tags mark release commits only.
 

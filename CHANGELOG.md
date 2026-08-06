@@ -74,6 +74,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Added executable module-boundary gates, current service/package ownership
   documentation, authority-root terminology, and release/build contracts for
   the 0.4 architecture.
+- Defined lightweight single-maintainer Pull Request boundaries: independent
+  semantic and higher-risk changes use feature PRs into the active minor line,
+  while releases use a gated development-to-`main` PR with explicit diff
+  review and CI evidence.
 
 ## v0.3.1 - 2026-07-30
 
