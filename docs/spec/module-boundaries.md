@@ -1,6 +1,6 @@
 # Module Boundaries
 
-Status: authoritative for v0.3.1.
+Status: authoritative for v0.4.0.
 
 ## Purpose
 
@@ -671,4 +671,4 @@ Decoupling proceeds from enforceable boundaries inward:
 
 Each step removes the old path repository-wide. NuSelf does not retain parallel
 service locators, forwarding APIs, or deprecated construction paths during
-active v0.3.1 development.
+active v0.4.0 development.

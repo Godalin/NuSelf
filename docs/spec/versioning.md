@@ -28,7 +28,7 @@ Guidance:
 Branch intent follows the version line:
 
 - `main` tracks the stable, releasable state.
-- `dev/v0.3.x` tracks stabilization work for the current minor line.
+- `dev/v0.4.x` tracks stabilization work for the current minor line.
 - `feature/*` tracks isolated experiments and should not be treated as release candidates until merged into the stabilization or stable branch.
 
 ## Changelog

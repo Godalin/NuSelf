@@ -1,6 +1,6 @@
 # Storage
 
-Status: authoritative for v0.3.1.
+Status: authoritative for v0.4.0.
 
 NuSelf has one structured storage authority per selected scope: SQLite. The
 filesystem is used only for configuration, source documents, exports, logs,

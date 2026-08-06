@@ -6,587 +6,74 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
+### Added
+
+### Changed
+
+### Fixed
+
+### Documentation
+
+## v0.4.0 - 2026-08-07
+
+### Added
+
+- Added resumable, no-deadline Tool approval across LangGraph, daemon, CLI,
+  and REPL boundaries, plus read-only local/UTC time access for Chat.
+- Added independent Inbox and Delivery subsystems. Reflections and meaningful
+  Reason steps publish complete durable items, while log, email, and macOS
+  adapters independently track external delivery attempts.
+- Added an independent Source domain and top-level `nuself source` commands for
+  imported Markdown and text without mixing external documents into Memory.
+- Added top-level Reflection commands, discoverable SQLite data inspection and
+  export commands, explicit schema/layout migration tools, and authority health
+  diagnostics.
+
+### Changed
+
 - Tool effects now use frozen declarations bound to fresh invocation-scoped
   interpreters. Approval is one typed interaction family over generic
   suspension transport; observation solely owns safe Tool lifecycle/outcome
-  events, audit remains an independent domain projection, and Agent middleware
-  retains only execution tracking, retry safety, and local deduplication.
-- Daemon-backed Chat now returns typed approval challenges to the interactive
-  client instead of treating a missing daemon frontend as user rejection. The
-  REPL presents them on its terminal-owner thread without a deadline, and the
-  daemon resumes the exact LangGraph Tool checkpoint without regenerating
-  arguments or duplicating an approved write. Chat also exposes read-only local
-  and UTC current time.
-- Reflection Inbox items and their email/macOS deliveries now include the
-  complete reflection body instead of only a command telling users where to
-  inspect it.
-- Replaced the mixed Notification outbox with a generic Inbox domain and an
-  independent Delivery pipeline. Reflections and meaningful Reason steps now
-  publish durable Inbox items, while macOS, email, and log adapters track only
-  external delivery attempts.
-- Promoted Inbox item management to `nuself inbox ...` / `:inbox ...`, removed
-  the nested `inbox notify` interface, and added an explicit preview/apply
-  migration script for existing Notification records.
+  events, audit remains independent, and Agent middleware retains only retry
+  safety, execution classification, and invocation-local deduplication.
+- Chat and persona preparation no longer perform ambient Memory, Profile, or
+  Source retrieval. Agents load explicit skills and call service-boundary tools
+  when durable or imported context is required.
+- Agent Tool identity, component, read/write classification, effects, and
+  presentation now share one decorator/materialization path; repositories stay
+  private behind domain services.
+- Structured user/workspace authority is SQLite-only. Schema v4 uses compact
+  payload collections, runtime opening fails closed on old schemas, and
+  migration is an explicit preview/apply operator action with backups.
+- One bounded daemon scheduler now coordinates Chat, curation, Reflection,
+  Reason, Delivery, and maintenance work with resource-lane serialization and
+  capacity-aware admission.
+- Application composition is the single initialized authority graph. CLI,
+  daemon, agents, background workflows, and evaluation borrow explicit service
+  capabilities and resolved user/workspace configuration instead of reopening
+  paths or exposing repositories.
+- Chat persists and returns its answer before delayed compression, while
+  stable turn IDs, pending markers, exact continuation matching, and
+  cooperative cancellation protect retries from replaying effectful work.
 
-- Reflection now owns a top-level `nuself reflection` command family with
-  explicit `run` and `status` operations plus entry management. `nuself inbox`
-  is now the mixed pending-item view and no longer owns Reflection commands.
+### Fixed
 
-- Observed agent-tool logs once again show structured arguments and
-  result/error details by default. Tool authors may apply the orthogonal
-  `@compact` decorator when operation/status-only output is intentional.
+- Fixed daemon-wide SQLite deadlocks and interactive startup stalls caused by
+  holding shared transactions or scheduler capacity across long-running work.
+- Fixed retryable REPL messages losing their stable turn identity, Ctrl-C
+  abandoning owned work, and startup readiness diagnostics masking authority or
+  configuration failures.
+- Fixed transient model failures retrying or failing over after a mutating Tool
+  execution; execution-classified middleware now suppresses unsafe replay.
+- Fixed approval requests being interpreted as rejection when no local daemon
+  frontend existed and ensured requested activity is visible before suspension
+  without being duplicated on LangGraph resume.
 
-- Split imported documents into an independent Source domain and top-level
-  `nuself source` command family. Source ingestion and deletion no longer
-  create or remove personal Memory/Profile records.
-- Restored tool-driven context: Chat and persona preparation no longer perform
-  ambient Memory, Profile, or Source retrieval. Agents use the Memory and
-  Source skills and read-only tools only when the current discussion needs
-  durable context.
-- Grouped the Memory curator implementation under one owned subpackage and
-  removed obsolete source-extraction and prompt-packing code.
+### Documentation
 
-- Concrete composition, models, background workflows, and evaluation code now
-  live with their owning domains; shared application/runtime packages retain
-  only their actual architectural responsibilities.
-- One-shot Chat now reuses its per-turn conversation runtime for delayed
-  compression instead of rebuilding the complete model/tool resource graph.
-- CLI adapters now borrow the already-selected application graph or backend
-  without repeatedly passing and resolving the same authority path.
-- Configuration now has one scope-based loading entry point; removed the
-  parallel single-file/path loader and its duplicate filesystem policy.
-- Structured-agent composition no longer reloads model configuration from a
-  project path; application composition supplies endpoints explicitly, while
-  omitted endpoints form an explicit empty set.
-- Configuration loading now uses typed `SystemConfig` defaults directly and
-  inlines the single-use file-build path, removing two private forwarding
-  methods.
-- Effective config output now uses only `llm.endpoints.<index>.*`, removing the
-  duplicate first-endpoint `llm.0.*` compatibility projection.
-- Removed the unused `ConfigSystem._test_config()` production-code branch and
-  its duplicate daemon/reflection configuration tree.
-- Removed the obsolete process-global single-file configuration cache;
-  application runtimes still own one immutable snapshot, while explicit later
-  loads always inspect current file contents.
-- REPL startup notices no longer misclassify application or storage composition
-  failures as invalid configuration; readiness remains the configuration
-  diagnostic boundary and unexpected failures propagate.
-- Daemon chat now reads its request timeout directly from the application
-  graph at the client-call boundary, removing a single-use config getter.
-- `ApplicationRuntime` now has one lazy backend acquisition path shared by
-  graph composition and infrastructure borrowing, and releases its graph
-  reference during close.
-- Daemon chat timeouts and interactive startup notices now reuse the resolved
-  application configuration, preserving user/workspace layering and removing
-  duplicate path-only config loads.
-- The CLI composition root now binds Chat and REPL dependencies directly,
-  removing three private forwarding functions from the launch path.
-- Daemon recurring-task registration is now the sole periodic task subset,
-  removing a second handwritten task-kind type catalog.
-- Daemon clients now connect directly instead of racing a socket-path
-  existence preflight; missing sockets retain their structural connect failure
-  and original OS error like other transport failures.
-- Daemon restart results now expose final state only through their composed
-  start transition, removing a duplicate forwarding API.
-- Daemon startup now carries user/workspace scope metadata into the child
-  process, preserving layered workspace configuration instead of guessing from
-  an authority path.
-- The CLI now passes its resolved `NuSelfScope` into `ApplicationRuntime`
-  instead of discarding workspace/user-layer metadata to a root path.
-- Application composition now loads configuration from its already-resolved
-  scope, preserving user defaults beneath workspace overrides.
-- Daemon request state and its socket adapter now expose the selected
-  `authority_root` explicitly instead of calling it a project root.
-- `RuntimePaths` now exposes only the canonical `authority_root`; removed its
-  temporary legacy `project_root` alias and migrated all typed-path consumers.
-- System health now branches directly on the daemon status observation instead
-  of maintaining a duplicate unavailable flag.
-- The daemon-list handler now owns its fixed two-line rendering directly,
-  removing a single-use public formatter.
-- CLI lifecycle failures now use the shared safe diagnostic formatter directly,
-  removing a policy-free lifecycle-specific forwarding function.
-- Raw daemon request transport is now private to the typed client operations;
-  low-level framing tests continue to exercise the internal boundary directly.
-- Generic daemon response decoding is now private to the typed client
-  operations; failure tests exercise the public health boundary instead.
-- Daemon stop failures now expose ownership through their authoritative status
-  snapshot only, removing a duplicate forwarding property.
-- Daemon chat response confidence decoding now lives beside its range policy,
-  removing a generic helper with one caller.
-- Daemon chat request decoding now keeps its two optional ID defaults directly
-  in the owning codec, removing a two-call overloaded helper.
-- The log-only notification adapter now receives the resolved project path
-  directly instead of retaining the wider runtime-path aggregate.
-- Notification adapter composition now receives only validated email and macOS
-  settings instead of the aggregate system configuration.
-- macOS AppleScript escaping is now a private adapter implementation detail;
-  tests verify exact quoting through the emitted subprocess command.
-- The macOS notification adapter now keeps its construction-time executable
-  availability private; tests control discovery rather than mutating public
-  adapter state.
-- The macOS notification adapter now requires a composition-resolved project
-  path and no longer resolves authority through an optional constructor input.
-- Notification idempotency lookup now lives directly inside transactional
-  `add()`; removed its single-use private helper and moved concurrency-test
-  instrumentation to the real list boundary.
-- Notification outbox state transitions now expose their collection writes
-  directly, removing a policy-free `_write_entry()` forwarding method.
-- `ActivityBroker.close()` now matches the idempotent empty daemon response and
-  returns no test-only removal boolean.
-- Chat tool prompt rendering now lives directly in `ConversationToolRuntime`,
-  removing its single-use module helper and iterable-only import.
-- Chat prompt composition now checks its composed tool registry directly,
-  removing the single-use `has_tool()` membership facade.
-- Chat skill registration now computes its explicit tool intersection directly,
-  removing a single-use policy-free projection helper and unused type import.
-- Prompt-only advisory skills with an intentionally empty `allowed-tools`
-  declaration remain available, while stale non-empty tool declarations stay
-  filtered and receive no component-based fallback.
-- Agent skills now receive only explicitly declared tools present in the
-  runtime; removed component-based fallback that could mask a stale declaration
-  and silently broaden a skill's tool authority.
-- Chat now registers tools and advertises skills only for capabilities present
-  in that runtime; direct chat without a daemon job sink no longer exposes the
-  unusable Reason export tool or `reason_output` skill.
-- Reason export planning now requires a concrete job sink per operation;
-  surfaces without daemon scheduling fail before creating artifacts instead of
-  reporting a job as queued without submitting it.
-- Reason output persistence now writes manifests/progress directly in their
-  owning flows and resolves one-call section/PDF branches in place, removing
-  four policy-free internal forwarding helpers.
-- Reason export composition now has one injected-runner path; removed the
-  production-unused deterministic `compose_job()` renderer that could bypass
-  the daemon's model-backed body composition policy.
-- Reflection relevance now exposes only its complete score operation; removed
-  an unused boolean facade that discarded the rest of the LLM decision.
-- Reflection candidate generation no longer accepts the full reflection
-  configuration it never consumed; schedule and relevance policy stay with
-  their actual owners.
-- Reason thread prompt generation is now an application-composed capability;
-  the domain service no longer reloads model configuration, while provider
-  clients remain lazy until a thread is actually started.
-- Legacy v0.3.0 authority-layout migration now runs only from
-  `scripts/migrate_legacy_layout.py`; removed the installed module and
-  top-level `nuself migrate-layout` command.
-- Configuration loading now accepts only the current strict schema; removed
-  runtime mutation/warnings for `experimental.langmem_adapter` and the special
-  v0.2.5 email migration error.
-- Removed a one-helper Reason list alias and made Persona discussion reuse the
-  existing identical non-blank text constraint from its domain dependency.
-- Runtime context decoding now accepts only canonical `conversation_id` and
-  rejects the pre-v0.3.1 chat `thread_id` alias.
-- Configuration caching now relies solely on automatic path/mtime/size
-  invalidation; removed an explicit reset method used only by one test.
-- Removed the unused Profile statistics type/function; Memory statistics remain
-  the only statistics API because they have an actual product consumer.
-- Tool outcomes now use their validated dataclass constructor directly;
-  removed success/failure convenience factories used only by tests.
-- Reason output now exposes only its active plan/get/compose/path operations;
-  removed test-only start/resume/list wrappers and obsolete cleanup for an
-  export lock that the single-scheduler flow never creates.
-- Removed an unused chat logger and a stale Reason storage-version declaration
-  that did not participate in logging, decoding, or schema validation.
-- The Reason repository no longer exposes a no-op `ensure()` or an unused raw
-  step lookup; thread-scoped ordered step access remains the service boundary.
-- Memory application composition no longer exposes unused type/relation
-  registry overrides; custom registries remain available to focused repository
-  construction.
-- Raw Source document writes are now direct internal steps of complete source
-  ingestion; CLI tests use real temporary files instead of a partial-write API.
-- Source chunk replacement is now an internal part of the complete ingest
-  operation instead of an independently exposed repository mutation.
-- Memory relation listing now owns its one-shot projection and filtering,
-  removing a single-use private projection method.
-- Removed the unused Memory-object persistence adapter; memory entry writes now
-  expose only the canonical validated `save(MemoryEntry)` repository boundary.
-- Memory symbolic graph projection now has one `compute_graph()` implementation
-  reused by repository operations and external query expansion, removing a
-  private mirror and public pass-through.
-- Reflection status decisions now remain in the user service and organizer;
-  removed repository-level dismiss/archive use cases that re-read already
-  resolved entries before saving them.
-- Reflection persistence now uses one stable-ID `save()` operation, removing
-  identical `add()` and `update()` repository APIs while retaining explicit
-  status-transition operations.
-- Reason pause, resume, resolve, and archive keep their explicit service API
-  while their shared transition rule now owns ID-or-index resolution, removing
-  four repeated adapter steps.
-- Reason advancement now resolves one concrete step before mutation, removing
-  repeated impossible null branches and a one-use optional-summary helper from
-  state construction, persistence, and auditing.
-- Reason service no longer retains an unused constructor-time advancer;
-  advancement receives its narrow advancer or structured step explicitly at
-  the operation boundary, removing two competing dependency sources.
-- Reason scheduler composition now requires its advancer protocol capability,
-  removing an unused missing-dependency mode that silently disabled background
-  advancement at runtime.
-- Reason output now owns one validated job-path operation reused by daemon
-  execution, and submits export jobs directly at the sink boundary, removing
-  private path pass-throughs, duplicate manifest assembly, and a one-call
-  enqueue closure.
-- Private workspace paths now expose only the distinct export root and
-  authority database, removing an unused notes path and an artifacts alias of
-  the root; artifact writers derive their owned child paths directly.
-- Private workspace consumers now use the side-effect-free `paths()` resolver
-  directly, removing a misleading `ensure()` alias that created nothing.
-- Memory and profile statistics now use standard-library counting directly,
-  removing two duplicate repository-local counting implementations.
-- Notification delivery loops now validate and freeze their adapter index once
-  at composition instead of rebuilding it for every poll and pending entry;
-  the canonical adapter builder now returns its ordered plan as an immutable
-  tuple.
-- Reflection organizer composition now requires an explicit resolved project
-  root so successful merge audits cannot silently lose authority scope.
-- Reason scheduler composition now requires an explicit resolved project root,
-  preventing background failure observations from silently losing authority
-  scope.
-- Background Reason scheduling now depends on the existing one-operation
-  advancer protocol instead of the concrete model-backed implementation.
-- Daemon durable follow-up admission no longer exposes an unused boolean
-  result; deferral remains observable and recoverable through its existing
-  typed boundary.
-- Daemon reflection checks now call the scheduler's authoritative `reflect()`
-  operation once instead of evaluating its jittered schedule gates twice.
-- Conversation and notification resource locking now share one managed-file
-  lock lifecycle primitive instead of maintaining duplicate stateful classes
-  or repeating its parent-directory preparation at domain call sites.
-- Visible tool-call leakage rejection now owns its sole marker check directly,
-  removing a one-use substring-classifier helper.
-- Unconfigured and exhausted-endpoint chat fallbacks now share one last-user-
-  message extractor while retaining distinct cause text and epistemic policy.
-- REPL memory search and reflection indentation now stay at their sole command
-  branches, removing two one-use public helpers.
-- Interactive reflection and notification pending/all views now share one
-  domain handler each, replacing two duplicate public list handlers.
-- Interactive Reason commands now name their ID/index inputs as Reason thread
-  references instead of carrying misleading conversation terminology.
-- Interactive memory entry, review-candidate, and source commands now use the
-  shared visible-handle resolver instead of duplicating numeric index parsing.
-- Trace CLI composition now borrows only the read-only query service instead of
-  receiving the recorder-bearing trace service bundle.
-- REPL exit curation now receives only the selected authority and scans pending
-  memory observations, removing an ignored conversation-ID dependency.
-- Authority ID generation now accepts only its canonical-root identity input,
-  removing a discarded scope-kind parameter while preserving v1 IDs.
-- Chat-persona lifecycle points now write their closed persona audits directly,
-  removing three one-use forwarding methods and two discarded parameters.
-- Reason workspace and persona tools now share one thread-scoped workspace
-  resolver instead of duplicating authority and namespace composition.
-- Reflection-promotion trace recording now persists its owned link directly,
-  removing a one-use generic link pass-through from `TraceRecorder`.
-- Trace, reflection, and Reason commands now use one shared JSONL output
-  primitive instead of maintaining identical domain-local printers.
-- Daemon state now borrows the authority-scoped application graph only during
-  composition and retains explicit task capabilities instead of exposing the
-  complete graph as a long-lived service locator.
-- Memory record and payload decoding now share one required-string and one
-  optional-string codec across dict and mapping inputs, replacing three
-  duplicate validators.
-- Atomic text and binary publication now share one internal path-fsync
-  primitive instead of duplicate file and directory implementations; callers
-  retain their distinct pre/post-replace failure contracts.
-- The chat respond stage now calls its injected response service directly,
-  removing two exact runtime pass-through methods while retaining separate
-  completion and finalization operations.
-- Reason output chunk lifecycle audits now share one exact thread/job/chunk
-  metadata validator while retaining event-specific status, error, and duration
-  policies.
-- Memory curator and optimizer audits now use one sealed-domain
-  `write_memory_audit()` operation instead of two identical writer façades.
-- Memory curation now joins observation fragments and removes backend record
-  identity directly at their sole consumption sites, eliminating two exact
-  one-use helpers.
-- Memory curator plan corruption now preserves its typed store error across the
-  curator boundary instead of passing through a one-use generic rewrapper.
-- Memory curator recovery and operator inspection now share the plan store's
-  single typed `get()` operation. The duplicate `resumable()` read and
-  standalone one-use observation-ID validator were removed.
-- Visible-handle parsing now keeps selection-shape classification private and
-  exposes only the shared parse/resolve operations used by command adapters.
-- SQLite rollback-only and rollback-cleanup failures now remain distinct direct
-  runtime errors without an unused transaction exception family.
-- Handler registry duplicate, sealed, unsealed, coverage, and unknown-key
-  failures now remain distinct direct runtime errors without an unused common
-  exception family.
-- Daemon requests now generate their default UUID-hex identity directly at the
-  typed request field, removing an orphaned standalone generator API.
-- Scheduler capacity and stopped-admission failures now remain distinct direct
-  runtime errors without an unused common exception base.
-- Daemon lifecycle cleanup now shuts down its sole scheduler directly. The
-  state-level plural `stop_background_tasks` pass-through API was removed;
-  startup still owns durable recovery and recurring task admission.
-- Successful chat follow-up adapters now obtain committed-turn evidence through
-  one `ChatResult` invariant. Direct CLI and daemon paths no longer maintain
-  separate missing-turn validation branches; memory projection, curation, and
-  compression ownership remain unchanged.
-- Application storage lifetime is now owned directly by `ApplicationRuntime`.
-  The process-global default-backend cache, lock, override/reset API, and
-  aggregate reset error were removed; manual scripts and tests now use explicit
-  scoped ownership and close their selected backends deterministically.
-- Required Reason and memory-curation trace collaborators are now represented
-  as non-null service dependencies, while retaining best-effort trace failure
-  isolation. Daemon task construction now uses one path for captured and
-  explicitly supplied runtime contexts.
-- Initialized CLI and REPL domain handlers now enter through one
-  authority-validating application composition API. The redundant
-  conversation-store composition shortcut and its separate mock surface were
-  removed; explicit backend borrowing remains restricted to infrastructure
-  commands.
-- Reflection scheduling state is now accessed through the authority-owned
-  reflection repository. The application graph, scheduler, and relevance gate
-  no longer expose, accept, or retain a raw scheduler-state collection; typed
-  decoding, cooldown behavior, and corruption handling are unchanged.
-- `OwnedCall` now captures the complete Python execution context for its
-  one-shot thread. Interactive chat no longer stacks separate application and
-  runtime-context callback wrappers, while authority, correlation, cancellation,
-  outcome, and traceback behavior remain intact.
-- Removed orphaned helpers from superseded file-storage, reasoning-tool,
-  configuration, memory parsing, tool-result, and relation-rendering paths.
-  Active configuration inspection, reasoning prompt generation, relation
-  output, and repository compensation behavior are unchanged.
-- Memory optimization and endpoint failover now call their shared classifiers
-  directly, and the single legacy-email migration error no longer has an
-  unused one-child exception hierarchy.
-- Interactive session-header output now uses the existing CLI presentation
-  module and the REPL's typed callback directly. The dedicated one-method
-  presenter class and source module were removed without changing status
-  refresh or rendered output.
-- Daemon Reason composition now reuses its already-resolved model endpoints and
-  queries only immutable readonly-tool membership from conversation runtime.
-  The redundant two-field agent capability snapshot and its source module were
-  removed without exposing the mutable tool registry.
-- Removed the continuously rewritten JSON indexes for memory, profile, source,
-  reason, and trace data, along with their `reindex` commands. Graph,
-  relation, search, and trace views now read authoritative SQLite records
-  directly; explicit user-requested exports remain unchanged.
-- Daemon control success payloads no longer duplicate request type and status
-  as fixed acknowledgement strings. Ping carries only the runtime
-  `authority_id`, while shutdown and idempotent activity close return the
-  shared exact empty payload. Health returns the unified scheduler snapshot
-  directly instead of nesting it in a single-field response wrapper.
-- The unified daemon scheduler now sleeps while executor capacity or resource
-  lanes are blocked, fails chat closed when unavailable, and reports only
-  payload-safe current degradation. A committed chat reply is no longer
-  replaced by a failed curation/compression wake-up; durable scans recover both
-  kinds of maintenance. The shared `@observed` policy now emits safe feature
-  started/completed/failed events, and production daemon tasks enter through a
-  closed typed construction boundary.
-- Application composition is now the single authority path for initialized
-  CLI, REPL, daemon, chat, reflection, persona, and evaluation work. Generic
-  data commands use a validated administration API instead of raw
-  collections; committed turns cross into memory as immutable DTOs;
-  reflection receives foreign capabilities explicitly; worker threads carry
-  the active application authority; and the daemon's one scheduler now has a
-  closed task-name catalog. No service bus or parallel compatibility path was
-  added.
-- Conversation and memory now meet through explicit domain APIs instead of
-  shared storage. A committed chat turn is projected through memory's generic,
-  durable `observe()` inbox; the curator scans only pending observations and
-  never opens conversation state. Conversation also exposes a bounded,
-  read-only history API so reflection or reasoning can request chat evidence
-  without receiving `ConversationStore`, locks, or persistence records. Schema
-  v7 migrates unprocessed v6 curator ranges into durable observations.
-- Persistent chat streams are now consistently named `conversation` across
-  the CLI (`nuself conversation`, `:conversation`/`:c`), daemon protocol,
-  storage, logs, traces, memory evidence, notifications, and internal APIs.
-  `session` remains one transient client connection and `turn` remains one
-  interaction; reasoning threads keep their separate reason-domain identity.
-  Schema v6 provides an explicit reversible migration from v5 without changing
-  message content or order. Completed replies are committed and presented
-  before compression; daemon compression runs after memory curation on the same
-  conversation resource, while bounded stage durations and context counts make
-  slow context preparation observable without logging private content.
-- The daemon now runs chat, memory curation, reflection, reasoning,
-  notifications, and reason export through one bounded scheduler in one daemon
-  process. Stable task identities coalesce duplicate wake-ups, resource keys
-  serialize conflicting work without per-module locks, and one health snapshot
-  replaces worker-specific lifecycle state. Dedicated worker supervisors,
-  admission queues, timer schedulers, and export-worker threads were removed.
-- Daemon chat now returns immediately after persisting the reply and publishes
-  a durable memory observation for the unified scheduler instead of running a
-  second model call in the request path. Requested observation IDs are
-  coalesced, and periodic scans of the memory inbox recover missed in-memory
-  wake-ups without opening conversation storage.
-  Reusing a persisted chat `turn_id` with different input now fails before the
-  model or tools run instead of creating a second conflicting turn. Chat state
-  update and compression also preserve archived thread state instead of
-  implicitly unarchiving it. The redundant branch-free outer `StateGraph` was
-  removed; LangChain `create_agent` remains the single framework-native
-  model/tool loop while NuSelf stages run as a direct typed pipeline. Stable
-  turns now persist an internal pending marker before model/tool execution and
-  clear it with the completed reply; interrupted or failed commits fail closed
-  on retry instead of replaying a possibly committed mutation. Chat-turn trace
-  projection now runs only after the completed thread state commits, outside
-  the per-thread lock, so a failed save cannot leave provenance for a reply
-  that was never persisted.
-- Agent tools now use one orthogonal declarative policy path for identity,
-  ownership, effects, confirmation, observation, and audit. The old
-  effectful approval wrapper and ad-hoc StructuredTool factories are removed.
-  Approval is supplied by a replaceable frontend port, while privacy-safe tool
-  and approval activity uses the existing typed `chat/tool.activity` event for
-  terminal, daemon, durable-log, and future web projections. Conversation
-  composition now passes small, ownership-specific conversation and tool
-  resource snapshots instead of forwarding a dozen repositories and services
-  through nested constructors. Presentation activity now publishes directly
-  through the existing runtime event publisher; the redundant frontend-event
-  wrapper, sink, and adapter layer has been removed.
-- Module dependency rules are now executable architecture gates. Agent tools
-  return model-facing structured data without importing terminal renderers,
-  establishing the first enforced adapter boundary for the v0.3.1 decoupling.
-  A shared, lazy `ApplicationRuntime` now owns resolved paths, storage lifetime,
-  and one application graph for both CLI and daemon process surfaces, including
-  normal, interrupted, and exceptional teardown. Daemon chat and its tool
-  runtime now receive graph-owned memory, profile, reflection, trace, and
-  thread-storage collaborators instead of rebuilding them. Daemon curation,
-  reflection, and reasoning workers reuse that graph's backend, repositories,
-  outbox, recovery plans, and trace recorder. Reflection candidate generation,
-  relevance evaluation, organization, and scheduling now receive explicit
-  graph resources through application-owned composition. Direct and daemon
-  chat also share one application-owned factory; reason, trace, persona,
-  memory, reflection, and thread-storage tool collaborators are injected
-  before the agent layer, and the conversation runtime no longer contains a
-  root-based fallback composition path. Reflection schedule-state persistence is separated
-  from orchestration into its own strict codec module, and model-backed
-  relevance evaluation and candidate generation now have dedicated modules
-  with injected gate and thread-context boundaries. Reflection promotion
-  operations require explicitly composed repository, reason, and trace ports.
-  Memory intake now receives
-  its profile context explicitly instead of opening storage, and memory
-  optimization receives the graph-owned entry, candidate, and profile
-  repositories. Memory curation likewise requires the graph-owned backend,
-  stores, repositories, recovery plans, and trace recorder; its structured
-  actions, observation schema, settings, and result DTO now live in a dedicated
-  contract module. Reason operations
-  used by CLI, REPL, chat, reflection, and
-  daemon workers now share application-owned composition; the core reason
-  service requires explicit repository, workspace, and trace dependencies,
-  while schedulers and export workers receive that existing service and
-  schedulers receive the repository explicitly. The
-  conversation graph runtime now requires its complete memory, thread,
-  reflection, reason, trace, and persona capability set instead of rebuilding
-  authority resources inside the agent layer. Persona definitions receive the
-  graph-owned memory repository rather than opening storage from persona
-  policy. Persona tools and reason advancement now also receive graph-owned
-  prompt, trace, path, and workspace capabilities instead of selecting a
-  second authority during tool construction. Chat thread persistence now
-  receives resolved paths and storage explicitly, while CLI, REPL, daemon,
-  curator, reflection, and chat composition share the application-owned
-  factory. Logging terminal-warning schemas
-  are isolated from the durable log engine in a dedicated runtime contract
-  module. Trace
-  repositories and services now require explicitly composed storage instead
-  of resolving a hidden default backend or paths, and their concrete assembly
-  is owned by the application layer rather than the trace domain. Profile
-  persistence and aggregation now use the same explicit composition boundary,
-  as do reason thread/step and reflection persistence; reason and reflection
-  domains no longer import outward application composition. Memory entries,
-  candidates, profiles, and sources now form one authority-scoped application
-  graph with shared collaborator instances instead of resolving storage inside
-  repositories. The notification outbox and its lock paths are now part of the
-  same graph and likewise receive explicit authority resources. Persona prompts
-  and memory curator recovery plans complete the persistence migration: both
-  now receive graph-owned authority resources instead of resolving defaults
-  inside their repositories. Memory-backed persona definition loading also
-  receives the graph-owned memory repository instead of selecting storage.
-  Persona agent tools and reason advancers now receive prompt, trace,
-  workspace, path, and storage capabilities from application composition;
-  reason scheduling no longer builds an advancer from a project root. Agent
-  reason-export tools also receive their reason workspace explicitly instead
-  of resolving runtime paths, and the output service no longer constructs a
-  fallback workspace authority. Workspace storage itself now receives resolved
-  runtime paths, and the daemon export worker borrows that store from process
-  composition instead of creating it during startup.
-  Reason-output section, chunk, manifest, progress, path, and planner schemas
-  now live in a dedicated strict contract module, separate from export
-  persistence and composition workflow.
-  Notification delivery orchestration is now
-  separated from outbox persistence and consumes an injected delivery plan.
-  Memory persistence and query components now
-  depend on a narrow profile capability contract instead of the concrete
-  profile storage adapter. Reflection promotion likewise consumes only narrow
-  reason-thread-start and provenance-recording ports, while executable gates
-  keep domain and agent code independent of CLI/TUI presentation. Notification
-  delivery orchestration now lives separately from outbox persistence and
-  locking, without changing the package's public imports.
-- Schema v4 replaces per-collection dynamic-column tables with one compact
-  strict-JSON `records` table and makes namespaced workspace state part of the
-  main authority. Its v3↔v4 migration is reversible. Reason exports now live
-  under `exports/reason/` instead of creating structured workspace directories.
-  Schema v5 removes the redundant prefix indexes through an explicit reversible
-  migration, exact versioned schema identity is validated on open, and
-  downgrade refuses to discard unexported workspace state.
-- Database schema migration is now an explicit operator action rather than a
-  side effect of opening storage. Versioned scripts under
-  `scripts/database_migrations/` provide dry-run planning, exact targets,
-  consistent pre-migration backups, cross-process serialization, and
-  transactional paths. The runtime accepts only the current schema; every new
-  post-v3 migration must also define its downgrade.
-- Interactive startup no longer repeats historical record-decode Attention
-  notices after a successful validated update of the same collection and
-  record. Later, unidentified, and still-unrepaired failures remain visible.
-- Transient model-availability failures now retry the same endpoint once before
-  ordered failover. Readonly tool outcomes remain replayable while any
-  write-capable outcome still suppresses replay. An empty chat memory search
-  now requires one distinct broader query before reporting no stored match.
-- Fixed a daemon-wide deadlock caused by holding the shared SQLite transaction
-  across LangGraph model/tool execution. Chat turns now retain only their
-  per-thread serialization lock during long work, then recheck and commit in a
-  short transaction. Graceful stop/restart now has a 30-second ownership
-  release budget while the authority lock continues to enforce one daemon
-  process.
-- Added `nuself data check` to report the current unique invalid memory or chat
-  records and print validated edit/confirmed delete commands without exposing
-  payloads or mutating data. One-time legacy-memory repair is now an explicit
-  dry-run-first repository script rather than installed runtime behavior.
-  Interactive Attention notices point to validation; undelivered completed
-  chat replies point to `:history`, with daemon restart reserved for recurring
-  transport failures.
-- Ctrl-C during an in-flight interactive turn now cooperatively closes its
-  daemon request socket and joins the owned send before returning to the
-  prompt. Ctrl-D and all true session exits continue through transcript,
-  curator, and storage cleanup exactly once. One-shot interrupts exit cleanly
-  with status `130`, destructive confirmations cancel without mutation, and
-  notification watch now honors both terminal EOF and `q`.
-- Fixed interactive startup silently blocking behind a daemon chat turn.
-  Thread snapshot reads now use SQLite's last committed view without competing
-  for the long-lived per-thread mutation lock or a write transaction.
-- CLI startup now performs side-effect-free readiness checks before opening
-  domain storage, starting a daemon, or entering interactive chat. Commands
-  that need an initialized authority exit with status `3` and an exact scoped
-  `nuself init` command; interactive entrypoints also reject missing model
-  configuration before they can appear to hang. Temporary daemon and transport
-  failures use status `4`.
-- Interactive chat now retains a failed retryable message with its original
-  logical `turn_id` and exposes `:retry`, allowing a safe explicit retry even
-  when the previous request may already have completed.
-- Interactive chat now surfaces a grouped `Attention:` block for an unusable
-  model configuration, an explicitly unselected workspace authority, unreadable
-  persisted records, and daemon reply-delivery failures. Turn-time record
-  failures are aggregated into actionable metadata-only notices instead of
-  remaining hidden in developer logs or flooding the terminal one record at a
-  time.
-- Structured state is now SQLite-only in user and workspace authorities.
-  Chat threads, curator cursors/plans, and scheduler state have joined the
-  domain collections; file-backend fallback and `dev migrate` are removed.
-  Missing canonical databases initialize atomically, while invalid existing
-  authority still fails closed.
-- Added `nuself data collections/list/show/export` for discoverable SQLite
-  data and validated `data edit/delete` workflows for memory and chat threads.
-  Editing preserves stable identity, shows a diff, confirms changes, detects
-  concurrent updates, and writes metadata-only audit events. Internal
-  operational collections remain hidden unless explicitly requested.
-- The repository authority was migrated to schema v3 and verified before
-  legacy JSON directories were retired. The public example now contains only
-  configuration and source inputs; obsolete example profile/manifest/share
-  state and frozen file-backend migration fixtures are removed.
-- The committed public authority example now lives at `examples/.nuself/`,
-  matching the v0.3.1 workspace layout and documentation. Repository-local
-  `.nuself/` state and its migration lease are ignored.
-- Legacy layout migration now uses the readable sibling lease name
-  `.nuself.migration.lock` instead of leaving a double-dot filename.
-- Current diagnostics and help now consistently say `authority root` and
-  resolve exports relative to the selected authority. The obsolete
-  `nuself.private` helper has been replaced by `nuself.authority`.
+- Added executable module-boundary gates, current service/package ownership
+  documentation, authority-root terminology, and release/build contracts for
+  the 0.4 architecture.
 
 ## v0.3.1 - 2026-07-30
 

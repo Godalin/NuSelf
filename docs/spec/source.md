@@ -1,6 +1,6 @@
 # Source
 
-Status: authoritative for v0.3.1.
+Status: authoritative for v0.4.0.
 
 Source is NuSelf's external knowledge domain. It owns imported documents and
 chunks from local files and future connectors such as Zotero. Source content is
