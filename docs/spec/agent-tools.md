@@ -46,42 +46,69 @@ presentation policy. Retry, idempotency, timeout, and capability may be added
 independently when their execution contracts exist; they must not enlarge one
 catch-all decorator.
 
-Every effect decorator appends one immutable policy to the ToolSpec's canonical
-effect collection. Decorator order cannot change execution semantics. The
-shared interpreter runs effects by declared phase:
+Every effect decorator appends one frozen `FeatureEffect` declaration to the
+ToolSpec's effect collection. `FeatureEffect` is an application-owned ABC whose
+only runtime responsibility is `bind(environment)`. Binding creates a fresh,
+invocation-scoped `BoundFeatureEffect`; declarations never contain publisher,
+frontend, storage, LangGraph, or mutable execution state. Runtime capabilities
+remain narrow Protocols collected in an explicit `EffectEnvironment`.
+
+`FeatureSpec` does not enumerate concrete effects and the executor has no
+central effect union or handler registry. Declaration-specific cardinality and
+validation belong to the declaration hierarchy rather than a growing central
+validator. Decorator order cannot change execution semantics. Bound effects
+declare stable before, success, and failure priorities. Execution proceeds as:
 
 1. interaction gates may return a typed suspension before the service call;
 2. lifecycle projections observe start without becoming execution authority;
 3. the service function executes exactly once;
-4. success/failure projections observe the authoritative outcome.
+4. success or failure projections observe the authoritative outcome.
 
-Effect handlers are registered by policy type. Adding another interaction or
-projection effect extends the policy union and its handler; it does not add a
-new Chat, daemon, Conversation, or CLI control path.
+Interaction gates run before observation start. On success, a declared domain
+audit precedes observation completion; on service failure, observation failure
+runs and a success-only audit does not. Suspension is not a service failure.
+The service callable executes exactly once and bound state cannot leak between
+invocations.
 
-A suspending effect is transported as a discriminated `ToolEffectRequest` and
-answered by an exactly bound `ToolEffectResolution`. Approval currently uses
-`kind="approval"`; future effect kinds use the same continuation protocol.
+A suspending effect is transported as a concrete subclass of the generic
+`ToolEffectRequest` ABC and answered by a concrete `ToolEffectResolution`
+subclass exactly bound to that request. Approval supplies one request/resolution
+pair; the generic bases do not expose approval fields such as `approved`,
+`risk`, `approver`, or `input_kind`.
 LangGraph maps the request to `interrupt()` and resumes it with the resolution.
 The generic Tool effect protocol, not an approval-specific ContextVar, carries
 the decision across execution layers.
 
 One LangChain adapter reads the composed specification and produces the
-framework tool. Shared execution middleware interprets policies. Interaction
-effects use an injected Tool effect port; terminal, daemon, test, and future web
+framework tool. `FeatureExecutor` binds and interprets declarations.
+Interaction effects use an injected Tool effect port; terminal, daemon, test,
+and future web
 frontends provide different adapters without changing feature functions.
-Observation publishes safe lifecycle events and one tool outcome event. Audit
+The environment supplies the event producer; generic runtime code never
+hard-codes Chat. Observation publishes safe lifecycle and outcome events. Audit
 writes durable records through an injected sink. Observed tool outcomes include
-their structured arguments and result/error by default. `@compact` is an
-independent presentation declaration that reduces the tool outcome to
-component, operation, and status; it does not disable observation or alter the
-tool result.
+safe component, operation, status, duration, execution classification, and
+error type by default; arbitrary arguments, results, and raw errors are not
+logged. `@compact` is independent presentation metadata and neither enables nor
+suppresses observation.
 For an `@observed` function, the shared executor publishes
 `feature.started` followed by exactly one of `feature.completed` or
 `feature.failed`. Payloads contain component, operation, and status only; the
 failure payload may contain the exception type but never arguments, results,
 or the raw exception message. Functions without `@observed` publish none of
 these lifecycle events. Event publication remains secondary to execution.
+
+`ToolCaptureMiddleware` is not an observation or persistence authority. It
+tracks only invocation-local execution facts required for duplicate suppression
+and model retry/failover safety. Tracking uses the Tool's declared execution
+classification rather than inferring mutation from a name or missing tag.
+Suspension is not captured as a failed Tool execution.
+
+The runtime feature codec owns wire encoding and decoding for concrete
+interaction request/resolution pairs. Daemon payloads call that codec and do
+not inspect approval fields. LangGraph supervision validates only generic Tool
+effect bases. Terminal adapters are explicit exhaustive typed dispatch points
+and fail fast for unsupported request classes.
 
 Agent continuations are ephemeral and keyed by the exact conversation and turn
 context. A matching resolution takes ownership of its saved continuation

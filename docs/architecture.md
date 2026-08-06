@@ -193,9 +193,10 @@ NuSelf does not stamp every domain from an empty package template.
 
 Feature functions declare cross-cutting behavior through orthogonal decorators
 for Tool identity, component ownership, execution classification, structured
-effects, and presentation. `runtime.feature.policy` owns those inert
-declarations while `runtime.feature.execution` interprets one canonical effect
-collection through injected handlers. Approval is a suspending interaction
+effects, and presentation. Frozen `FeatureEffect` declarations bind against an
+explicit runtime environment to fresh `BoundFeatureEffect` implementations for
+each invocation; `FeatureExecutor` owns lifecycle ordering without a central
+effect union or handler registry. Approval is a suspending interaction
 effect; observation and audit are projection effects; read/write is an
 execution classification rather than another control path. LangGraph, daemon,
 and frontend adapters transport generic Tool effect requests and resolutions
