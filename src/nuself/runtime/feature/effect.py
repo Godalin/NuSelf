@@ -38,10 +38,12 @@ class FeatureAuditRecord:
     error_type: str | None = None
 
 
-class FeatureAuditSink(Protocol):
-    """Durable audit adapter boundary."""
+class FeatureAuditProjection(Protocol):
+    """Non-raising durable audit projection adapter boundary."""
 
-    def write(self, record: FeatureAuditRecord) -> None: ...
+    def project_best_effort(self, record: FeatureAuditRecord) -> None:
+        """Project a record and observably contain persistence failures."""
+        ...
 
 
 class FeatureEffectRejected(ToolException):
@@ -55,7 +57,7 @@ class EffectEnvironment:
     producer: str
     effect_port: ToolEffectPort
     events: FeatureEventPublisher | None = None
-    audits: FeatureAuditSink | None = None
+    audits: FeatureAuditProjection | None = None
 
     def __post_init__(self) -> None:
         if not self.producer.strip():

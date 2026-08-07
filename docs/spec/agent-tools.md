@@ -86,7 +86,11 @@ and future web
 frontends provide different adapters without changing feature functions.
 The environment supplies the event producer; generic runtime code never
 hard-codes Chat. Observation publishes one safe lifecycle event vocabulary. Audit
-writes durable records through an injected sink. Observed tool outcomes include
+writes durable records through an injected best-effort projection. The
+projection port is explicitly non-raising: its adapter owns persistence-failure
+reporting through the shared observability boundary, while the effect owns only
+record construction and dispatch. The effect must not hide adapter failures in
+a local `try/except/pass` block. Observed tool outcomes include
 safe component, operation, status, duration, execution classification, and
 error type by default; arbitrary arguments, results, and raw errors are not
 logged. `@compact` is independent presentation metadata and neither enables nor

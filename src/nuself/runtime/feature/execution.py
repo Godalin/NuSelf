@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from nuself.runtime.feature.effect import (
     EffectEnvironment,
-    FeatureAuditSink,
+    FeatureAuditProjection,
     FeatureEventPublisher,
     FeatureInvocation,
 )
@@ -26,7 +26,7 @@ class FeatureExecutor:
         producer: str = "runtime",
         effects: ToolEffectPort | None = None,
         events: FeatureEventPublisher | None = None,
-        audits: FeatureAuditSink | None = None,
+        audits: FeatureAuditProjection | None = None,
     ) -> None:
         self._environment = EffectEnvironment(
             producer=producer,

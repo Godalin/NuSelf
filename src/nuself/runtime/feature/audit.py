@@ -45,12 +45,9 @@ class _BoundAuditEffect(BoundFeatureEffect):
         audits = self._environment.audits
         if audits is None:
             return
-        try:
-            audits.write(FeatureAuditRecord(
-                component=invocation.component,
-                event=self._declaration.event,
-                operation=invocation.operation,
-                outcome="completed",
-            ))
-        except Exception:
-            return
+        audits.project_best_effort(FeatureAuditRecord(
+            component=invocation.component,
+            event=self._declaration.event,
+            operation=invocation.operation,
+            outcome="completed",
+        ))

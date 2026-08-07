@@ -56,7 +56,7 @@ class Audits:
         default_factory=lambda: list[FeatureAuditRecord]()
     )
 
-    def write(self, record: FeatureAuditRecord) -> None:
+    def project_best_effort(self, record: FeatureAuditRecord) -> None:
         self.values.append(record)
 
 
@@ -468,10 +468,14 @@ def test_materialized_tool_preserves_framework_boundary() -> None:
 
 
 def test_secondary_event_and_audit_failures_do_not_replace_result() -> None:
-    class BrokenAudits:
-        def write(self, record: FeatureAuditRecord) -> None:
-            del record
-            raise OSError("audit unavailable")
+    class ObservedBrokenAudits:
+        failures: list[tuple[FeatureAuditRecord, OSError]] = []
+
+        def project_best_effort(self, record: FeatureAuditRecord) -> None:
+            try:
+                raise OSError("audit unavailable")
+            except OSError as error:
+                self.failures.append((record, error))
 
     @tool
     @component("memory")
@@ -487,7 +491,10 @@ def test_secondary_event_and_audit_failures_do_not_replace_result() -> None:
         raise OSError("event unavailable")
 
     broken_events.attach_projection(fail_projection)
+    audits = ObservedBrokenAudits()
     assert FeatureExecutor(
         events=broken_events,
-        audits=BrokenAudits(),
+        audits=audits,
     ).invoke(update) == "primary"
+    assert len(audits.failures) == 1
+    assert audits.failures[0][0].event == "memory_updated"

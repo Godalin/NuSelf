@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Feature audit ports now declare an explicit non-raising best-effort
+  projection contract; concrete adapters own observable persistence-failure
+  reporting instead of effects silently swallowing sink errors.
+
 ### Fixed
 
 - Unified observed Tool lifecycle under one `tool.activity` vocabulary, removing

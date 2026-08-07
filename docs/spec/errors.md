@@ -399,6 +399,11 @@ after a memory or persona update.
 
 - These effects run through one shared observable best-effort boundary rather
   than local `try/except/pass` blocks.
+- Tool feature audit uses an injected non-raising projection port. The bound
+  audit effect constructs the record and calls `project_best_effort`; the
+  concrete adapter owns caught-failure reporting through this shared boundary.
+  Supplying a raw raising writer as that port is a composition error, not an
+  alternate strong-audit mode.
 - Auxiliary structured logs use
   `write_observed_log_event(component, event, message, ...)`, which mirrors the
   typed log fields and returns the written `LogEvent` or `None`. It never
