@@ -16,6 +16,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Daemon Chat scheduling now carries completed and suspended states as a closed
   typed outcome instead of returning exception objects as successful future
   values.
+- `ApplicationGraph` now has an exact executable field contract that prevents
+  unreviewed widening into lookup, forwarding, or lifecycle behavior.
 
 ### Fixed
 
