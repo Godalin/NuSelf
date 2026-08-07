@@ -55,6 +55,16 @@ def test_ci_and_release_use_exact_locked_toolchain() -> None:
         assert "uvx pyright" not in workflow
 
 
+def test_ci_avoids_duplicate_development_push_and_pr_matrices() -> None:
+    ci = _workflow("ci.yml")
+    push, pull_request = ci.split("  pull_request:", maxsplit=1)
+
+    assert "      - main" in push
+    assert '      - "dev/**"' not in push
+    assert "      - main" in pull_request
+    assert '      - "dev/**"' in pull_request
+
+
 def test_release_reruns_full_gate_with_complete_git_history() -> None:
     release = _workflow("release.yml")
 

@@ -18,6 +18,8 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
   values.
 - `ApplicationGraph` now has an exact executable field contract that prevents
   unreviewed widening into lookup, forwarding, or lifecycle behavior.
+- Development PR commits now run one CI matrix instead of duplicate push and
+  pull-request matrices; `main` remains independently verified after merge.
 
 ### Fixed
 
