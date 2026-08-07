@@ -33,9 +33,9 @@ from nuself.agent.failover import (
     is_recoverable_agent_failure,
 )
 from nuself.agent.middleware import (
-    ExecutedTool,
     ToolCaptureMiddleware,
 )
+from nuself.agent.outcome import ToolOutcome, ToolOutcomeProjection
 from nuself.agent.structured import require_structured_response
 from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
@@ -108,10 +108,12 @@ class ConversationResponseSynthesizer:
         project_root: Path | None,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         tools: Iterable[BaseTool],
+        tool_outcomes: ToolOutcomeProjection | None = None,
     ) -> None:
         self._project_root = project_root
         self._langchain_models = langchain_models
         self._tools = tuple(tools)
+        self._tool_outcomes = tool_outcomes
         self._continuations = _ContinuationRegistry()
 
     def complete(
@@ -176,6 +178,7 @@ class ConversationResponseSynthesizer:
             supervisor = _LangChainChatSupervisor(
                 endpoint=endpoint,
                 tools=self._tools,
+                tool_outcomes=self._tool_outcomes,
             )
             try:
                 return supervisor.complete(prompt)
@@ -260,10 +263,12 @@ class _LangChainChatSupervisor:
         *,
         endpoint: LangChainLLMEndpoint,
         tools: Iterable[BaseTool],
+        tool_outcomes: ToolOutcomeProjection | None,
     ) -> None:
         self._endpoint = endpoint
         self._tools = tuple(tools)
-        self._tool_outcomes: list[ExecutedTool] = []
+        self._outcome_projection = tool_outcomes
+        self._tool_outcomes: list[ToolOutcome] = []
         self._checkpointer = InMemorySaver()
         self._agent: Any | None = None
         self._effect_request: ToolEffectRequest | None = None
@@ -297,6 +302,7 @@ class _LangChainChatSupervisor:
             middleware = ToolCaptureMiddleware(
                 captured=self._tool_outcomes,
                 cache={},
+                outcomes=self._outcome_projection,
             )
             create_agent = cast(Any, _create_agent)
             self._agent = create_agent(

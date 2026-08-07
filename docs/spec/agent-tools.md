@@ -518,16 +518,19 @@ Arguments that cannot cross the JSON tool boundary bypass duplicate
 suppression; middleware still delegates them to LangChain's handler so caching
 does not introduce a second validation protocol or suppress execution.
 
-The shared tool middleware owns its cache, capture sink, tool-log callback, and
-tool-log failure reporter for its complete lifetime. These constructor-bound
-effects are not replaced between invocations. A caller that needs different
-per-invocation effects creates another middleware instance; a reused agent
-must instead serialize access to any shared mutable capture state.
+The shared tool middleware owns its cache, capture sink, and injected Tool
+outcome projection port for its complete lifetime. These constructor-bound
+collaborators are not replaced between invocations. Middleware captures the
+framework call but does not own the `service_tool_called` event schema or its
+persistence: the projection adapter owns those meanings. A caller that needs
+different per-invocation collaborators creates another middleware instance; a
+reused agent must instead serialize access to any shared mutable capture state.
 
 Middleware constructs exactly one immutable `ToolOutcome` for each executed
 tool whose arguments can cross the strict JSON boundary. The same object is
-passed to the tool-log callback and appended to the capture sink; logging does
-not reconstruct a parallel `name/args/result/error` message. `ToolOutcome`
+passed to the projection port and appended to the capture sink; neither
+middleware nor callers reconstruct a parallel `name/args/result/error`
+message. `ToolOutcome`
 requires exactly one of result or error and freezes its JSON-safe argument
 mapping before either consumer sees it. Non-JSON arguments still execute; an
 outcome-construction failure follows the same secondary log-failure reporter
@@ -539,9 +542,10 @@ Tool-log projection is a secondary observation effect:
   or `Command`;
 - failure while reporting a tool exception cannot replace that original
   exception;
-- the composition root provides a failure reporter backed by shared structured
-  observability;
-- if no reporter is configured, or the reporter itself fails, middleware emits
+- the composition root injects a non-raising projection adapter whose capture
+  failure method is backed by shared structured observability;
+- if no projection adapter is configured, or its reporter itself fails,
+  middleware emits
   a registered `RuntimeWarning` without changing the primary tool outcome;
 - captured tool-error text and fallback warnings use the shared safe diagnostic
   formatter. The original tool exception is re-raised unchanged, while its

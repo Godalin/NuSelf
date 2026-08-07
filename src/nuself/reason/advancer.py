@@ -15,8 +15,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.failover import invoke_agent_endpoint
 from nuself.agent.text import LangChainTextAgent
-from nuself.agent.middleware import ExecutedTool, ToolCaptureMiddleware
+from nuself.agent.middleware import ToolCaptureMiddleware
+from nuself.agent.outcome import ToolOutcome, ToolOutcomeProjection
+from nuself.agent.projection import (
+    LogToolOutcomeProjection,
+    tool_outcome_snapshot,
+)
 from nuself.agent.structured import require_structured_response
+from nuself.agent.tool_utils import index_tool_service_components
 from nuself.config.settings import RuntimePaths
 
 from nuself.agent.endpoint import LangChainLLMEndpoint
@@ -47,8 +53,8 @@ def _current_reason_thread_id() -> str:
     return thread_id
 
 
-def _execution_snapshot(outcome: ExecutedTool) -> dict[str, object]:
-    """Return safe Agent execution evidence for one Reason step."""
+def _execution_snapshot(outcome: ToolOutcome) -> dict[str, object]:
+    """Return minimal evidence when a synthetic Tool has no service tag."""
 
     return {
         "component": "reasoning",
@@ -220,6 +226,7 @@ class ReasonAdvancer:
         feature_executor: FeatureExecutor,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+        tool_outcomes: ToolOutcomeProjection | None = None,
     ) -> None:
         self._paths = paths
         self._project_root = paths.authority_root
@@ -229,9 +236,13 @@ class ReasonAdvancer:
         self._feature_executor = feature_executor
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
-        self._captured: list[ExecutedTool] = []
+        self._captured: list[ToolOutcome] = []
+        self._tool_service_map: dict[str, str] = {}
         self._invoke_lock = Lock()
-        self._middleware = ToolCaptureMiddleware(captured=self._captured)
+        self._middleware = ToolCaptureMiddleware(
+            captured=self._captured,
+            outcomes=tool_outcomes,
+        )
         self._agents = self._build_agents()
 
     def _build_agents(
@@ -243,6 +254,7 @@ class ReasonAdvancer:
         ws_tools = self._build_workspace_tools()
         persona_tools = self._build_persona_tools()
         all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
+        self._tool_service_map = index_tool_service_components(all_tools)
         create_agent = cast(Any, _create_agent)
         return tuple(
             (
@@ -344,7 +356,15 @@ class ReasonAdvancer:
     ) -> tuple[dict[str, object], ...]:
         snapshots: list[dict[str, object]] = []
         for outcome in self._captured:
-            snapshots.append(_execution_snapshot(outcome))
+            service_component = self._tool_service_map.get(outcome.name)
+            if service_component is None:
+                snapshots.append(_execution_snapshot(outcome))
+                continue
+            snapshots.append(tool_outcome_snapshot(
+                "reasoning",
+                outcome,
+                service_component=service_component,
+            ))
         return tuple(snapshots)
 
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
@@ -411,4 +431,8 @@ def default_reason_advancer(
         ),
         readonly_tools=readonly_tools,
         langchain_models=langchain_models,
+        tool_outcomes=LogToolOutcomeProjection(
+            component="reasoning",
+            project_root=paths.authority_root,
+        ),
     )

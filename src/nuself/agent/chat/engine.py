@@ -34,6 +34,7 @@ from nuself.agent.chat.response import (
 from nuself.agent.chat.resources import ConversationResources
 from nuself.agent.chat.state import ConversationStateManager
 from nuself.agent.chat.tool_runtime import ConversationToolRuntime
+from nuself.agent.projection import LogToolOutcomeProjection
 from nuself.conversation import (
     CompletedTurn,
     ConversationTurnConflictError,
@@ -154,8 +155,13 @@ class ConversationGraphRuntime:
                 project_root=project_root,
                 langchain_models=self._langchain_models,
                 tools=tools.values(),
+                tool_outcomes=LogToolOutcomeProjection(
+                    component="chat",
+                    project_root=project_root,
+                ),
             )
         )
+
     def readonly_tools(self) -> tuple[BaseTool, ...]:
         """Return immutable readonly-tool membership."""
 

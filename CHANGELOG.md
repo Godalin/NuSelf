@@ -23,6 +23,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Restored production `service_tool_called` projection so completed and failed
+  framework Tool executions again expose structured arguments and result/error
+  in live activity and logs without adding payloads to lifecycle observation.
 - Unified observed Tool lifecycle under one `tool.activity` vocabulary, removing
   duplicate terminal `feature.*` projections while keeping structured Tool I/O
   in the framework-owned outcome event.

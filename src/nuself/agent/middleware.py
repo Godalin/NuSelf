@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
@@ -12,22 +11,49 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
+from nuself.agent.outcome import ToolOutcome, ToolOutcomeProjection
+from nuself.agent.tool_utils import tool_service_component
+from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.effect import Execution
 from nuself.runtime.feature.protocol import ToolEffectRequired
 from nuself.runtime.messages import encode_json_value
+from nuself.runtime.warning import (
+    TerminalWarningDefinition,
+    TerminalWarningRegistry,
+    TerminalWarningSchemaError,
+    emit_registered_terminal_warning,
+)
+
+TOOL_OUTCOME_CAPTURE_FAILED = "agent/tool_outcome_capture_failed"
+TOOL_OUTCOME_REPORTER_FAILED = "agent/tool_outcome_reporter_failed"
 
 
-@dataclass(frozen=True)
-class ExecutedTool:
-    """Minimal execution fact used for Agent retry safety."""
+def _validate_outcome_warning(metadata: Mapping[str, object]) -> None:
+    for field, value in metadata.items():
+        if not isinstance(value, str) or not value.strip():
+            raise TerminalWarningSchemaError(
+                f"agent Tool outcome warning {field} must be non-blank"
+            )
 
-    name: str
-    execution: Execution
-    succeeded: bool
 
-    def __post_init__(self) -> None:
-        if not self.name.strip():
-            raise ValueError("executed Tool name must not be blank")
+AGENT_TOOL_OUTCOME_WARNINGS = (
+    TerminalWarningRegistry()
+    .register(
+        TerminalWarningDefinition(
+            TOOL_OUTCOME_CAPTURE_FAILED,
+            ("tool", "error"),
+            _validate_outcome_warning,
+        )
+    )
+    .register(
+        TerminalWarningDefinition(
+            TOOL_OUTCOME_REPORTER_FAILED,
+            ("tool", "error", "reporter_error"),
+            _validate_outcome_warning,
+        )
+    )
+    .seal()
+)
 
 
 class ToolCaptureMiddleware(AgentMiddleware):
@@ -40,12 +66,14 @@ class ToolCaptureMiddleware(AgentMiddleware):
     def __init__(
         self,
         *,
-        captured: list[ExecutedTool] | None = None,
+        captured: list[ToolOutcome] | None = None,
         cache: dict[str, str] | None = None,
+        outcomes: ToolOutcomeProjection | None = None,
     ) -> None:
         super().__init__()
         self._captured = captured
         self._cache = cache
+        self._outcomes = outcomes
         self._cache_lock = threading.Lock()
 
     def wrap_tool_call(
@@ -58,6 +86,7 @@ class ToolCaptureMiddleware(AgentMiddleware):
         args: dict[str, Any] = tool_call.get("args", {})
         call_id: str | None = tool_call.get("id")
         execution = _tool_execution(request)
+        service_component = tool_service_component(request.tool)
         cache_key = (
             _tool_cache_key(name, args)
             if self._cache is not None
@@ -77,20 +106,102 @@ class ToolCaptureMiddleware(AgentMiddleware):
             result = handler(request)
         except ToolEffectRequired:
             raise
-        except Exception:
-            self._capture(ExecutedTool(name, execution, False))
+        except Exception as error:
+            self._capture_and_project(
+                name,
+                execution,
+                args,
+                service_component=service_component,
+                error=diagnostic_exception_message(error),
+            )
             raise
 
         result_text = _middleware_result_text(result)
         if self._cache is not None and cache_key is not None:
             with self._cache_lock:
                 self._cache[cache_key] = result_text
-        self._capture(ExecutedTool(name, execution, True))
+        self._capture_and_project(
+            name,
+            execution,
+            args,
+            service_component=service_component,
+            result=result_text,
+        )
         return result
 
-    def _capture(self, execution: ExecutedTool) -> None:
+    def _capture_and_project(
+        self,
+        name: str,
+        execution: Execution,
+        args: dict[str, Any],
+        *,
+        service_component: str | None,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        if self._captured is None and self._outcomes is None:
+            return
+        try:
+            outcome = ToolOutcome(
+                name=name,
+                execution=execution,
+                args=args,
+                result=result,
+                error=error,
+            )
+        except Exception as capture_error:
+            self._report_capture_failure(capture_error, tool=name)
+            return
         if self._captured is not None:
-            self._captured.append(execution)
+            self._captured.append(outcome)
+        if self._outcomes is not None:
+            if service_component is None:
+                self._report_capture_failure(
+                    ValueError("Tool has no service component metadata"),
+                    tool=name,
+                )
+                return
+            try:
+                self._outcomes.project_best_effort(
+                    outcome,
+                    service_component=service_component,
+                )
+            except Exception as projection_error:
+                self._report_capture_failure(projection_error, tool=name)
+
+    def _report_capture_failure(
+        self,
+        error: Exception,
+        *,
+        tool: str,
+    ) -> None:
+        if self._outcomes is not None:
+            try:
+                self._outcomes.report_capture_failure(error, tool=tool)
+                return
+            except Exception as reporter_error:
+                emit_registered_terminal_warning(
+                    AGENT_TOOL_OUTCOME_WARNINGS,
+                    TOOL_OUTCOME_REPORTER_FAILED,
+                    {
+                        "tool": tool,
+                        "error": diagnostic_exception_message(error),
+                        "reporter_error": diagnostic_exception_message(
+                            reporter_error
+                        ),
+                    },
+                    stacklevel=3,
+                )
+                return
+        emit_registered_terminal_warning(
+            AGENT_TOOL_OUTCOME_WARNINGS,
+            TOOL_OUTCOME_CAPTURE_FAILED,
+            {
+                "tool": tool,
+                "error": diagnostic_exception_message(error),
+            },
+            stacklevel=3,
+        )
 
 
 def _tool_execution(request: ToolCallRequest) -> Execution:

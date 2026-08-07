@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # pyright: reportPrivateUsage=false
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -10,10 +11,14 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 
 from nuself.agent.middleware import (
-    ExecutedTool,
     ToolCaptureMiddleware,
     _tool_cache_key,
 )
+from nuself.agent.outcome import ToolOutcome
+from nuself.agent.projection import LogToolOutcomeProjection
+from nuself.log.reader import read_log_events
+from nuself.log.record import LogEvent
+from nuself.log.store import project_log_events
 from nuself.runtime.feature.approval import ApprovalEffectRequest
 from nuself.runtime.feature.protocol import ToolEffectRequired
 
@@ -32,7 +37,10 @@ def _request(
             "type": "tool_call",
         }),
         tool=cast(Any, SimpleNamespace(
-            metadata={"execution": execution},
+            metadata={
+                "execution": execution,
+                "service_component": "memory",
+            },
         )),
         state={},
         runtime=cast(Any, None),
@@ -102,7 +110,7 @@ def test_middleware_deduplicates_only_within_its_own_cache() -> None:
 
 
 def test_middleware_tracks_declared_execution_and_success() -> None:
-    captured: list[ExecutedTool] = []
+    captured: list[ToolOutcome] = []
     middleware = ToolCaptureMiddleware(captured=captured)
 
     result = middleware.wrap_tool_call(
@@ -115,11 +123,16 @@ def test_middleware_tracks_declared_execution_and_success() -> None:
     )
 
     assert isinstance(result, ToolMessage)
-    assert captured == [ExecutedTool("memory_count", "mutating", True)]
+    assert captured == [ToolOutcome(
+        name="memory_count",
+        execution="mutating",
+        args={},
+        result="done",
+    )]
 
 
-def test_middleware_tracks_failure_without_logging_payloads() -> None:
-    captured: list[ExecutedTool] = []
+def test_middleware_tracks_structured_failure_outcome() -> None:
+    captured: list[ToolOutcome] = []
     middleware = ToolCaptureMiddleware(captured=captured)
 
     with pytest.raises(LookupError, match="private failure"):
@@ -130,12 +143,16 @@ def test_middleware_tracks_failure_without_logging_payloads() -> None:
             ),
         )
 
-    assert captured == [ExecutedTool("memory_count", "readonly", False)]
-    assert "private" not in repr(captured)
+    assert captured == [ToolOutcome(
+        name="memory_count",
+        execution="readonly",
+        args={"secret": "private"},
+        error="private failure",
+    )]
 
 
 def test_suspension_is_not_a_failed_tool_execution() -> None:
-    captured: list[ExecutedTool] = []
+    captured: list[ToolOutcome] = []
     middleware = ToolCaptureMiddleware(captured=captured)
     request = ApprovalEffectRequest(
         component="memory",
@@ -155,3 +172,109 @@ def test_suspension_is_not_a_failed_tool_execution() -> None:
         )
 
     assert captured == []
+
+
+def test_middleware_projects_one_structured_success_outcome(
+    tmp_path: Path,
+) -> None:
+    middleware = ToolCaptureMiddleware(
+        outcomes=LogToolOutcomeProjection(
+            component="chat",
+            project_root=tmp_path,
+        )
+    )
+
+    live: list[LogEvent] = []
+    with project_log_events(live.append):
+        result = middleware.wrap_tool_call(
+            _request({"query": "important"}, call_id="call-1"),
+            lambda request: ToolMessage(
+                content="Found one memory",
+                name="memory_count",
+                tool_call_id=request.tool_call["id"] or "",
+            ),
+        )
+
+    assert isinstance(result, ToolMessage)
+    events = read_log_events(project_root=tmp_path, component="chat")
+    assert [event.event for event in events] == ["service_tool_called"]
+    assert live == events
+    assert events[0].status == "completed"
+    assert events[0].error is None
+    assert events[0].metadata == {
+        "service_component": "memory",
+        "tool": "memory_count",
+        "args": {"query": "important"},
+        "result": "Found one memory",
+    }
+
+
+def test_middleware_projects_failure_without_replacing_exception(
+    tmp_path: Path,
+) -> None:
+    middleware = ToolCaptureMiddleware(
+        outcomes=LogToolOutcomeProjection(
+            component="chat",
+            project_root=tmp_path,
+        )
+    )
+
+    with pytest.raises(LookupError, match="not found"):
+        middleware.wrap_tool_call(
+            _request({"entry_id": "m1"}, call_id="call-1"),
+            lambda _request: (_ for _ in ()).throw(
+                LookupError("not found")
+            ),
+        )
+
+    events = read_log_events(project_root=tmp_path, component="chat")
+    assert [event.event for event in events] == ["service_tool_called"]
+    assert events[0].status == "failed"
+    assert events[0].error == "not found"
+    assert events[0].metadata == {
+        "service_component": "memory",
+        "tool": "memory_count",
+        "args": {"entry_id": "m1"},
+        "error": "not found",
+    }
+
+
+def test_projection_failure_does_not_replace_tool_result() -> None:
+    class BrokenProjection:
+        def __init__(self) -> None:
+            self.failures: list[tuple[str, Exception]] = []
+
+        def project_best_effort(
+            self,
+            outcome: ToolOutcome,
+            *,
+            service_component: str,
+        ) -> None:
+            del outcome, service_component
+            raise OSError("log unavailable")
+
+        def report_capture_failure(
+            self,
+            error: Exception,
+            *,
+            tool: str,
+        ) -> None:
+            self.failures.append((tool, error))
+
+    projection = BrokenProjection()
+    middleware = ToolCaptureMiddleware(outcomes=projection)
+
+    result = middleware.wrap_tool_call(
+        _request({}, call_id="call-1"),
+        lambda request: ToolMessage(
+            content="authoritative result",
+            name="memory_count",
+            tool_call_id=request.tool_call["id"] or "",
+        ),
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert _content(result) == "authoritative result"
+    assert len(projection.failures) == 1
+    assert projection.failures[0][0] == "memory_count"
+    assert isinstance(projection.failures[0][1], OSError)

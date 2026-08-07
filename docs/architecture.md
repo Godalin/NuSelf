@@ -206,6 +206,13 @@ and frontend adapters transport generic Tool effect requests and resolutions
 without moving behavior into domain functions. Domain functions remain
 directly testable service-boundary callables.
 
+Framework middleware captures one immutable `ToolOutcome` only after a real
+Tool execution. An injected log projection—not middleware or the observation
+effect—owns the canonical `service_tool_called` schema containing detached
+arguments and exactly one result or error. The same projection reaches durable
+logs and request-scoped live activity; projection failure remains secondary to
+the Tool outcome.
+
 Major domains are:
 
 - **Memory and Source** — Memory owns chat-derived observations, authoritative

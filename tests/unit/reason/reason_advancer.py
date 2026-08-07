@@ -16,7 +16,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import StructuredTool
 from pydantic import ValidationError
 
-from nuself.agent.middleware import ExecutedTool
+from nuself.agent.outcome import ToolOutcome
 from nuself.application.composition import compose_application
 from nuself.reason.composition import compose_reason_advancer
 from nuself.config.settings import runtime_paths
@@ -200,14 +200,15 @@ class _ConcurrentCaptureAgent:
             self.max_active = max(self.max_active, self._active)
         try:
             captured = cast(
-                list[ExecutedTool],
+                list[ToolOutcome],
                 cast(Any, advancer)._captured,
             )
             captured.append(
-                ExecutedTool(
-                    f"tool-{thread_id}",
-                    "readonly",
-                    True,
+                ToolOutcome(
+                    name=f"tool-{thread_id}",
+                    execution="readonly",
+                    args={},
+                    result="done",
                 )
             )
             time.sleep(0.03)
@@ -469,14 +470,15 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
         def invoke(self, _input: object) -> dict[str, object]:
             assert self.advancer is not None
             captured = cast(
-                list[ExecutedTool],
+                list[ToolOutcome],
                 cast(Any, self.advancer)._captured,
             )
             captured.append(
-                ExecutedTool(
-                    "workspace_put",
-                    "mutating",
-                    False,
+                ToolOutcome(
+                    name="workspace_put",
+                    execution="mutating",
+                    args={},
+                    error="tool failed",
                 )
             )
             raise RuntimeError("agent failed after tool")
