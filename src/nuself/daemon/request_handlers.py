@@ -44,6 +44,7 @@ from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.protocol import ToolEffectResolution
 
+
 class DaemonRequestPayloadError(ProtocolError):
     """A direct request-specific payload codec rejected its input."""
 
