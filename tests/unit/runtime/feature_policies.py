@@ -340,13 +340,15 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
             outcome="completed",
         )
     ]
-    assert [
-        event.name
+    observed_events = [
+        event
         for event in captured
-        if event.name.startswith("feature.")
-    ] == [
-        "feature.started",
-        "feature.completed",
+        if RuntimeLogEventPayload.from_mapping(event.payload).status
+        in {"started", "completed"}
+    ]
+    assert [event.name for event in observed_events] == [
+        "tool.activity",
+        "tool.activity",
     ]
 
 
@@ -367,8 +369,7 @@ def test_observed_feature_publishes_safe_failure_lifecycle() -> None:
         )
 
     assert [event.name for event in captured] == [
-        "feature.started",
-        "feature.failed",
+        "tool.activity",
         "tool.activity",
     ]
     assert "private-value" not in repr(captured)
@@ -410,7 +411,7 @@ def test_observed_feature_uses_the_normal_log_projection(tmp_path: Path) -> None
     assert [
         event.event
         for event in read_log_events(project_root=tmp_path, component="chat")
-    ] == ["feature.started", "feature.completed", "tool.activity"]
+    ] == ["tool.activity", "tool.activity"]
 
 
 def test_declined_confirmation_does_not_call_feature() -> None:

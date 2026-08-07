@@ -85,15 +85,17 @@ Interaction effects use an injected Tool effect port; terminal, daemon, test,
 and future web
 frontends provide different adapters without changing feature functions.
 The environment supplies the event producer; generic runtime code never
-hard-codes Chat. Observation publishes safe lifecycle and outcome events. Audit
+hard-codes Chat. Observation publishes one safe lifecycle event vocabulary. Audit
 writes durable records through an injected sink. Observed tool outcomes include
 safe component, operation, status, duration, execution classification, and
 error type by default; arbitrary arguments, results, and raw errors are not
 logged. `@compact` is independent presentation metadata and neither enables nor
 suppresses observation.
-For an `@observed` function, the shared executor publishes
-`feature.started` followed by exactly one of `feature.completed` or
-`feature.failed`. Payloads contain component, operation, and status only; the
+For an `@observed` function, the shared executor publishes `tool.activity`
+with `status="started"` followed by exactly one `tool.activity` with
+`status="completed"` or `status="failed"`. The terminal activity is the outcome
+observation; no parallel `feature.*` event is emitted. Payloads contain safe
+component, operation, execution classification, status, and duration only; the
 failure payload may contain the exception type but never arguments, results,
 or the raw exception message. Functions without `@observed` publish none of
 these lifecycle events. Event publication remains secondary to execution.

@@ -12,6 +12,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Unified observed Tool lifecycle under one `tool.activity` vocabulary, removing
+  duplicate terminal `feature.*` projections while keeping structured Tool I/O
+  in the framework-owned outcome event.
+
 ### Documentation
 
 ## v0.4.0 - 2026-08-07

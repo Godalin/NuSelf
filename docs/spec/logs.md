@@ -129,11 +129,14 @@ Human-readable rendering must show both tags at the front:
   result: Archived "Old memory".
 ```
 
-Agent tools declared with `@observed` publish the same structured I/O through
-the live `tool.activity` event by default. A tool may add the orthogonal
-`@compact` declaration when its activity should intentionally contain only the
-service component, operation, and status. Compactness is never inferred from
-the presence of `@observed` and must not change the tool's returned value.
+Agent tools declared with `@observed` publish privacy-safe lifecycle through
+the live `tool.activity` event: one `started` activity and exactly one
+`completed` or `failed` activity. They do not duplicate that lifecycle under a
+parallel `feature.*` name. Structured invocation arguments and results belong
+only to the framework-owned `service_tool_called` outcome below. A tool may add
+the orthogonal `@compact` declaration for presentation metadata; compactness is
+never inferred from `@observed` and must not change the returned value or
+observation cardinality.
 
 Rules:
 

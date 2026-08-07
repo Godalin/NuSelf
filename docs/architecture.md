@@ -197,7 +197,9 @@ effects, and presentation. Frozen `FeatureEffect` declarations bind against an
 explicit runtime environment to fresh `BoundFeatureEffect` implementations for
 each invocation; `FeatureExecutor` owns lifecycle ordering without a central
 effect union or handler registry. Approval is a suspending interaction
-effect; observation and audit are projection effects; read/write is an
+effect; observation and audit are projection effects. Observation owns one
+`tool.activity` lifecycle vocabulary rather than duplicating terminal outcomes
+under parallel event names; read/write is an
 execution classification rather than another control path. LangGraph, daemon,
 and frontend adapters transport generic Tool effect requests and resolutions
 without moving behavior into domain functions. Domain functions remain
