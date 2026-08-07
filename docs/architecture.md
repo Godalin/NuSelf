@@ -210,8 +210,10 @@ Framework middleware captures one immutable `ToolOutcome` only after a real
 Tool execution. An injected log projection—not middleware or the observation
 effect—owns the canonical `service_tool_called` schema containing detached
 arguments and exactly one result or error. The same projection reaches durable
-logs and request-scoped live activity; projection failure remains secondary to
-the Tool outcome.
+logs and request-scoped live activity; daemon composition injects the activity
+broker explicitly because Tool execution may occur beyond the request thread's
+`ContextVar` boundary. Projection failure remains secondary to the Tool
+outcome.
 
 Major domains are:
 

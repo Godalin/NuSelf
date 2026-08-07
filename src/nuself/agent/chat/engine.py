@@ -155,9 +155,13 @@ class ConversationGraphRuntime:
                 project_root=project_root,
                 langchain_models=self._langchain_models,
                 tools=tools.values(),
-                tool_outcomes=LogToolOutcomeProjection(
-                    component="chat",
-                    project_root=project_root,
+                tool_outcomes=(
+                    resources.tool_outcomes
+                    if resources.tool_outcomes is not None
+                    else LogToolOutcomeProjection(
+                        component="chat",
+                        project_root=project_root,
+                    )
                 ),
             )
         )

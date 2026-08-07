@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 from nuself.agent.outcome import ToolOutcome
+from nuself.log.record import LogEvent
 from nuself.runtime.audit.types import LogComponent
 from nuself.runtime.messages import thaw_json_value
 from nuself.runtime.observability import report_observed_failure
-from nuself.runtime.observability import write_observed_log_event
+from nuself.runtime.observability import (
+    run_observed_best_effort,
+    write_observed_log_event,
+)
 
 SERVICE_TOOL_EVENT = "service_tool_called"
 SERVICE_TOOL_MESSAGE = "Service tool outcome recorded"
@@ -67,6 +72,7 @@ class LogToolOutcomeProjection:
 
     component: LogComponent
     project_root: Path | None
+    live: Callable[[LogEvent], None] | None = None
 
     def project_best_effort(
         self,
@@ -82,7 +88,7 @@ class LogToolOutcomeProjection:
         except Exception as error:
             self.report_capture_failure(error, tool=outcome.name)
             return
-        write_observed_log_event(
+        event = write_observed_log_event(
             self.component,
             SERVICE_TOOL_EVENT,
             SERVICE_TOOL_MESSAGE,
@@ -91,6 +97,16 @@ class LogToolOutcomeProjection:
             error=outcome.error,
             metadata=metadata,
         )
+        live = self.live
+        if event is not None and live is not None:
+            run_observed_best_effort(
+                lambda: live(event),
+                component=self.component,
+                event="tool_outcome_live_projection_failed",
+                message="Could not deliver live service Tool outcome",
+                project_root=self.project_root,
+                metadata={"tool": outcome.name},
+            )
 
     def report_capture_failure(
         self,

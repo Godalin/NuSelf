@@ -3,6 +3,7 @@ from __future__ import annotations
 # pyright: reportPrivateUsage=false
 
 from pathlib import Path
+from threading import Thread
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -278,3 +279,40 @@ def test_projection_failure_does_not_replace_tool_result() -> None:
     assert len(projection.failures) == 1
     assert projection.failures[0][0] == "memory_count"
     assert isinstance(projection.failures[0][1], OSError)
+
+
+def test_explicit_live_projection_crosses_worker_thread(
+    tmp_path: Path,
+) -> None:
+    live: list[LogEvent] = []
+    middleware = ToolCaptureMiddleware(
+        outcomes=LogToolOutcomeProjection(
+            component="chat",
+            project_root=tmp_path,
+            live=live.append,
+        )
+    )
+
+    worker = Thread(
+        target=lambda: middleware.wrap_tool_call(
+            _request({"query": "threaded"}, call_id="call-1"),
+            lambda request: ToolMessage(
+                content="thread result",
+                name="memory_count",
+                tool_call_id=request.tool_call["id"] or "",
+            ),
+        )
+    )
+    worker.start()
+    worker.join(timeout=2)
+
+    assert not worker.is_alive()
+    persisted = read_log_events(project_root=tmp_path, component="chat")
+    assert len(persisted) == 1
+    assert live == persisted
+    assert live[0].metadata == {
+        "service_component": "memory",
+        "tool": "memory_count",
+        "args": {"query": "threaded"},
+        "result": "thread result",
+    }

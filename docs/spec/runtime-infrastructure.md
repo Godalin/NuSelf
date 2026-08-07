@@ -832,6 +832,11 @@ They are display-only: receiving or replaying activity cannot execute a
 command. Direct/one-shot mode may continue using the local incremental cursor;
 daemon-attached REPL mode must not poll component log files for live activity.
 
+Tool outcome projection receives the activity broker as an explicit
+composition dependency. Scheduler workers therefore forward the exact
+persisted `service_tool_called` event without relying on request-thread
+`ContextVar` propagation and without writing a duplicate event.
+
 Each activity batch carries exact `events` and `dropped_count` fields. The
 count is a non-negative integer recording events evicted from that subscription
 since its previous read; booleans are invalid. A positive count is a stream

@@ -13,6 +13,7 @@ from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.reason.composition import compose_reason_advancer
 from nuself.agent.text import LangChainTextAgent
 from nuself.agent.effect import GraphToolEffectPort
+from nuself.agent.projection import LogToolOutcomeProjection
 from nuself.daemon.activity import ActivityBroker
 from nuself.daemon.outcome import ChatCompleted, ChatOutcome, ChatSuspended
 from nuself.reason.export import (
@@ -111,6 +112,11 @@ class DaemonState:
             event_publisher=self.event_publisher,
             langchain_models=langchain_models,
             effect_port=GraphToolEffectPort(),
+            tool_outcomes=LogToolOutcomeProjection(
+                component="chat",
+                project_root=self.authority_root,
+                live=self.activity_broker.publish,
+            ),
         )
 
         self.memory_curator = application.memory_workflows.curator(

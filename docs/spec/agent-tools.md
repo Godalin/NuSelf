@@ -538,6 +538,14 @@ and cannot replace the tool result or exception.
 
 Tool-log projection is a secondary observation effect:
 
+- Composition may inject an explicit live-event sink alongside durable log
+  persistence. This is required when Tool execution can move to a scheduler
+  worker thread: live delivery must not depend on a request-thread
+  `ContextVar` crossing that boundary.
+- The projection writes the canonical event once, then forwards that exact
+  `LogEvent` to the live sink. The live sink must not reconstruct or persist a
+  second event.
+
 - failure after a successful tool execution cannot replace its `ToolMessage`
   or `Command`;
 - failure while reporting a tool exception cannot replace that original
