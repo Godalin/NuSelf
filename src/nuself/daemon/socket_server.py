@@ -62,7 +62,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
             report_daemon_transport_failure(
                 exc,
                 event="request_transport_failed",
-                project_root=self._request_project_root(),
+                project_root=self._request_authority_root(),
                 request_id=None,
             )
             response = DaemonResponse.fail_from_exception(
@@ -81,15 +81,18 @@ class RequestHandler(socketserver.StreamRequestHandler):
             else:
                 request_id = request.request_id
                 try:
+                    server = self.server
+                    if not isinstance(server, NuSelfUnixServer):
+                        raise RuntimeError("unexpected server type")
                     response = handle_request(
                         request,
-                        self._daemon_state(),
+                        server.state,
                     )
                 except Exception as exc:
                     report_daemon_transport_failure(
                         exc,
                         event="request_failed",
-                        project_root=self._request_project_root(),
+                        project_root=self._request_authority_root(),
                         request_id=request_id,
                     )
                     response = DaemonResponse.fail_from_exception(
@@ -105,7 +108,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
             report_daemon_transport_failure(
                 exc,
                 event="response_encode_failed",
-                project_root=self._request_project_root(),
+                project_root=self._request_authority_root(),
                 request_id=request_id,
                 metadata={"response_status": response.status},
             )
@@ -122,7 +125,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
             report_daemon_transport_failure(
                 exc,
                 event="response_delivery_failed",
-                project_root=self._request_project_root(),
+                project_root=self._request_authority_root(),
                 request_id=request_id,
                 metadata={
                     "response_status": response.status,
@@ -130,14 +133,8 @@ class RequestHandler(socketserver.StreamRequestHandler):
                 },
             )
 
-    def _request_project_root(self) -> Path | None:
+    def _request_authority_root(self) -> Path | None:
         server = self.server
         if not isinstance(server, NuSelfUnixServer):
             return None
-        return server.state.project_root
-
-    def _daemon_state(self) -> DaemonRequestState:
-        server = self.server
-        if not isinstance(server, NuSelfUnixServer):
-            raise RuntimeError("unexpected server type")
-        return server.state
+        return server.state.authority_root

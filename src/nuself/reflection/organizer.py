@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import re
 from pathlib import Path
 
-from nuself.reflection.audit import write_reflection_audit
+from nuself.reflection.audit import REFLECTION_AUDIT
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
 
 SIMILARITY_THRESHOLD = 0.48
@@ -25,7 +25,7 @@ class ReflectionOrganizer:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         *,
         repository: ReflectionRepository,
     ) -> None:
@@ -42,9 +42,9 @@ class ReflectionOrganizer:
             duplicates = [entry for entry in group if entry.id != primary.id]
             if not duplicates:
                 continue
-            self._repository.update(_merge_entries(primary, duplicates))
+            self._repository.save(_merge_entries(primary, duplicates))
             for entry in duplicates:
-                self._repository.archive(entry.id)
+                self._repository.save(entry.with_status("archived"))
             archived_count += len(duplicates)
 
         result = ReflectionOrganizationResult(
@@ -52,7 +52,7 @@ class ReflectionOrganizer:
             archived_entries=archived_count,
         )
         if result.archived_entries:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "organizer_completed",
                 "reflection organizer merged similar pending entries",
                 project_root=self._project_root,

@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
-from nuself.application.reason import (
+from nuself.reason.composition import (
     compose_reason_advancer,
-    compose_reason_service,
 )
-from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.application import cli_application
+from nuself.cli.output import print_ansi, print_json_lines
+from nuself.cli.reason_watch import watch_reason_steps
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.reason.service import ReasonAdvancerProtocol
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.tui.reason import render_reason_detail, render_reason_row
 
@@ -26,31 +24,15 @@ REASON_VERBS: dict[str, tuple[str, str]] = {
 }
 
 
-def _service(
-    args: argparse.Namespace,
-    *,
-    advancer: ReasonAdvancerProtocol | None = None,
-):
-    return compose_reason_service(
-        compose_cli_application(args.project_root),
-        advancer=advancer,
-    )
-
-
-def _print_json(*entities: object) -> None:
-    for entity in entities:
-        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
-
-
 def handle_reason_list(args: argparse.Namespace) -> int:
-    threads = _service(args).list_threads(
+    threads = cli_application().reason.list_threads(
         status=args.status
     )
     if not threads:
         print("No reason threads.")
         return 0
     if args.as_json:
-        _print_json(*(thread.to_wire() for thread in threads))
+        print_json_lines(*(thread.to_wire() for thread in threads))
         return 0
     for index, thread in enumerate(threads):
         print_ansi(render_reason_row(thread, index=index))
@@ -58,7 +40,7 @@ def handle_reason_list(args: argparse.Namespace) -> int:
 
 
 def handle_reason_show(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().reason
     try:
         thread = service.show_thread(args.thread_id)
     except ReasonNotFound:
@@ -71,7 +53,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
     if args.as_json:
         payload = thread.to_wire()
         payload["steps"] = [step.to_wire() for step in steps]
-        _print_json(payload)
+        print_json_lines(payload)
         return 0
     print_ansi(
         render_reason_detail(
@@ -82,7 +64,7 @@ def handle_reason_show(args: argparse.Namespace) -> int:
 
 
 def handle_reason_start(args: argparse.Namespace) -> int:
-    service = _service(args)
+    service = cli_application().reason
     mandates = tuple(getattr(args, "mandate", None) or [])
     try:
         thread = service.start_thread(
@@ -99,17 +81,36 @@ def handle_reason_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_reason_watch(args: argparse.Namespace) -> int:
+    """Run the one-shot argparse adapter for the shared watch loop."""
+    watch_reason_steps(
+        args.project_root,
+        interval=getattr(args, "interval", 5),
+        thread_ref=getattr(args, "thread_id", None) or None,
+    )
+    return 0
+
+
 def handle_reason_thread_action(args: argparse.Namespace) -> int:
     verb, method_name = REASON_VERBS[args.action]
-    service = _service(args)
+    application = cli_application()
+    service = application.reason
+    advancer = None
     if args.action == "advance":
         advancer = compose_reason_advancer(
-            compose_cli_application(args.project_root)
+            application.paths,
+            application.reason,
+            application.personas,
+            application.trace.recorder,
+            application.config,
         )
-        service = _service(args, advancer=advancer)
     method = getattr(service, method_name)
     try:
-        thread = method(args.thread_id)
+        thread = (
+            service.advance_thread(args.thread_id, advancer=advancer)
+            if args.action == "advance"
+            else method(args.thread_id)
+        )
     except ReasonError as exc:
         print(
             f"Error: {diagnostic_exception_message(exc)}",
@@ -128,7 +129,7 @@ def handle_reason_delete(args: argparse.Namespace) -> int:
         print("Use --yes to confirm deletion.", file=sys.stderr)
         return 1
     try:
-        thread_id = _service(args).delete_thread(
+        thread_id = cli_application().reason.delete_thread(
             args.thread_id
         )
     except ReasonError as exc:

@@ -9,13 +9,13 @@ from pydantic import BaseModel
 import pytest
 import yaml
 
-from nuself.config import (
+from nuself.config.settings import (
     ChatConfig,
     ChatContextConfig,
     ConfigSystem,
     DaemonConfig,
     DaemonMemoryCuratorConfig,
-    DaemonNotificationDeliveryConfig,
+    DaemonDeliveryConfig,
     DaemonReasonSchedulerConfig,
     DaemonReflectionSchedulerConfig,
     EmailConfig,
@@ -30,6 +30,7 @@ from nuself.config import (
     ReflectionSettings,
     SystemConfig,
 )
+from nuself.config.scope import scope_from_authority_root
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -128,8 +129,8 @@ def test_runtime_models_and_published_schema_have_complete_parity() -> None:
             _object_at(schema, "daemon", "reflection_scheduler"),
         ),
         (
-            DaemonNotificationDeliveryConfig,
-            _object_at(schema, "daemon", "notification_delivery"),
+            DaemonDeliveryConfig,
+            _object_at(schema, "daemon", "delivery"),
         ),
         (
             DaemonReasonSchedulerConfig,
@@ -325,7 +326,7 @@ def test_runtime_and_published_schema_acceptance_are_identical(
         encoding="utf-8",
     )
     try:
-        ConfigSystem.load(project_root=tmp_path)
+        ConfigSystem.load_scope(scope_from_authority_root(tmp_path))
     except (ValueError, TypeError):
         runtime_accepted = False
     else:

@@ -16,10 +16,6 @@ from nuself.daemon.protocol import (
 _SOCKET_CHUNK_BYTES = 4096
 
 
-class BinaryFrameReader(Protocol):
-    def readline(self, size: int | None = -1, /) -> bytes: ...
-
-
 class BinaryFrameWriter(Protocol):
     def write(self, data: bytes, /) -> int | None: ...
     def flush(self) -> None: ...
@@ -27,29 +23,6 @@ class BinaryFrameWriter(Protocol):
 
 class SocketFrameReader(Protocol):
     def recv(self, size: int, /) -> bytes: ...
-
-
-def read_stream_frame(stream: BinaryFrameReader) -> bytes:
-    """Read one bounded newline-terminated frame from a buffered stream."""
-
-    frame = stream.readline(MAX_DAEMON_FRAME_BYTES + 1)
-    if not frame:
-        raise DaemonPeerDisconnected(
-            "peer closed connection before sending a frame"
-        )
-    if len(frame) > MAX_DAEMON_FRAME_BYTES:
-        raise DaemonFrameTooLarge(
-            f"daemon frame exceeds {MAX_DAEMON_FRAME_BYTES} bytes"
-        )
-    if not frame.endswith(b"\n"):
-        if len(frame) >= MAX_DAEMON_FRAME_BYTES:
-            raise DaemonFrameTooLarge(
-                f"daemon frame exceeds {MAX_DAEMON_FRAME_BYTES} bytes"
-            )
-        raise DaemonIncompleteFrame(
-            "daemon frame ended before its newline"
-        )
-    return frame
 
 
 def read_socket_frame(

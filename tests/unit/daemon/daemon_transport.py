@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 import io
@@ -8,14 +9,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon import client
 from nuself.daemon.client import DaemonConnectionError
 from nuself.daemon.client import DaemonApplicationError
 from nuself.daemon.client import ActivityStreamGapError
 from nuself.daemon.payloads import (
     ActivityEventsResponsePayload,
-    MessagePayload,
+    EmptyPayload,
 )
 from nuself.daemon.protocol import (
     MAX_DAEMON_FRAME_BYTES,
@@ -29,12 +30,12 @@ from nuself.daemon.protocol import (
     ProtocolError,
     RequestType,
 )
+from nuself.daemon.socket_server import NuSelfUnixServer
 from nuself.daemon.transport import (
     read_socket_frame,
-    read_stream_frame,
     write_stream_frame,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.execution import OwnedCall
 
 
@@ -173,6 +174,15 @@ class BlockingClientSocket(ClientSocket):
         self.closed.set()
 
 
+def test_daemon_request_generates_a_fresh_hex_identity() -> None:
+    first = DaemonRequest("ping")
+    second = DaemonRequest("ping")
+
+    assert len(first.request_id) == 32
+    assert int(first.request_id, 16) >= 0
+    assert second.request_id != first.request_id
+
+
 def test_socket_frame_reader_accepts_fragmented_frame() -> None:
     sock = ChunkSocket([b'{"ok":', b"true}\n"])
 
@@ -190,23 +200,17 @@ def test_socket_frame_reader_retries_timeout_without_losing_partial_frame() -> N
     ) == b'{"ok":true}\n'
 
 
-def test_frame_readers_distinguish_clean_and_partial_eof() -> None:
+def test_socket_frame_reader_distinguishes_clean_and_partial_eof() -> None:
     with pytest.raises(DaemonPeerDisconnected):
         read_socket_frame(ChunkSocket([]))  # type: ignore[arg-type]
     with pytest.raises(DaemonIncompleteFrame):
         read_socket_frame(ChunkSocket([b'{"partial":true}']))  # type: ignore[arg-type]
-    with pytest.raises(DaemonPeerDisconnected):
-        read_stream_frame(io.BytesIO())
-    with pytest.raises(DaemonIncompleteFrame):
-        read_stream_frame(io.BytesIO(b'{"partial":true}'))
 
 
-def test_frame_readers_reject_oversized_and_extra_data() -> None:
+def test_socket_frame_reader_rejects_oversized_and_extra_data() -> None:
     oversized = b"x" * MAX_DAEMON_FRAME_BYTES
     with pytest.raises(DaemonFrameTooLarge):
         read_socket_frame(ChunkSocket([oversized]))  # type: ignore[arg-type]
-    with pytest.raises(DaemonFrameTooLarge):
-        read_stream_frame(io.BytesIO(oversized))
     with pytest.raises(DaemonExtraFrameData):
         read_socket_frame(  # type: ignore[arg-type]
             ChunkSocket([b'{"one":1}\n{"two":2}\n'])
@@ -228,12 +232,16 @@ def _handler_fake(
     raw: object,
     writer: object,
 ) -> object:
+    server = object.__new__(NuSelfUnixServer)
+    server.state = SimpleNamespace(  # type: ignore[assignment]
+        authority_root=project_root
+    )
     return SimpleNamespace(
         connection=FakeConnection(raw),
         rfile=raw,
         wfile=writer,
-        _daemon_state=lambda: SimpleNamespace(project_root=project_root),
-        _request_project_root=lambda: project_root,
+        server=server,
+        _request_authority_root=lambda: project_root,
     )
 
 
@@ -249,34 +257,34 @@ def _invalid_success_response(
     )
 
 
-def test_request_project_root_reads_owned_server_state(tmp_path: Path) -> None:
+def test_request_authority_root_reads_owned_server_state(tmp_path: Path) -> None:
     from nuself.daemon.socket_server import NuSelfUnixServer, RequestHandler
 
     server = object.__new__(NuSelfUnixServer)
-    server.state = SimpleNamespace(project_root=tmp_path)  # type: ignore[assignment]
+    server.state = SimpleNamespace(authority_root=tmp_path)  # type: ignore[assignment]
     handler = SimpleNamespace(server=server)
 
-    assert RequestHandler._request_project_root(handler) == tmp_path  # type: ignore[arg-type]
+    assert RequestHandler._request_authority_root(handler) == tmp_path  # type: ignore[arg-type]
 
 
-def test_request_project_root_omits_unowned_server_state() -> None:
+def test_request_authority_root_omits_unowned_server_state() -> None:
     from nuself.daemon.socket_server import RequestHandler
 
     handler = SimpleNamespace(
         server=SimpleNamespace(
-            state=SimpleNamespace(project_root=Path("/must-not-be-read"))
+            state=SimpleNamespace(authority_root=Path("/must-not-be-read"))
         )
     )
 
-    assert RequestHandler._request_project_root(handler) is None  # type: ignore[arg-type]
+    assert RequestHandler._request_authority_root(handler) is None  # type: ignore[arg-type]
 
 
-def test_request_project_root_does_not_hide_owned_state_failure() -> None:
+def test_request_authority_root_does_not_hide_owned_state_failure() -> None:
     from nuself.daemon.socket_server import NuSelfUnixServer, RequestHandler
 
     class BrokenState:
         @property
-        def project_root(self) -> Path:
+        def authority_root(self) -> Path:
             raise RuntimeError("request state is broken")
 
     server = object.__new__(NuSelfUnixServer)
@@ -284,7 +292,7 @@ def test_request_project_root_does_not_hide_owned_state_failure() -> None:
     handler = SimpleNamespace(server=server)
 
     with pytest.raises(RuntimeError, match="request state is broken"):
-        RequestHandler._request_project_root(handler)  # type: ignore[arg-type]
+        RequestHandler._request_authority_root(handler)  # type: ignore[arg-type]
 
 
 def test_server_clean_eof_returns_without_response(tmp_path: Path) -> None:
@@ -699,13 +707,13 @@ def test_client_classifies_missing_socket_as_connect_failure(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert captured.value.phase == "connect"
     assert captured.value.request_id is not None
     assert captured.value.retryable is True
     assert captured.value.request_may_have_completed is False
-    assert captured.value.__cause__ is None
+    assert isinstance(captured.value.__cause__, OSError)
 
 
 def test_client_request_encoding_failure_is_not_retryable(
@@ -729,8 +737,8 @@ def test_client_request_encoding_failure_is_not_retryable(
     )
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request(
-            "echo",
+        client._request(
+            "ping",
             {"value": float("nan")},
             project_root=tmp_path,
         )
@@ -781,7 +789,7 @@ def test_client_classifies_socket_io_phase(
     )
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert captured.value.phase == phase
     assert captured.value.request_id is not None
@@ -812,7 +820,7 @@ def test_client_request_cancellation_closes_owned_socket(
     )
     call = OwnedCall(
         name="cancelled-daemon-request",
-        target=lambda: client.request(
+        target=lambda: client._request(
             "ping",
             project_root=tmp_path,
             timeout=60,
@@ -846,7 +854,7 @@ def test_client_rejects_mismatched_response_identity(
     monkeypatch.setattr(client.socket, "socket", socket_factory)
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert isinstance(captured.value.__cause__, ProtocolError)
     assert "request_id does not match" in str(captured.value)
@@ -870,7 +878,7 @@ def test_client_wraps_extra_response_frame_as_connection_error(
     monkeypatch.setattr(client.socket, "socket", socket_factory)
 
     with pytest.raises(DaemonConnectionError) as captured:
-        client.request("ping", project_root=tmp_path)
+        client._request("ping", project_root=tmp_path)
 
     assert isinstance(captured.value.__cause__, DaemonExtraFrameData)
     assert captured.value.phase == "response_decode"
@@ -882,7 +890,7 @@ def test_client_wraps_extra_response_frame_as_connection_error(
 @pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan"), True])
 def test_client_rejects_invalid_timeout(timeout: object) -> None:
     with pytest.raises(ValueError, match="positive and finite"):
-        client.request("ping", timeout=timeout)  # type: ignore[arg-type]
+        client._request("ping", timeout=timeout)  # type: ignore[arg-type]
 
 
 def test_ping_forwards_readiness_timeout(
@@ -907,12 +915,11 @@ def test_ping_forwards_readiness_timeout(
             request_id="ping-request",
             status="ok",
             payload={
-                "message": "pong",
                 "authority_id": runtime_paths(tmp_path).scope.authority_id,
             },
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     assert client.ping(tmp_path, timeout=0.125) is True
     assert captured_timeout == 0.125
@@ -934,12 +941,11 @@ def test_ping_rejects_daemon_for_another_authority(
             request_id="ping-request",
             status="ok",
             payload={
-                "message": "pong",
                 "authority_id": "v1-wrong-authority",
             },
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     assert client.ping(tmp_path) is False
 
@@ -965,10 +971,10 @@ def test_shutdown_forwards_remaining_timeout(
         return DaemonResponse(
             request_id="shutdown-request",
             status="ok",
-            payload=MessagePayload(message="shutdown requested").to_wire(),
+            payload=EmptyPayload().to_wire(),
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     client.shutdown(tmp_path, timeout=0.125)
     assert captured_timeout == 0.125
@@ -995,7 +1001,7 @@ def test_activity_client_rejects_lossy_batch(
             ).to_wire(),
         )
 
-    monkeypatch.setattr(client, "request", fake_request)
+    monkeypatch.setattr(client, "_request", fake_request)
 
     with pytest.raises(ActivityStreamGapError) as captured:
         client.next_activity("sub-1", timeout_ms=0)
@@ -1003,32 +1009,54 @@ def test_activity_client_rejects_lossy_batch(
     assert captured.value.dropped_count == 3
 
 
-def test_typed_response_decoder_distinguishes_application_failure() -> None:
+def test_health_distinguishes_application_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failed_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        del payload, project_root, timeout
+        assert request_type == "health"
+        return DaemonResponse.fail("r", "request rejected")
+
+    monkeypatch.setattr(client, "_request", failed_request)
+
     with pytest.raises(
         DaemonApplicationError,
         match="request rejected",
     ):
-        client.decode_response(
-            DaemonResponse.fail("r", "request rejected"),
-            MessagePayload.from_wire,
-            operation="ping",
+        client.health()
+
+
+def test_health_wraps_malformed_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def malformed_request(
+        request_type: RequestType,
+        payload: dict[str, JsonValue] | None = None,
+        *,
+        project_root: Path | None = None,
+        timeout: float = 2.0,
+    ) -> DaemonResponse:
+        del payload, project_root, timeout
+        assert request_type == "health"
+        return DaemonResponse(
+            request_id="r",
+            status="ok",
+            payload={"unexpected": True},
         )
 
+    monkeypatch.setattr(client, "_request", malformed_request)
 
-def test_typed_response_decoder_wraps_malformed_success() -> None:
     with pytest.raises(DaemonConnectionError) as captured:
-        client.decode_response(
-            DaemonResponse(
-                request_id="r",
-                status="ok",
-                payload={"unexpected": True},
-            ),
-            MessagePayload.from_wire,
-            operation="ping",
-        )
+        client.health()
 
     assert isinstance(captured.value.__cause__, ProtocolError)
-    assert "ping response is malformed" in str(captured.value)
+    assert "health response is malformed" in str(captured.value)
     assert captured.value.phase == "payload_decode"
     assert captured.value.request_id == "r"
     assert captured.value.retryable is False

@@ -1,25 +1,37 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+import threading
 
 import pytest
 
 import nuself.cli.repl.turns as turns
-from nuself.agent.chat import ThreadMessage, ThreadState
-from thread_fixtures import ThreadStore
+from nuself.conversation import ConversationMessage, ConversationState
+from conversation_fixtures import ConversationStore
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.turns import send_interactive_chat_turn
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.logs import (
+from nuself.log.reader import (
     InteractiveLogCursor,
-    LogEvent,
     read_log_events,
 )
-from nuself.runtime import (
+from nuself.runtime.context import (
     RuntimeContext,
     current_runtime_context,
     runtime_context,
+)
+from nuself.log.record import LogEvent
+from nuself.runtime.feature.approval import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequest,
+    ToolEffectResolution,
 )
 
 
@@ -40,8 +52,8 @@ def _print_no_activity(events: list[LogEvent]) -> None:
 def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
     tmp_path: Path,
 ) -> None:
-    store = ThreadStore(tmp_path)
-    store.save(ThreadState.empty("default"))
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     assert session.start_index_for(tmp_path, "default") == 0
     observed: list[RuntimeContext] = []
@@ -50,8 +62,9 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
 
     def send(
         _message: str,
-        thread_id: str,
+        conversation_id: str,
         turn_id: str | None,
+        _effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         observed.append(current_runtime_context())
         turn_ids.append(turn_id)
@@ -62,11 +75,11 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
                 error="temporary transport failure",
             )
         store.save(
-            ThreadState(
-                thread_id=thread_id,
+            ConversationState(
+                conversation_id=conversation_id,
                 messages=[
-                    ThreadMessage(role="user", content="hello", turn_id=turn_id),
-                    ThreadMessage(role="assistant", content="done", turn_id=turn_id),
+                    ConversationMessage(role="user", content="hello", turn_id=turn_id),
+                    ConversationMessage(role="assistant", content="done", turn_id=turn_id),
                 ],
             )
         )
@@ -100,7 +113,7 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
     assert len(turn_ids) == 2
     assert turn_ids[0] == turn_ids[1]
     assert turn_ids[0] is not None
-    assert all(context.thread_id == "default" for context in observed)
+    assert all(context.conversation_id == "default" for context in observed)
     assert all(context.turn_id == turn_ids[0] for context in observed)
     assert all(context.request_id is None for context in observed)
     assert all(context.job_id is None for context in observed)
@@ -115,24 +128,118 @@ def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
         if event.event == "turn_retry"
     )
     assert retry.turn_id == turn_ids[0]
-    assert retry.thread_id == "default"
+    assert retry.conversation_id == "default"
     assert retry.source == "client"
     assert retry.request_id is None
     assert retry.job_id is None
+
+
+def test_turn_coordinator_owns_unbounded_approval_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    request = ApprovalEffectRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
+    )
+    owner_thread = threading.current_thread()
+    send_threads: list[threading.Thread] = []
+    resolutions: list[ToolEffectResolution | None] = []
+    prompt_calls = 0
+
+    def send(
+        _message: str,
+        _conversation_id: str,
+        _turn_id: str | None,
+        effect_resolution: ToolEffectResolution | None,
+    ) -> InteractiveChatResult:
+        send_threads.append(threading.current_thread())
+        resolutions.append(effect_resolution)
+        if effect_resolution is None:
+            return InteractiveChatResult(
+                code=0,
+                tool_effect_request=request,
+            )
+        assert effect_resolution.request == request
+        if len(resolutions) == 2:
+            return InteractiveChatResult(
+                code=1,
+                retryable=True,
+                error="temporary transport failure",
+            )
+        return InteractiveChatResult(code=0, reply="saved")
+
+    class ResolveOnOwnerThread:
+        def resolve(
+            self,
+            observed: ToolEffectRequest,
+            *,
+            on_requested: Callable[[], None],
+        ) -> ToolEffectResolution:
+            nonlocal prompt_calls
+            on_requested()
+            prompt_calls += 1
+            assert threading.current_thread() is owner_thread
+            assert isinstance(observed, ApprovalEffectRequest)
+            assert observed == request
+            return ApprovalEffectResolution(
+                observed,
+                ApprovalEffectDecision(
+                    True,
+                    approver="tester",
+                    input_kind="affirmative",
+                ),
+            )
+
+    monkeypatch.setattr(
+        turns,
+        "TerminalToolEffectPort",
+        ResolveOnOwnerThread,
+    )
+    replies: list[str] = []
+
+    result = send_interactive_chat_turn(
+        send,
+        tmp_path,
+        "default",
+        "remember this",
+        session,
+        daemon_activity=False,
+        max_attempts=2,
+        poll_interval_seconds=0,
+        read_activity_events=_read_no_activity,
+        print_activity_events=_print_no_activity,
+        print_reply=replies.append,
+    )
+
+    assert result == 0
+    assert replies == ["saved"]
+    assert resolutions[0] is None
+    assert resolutions[1] is not None
+    assert resolutions[2] == resolutions[1]
+    assert prompt_calls == 1
+    assert all(thread is not owner_thread for thread in send_threads)
 
 
 def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     attempts = 0
 
     def send(
         _message: str,
-        _thread_id: str,
+        _conversation_id: str,
         _turn_id: str | None,
+        _effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         nonlocal attempts
         attempts += 1
@@ -147,7 +254,11 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
     def drop_audit(*args: object, **kwargs: object) -> None:
         del args, kwargs
 
-    monkeypatch.setattr(turns, "write_chat_audit", drop_audit)
+    monkeypatch.setattr(
+        turns,
+        "CHAT_AUDIT",
+        SimpleNamespace(write=drop_audit),
+    )
 
     result = send_interactive_chat_turn(
         send,
@@ -171,14 +282,15 @@ def test_turn_retry_continues_when_retry_audit_persistence_is_uncertain(
 def test_failed_retry_offer_reuses_original_turn_id(
     tmp_path: Path,
 ) -> None:
-    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
     session = InteractiveSession(connected_at=datetime.now(UTC))
     turn_ids: list[str | None] = []
 
     def fail(
         _message: str,
-        _thread_id: str,
+        _conversation_id: str,
         turn_id: str | None,
+        _effect_resolution: ToolEffectResolution | None,
     ) -> InteractiveChatResult:
         turn_ids.append(turn_id)
         return InteractiveChatResult(

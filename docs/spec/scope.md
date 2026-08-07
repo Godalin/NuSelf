@@ -19,7 +19,8 @@ because one exists in the current directory.
 The canonical authority root determines a stable `authority_id`. The ID is a
 versioned cryptographic digest of the canonical root, suitable for filenames
 and protocol comparison. Selecting the same root through different explicit
-means identifies the same authority. The ID is an identity, not a secret.
+means identifies the same authority; scope kind is not an identity input. The
+ID is an identity, not a secret.
 
 ## Resolved Paths
 
@@ -46,6 +47,10 @@ checkout is neither an install root nor an implicit authority.
 
 Runtime paths include the selected scope, authority ID, configuration files,
 database, source/import/export directories, logs, and daemon lifecycle paths.
+`RuntimePaths.authority_root` is the sole canonical root field; it does not
+expose a legacy `project_root` alias. APIs that still name an authority input
+`project_root` receive this same canonical value until their own boundary is
+explicitly renamed.
 Managed authority roots and files retain NuSelf's no-follow and owner-only
 filesystem protections.
 
@@ -73,8 +78,8 @@ configuration model. Diagnostics identify the layer containing malformed YAML
 or an invalid value without exposing secrets.
 
 Configuration layering does not layer runtime state. SQLite, memory, threads,
-profile, persona, reason, trace, reflection, notification, logs, and derived
-runtime preferences read and write only the selected authority.
+profile, persona, reason, trace, reflection, Inbox, Delivery, logs, and runtime
+preferences read and write only the selected authority.
 
 ## Initialization
 
@@ -105,7 +110,13 @@ Each authority has an independent daemon instance with its own:
 - PID and lifecycle metadata;
 - Unix socket;
 - SQLite authority;
-- background scheduler and notification outbox.
+- background scheduler, Inbox, and Delivery records.
+
+Daemon startup serializes the resolved user root and, for workspace scope, the
+workspace root. The child reconstructs `NuSelfScope` through the canonical
+scope resolver before deriving paths or loading configuration. Passing only the
+authority root and guessing scope kind is forbidden because it would discard
+the user configuration layer beneath a workspace authority.
 
 Socket paths must remain below platform Unix-domain socket length limits.
 NuSelf may place sockets in a short, owner-private runtime base and name them
@@ -128,12 +139,12 @@ The v0.3.0 checkout-local layout:
 is never an implicit v0.3.1 authority. Detection may print a migration hint,
 but must not copy, merge, rename, delete, chmod, open, or upgrade legacy data.
 
-An explicit migration command selects one source and one target:
+The source-checkout migration script selects one source and one target:
 
 ```text
-nuself migrate-layout --from PATH --to user
-nuself migrate-layout --from PATH --to-local
-nuself migrate-layout --from PATH --workspace PATH
+uv run python scripts/migrate_legacy_layout.py --from PATH --to user
+uv run python scripts/migrate_legacy_layout.py --from PATH --to-local
+uv run python scripts/migrate_legacy_layout.py --from PATH --workspace PATH
 ```
 
 Migration runs under an exclusive target lease, validates the source before
@@ -141,6 +152,9 @@ publication, refuses a non-empty or conflicting target, and publishes a
 complete target atomically where the filesystem permits. Failure preserves
 the source and leaves no partial authority. Success also preserves the source
 unless a future separately approved command adds destructive cleanup.
+
+The script is not packaged into the NuSelf runtime and there is no installed
+`migrate-layout` command.
 
 Configuration is copied as configuration, SQLite as its single authority, and
 managed non-database artifacts into their corresponding target paths. It is

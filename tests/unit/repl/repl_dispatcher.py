@@ -6,8 +6,8 @@ from pathlib import Path
 from _pytest.capture import CaptureFixture
 import pytest
 
-from nuself.agent.chat import ThreadState
-from thread_fixtures import ThreadStore
+from nuself.conversation import ConversationState
+from conversation_fixtures import ConversationStore
 import nuself.cli.repl.dispatcher as dispatcher_module
 from nuself.cli.repl.dispatcher import ReplCommandDispatcher
 from nuself.cli.repl.registry import command_names
@@ -19,25 +19,25 @@ def _session() -> InteractiveSession:
     return InteractiveSession(connected_at=datetime.now(UTC))
 
 
-def test_dispatcher_owns_thread_switch_and_creation(
+def test_dispatcher_owns_conversation_switch_and_creation(
     tmp_path: Path,
     capsys: CaptureFixture[str],
 ) -> None:
-    ThreadStore(tmp_path).save(ThreadState.empty("default"))
+    ConversationStore(tmp_path).save(ConversationState.empty("default"))
 
     action = ReplCommandDispatcher().handle(
-        ":thread project",
+        ":conversation project",
         tmp_path,
         "default",
         _session(),
     )
 
     assert action == ("redraw_header", "project")
-    assert "project" in ThreadStore(tmp_path).list()
-    assert "Switched to thread: project" in capsys.readouterr().out
+    assert "project" in ConversationStore(tmp_path).list()
+    assert "Switched to conversation: project" in capsys.readouterr().out
 
 
-def test_dispatcher_unknown_command_preserves_thread_and_uses_registry_help(
+def test_dispatcher_unknown_command_preserves_conversation_and_uses_registry_help(
     tmp_path: Path,
     capsys: CaptureFixture[str],
 ) -> None:
@@ -52,12 +52,6 @@ def test_dispatcher_unknown_command_preserves_thread_and_uses_registry_help(
     output = capsys.readouterr().out
     assert "Unknown interactive command: :not-a-command" in output
     assert ":help" in output
-
-
-def test_dispatcher_registry_is_complete_and_sealed() -> None:
-    dispatcher = ReplCommandDispatcher()
-
-    assert set(dispatcher.registered_commands) == set(command_names())
 
 
 def test_retry_requires_an_available_retryable_turn(

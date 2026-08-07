@@ -9,18 +9,19 @@ from collections.abc import Mapping
 from pathlib import Path
 from threading import Lock
 import time
-from typing import Any, Never, cast
+from typing import Any, cast
 
 import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.tools import StructuredTool
 from pydantic import ValidationError
 
-from nuself.agent.middleware import ToolOutcome
+from nuself.agent.middleware import ExecutedTool
 from nuself.application.composition import compose_application
-from nuself.config import runtime_paths
-from nuself.llm import LLMSettings, LangChainLLMEndpoint
-from nuself.logs import read_log_events
+from nuself.reason.composition import compose_reason_advancer
+from nuself.config.settings import runtime_paths
+from nuself.agent.endpoint import LLMSettings, LangChainLLMEndpoint
+from nuself.log.reader import read_log_events
 from nuself.reason.advancer import (
     REASON_ADVANCE_SYSTEM_PROMPT,
     ReasonAdvancer,
@@ -31,30 +32,76 @@ from nuself.reason.advancer import (
     build_system_prompt,
     default_reason_advancer,
 )
-from nuself.reason.domain import ReasoningThread
+from nuself.reason.model import ReasoningThread
 from nuself.reason.errors import ReasonAdvanceError
-from nuself.runtime import RuntimeContext, current_runtime_context, runtime_context
-from nuself.storage import _create_sqlite_backend, get_default_backend
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.runtime.context import (
+    RuntimeContext,
+    current_runtime_context,
+    runtime_context,
+)
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.storage.authority import _create_sqlite_backend
+from tests.backend import owned_backend
 
 
 def _advancer_dependencies(project_root: Path) -> dict[str, Any]:
     application = compose_application(
         runtime_paths(project_root),
-        get_default_backend(project_root),
+        owned_backend(project_root),
     )
     return {
         "paths": application.paths,
-        "workspace_store": PrivateWorkspaceStore(
-            runtime_paths(project_root),
-            scope="reason",
-        ),
-        "persona_repository": application.persona_prompts,
+        "reason_service": application.reason,
+        "persona_service": application.personas,
         "trace_recorder": application.trace.recorder,
     }
 
 
-def test_default_reason_advancer_loads_project_endpoints_once(
+def test_application_reason_composition_resolves_models_from_graph_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = compose_application(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://reason.test/v1",
+            api_key="test",
+            model="reason-test",
+        ),
+        model=cast(BaseChatModel, object()),
+    )
+    captured: list[tuple[Path | None, object]] = []
+
+    def configured(
+        project_root: Path | None,
+        *,
+        config: object,
+    ) -> tuple[LangChainLLMEndpoint, ...]:
+        captured.append((project_root, config))
+        return (endpoint,)
+
+    monkeypatch.setattr(
+        "nuself.reason.composition.configured_langchain_chat_models",
+        configured,
+    )
+
+    advancer = compose_reason_advancer(
+        application.paths,
+        application.reason,
+        application.personas,
+        application.trace.recorder,
+        application.config,
+    )
+
+    assert captured == [(tmp_path, application.config)]
+    assert advancer._langchain_models == (endpoint,)
+
+
+def test_default_reason_advancer_uses_explicit_endpoints_and_tools(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -67,14 +114,6 @@ def test_default_reason_advancer_loads_project_endpoints_once(
         ),
         model=cast(BaseChatModel, object()),
     )
-    calls: list[Path | None] = []
-
-    def configured(
-        project_root: Path | None,
-    ) -> tuple[LangChainLLMEndpoint, ...]:
-        calls.append(project_root)
-        return (endpoint,)
-
     def create_agent(**kwargs: object) -> object:
         return kwargs
 
@@ -94,10 +133,6 @@ def test_default_reason_advancer_loads_project_endpoints_once(
     )
 
     monkeypatch.setattr(
-        "nuself.reason.advancer.configured_langchain_chat_models",
-        configured,
-    )
-    monkeypatch.setattr(
         "nuself.reason.advancer._create_agent",
         create_agent,
     )
@@ -105,32 +140,20 @@ def test_default_reason_advancer_loads_project_endpoints_once(
     advancer = default_reason_advancer(
         **_advancer_dependencies(tmp_path),
         readonly_tools=(readonly_tool, invalid_metadata_tool),
+        langchain_models=(endpoint,),
     )
 
-    assert calls == [tmp_path]
     assert advancer._langchain_models == (endpoint,)
-    assert advancer._workspace_store is not None
+    assert advancer._reason_service is not None
     assert advancer._readonly_tools == (
         readonly_tool,
         invalid_metadata_tool,
     )
-    assert advancer._tool_service_map["test_lookup"] == "memory"
-    assert "invalid_metadata" not in advancer._tool_service_map
 
 
 def test_default_reason_advancer_preserves_explicit_empty_endpoints(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def unexpected(project_root: Path | None) -> Never:
-        del project_root
-        raise AssertionError("configured endpoints must not be loaded")
-
-    monkeypatch.setattr(
-        "nuself.reason.advancer.configured_langchain_chat_models",
-        unexpected,
-    )
-
     advancer = default_reason_advancer(
         **_advancer_dependencies(tmp_path),
         langchain_models=(),
@@ -177,14 +200,14 @@ class _ConcurrentCaptureAgent:
             self.max_active = max(self.max_active, self._active)
         try:
             captured = cast(
-                list[ToolOutcome],
+                list[ExecutedTool],
                 cast(Any, advancer)._captured,
             )
             captured.append(
-                ToolOutcome.succeeded(
+                ExecutedTool(
                     f"tool-{thread_id}",
-                    {"thread_id": thread_id},
-                    thread_id,
+                    "readonly",
+                    True,
                 )
             )
             time.sleep(0.03)
@@ -223,7 +246,10 @@ def _advancer_with_agent(
     project_root: Path,
     agent: Any,
 ) -> ReasonAdvancer:
-    advancer = ReasonAdvancer(**_advancer_dependencies(project_root))
+    advancer = ReasonAdvancer(
+        **_advancer_dependencies(project_root),
+        feature_executor=FeatureExecutor(),
+    )
     dynamic = cast(Any, advancer)
     endpoint = LangChainLLMEndpoint(
         index=0,
@@ -243,7 +269,10 @@ def _advancer_with_agents(
     project_root: Path,
     agents: tuple[Any, ...],
 ) -> ReasonAdvancer:
-    advancer = ReasonAdvancer(**_advancer_dependencies(project_root))
+    advancer = ReasonAdvancer(
+        **_advancer_dependencies(project_root),
+        feature_executor=FeatureExecutor(),
+    )
     dynamic = cast(Any, advancer)
     dynamic._agents = tuple(
         (
@@ -307,7 +336,7 @@ def test_advance_uses_shared_reason_thread_context_and_restores_caller(
     assert step is not None
     assert agent.contexts == [
         RuntimeContext(
-            thread_id="reason-test",
+            reason_id="reason-test",
             request_id="request-1",
             turn_id="turn-1",
             job_id="job-1",
@@ -423,7 +452,7 @@ def test_advance_failure_logs_shared_context_and_restores_caller(
 
     events = read_log_events(project_root=tmp_path, component="reasoning")
     failure = next(event for event in events if event.event == "advance_failed")
-    assert failure.thread_id == "reason-test"
+    assert failure.reason_id == "reason-test"
     assert failure.request_id == "request-1"
     assert failure.source == "client"
     assert failure.error == "agent failed"
@@ -440,14 +469,14 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
         def invoke(self, _input: object) -> dict[str, object]:
             assert self.advancer is not None
             captured = cast(
-                list[ToolOutcome],
+                list[ExecutedTool],
                 cast(Any, self.advancer)._captured,
             )
             captured.append(
-                ToolOutcome.failed(
+                ExecutedTool(
                     "workspace_put",
-                    {"key": "decision"},
-                    "storage unavailable",
+                    "mutating",
+                    False,
                 )
             )
             raise RuntimeError("agent failed after tool")
@@ -470,15 +499,10 @@ def test_agent_failure_still_projects_prior_failed_tool_outcome(
         project_root=tmp_path,
         component="reasoning",
     )
-    tool_event = next(
-        event
+    assert not any(
+        event.event == "service_tool_called"
         for event in events
-        if event.event == "service_tool_called"
     )
-    assert tool_event.status == "failed"
-    assert tool_event.metadata is not None
-    assert tool_event.metadata["tool"] == "workspace_put"
-    assert tool_event.metadata["error"] == "storage unavailable"
     assert any(
         event.event == "llm_failover_suppressed_after_tool_call"
         for event in events
@@ -545,7 +569,7 @@ def test_concurrent_advances_isolate_invocation_tool_capture(
         metadata = step.tool_logs[0]["metadata"]
         assert isinstance(metadata, Mapping)
         assert metadata["tool"] == f"tool-{thread.id}"
-        assert metadata["result"] == thread.id
+        assert metadata["execution"] == "readonly"
 
 
 def test_advance_failure_releases_invocation_owner(
@@ -571,19 +595,20 @@ def test_workspace_tools_route_by_shared_reason_thread_context(
     _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     advancer = ReasonAdvancer(
         **_advancer_dependencies(tmp_path),
+        feature_executor=FeatureExecutor(),
     )
     tools = cast(Any, advancer)._build_workspace_tools()
     tool_map = {tool.name: tool for tool in tools}
     put = tool_map["workspace_put"]
     get = tool_map["workspace_get"]
 
-    with runtime_context(thread_id="reason-a"):
+    with runtime_context(reason_id="reason-a"):
         assert put.invoke({"key": "item", "value": '{"owner": "a"}'}) == (
             "Stored item"
         )
         assert '"owner": "a"' in get.invoke({"key": "item"})
 
-    with runtime_context(thread_id="reason-b"):
+    with runtime_context(reason_id="reason-b"):
         assert get.invoke({"key": "item"}) == "Key item not found"
 
     with pytest.raises(

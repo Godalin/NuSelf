@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.application import cli_application
 from nuself.memory.repository import (
     SymbolicGraphEdge,
     SymbolicGraphEdgeFilters,
@@ -25,9 +25,7 @@ def _format_edge(edge: SymbolicGraphEdge) -> str:
 
 
 def handle_memory_graph_nodes(args: argparse.Namespace) -> int:
-    nodes = compose_cli_application(
-        args.project_root
-    ).memory.entries.list_graph_nodes(
+    nodes = cli_application().memory.list_graph_nodes(
         SymbolicGraphNodeFilters(type=args.type)
     )
     if not nodes:
@@ -39,9 +37,7 @@ def handle_memory_graph_nodes(args: argparse.Namespace) -> int:
 
 
 def handle_memory_graph_edges(args: argparse.Namespace) -> int:
-    edges = compose_cli_application(
-        args.project_root
-    ).memory.entries.list_graph_edges(
+    edges = cli_application().memory.list_graph_edges(
         SymbolicGraphEdgeFilters(
             relation=args.relation,
             source_id=args.source_id,
@@ -57,7 +53,7 @@ def handle_memory_graph_edges(args: argparse.Namespace) -> int:
 
 
 def handle_memory_graph_search(args: argparse.Namespace) -> int:
-    result = compose_cli_application(args.project_root).memory.entries.search_graph(
+    result = cli_application().memory.search_graph(
         args.query,
         node_type=args.type,
         limit=args.limit,
@@ -77,7 +73,7 @@ def handle_memory_graph_search(args: argparse.Namespace) -> int:
 
 
 def handle_memory_graph_path(args: argparse.Namespace) -> int:
-    path = compose_cli_application(args.project_root).memory.entries.find_path(
+    path = cli_application().memory.find_graph_path(
         args.from_id, args.to_id
     )
     if not path:
@@ -95,9 +91,7 @@ def handle_memory_graph_closure(
     if args.relation is None:
         print("--relation is required for closure.")
         return 1
-    result = compose_cli_application(
-        args.project_root
-    ).memory.entries.transitive_closure(
+    result = cli_application().memory.graph_closure(
         args.node_id, args.relation
     )
     if not result.nodes:

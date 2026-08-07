@@ -11,12 +11,13 @@ import sys
 import time
 from typing import Literal, Never
 
-from nuself.config import RuntimePaths, ensure_runtime_dirs, runtime_paths
+from nuself.config.settings import RuntimePaths, ensure_runtime_dirs, runtime_paths
 from nuself.daemon import client
 from nuself.daemon.instance import daemon_instance_owned
-from nuself.private_fs import ensure_private_file
+from nuself.storage.filesystem import ensure_private_file
+from nuself.config.scope import NuSelfScope
 from nuself.runtime.observability import report_corrupt_record
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningSchemaError,
@@ -97,19 +98,19 @@ DEFAULT_DAEMON_STARTUP_POLICY = DaemonWaitPolicy()
 DEFAULT_DAEMON_SHUTDOWN_POLICY = DaemonWaitPolicy(timeout_seconds=30.0)
 DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS = 2.0
 
-DaemonStartFailureReason = Literal[
+type DaemonStartFailureReason = Literal[
     "spawn_failed",
     "status_failed",
     "owner_unready",
     "process_exited",
     "timeout",
 ]
-DaemonStopFailureReason = Literal[
+type DaemonStopFailureReason = Literal[
     "request_failed",
     "ownership_check_failed",
     "timeout",
 ]
-DaemonPhase = Literal[
+type DaemonPhase = Literal[
     "stopped",
     "owned_unready",
     "ready",
@@ -140,8 +141,8 @@ class DaemonStatus:
         return self.phase in {"owned_unready", "ready"}
 
 
-DaemonStartOutcome = Literal["started", "already_ready"]
-DaemonStopOutcome = Literal["stopped", "already_stopped"]
+type DaemonStartOutcome = Literal["started", "already_ready"]
+type DaemonStopOutcome = Literal["stopped", "already_stopped"]
 
 
 @dataclass(frozen=True)
@@ -199,10 +200,6 @@ class DaemonRestartResult:
             raise ValueError(
                 "daemon restart start must consume the stop result status"
             )
-
-    @property
-    def status(self) -> DaemonStatus:
-        return self.start.status
 
 
 def _validate_transition_runtime(
@@ -268,7 +265,6 @@ class DaemonStopError(RuntimeError):
         reason: DaemonStopFailureReason,
         *,
         status: DaemonStatus,
-        owner_active: bool | None,
         timeout_seconds: float | None = None,
     ) -> None:
         if reason == "request_failed":
@@ -283,9 +279,7 @@ class DaemonStopError(RuntimeError):
         super().__init__(message)
         self.reason = reason
         self.status = status
-        self.owner_active = owner_active
         self.timeout_seconds = timeout_seconds
-
 
 def status(
     project_root: Path | None = None,
@@ -294,7 +288,7 @@ def status(
 ) -> DaemonStatus:
     paths = runtime_paths(project_root)
     running = client.ping(
-        paths.project_root,
+        paths.authority_root,
         timeout=ping_timeout,
     )
     partial = DaemonStatus(
@@ -321,7 +315,7 @@ def status(
 
 
 def start(
-    project_root: Path | None = None,
+    authority: NuSelfScope | Path | None = None,
     *,
     initial_status: DaemonStatus | None = None,
     process_log_retention: DaemonProcessLogRetentionPolicy = (
@@ -329,10 +323,10 @@ def start(
     ),
     startup_policy: DaemonWaitPolicy = DEFAULT_DAEMON_STARTUP_POLICY,
 ) -> DaemonStartResult:
-    paths = runtime_paths(project_root)
+    paths = runtime_paths(authority)
     if initial_status is None:
         ensure_runtime_dirs(paths)
-        current = _status_for_start(paths.project_root)
+        current = _status_for_start(paths.authority_root)
     else:
         _validate_status_paths(initial_status, paths)
         ensure_runtime_dirs(paths)
@@ -349,12 +343,7 @@ def start(
             "owner_unready",
             status=current,
         )
-    if current.phase == "inconsistent":
-        raise DaemonStartError(
-            "status_failed",
-            status=current,
-        )
-    if current.phase == "unknown":
+    if current.phase in {"inconsistent", "unknown"}:
         raise DaemonStartError(
             "status_failed",
             status=current,
@@ -374,15 +363,23 @@ def start(
     ensure_private_file(paths.daemon_process_log_path)
     with paths.daemon_process_log_path.open("ab") as process_log:
         try:
+            command = [
+                sys.executable,
+                "-m",
+                "nuself.daemon.server",
+                "--user-root",
+                str(paths.scope.user_root),
+            ]
+            if paths.scope.workspace_root is not None:
+                command.extend(
+                    [
+                        "--workspace-root",
+                        str(paths.scope.workspace_root),
+                    ]
+                )
             process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "nuself.daemon.server",
-                    "--project-root",
-                    str(paths.project_root),
-                ],
-                cwd=paths.project_root,
+                command,
+                cwd=paths.authority_root,
                 stdout=process_log,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
@@ -396,13 +393,9 @@ def start(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise DaemonStartError(
-                "timeout",
-                status=current,
-                timeout_seconds=startup_policy.timeout_seconds,
-            )
+            break
         current = _status_for_start(
-            paths.project_root,
+            paths.authority_root,
             ping_timeout=remaining,
         )
         if current.running:
@@ -420,12 +413,13 @@ def start(
             )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise DaemonStartError(
-                "timeout",
-                status=current,
-                timeout_seconds=startup_policy.timeout_seconds,
-            )
+            break
         time.sleep(min(startup_policy.poll_interval_seconds, remaining))
+    raise DaemonStartError(
+        "timeout",
+        status=current,
+        timeout_seconds=startup_policy.timeout_seconds,
+    )
 
 
 def _status_for_start(
@@ -487,7 +481,7 @@ def stop(
     paths = runtime_paths(project_root)
     deadline = time.monotonic() + shutdown_policy.timeout_seconds
     current = _status_for_stop(
-        paths.project_root,
+        paths.authority_root,
         ping_timeout=min(
             DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
             shutdown_policy.timeout_seconds,
@@ -507,13 +501,12 @@ def stop(
     if remaining <= 0:
         _raise_daemon_stop_timeout(
             current,
-            owner_active=owner_active,
             policy=shutdown_policy,
             request_error=None,
         )
     try:
         client.shutdown(
-            paths.project_root,
+            paths.authority_root,
             timeout=min(
                 DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
                 remaining,
@@ -523,21 +516,15 @@ def stop(
         raise DaemonStopError(
             "request_failed",
             status=current,
-            owner_active=owner_active,
         ) from exc
     except client.DaemonConnectionError as exc:
         request_error = exc
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            _raise_daemon_stop_timeout(
-                current,
-                owner_active=owner_active,
-                policy=shutdown_policy,
-                request_error=request_error,
-            )
+            break
         current = _status_for_stop(
-            paths.project_root,
+            paths.authority_root,
             ping_timeout=min(
                 DAEMON_CONTROL_PROBE_TIMEOUT_SECONDS,
                 remaining,
@@ -553,26 +540,24 @@ def stop(
             )
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            _raise_daemon_stop_timeout(
-                current,
-                owner_active=owner_active,
-                policy=shutdown_policy,
-                request_error=request_error,
-            )
+            break
         time.sleep(min(shutdown_policy.poll_interval_seconds, remaining))
+    _raise_daemon_stop_timeout(
+        current,
+        policy=shutdown_policy,
+        request_error=request_error,
+    )
 
 
 def _raise_daemon_stop_timeout(
     status_snapshot: DaemonStatus,
     *,
-    owner_active: bool,
     policy: DaemonWaitPolicy,
     request_error: client.DaemonConnectionError | None,
 ) -> Never:
     error = DaemonStopError(
         "timeout",
         status=status_snapshot,
-        owner_active=owner_active,
         timeout_seconds=policy.timeout_seconds,
     )
     if request_error is not None:
@@ -591,7 +576,6 @@ def _status_for_stop(
         raise DaemonStopError(
             "ownership_check_failed",
             status=exc.status,
-            owner_active=None,
         ) from exc
 
 
@@ -616,5 +600,5 @@ def _report_invalid_pid(paths: RuntimePaths) -> None:
         component="daemon",
         collection="daemon_runtime",
         record_id=paths.pid_path.stem,
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
     )

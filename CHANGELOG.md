@@ -6,163 +6,78 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ## Unreleased
 
-- Module dependency rules are now executable architecture gates. Agent tools
-  return model-facing structured data without importing terminal renderers,
-  establishing the first enforced adapter boundary for the v0.3.1 decoupling.
-  A shared, lazy `ApplicationRuntime` now owns resolved paths, storage lifetime,
-  and one application graph for both CLI and daemon process surfaces, including
-  normal, interrupted, and exceptional teardown. Daemon chat and its tool
-  runtime now receive graph-owned memory, profile, reflection, trace, and
-  thread-storage collaborators instead of rebuilding them. Daemon curation,
-  reflection, and reasoning workers reuse that graph's backend, repositories,
-  outbox, recovery plans, and trace recorder. Reflection candidate generation,
-  relevance evaluation, organization, and scheduling now receive explicit
-  graph resources through application-owned composition. Direct and daemon
-  chat also share one application-owned factory; reason, trace, persona,
-  memory, reflection, and thread-storage tool collaborators are injected
-  before the agent layer, and the conversation runtime no longer contains a
-  root-based fallback composition path. Reflection schedule-state persistence is separated
-  from orchestration into its own strict codec module, and model-backed
-  relevance evaluation and candidate generation now have dedicated modules
-  with injected gate and thread-context boundaries. Reflection promotion
-  operations require explicitly composed repository, reason, and trace ports.
-  Memory intake now receives
-  its profile context explicitly instead of opening storage, and memory
-  optimization receives the graph-owned entry, candidate, and profile
-  repositories. Memory curation likewise requires the graph-owned backend,
-  stores, repositories, recovery plans, and trace recorder; its structured
-  actions, cursor schema, settings, and result DTO now live in a dedicated
-  contract module. Reason operations
-  used by CLI, REPL, chat, reflection, and
-  daemon workers now share application-owned composition; the core reason
-  service requires explicit repository, workspace, and trace dependencies,
-  while schedulers and export workers receive that existing service and
-  schedulers receive the repository explicitly. The
-  conversation graph runtime now requires its complete memory, thread,
-  reflection, reason, trace, and persona capability set instead of rebuilding
-  authority resources inside the agent layer. Persona definitions receive the
-  graph-owned memory repository rather than opening storage from persona
-  policy. Persona tools and reason advancement now also receive graph-owned
-  prompt, trace, path, and workspace capabilities instead of selecting a
-  second authority during tool construction. Chat thread persistence now
-  receives resolved paths and storage explicitly, while CLI, REPL, daemon,
-  curator, reflection, and chat composition share the application-owned
-  factory. Logging terminal-warning schemas
-  are isolated from the durable log engine in a dedicated runtime contract
-  module. Trace
-  repositories and services now require explicitly composed storage instead
-  of resolving a hidden default backend or paths, and their concrete assembly
-  is owned by the application layer rather than the trace domain. Profile
-  persistence and aggregation now use the same explicit composition boundary,
-  as do reason thread/step and reflection persistence; reason and reflection
-  domains no longer import outward application composition. Memory entries,
-  candidates, profiles, and sources now form one authority-scoped application
-  graph with shared collaborator instances instead of resolving storage inside
-  repositories. The notification outbox and its lock paths are now part of the
-  same graph and likewise receive explicit authority resources. Persona prompts
-  and memory curator recovery plans complete the persistence migration: both
-  now receive graph-owned authority resources instead of resolving defaults
-  inside their repositories. Memory-backed persona definition loading also
-  receives the graph-owned memory repository instead of selecting storage.
-  Persona agent tools and reason advancers now receive prompt, trace,
-  workspace, path, and storage capabilities from application composition;
-  reason scheduling no longer builds an advancer from a project root. Agent
-  reason-export tools also receive their reason workspace explicitly instead
-  of resolving runtime paths, and the output service no longer constructs a
-  fallback workspace authority. Workspace storage itself now receives resolved
-  runtime paths, and the daemon export worker borrows that store from process
-  composition instead of creating it during startup.
-  Reason-output section, chunk, manifest, progress, path, and planner schemas
-  now live in a dedicated strict contract module, separate from export
-  persistence and composition workflow.
-  Notification delivery orchestration is now
-  separated from outbox persistence and consumes an injected delivery plan.
-  Memory persistence and query components now
-  depend on a narrow profile capability contract instead of the concrete
-  profile storage adapter. Reflection promotion likewise consumes only narrow
-  reason-thread-start and provenance-recording ports, while executable gates
-  keep domain and agent code independent of CLI/TUI presentation. Notification
-  delivery orchestration now lives separately from outbox persistence and
-  locking, without changing the package's public imports.
-- Schema v4 replaces per-collection dynamic-column tables with one compact
-  strict-JSON `records` table and makes namespaced workspace state part of the
-  main authority. Its v3↔v4 migration is reversible. Reason exports now live
-  under `exports/reason/` instead of creating structured workspace directories.
-  Schema v5 removes the redundant prefix indexes through an explicit reversible
-  migration, exact versioned schema identity is validated on open, and
-  downgrade refuses to discard unexported workspace state.
-- Database schema migration is now an explicit operator action rather than a
-  side effect of opening storage. Versioned scripts under
-  `scripts/database_migrations/` provide dry-run planning, exact targets,
-  consistent pre-migration backups, cross-process serialization, and
-  transactional paths. The runtime accepts only the current schema; every new
-  post-v3 migration must also define its downgrade.
-- Interactive startup no longer repeats historical record-decode Attention
-  notices after a successful validated update of the same collection and
-  record. Later, unidentified, and still-unrepaired failures remain visible.
-- Transient model-availability failures now retry the same endpoint once before
-  ordered failover. Readonly tool outcomes remain replayable while any
-  write-capable outcome still suppresses replay. An empty chat memory search
-  now requires one distinct broader query before reporting no stored match.
-- Fixed a daemon-wide deadlock caused by holding the shared SQLite transaction
-  across LangGraph model/tool execution. Chat turns now retain only their
-  per-thread serialization lock during long work, then recheck and commit in a
-  short transaction. Graceful stop/restart now has a 30-second ownership
-  release budget while the authority lock continues to enforce one daemon
-  process.
-- Added `nuself data check` to report the current unique invalid memory or chat
-  records and print validated edit/confirmed delete commands without exposing
-  payloads or mutating data. One-time legacy-memory repair is now an explicit
-  dry-run-first repository script rather than installed runtime behavior.
-  Interactive Attention notices point to validation; undelivered completed
-  chat replies point to `:history`, with daemon restart reserved for recurring
-  transport failures.
-- Ctrl-C during an in-flight interactive turn now cooperatively closes its
-  daemon request socket and joins the owned send before returning to the
-  prompt. Ctrl-D and all true session exits continue through transcript,
-  curator, and storage cleanup exactly once. One-shot interrupts exit cleanly
-  with status `130`, destructive confirmations cancel without mutation, and
-  notification watch now honors both terminal EOF and `q`.
-- Fixed interactive startup silently blocking behind a daemon chat turn.
-  Thread snapshot reads now use SQLite's last committed view without competing
-  for the long-lived per-thread mutation lock or a write transaction.
-- CLI startup now performs side-effect-free readiness checks before opening
-  domain storage, starting a daemon, or entering interactive chat. Commands
-  that need an initialized authority exit with status `3` and an exact scoped
-  `nuself init` command; interactive entrypoints also reject missing model
-  configuration before they can appear to hang. Temporary daemon and transport
-  failures use status `4`.
-- Interactive chat now retains a failed retryable message with its original
-  logical `turn_id` and exposes `:retry`, allowing a safe explicit retry even
-  when the previous request may already have completed.
-- Interactive chat now surfaces a grouped `Attention:` block for an unusable
-  model configuration, an explicitly unselected workspace authority, unreadable
-  persisted records, and daemon reply-delivery failures. Turn-time record
-  failures are aggregated into actionable metadata-only notices instead of
-  remaining hidden in developer logs or flooding the terminal one record at a
-  time.
-- Structured state is now SQLite-only in user and workspace authorities.
-  Chat threads, curator cursors/plans, and scheduler state have joined the
-  domain collections; file-backend fallback and `dev migrate` are removed.
-  Missing canonical databases initialize atomically, while invalid existing
-  authority still fails closed.
-- Added `nuself data collections/list/show/export` for discoverable SQLite
-  data and validated `data edit/delete` workflows for memory and chat threads.
-  Editing preserves stable identity, shows a diff, confirms changes, detects
-  concurrent updates, and writes metadata-only audit events. Internal
-  operational collections remain hidden unless explicitly requested.
-- The repository authority was migrated to schema v3 and verified before
-  legacy JSON directories were retired. The public example now contains only
-  configuration and source inputs; obsolete example profile/manifest/share
-  state and frozen file-backend migration fixtures are removed.
-- The committed public authority example now lives at `examples/.nuself/`,
-  matching the v0.3.1 workspace layout and documentation. Repository-local
-  `.nuself/` state and its migration lease are ignored.
-- Legacy layout migration now uses the readable sibling lease name
-  `.nuself.migration.lock` instead of leaving a double-dot filename.
-- Current diagnostics and help now consistently say `authority root` and
-  resolve exports relative to the selected authority. The obsolete
-  `nuself.private` helper has been replaced by `nuself.authority`.
+### Added
+
+### Changed
+
+### Fixed
+
+### Documentation
+
+## v0.4.0 - 2026-08-07
+
+### Added
+
+- Added resumable, no-deadline Tool approval across LangGraph, daemon, CLI,
+  and REPL boundaries, plus read-only local/UTC time access for Chat.
+- Added independent Inbox and Delivery subsystems. Reflections and meaningful
+  Reason steps publish complete durable items, while log, email, and macOS
+  adapters independently track external delivery attempts.
+- Added an independent Source domain and top-level `nuself source` commands for
+  imported Markdown and text without mixing external documents into Memory.
+- Added top-level Reflection commands, discoverable SQLite data inspection and
+  export commands, explicit schema/layout migration tools, and authority health
+  diagnostics.
+
+### Changed
+
+- Tool effects now use frozen declarations bound to fresh invocation-scoped
+  interpreters. Approval is one typed interaction family over generic
+  suspension transport; observation solely owns safe Tool lifecycle/outcome
+  events, audit remains independent, and Agent middleware retains only retry
+  safety, execution classification, and invocation-local deduplication.
+- Chat and persona preparation no longer perform ambient Memory, Profile, or
+  Source retrieval. Agents load explicit skills and call service-boundary tools
+  when durable or imported context is required.
+- Agent Tool identity, component, read/write classification, effects, and
+  presentation now share one decorator/materialization path; repositories stay
+  private behind domain services.
+- Structured user/workspace authority is SQLite-only. Schema v4 uses compact
+  payload collections, runtime opening fails closed on old schemas, and
+  migration is an explicit preview/apply operator action with backups.
+- One bounded daemon scheduler now coordinates Chat, curation, Reflection,
+  Reason, Delivery, and maintenance work with resource-lane serialization and
+  capacity-aware admission.
+- Application composition is the single initialized authority graph. CLI,
+  daemon, agents, background workflows, and evaluation borrow explicit service
+  capabilities and resolved user/workspace configuration instead of reopening
+  paths or exposing repositories.
+- Chat persists and returns its answer before delayed compression, while
+  stable turn IDs, pending markers, exact continuation matching, and
+  cooperative cancellation protect retries from replaying effectful work.
+
+### Fixed
+
+- Fixed daemon-wide SQLite deadlocks and interactive startup stalls caused by
+  holding shared transactions or scheduler capacity across long-running work.
+- Fixed retryable REPL messages losing their stable turn identity, Ctrl-C
+  abandoning owned work, and startup readiness diagnostics masking authority or
+  configuration failures.
+- Fixed transient model failures retrying or failing over after a mutating Tool
+  execution; execution-classified middleware now suppresses unsafe replay.
+- Fixed approval requests being interpreted as rejection when no local daemon
+  frontend existed and ensured requested activity is visible before suspension
+  without being duplicated on LangGraph resume.
+
+### Documentation
+
+- Added executable module-boundary gates, current service/package ownership
+  documentation, authority-root terminology, and release/build contracts for
+  the 0.4 architecture.
+- Defined lightweight single-maintainer Pull Request boundaries: independent
+  semantic and higher-risk changes use feature PRs into the active minor line,
+  while releases use a gated development-to-`main` PR with explicit diff
+  review and CI evidence.
 
 ## v0.3.1 - 2026-07-30
 

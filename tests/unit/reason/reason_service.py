@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-import sqlite3
 from typing import Any, Never
 
 import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import ValidationError
 
-from nuself.application import compose_trace_services
-from nuself.config import runtime_paths
-from nuself.logs import read_log_events
-from nuself.reason.domain import ReasoningStep
+from nuself.trace.composition import compose_trace_services
+from nuself.config.settings import runtime_paths
+from nuself.log.reader import read_log_events
+from nuself.reason.model import ReasoningStep
 from nuself.reason.errors import (
     ReasonAdvanceError,
     ReasonPromptError,
@@ -22,7 +21,8 @@ from nuself.reason.errors import (
 )
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
+from inbox_fixtures import inbox_service
 
 
 def _reason_service(**kwargs: Any) -> ReasonService:
@@ -144,25 +144,21 @@ def test_start_thread_preserves_unexpected_prompt_generator_error(
     assert caught.value is unexpected
 
 
-def test_start_thread_uses_default_user_authority_for_prompt_generator(
+def test_start_thread_passes_only_reason_inputs_to_prompt_generator(
     tmp_path: Path,
-    monkeypatch: Any,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("NUSELF_HOME", str(tmp_path))
-    seen_project_roots: list[Path] = []
+    seen_kwargs: dict[str, object] = {}
 
     def prompt_generator(*args: object, **kwargs: object) -> str:
-        project_root = kwargs.get("project_root")
-        if isinstance(project_root, Path):
-            seen_project_roots.append(project_root)
+        del args
+        seen_kwargs.update(kwargs)
         return "Generated prompt."
 
-    service = ReasonService(prompt_generator=prompt_generator)
+    service = ReasonService(tmp_path, prompt_generator=prompt_generator)
 
     service.start_thread("Prompt root")
 
-    assert seen_project_roots == [tmp_path]
+    assert seen_kwargs == {"mandates": (), "active_items": ()}
 
 
 def test_generated_prompt_request_defines_bounded_round_pacing(
@@ -220,7 +216,7 @@ def test_reason_prompt_output_is_exact(
 
 
 def test_start_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("What should I do?")
     assert thread.topic == "What should I do?"
     assert thread.status == "active"
@@ -240,32 +236,8 @@ def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:
     assert (tmp_path / "logs" / "reasoning.log").is_file()
 
 
-def test_start_thread_uses_main_authority_without_workspace_directory(
-    tmp_path: Path,
-) -> None:
-    service = _reason_service(project_root=tmp_path)
-
-    thread = service.start_thread("Where should scratch state live?")
-
-    workspace = service.workspace_paths(thread.id)
-    db_path = tmp_path / "nuself.sqlite"
-    assert workspace.root == tmp_path / "exports" / "reason" / thread.id
-    assert workspace.database == db_path
-    assert not workspace.root.exists()
-    ws = service.workspace(thread.id)
-    ws.put("meta", {"key": "value"})
-    assert db_path.is_file()
-    assert not (tmp_path / "workspaces").exists()
-    conn = sqlite3.connect(str(db_path))
-    try:
-        tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-        assert "workspace_entries" in tables
-    finally:
-        conn.close()
-
-
 def test_start_and_list(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     service.start_thread("Question 1")
     service.start_thread("Question 2")
     threads = service.list_threads()
@@ -273,7 +245,7 @@ def test_start_and_list(tmp_path: Path) -> None:
 
 
 def test_start_with_evidence(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("Test", evidence_refs=("ref-1", "ref-2"))
     assert thread.evidence_refs == ("ref-1", "ref-2")
 
@@ -285,7 +257,7 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
     traces = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == (f"reason:{thread.id}",)
@@ -293,13 +265,13 @@ def test_start_thread_records_trace(tmp_path: Path) -> None:
 
 
 def test_start_thread_records_trace_when_repository_is_injected(tmp_path: Path) -> None:
-    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path, repository=ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)))
 
     thread = service.start_thread("Injected repository should still trace")
 
     traces = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(kind="reason_thread")
     assert len(traces) == 1
     assert traces[0].outputs == (f"reason:{thread.id}",)
@@ -349,14 +321,14 @@ def test_start_projections_cannot_replace_persisted_thread(
 
 
 def test_show_thread_by_id(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     created = service.start_thread("Show me")
     shown = service.show_thread(created.id)
     assert shown.id == created.id
 
 
 def test_pause_and_resume_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     t = service.start_thread("Test")
     paused = service.pause_thread(t.id)
     assert paused.status == "paused"
@@ -394,21 +366,21 @@ def test_transition_audit_failure_cannot_replace_persisted_status(
 
 
 def test_resolve_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     t = service.start_thread("Test")
     resolved = service.resolve_thread(t.id)
     assert resolved.status == "resolved"
 
 
 def test_archive_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     t = service.start_thread("Test")
     archived = service.archive_thread(t.id)
     assert archived.status == "archived"
 
 
 def test_invalid_transition_raises(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     t = service.start_thread("Test")
     service.resolve_thread(t.id)
     with pytest.raises(ReasonTransitionError):
@@ -416,7 +388,7 @@ def test_invalid_transition_raises(tmp_path: Path) -> None:
 
 
 def test_advance_thread(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     t = service.start_thread("Test advance")
     step = _test_step(t.id)
     advanced = service.advance_thread(t.id, step=step)
@@ -424,6 +396,28 @@ def test_advance_thread(tmp_path: Path) -> None:
     steps = service.list_steps(t.id)
     assert len(steps) == 1
     assert steps[0] == step
+
+    items = inbox_service(tmp_path).list()
+    assert [(item.kind, item.source_id) for item in items] == [
+        ("reason_step", step.id)
+    ]
+
+
+def test_no_change_step_does_not_enter_inbox(tmp_path: Path) -> None:
+    service = _reason_service(project_root=tmp_path)
+    thread = service.start_thread("No change")
+    service.advance_thread(
+        thread.id,
+        step=ReasoningStep(
+            thread_id=thread.id,
+            kind="no_change",
+            summary="No meaningful change.",
+            delta="No new evidence.",
+            output="Continue later.",
+        ),
+    )
+
+    assert inbox_service(tmp_path).list() == []
 
 
 def test_advance_thread_applies_resolved_terminal_status(tmp_path: Path) -> None:
@@ -495,7 +489,7 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
     steps = service.list_steps(thread.id)
     traces = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(kind="reason_step")
     assert len(traces) == 1
     assert traces[0].outputs == (
@@ -586,7 +580,7 @@ def test_delete_failure_does_not_emit_success_audit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repository = ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    repository = ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     service = _reason_service(
         project_root=tmp_path,
         repository=repository,
@@ -630,7 +624,7 @@ def test_reason_step_rejects_non_object_tool_logs() -> None:
 
 
 def test_advance_without_advancer_or_step_raises(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("No fallback advance")
 
     with pytest.raises(
@@ -645,18 +639,18 @@ def test_advance_when_advancer_returns_none_raises(tmp_path: Path) -> None:
         def advance(self, thread: object) -> None:
             return None
 
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), advancer=EmptyAdvancer())
+    service = _reason_service(project_root=tmp_path)
     thread = service.start_thread("No fake steps")
 
     with pytest.raises(
         ReasonAdvanceError,
         match="did not produce a structured step",
     ):
-        service.advance_thread(thread.id)
+        service.advance_thread(thread.id, advancer=EmptyAdvancer())
 
 
 def test_advance_paused_thread_raises(tmp_path: Path) -> None:
-    service = _reason_service(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)))
+    service = _reason_service(project_root=tmp_path)
     t = service.start_thread("Test")
     service.pause_thread(t.id)
     with pytest.raises(ReasonAdvanceError):

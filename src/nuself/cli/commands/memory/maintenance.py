@@ -7,33 +7,32 @@ import json
 import sys
 from typing import cast
 
-from nuself.cli.composition import compose_cli_application
-from nuself.application.curator import (
-    compose_memory_curator,
-    compose_memory_optimizer,
-)
+from nuself.cli.application import cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.domain.memory import MemoryEntry
+from nuself.memory.model import MemoryEntry
 from nuself.memory.optimizer import (
     MemoryOptimizerSettings,
 )
 
 
 def handle_memory_update(args: argparse.Namespace) -> int:
-    result = compose_memory_curator(
-        compose_cli_application(args.project_root)
-    ).run_once()
-    print(
-        f"Memory curator: {result.summary()} "
-        f"log={result.log_path}"
+    application = cli_application()
+    curator = application.memory_workflows.curator(
+        application.trace.recorder,
+        application.config,
     )
+    pending = application.memory_workflows.pending_observations()
+    for observation in pending:
+        curator.run_once(observation.id)
+    print(f"Memory curator: processed_observations={len(pending)}")
     return 0
 
 
 def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
-    result = compose_memory_optimizer(
-        compose_cli_application(args.project_root),
+    application = cli_application()
+    result = application.memory_workflows.optimizer(
+        application.config,
         settings=settings,
     ).run_once()
     print(
@@ -44,7 +43,7 @@ def handle_memory_optimize(args: argparse.Namespace) -> int:
 
 
 def handle_memory_export(args: argparse.Namespace) -> int:
-    entries = compose_cli_application(args.project_root).memory.entries.list()
+    entries = cli_application().memory.list_entries()
     data = [entry.to_wire() for entry in entries]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
@@ -72,7 +71,7 @@ def handle_memory_import(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    repository = compose_cli_application(args.project_root).memory.entries
+    application = cli_application()
     data = cast(list[object], raw)
     imported = 0
     for item in data:
@@ -81,12 +80,14 @@ def handle_memory_import(args: argparse.Namespace) -> int:
         entry = MemoryEntry.from_wire(
             cast(dict[str, object], item)
         )
-        repository.save(entry)
+        application.memory.save_entry(entry)
         record_memory_trace(
-            args.project_root, entry, "import"
+            application.trace.recorder,
+            args.project_root,
+            entry,
+            "import",
         )
         imported += 1
-    repository.reindex()
     print(
         f"Imported {imported} memory entries from {args.path}"
     )

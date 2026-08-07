@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from notification_fixtures import notification_outbox
-
 # pyright: reportUnusedImport=false
 
 from memory_fixtures import (
@@ -31,31 +29,28 @@ from typing import Callable, cast
 
 import pytest
 
-import nuself.storage_sqlite as sqlite_storage
-from nuself.logs import read_log_events
-from nuself.notification import NotificationOutbox
+import nuself.storage.sqlite as sqlite_storage
+import nuself.storage.pack as pack_storage
+from nuself.log.reader import read_log_events
+from nuself.inbox.service import InboxService
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
-from nuself.memory.source_repository import SourceRepository
-from nuself.application import compose_trace_services
-from nuself.config import runtime_paths
+from nuself.source.repository import SourceRepository
+from nuself.trace.composition import compose_trace_services
+from nuself.config.settings import runtime_paths
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
-from nuself.storage import (
+from nuself.storage.authority import (
     _create_sqlite_backend as create_sqlite_backend,
-    DefaultBackendResetError,
     auto_backend,
-    StorageBackend,
-    get_default_backend,
     open_sqlite_backend,
-    reset_default_backend,
-    set_default_backend,
 )
-from nuself.storage_sqlite import (
-    COLLECTION_NAMES,
+from nuself.storage.contract import COLLECTION_NAMES
+from nuself.storage.pack import inspect_sqlite_thought_pack
+from nuself.storage.sqlite import (
     SqliteStorageBackend,
     SqliteStorageBackupCleanupError,
     SqliteStorageCheckpointError,
@@ -65,7 +60,6 @@ from nuself.storage_sqlite import (
     SqliteStorageUnsupportedVersionError,
     SqliteTransactionCleanupError,
     SqliteTransactionRollbackOnlyError,
-    inspect_sqlite_thought_pack,
 )
 
 
@@ -288,23 +282,6 @@ class BackupFailingConnectionProxy:
     def backup(self, target: sqlite3.Connection) -> None:
         del target
         raise self.error
-
-
-class CloseBackend:
-    def __init__(self, *, error: Exception | None = None) -> None:
-        self.error = error
-        self.close_calls = 0
-
-    def collection(self, name: str) -> object:
-        raise AssertionError(f"unexpected collection access: {name}")
-
-    def transaction(self) -> object:
-        raise AssertionError("unexpected transaction access")
-
-    def close(self) -> None:
-        self.close_calls += 1
-        if self.error is not None:
-            raise self.error
 
 
 def _set_raw_sqlite_column(
@@ -555,8 +532,8 @@ def test_running_backend_reads_columns_added_by_another_backend(
     database = tmp_path / "shared-schema.sqlite"
     first = create_sqlite_backend(db_path=database)
     second = open_sqlite_backend(db_path=database)
-    first_collection = first.collection("notification_outbox")
-    second_collection = second.collection("notification_outbox")
+    first_collection = first.collection("inbox_items")
+    second_collection = second.collection("inbox_items")
     try:
         first_collection.put("entry", {"id": "entry", "title": "before"})
         assert first_collection.get("entry") == {
@@ -607,54 +584,13 @@ def test_sqlite_put_rejects_record_id_mismatch(
         backend.close()
 
 
-def test_default_backend_is_scoped_by_project_root(tmp_path: Path) -> None:
-    first_root = tmp_path / "first"
-    second_root = tmp_path / "second"
-    try:
-        first = get_default_backend(first_root)
-        second = get_default_backend(second_root)
-        assert first is get_default_backend(first_root)
-        assert second is get_default_backend(second_root)
-        assert first is not second
-
-        first.collection("memory_entries").put(
-            "only-first", {"id": "only-first"}
-        )
-        assert (
-            second.collection("memory_entries").get("only-first") is None
-        )
-    finally:
-        reset_default_backend()
-
-
-def test_notification_outbox_uses_explicit_authority_backend(
+def test_inbox_uses_explicit_authority_backend(
     tmp_path: Path,
 ) -> None:
     backend = auto_backend(tmp_path)
-    outbox = NotificationOutbox(runtime_paths(tmp_path), backend)
+    outbox = InboxService(runtime_paths(tmp_path), backend)
 
     assert outbox._backend is backend
-
-
-def test_reset_closes_backend_used_by_default_repository(
-    tmp_path: Path,
-) -> None:
-    backend = create_sqlite_backend(
-        tmp_path,
-        db_path=tmp_path / "nuself.sqlite",
-    )
-    set_default_backend(backend, tmp_path)
-    repository = memory_entry_repository(tmp_path)
-    backend.collection("memory_entries").put(
-        "lifecycle-probe",
-        {"id": "lifecycle-probe", "title": "probe"},
-    )
-
-    reset_default_backend(tmp_path)
-
-    assert getattr(backend, "_closed") is True
-    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
-        repository.list()
 
 
 def test_candidate_repository_uses_explicit_backend(
@@ -666,33 +602,6 @@ def test_candidate_repository_uses_explicit_backend(
     )
 
     assert repository.list() == []
-
-
-def test_reset_default_backend_attempts_every_owned_close(
-    tmp_path: Path,
-) -> None:
-    failed = CloseBackend(error=RuntimeError("first close failed"))
-    healthy = CloseBackend()
-    set_default_backend(cast(StorageBackend, failed), tmp_path / "first")
-    set_default_backend(cast(StorageBackend, healthy), tmp_path / "second")
-
-    with pytest.raises(
-        DefaultBackendResetError,
-        match="failed to close 1 default storage backend",
-    ) as captured:
-        reset_default_backend()
-
-    assert failed.close_calls == 1
-    assert healthy.close_calls == 1
-    assert captured.value.failures == (failed.error,)
-    [event] = read_log_events(
-        project_root=tmp_path / "first",
-        component="storage",
-    )
-    assert event.event == "backend_close_failed"
-    assert event.status == "degraded"
-    assert event.error == "first close failed"
-    assert event.metadata == {"backend_type": "CloseBackend"}
 
 
 def test_close_is_idempotent_after_connection_closes(
@@ -740,7 +649,7 @@ def test_online_backup_includes_wal_data_and_closes_destination(
         return tracked
 
     monkeypatch.setattr(
-        "nuself.storage_sqlite.sqlite3.connect",
+        "nuself.storage.pack.sqlite3.connect",
         tracking_connect,
     )
     destination = tmp_path / "exports" / "snapshot.sqlite"
@@ -833,7 +742,7 @@ def test_backup_and_destination_close_failure_retain_both_errors(
         return cast(sqlite3.Connection, destination)
 
     monkeypatch.setattr(
-        "nuself.storage_sqlite.sqlite3.connect",
+        "nuself.storage.sqlite.sqlite3.connect",
         connect_destination,
     )
     setattr(backend, "_conn", cast(sqlite3.Connection, source))
@@ -902,13 +811,13 @@ def test_readonly_inspection_closes_source_connection(
         return connection
 
     monkeypatch.setattr(
-        "nuself.storage_sqlite.sqlite3.connect",
+        "nuself.storage.sqlite.sqlite3.connect",
         tracking_connect,
     )
 
     inspection = inspect_sqlite_thought_pack(database)
 
-    assert inspection.schema_version == 5
+    assert inspection.schema_version == 7
     assert inspection.total_items == 0
     assert len(connections) == 1
     assert connections[0].close_calls == 1
@@ -1098,7 +1007,7 @@ def test_authority_open_does_not_run_thought_pack_integrity_scan(
         raise AssertionError("ordinary authority open ran quick_check")
 
     monkeypatch.setattr(
-        sqlite_storage,
+        pack_storage,
         "_validate_thought_pack_connection",
         unexpected_integrity_scan,
     )
@@ -1775,7 +1684,20 @@ def _create_v1_database(
             "CREATE TABLE _schema_version (version INTEGER NOT NULL)"
         )
         conn.execute("INSERT INTO _schema_version VALUES (1)")
-        for name in COLLECTION_NAMES:
+        for name in (
+            "memory_entries",
+            "memory_candidates",
+            "trace_nodes",
+            "trace_edges",
+            "reason_threads",
+            "reason_steps",
+            "persona_prompts",
+            "profile_items",
+            "source_documents",
+            "source_chunks",
+            "notification_outbox",
+            "reflection_entries",
+        ):
             conn.execute(
                 f'CREATE TABLE "col_{name}" '
                 "(id TEXT PRIMARY KEY, payload TEXT)"
@@ -1828,7 +1750,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "5",
+            "7",
             "--dry-run",
         ],
         check=True,
@@ -1840,6 +1762,8 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
         "upgrade v002_to_v003",
         "upgrade v003_to_v004",
         "upgrade v004_to_v005",
+        "upgrade v005_to_v006",
+        "upgrade v006_to_v007",
     ]
     subprocess.run(
         [
@@ -1848,7 +1772,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "5",
+            "7",
         ],
         check=True,
         capture_output=True,
@@ -1857,7 +1781,7 @@ def test_explicit_script_migrates_v1_and_preserves_wire_data(
     backend = SqliteStorageBackend(db_path)
 
     assert backend.collection("memory_entries").get("mem_legacy") == wire
-    assert (tmp_path / "nuself.sqlite.pre-v1-to-v5.bak").exists()
+    assert (tmp_path / "nuself.sqlite.pre-v1-to-v7.bak").exists()
     assert backend.collection("memory_entries").get("mem_legacy") == wire
     backend.close()
 
@@ -2079,7 +2003,7 @@ def test_registry_rejects_post_v3_migration_without_downgrade() -> None:
     assert "post-v3 migrations must define downgrade" in result.stderr
 
 
-def test_v5_migration_round_trip_preserves_records(tmp_path: Path) -> None:
+def test_v6_migration_round_trip_preserves_records(tmp_path: Path) -> None:
     db_path = tmp_path / "nuself.sqlite"
     backend = create_sqlite_backend(db_path=db_path)
     record_id = "mem_round_trip"
@@ -2125,7 +2049,7 @@ def test_v5_migration_round_trip_preserves_records(tmp_path: Path) -> None:
             "scripts.migrate_database",
             str(db_path),
             "--to",
-            "5",
+            "7",
         ],
         check=True,
         capture_output=True,
@@ -2201,6 +2125,266 @@ def test_v4_v5_index_migration_is_reversible(tmp_path: Path) -> None:
         finally:
             connection.close()
         assert indexes == expected_indexes
+
+
+def test_v5_v6_conversation_migration_is_reversible_and_payload_safe(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.collection("conversations").put(
+        "default",
+        {
+            "conversation_id": "default",
+            "summary": "",
+            "messages": [{"role": "user", "content": "conversation"}],
+            "message_start_index": 0,
+            "next_message_index": 1,
+            "archived": False,
+        },
+    )
+    backend.collection("memory_entries").put(
+        "mem-1",
+        {
+            "id": "mem-1",
+            "body": "conversation",
+            "source_refs": ["conversation:default:0-1", "manual:item"],
+            "evidence": [
+                {
+                    "source_type": "conversation",
+                    "source_ref": "conversation:default:0-1",
+                    "summary": "conversation",
+                }
+            ],
+        },
+    )
+    backend.collection("trace_nodes").put(
+        "trace-1", {"id": "trace-1", "conversation_id": "default"}
+    )
+    backend.collection("reflection_entries").put(
+        "reflection-1",
+        {
+            "id": "reflection-1",
+            "suggested_conversation_id": "default",
+        },
+    )
+    backend.collection("inbox_items").put(
+        "inbox-1",
+        {
+            "id": "inbox-1",
+            "deep_link": "nuself://conversation/default?message=hello",
+        },
+    )
+    backend.close()
+
+    for target in ("5", "6"):
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "scripts.migrate_database",
+                str(db_path),
+                "--to",
+                target,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    connection = sqlite3.connect(db_path)
+    try:
+        def record(collection: str, record_id: str) -> dict[str, object]:
+            row = connection.execute(
+                "SELECT payload FROM records WHERE collection = ? AND id = ?",
+                (collection, record_id),
+            ).fetchone()
+            assert row is not None
+            value = cast(object, json.loads(row[0]))
+            assert isinstance(value, dict)
+            return cast(dict[str, object], value)
+
+        conversation = record("conversations", "default")
+        assert conversation["conversation_id"] == "default"
+        memory = record("memory_entries", "mem-1")
+        assert memory["body"] == "conversation"
+        assert memory["source_refs"] == [
+            "conversation:default:0-1",
+            "manual:item",
+        ]
+        assert memory["evidence"] == [
+            {
+                "source_type": "conversation",
+                "source_ref": "conversation:default:0-1",
+                "summary": "conversation",
+            }
+        ]
+        assert record("trace_nodes", "trace-1") == {
+            "conversation_id": "default",
+        }
+        assert record("reflection_entries", "reflection-1") == {
+            "suggested_conversation_id": "default",
+        }
+        assert record("inbox_items", "inbox-1") == {
+            "deep_link": "nuself://conversation/default?message=hello",
+        }
+    finally:
+        connection.close()
+
+
+def test_v6_v7_migration_projects_unprocessed_chat_into_memory_observation(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.collection("conversations").put(
+        "default",
+        {
+            "conversation_id": "default",
+            "summary": "",
+            "messages": [
+                {"role": "user", "content": "remember this decision"},
+                {"role": "assistant", "content": "understood"},
+            ],
+            "message_start_index": 0,
+            "next_message_index": 2,
+            "archived": False,
+        },
+    )
+    backend.close()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "6",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO records(collection, id, payload) VALUES (?, ?, ?)",
+            (
+                "memory_curator_cursors",
+                "default",
+                json.dumps(
+                    {
+                        "conversation_id": "default",
+                        "processed_message_count": 0,
+                    }
+                ),
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "7",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    reopened = SqliteStorageBackend(db_path)
+    try:
+        [observation] = reopened.collection("memory_observations").list()
+        assert observation["status"] == "pending"
+        assert observation["fragments"] == [
+            "user: remember this decision",
+            "assistant: understood",
+        ]
+        assert str(observation["source_ref"]).startswith("interaction:")
+    finally:
+        reopened.close()
+
+
+def test_v6_migration_rejects_conversation_collection_collision(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "nuself.sqlite"
+    backend = create_sqlite_backend(db_path=db_path)
+    backend.collection("conversations").put(
+        "legacy",
+        {
+            "conversation_id": "legacy",
+            "summary": "",
+            "messages": [],
+            "message_start_index": 0,
+            "next_message_index": 0,
+            "archived": False,
+        },
+    )
+    backend.close()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "5",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    connection = sqlite3.connect(db_path)
+    try:
+        connection.execute(
+            "INSERT INTO records VALUES (?,?,?)",
+            (
+                "conversations",
+                "collision",
+                '{"conversation_id":"collision"}',
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.migrate_database",
+            str(db_path),
+            "--to",
+            "6",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "destination collection already exists" in result.stderr
+    connection = sqlite3.connect(db_path)
+    try:
+        assert connection.execute(
+            "SELECT MAX(version) FROM _schema_version"
+        ).fetchone() == (5,)
+        collections = {
+            row[0]
+            for row in connection.execute(
+                "SELECT DISTINCT collection FROM records"
+            )
+        }
+    finally:
+        connection.close()
+    assert {"chat_threads", "conversations"} <= collections
 
 
 def test_v4_upgrade_compacts_existing_v3_workspace_entries(
@@ -2408,7 +2592,7 @@ def test_v4_downgrade_requires_workspace_export(tmp_path: Path) -> None:
     try:
         assert connection.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone() == (5,)
+        ).fetchone() == (7,)
         assert connection.execute(
             "SELECT value FROM workspace_entries"
         ).fetchone() == ('{"value":1}',)
@@ -2457,7 +2641,7 @@ def test_v4_downgrade_failure_rolls_back_all_schema_changes(
         }
         assert connection.execute(
             "SELECT MAX(version) FROM _schema_version"
-        ).fetchone() == (5,)
+        ).fetchone() == (7,)
         assert connection.execute(
             "SELECT payload FROM records WHERE id='mem_invalid_column'"
         ).fetchone() == ('{"\\u0000":"value"}',)

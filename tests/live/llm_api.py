@@ -13,15 +13,16 @@ from pydantic import BaseModel, ConfigDict
 
 from nuself.agent.chat.response import ConversationResponseSynthesizer
 from nuself.agent.chat.types import ChatStructuredOutput
-from nuself.agent.middleware import ToolOutcome
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.llm import (
+from nuself.config.settings import ConfigSystem
+from nuself.config.scope import scope_from_authority_root
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     build_langchain_endpoint,
     configured_langchain_chat_models,
     redacted_llm_diagnostic,
 )
-from nuself.live_testing import LiveModelCase
+from tests.live.matrix import LiveModelCase
 
 pytestmark = pytest.mark.live_api
 
@@ -38,7 +39,12 @@ class _LiveStructuredOutput(BaseModel):
 def live_endpoint(
     live_model_case: LiveModelCase | None,
 ) -> LangChainLLMEndpoint:
-    endpoints = configured_langchain_chat_models(PROJECT_ROOT)
+    endpoints = configured_langchain_chat_models(
+        PROJECT_ROOT,
+        config=ConfigSystem.load_scope(
+            scope_from_authority_root(PROJECT_ROOT)
+        ),
+    )
     if not endpoints:
         pytest.fail(
             "no configured LLM endpoint with a non-empty API key",
@@ -120,7 +126,6 @@ def test_live_nuself_chat_response(
         project_root=tmp_path,
         langchain_models=(live_endpoint,),
         tools=(),
-        log_tool_outcome=lambda _outcome: None,
     )
     try:
         result = synthesizer.complete(
@@ -152,12 +157,10 @@ def test_live_nuself_tool_and_structured_response(
     live_endpoint: LangChainLLMEndpoint,
     tmp_path: Path,
 ) -> None:
-    outcomes: list[ToolOutcome] = []
     synthesizer = ConversationResponseSynthesizer(
         project_root=tmp_path,
         langchain_models=(live_endpoint,),
         tools=(_live_echo,),
-        log_tool_outcome=outcomes.append,
     )
     try:
         result = synthesizer.complete(
@@ -174,7 +177,5 @@ def test_live_nuself_tool_and_structured_response(
     except Exception as exc:
         _fail_live_layer("NuSelf tool and structured response", exc)
 
-    assert len(outcomes) == 1
-    assert outcomes[0].name == "_live_echo"
     assert result.answer.strip() == "LIVE_TOOL_CHAT_OK"
     assert "configured LLM request failed" not in result.answer

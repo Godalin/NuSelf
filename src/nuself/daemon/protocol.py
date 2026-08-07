@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, cast
 from uuid import uuid4
 
 from nuself.runtime.diagnostics import (
@@ -16,24 +16,22 @@ from nuself.runtime.diagnostics import (
 PROTOCOL_VERSION = 1
 MAX_DAEMON_FRAME_BYTES = 1024 * 1024
 
-JsonValue: TypeAlias = (
+type JsonValue = (
     None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
 )
-RequestType: TypeAlias = Literal[
+type RequestType = Literal[
     "ping",
     "health",
-    "echo",
     "chat",
     "shutdown",
     "activity_open",
     "activity_next",
     "activity_close",
 ]
-ResponseStatus: TypeAlias = Literal["ok", "error"]
+type ResponseStatus = Literal["ok", "error"]
 REQUEST_TYPES: tuple[RequestType, ...] = (
     "ping",
     "health",
-    "echo",
     "chat",
     "shutdown",
     "activity_open",
@@ -69,21 +67,15 @@ class DaemonExtraFrameData(ProtocolError):
     """Raised when a one-frame connection sends bytes after its newline."""
 
 
-def empty_payload() -> dict[str, JsonValue]:
-    return {}
-
-
-def new_request_id() -> str:
-    return uuid4().hex
-
-
 @dataclass(frozen=True)
 class DaemonRequest:
     """Request sent from a CLI client to the daemon."""
 
     type: RequestType
-    payload: dict[str, JsonValue] = field(default_factory=empty_payload)
-    request_id: str = field(default_factory=new_request_id)
+    payload: dict[str, JsonValue] = field(
+        default_factory=dict[str, JsonValue]
+    )
+    request_id: str = field(default_factory=lambda: uuid4().hex)
     version: int = PROTOCOL_VERSION
 
     def to_json_line(self) -> bytes:
@@ -116,7 +108,9 @@ class DaemonResponse:
 
     request_id: str
     status: ResponseStatus
-    payload: dict[str, JsonValue] = field(default_factory=empty_payload)
+    payload: dict[str, JsonValue] = field(
+        default_factory=dict[str, JsonValue]
+    )
     error: str | None = None
     version: int = PROTOCOL_VERSION
 

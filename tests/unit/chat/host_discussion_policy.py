@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from langchain_core.messages import BaseMessage
-from nuself.persona import AgentBackedActivationPolicy
+from nuself.persona.graph import AgentBackedActivationPolicy
 from nuself.persona.definition import (
     ANALYST_PERSONA,
     BUILDER_PERSONA,

@@ -6,16 +6,32 @@ from collections.abc import Callable
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.tools.common import structured_tool_factory
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import component, observed, readonly, tool
+from nuself.runtime.feature.execution import FeatureExecutor
 
 
 def build_selves_tools(
     consult: Callable[[str, str, str | None], str] | None,
+    *,
+    executor: FeatureExecutor,
 ) -> tuple[BaseTool, ...]:
     """Build the optional selves consultation tool."""
     if consult is None:
         return ()
 
+    @tool(
+        name="selves_consult",
+        description=(
+            "Invoke NuSelf's internal multi-persona subagent for perspective synthesis. "
+            "Use for explicit multi-perspective requests, complex design tradeoffs, value conflicts, "
+            "emotionally loaded reflection, self-model questions, or when the user asks for inner discussion. "
+            "Do not use for direct service status/count/search questions."
+        ),
+    )
+    @component("selves")
+    @readonly
+    @observed
     def consult_selves(
         topic: str,
         mode: str = "consult",
@@ -34,16 +50,8 @@ def build_selves_tools(
         )
 
     return (
-        structured_tool_factory()(
+        materialize_tool(
             consult_selves,
-            name="selves_consult",
-            description=(
-                "Invoke NuSelf's internal multi-persona subagent for perspective synthesis. "
-                "Use for explicit multi-perspective requests, complex design tradeoffs, value conflicts, "
-                "emotionally loaded reflection, self-model questions, or when the user asks for inner discussion. "
-                "Do not use for direct service status/count/search questions."
-            ),
-            tags=("readonly",),
-            metadata={"service_component": "selves"},
+            executor=executor,
         ),
     )

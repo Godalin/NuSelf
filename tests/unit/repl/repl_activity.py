@@ -17,14 +17,11 @@ from nuself.cli.repl.activity import (
     visible_interactive_activity_events,
 )
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.logs import (
-    InteractiveLogCursor,
-    LogComponent,
-    LogEvent,
-    read_log_events,
-    write_log_event,
-)
+from nuself.log.reader import InteractiveLogCursor, read_log_events
+from nuself.log.store import write_log_event
+from nuself.runtime.audit.types import LogComponent
 from nuself.runtime.execution import OwnedCall, current_cancellation
+from nuself.log.record import LogEvent
 
 
 def _event(
@@ -47,6 +44,7 @@ def _successful_send(
     _message: str,
     _thread_id: str,
     _turn_id: str | None,
+    _effect_resolution: object,
 ) -> InteractiveChatResult:
     return InteractiveChatResult(code=0, reply="done")
 
@@ -63,7 +61,7 @@ def _mark_presented(
 def test_activity_projection_keeps_capture_and_visibility_distinct() -> None:
     tool = _event("chat", "service_tool_called")
     background_chat = _event("chat", "one_shot_chat_completed")
-    approval = _event("reasoning", "approval_prompted")
+    approval = _event("chat", "tool.activity", status="pending")
     background_reason = _event("reasoning", "advance_completed")
 
     events = [tool, background_chat, approval, background_reason]
@@ -95,6 +93,20 @@ def test_registered_chat_lifecycle_events_are_visible() -> None:
     ]
 
     assert visible_interactive_activity_events(events) == events
+
+
+def test_removed_chat_lifecycle_aliases_are_not_visible() -> None:
+    events = [
+        _event("chat", name, status="completed")
+        for name in (
+            "turn_started",
+            "turn_completed",
+            "turn_reused",
+            "turn_failed",
+        )
+    ]
+
+    assert visible_interactive_activity_events(events) == []
 
 
 def test_live_send_drains_and_closes_daemon_subscription(
@@ -267,6 +279,7 @@ def test_live_send_observes_poll_failure_and_uses_file_fallback(
         _message: str,
         _thread_id: str,
         _turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         release.wait(1)
         return InteractiveChatResult(code=0, reply="done")
@@ -553,6 +566,7 @@ def test_live_send_reports_callback_exception_without_escaping(
         message: str,
         thread_id: str,
         turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         del message, thread_id, turn_id
         raise ValueError("send exploded")
@@ -605,6 +619,7 @@ def test_live_send_redacts_callback_exception_from_terminal_and_audit(
         message: str,
         thread_id: str,
         turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         del message, thread_id, turn_id
         raise ValueError(f"provider rejected api_key={secret}")
@@ -654,6 +669,7 @@ def test_send_failure_diagnostic_storage_loss_keeps_repl_failure(
         message: str,
         thread_id: str,
         turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         del message, thread_id, turn_id
         raise ValueError("send exploded")
@@ -724,6 +740,7 @@ def test_send_control_exception_is_reraised_after_close_without_drain(
         message: str,
         thread_id: str,
         turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         del message, thread_id, turn_id
         raise control from root_cause
@@ -796,6 +813,7 @@ def test_live_send_closes_subscription_on_unexpected_poll_failure(
         _message: str,
         _thread_id: str,
         _turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         release.wait(1)
         return InteractiveChatResult(code=0)
@@ -863,6 +881,7 @@ def test_live_send_reaps_call_before_reraising_presenter_failure(
         _message: str,
         _thread_id: str,
         _turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         release.wait(1)
         finished.set()
@@ -980,6 +999,7 @@ def test_live_send_reaps_call_before_reraising_main_control(
         _message: str,
         _thread_id: str,
         _turn_id: str | None,
+        _effect_resolution: object,
     ) -> InteractiveChatResult:
         release.wait(1)
         finished.set()
@@ -1043,6 +1063,7 @@ def test_live_send_reap_ignores_second_interrupt_during_cleanup(
         _message: str,
         _thread_id: str,
         _turn_id: str | None,
+    _effect_resolution: object,
     ) -> InteractiveChatResult:
         cancellation = current_cancellation()
         assert cancellation is not None

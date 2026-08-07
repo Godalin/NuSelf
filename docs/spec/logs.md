@@ -2,6 +2,16 @@
 
 ## LogEvent Structure
 
+`nuself.log.record` owns the immutable `LogEvent` projection model and
+its record codec. It depends only on neutral runtime identity, JSON, and audit
+types; protocol, domain-audit, and presentation code that handles an already
+constructed event must not import filesystem log persistence.
+
+The `nuself.log` package owns logging infrastructure without a package-root
+facade: `record` owns the immutable projection, `store` owns JSONL paths and
+append/rotation/recovery, `reader` owns readers and cursors, and `warning` owns
+terminal-warning contracts. Callers import the precise owner they use.
+
 | Field         | Type                                        | Required |
 | ------------- | ------------------------------------------- | -------- |
 | `time`        | `str` (ISO)                                 | yes      |
@@ -11,7 +21,8 @@
 | `message`     | `str`                                       | yes      |
 | `event_id`    | `str`                                       | new records |
 | `schema_version` | `int`                                    | new records |
-| `thread_id`   | `str \| None`                               | no       |
+| `conversation_id` | `str \| None`                          | no       |
+| `reason_id`   | `str \| None`                               | no       |
 | `request_id`  | `str \| None`                               | no       |
 | `turn_id`     | `str \| None`                               | no       |
 | `job_id`      | `str \| None`                               | no       |
@@ -37,7 +48,7 @@ observe one stable event snapshot.
 
 `LogEvent` is append-only evidence. The authoritative ephemeral correlation
 state and its complete public API live in `nuself.runtime.context`.
-`nuself.logs` consumes the active `RuntimeContext`; it does not define logging-
+`nuself.log.store` consumes the active `RuntimeContext`; it does not define logging-
 specific context types, accessors, aliases, or state.
 
 Runtime code may establish a `runtime_context(...)` around a daemon request,
@@ -45,14 +56,15 @@ chat turn, background job, or trace-producing operation.
 `write_log_event(...)` inherits unset ownership fields from the current
 runtime context:
 
-- `thread_id` for conversation thread ownership;
+- `conversation_id` for persistent conversation ownership;
+- `reason_id` for long-running reason ownership;
 - `request_id` for daemon/client request ownership;
 - `turn_id` for one logical chat turn;
-- `job_id` for daemon background jobs such as memory, reflection, notification, or future log maintenance;
+- `job_id` for daemon background jobs such as memory, reflection, Delivery, or future log maintenance;
 - `trace_id` for cross-service provenance;
 - `source` for the runtime boundary that wrote the event, such as `daemon`, `client`, or `chat_runtime`.
 
-Every scheduled memory-curator, reflection, reason, and notification-delivery
+Every scheduled memory-curator, reflection, reason, and Delivery
 tick owns a fresh `job_id`. Its worker source and job id are installed before
 domain code runs; nested domain context adds fields without replacing that tick
 identity. Iteration failure logs use the same job id, and reused worker threads
@@ -82,6 +94,18 @@ override projection defaults locally. Unknown events, missing or extra metadata
 fields, incorrect field types, forbidden errors, and missing required errors
 are programming errors raised before the best-effort log sink boundary.
 
+Exact metadata field-set validation is one shared audit-definition primitive;
+domain validators compose it with their own value constraints. Domains retain
+separate sealed registries, messages, producers, and semantic validators.
+Audit events without a current production producer are not retained as
+speculative API surface.
+
+Registered failure producers select the domain definition, fixed message, and
+schema metadata. One shared observability interpreter derives the sanitized
+exception chain, validates the selected definition, and invokes the
+best-effort failure sink. Domains must not duplicate those mechanics or lose
+control of event selection and metadata construction to a generic event bus.
+
 `restart_failed` is one event with two explicit metadata variants selected by
 `stage`: the `start` variant carries start-failure reason/phase/PID/socket/exit
 code, while the `stop` variant carries stop-failure
@@ -104,6 +128,12 @@ Human-readable rendering must show both tags at the front:
   args: {"entry_id": "m1"}
   result: Archived "Old memory".
 ```
+
+Agent tools declared with `@observed` publish the same structured I/O through
+the live `tool.activity` event by default. A tool may add the orthogonal
+`@compact` declaration when its activity should intentionally contain only the
+service component, operation, and status. Compactness is never inferred from
+the presence of `@observed` and must not change the tool's returned value.
 
 Rules:
 
@@ -161,7 +191,7 @@ Recoverable local command boundaries write ordinary structured events:
 | Component | Event                              | Required metadata |
 | --------- | ---------------------------------- | ----------------- |
 | `persona` | `interactive_command_failed`       | `action`          |
-| `chat`    | `interactive_history_load_failed`  | `thread_id`       |
+| `chat`    | `interactive_history_load_failed`  | `conversation_id` |
 
 The persona `action` is the first command token, or `list` for an empty
 command. It must not contain the persona prompt, full command body, or other
@@ -214,7 +244,7 @@ metadata.
 | `llm_retry_suppressed_after_tool_call` | `fallback` | `endpoint_index`, `model` |
 | `llm_endpoints_exhausted` | `fallback` | required error, no metadata |
 | `llm_endpoint_state_write_failed` | `degraded` | required error, `endpoint_index` |
-| `interactive_history_load_failed` | `error` | required error, `thread_id` |
+| `interactive_history_load_failed` | `error` | required error, `conversation_id` |
 | `interactive_history_write_failed` | `degraded` | required error, no metadata |
 | Chat `completion_load_failed` | `degraded` | required error, exact `completion` kind |
 | `interactive_prompt_failed` | `degraded` | required error, fixed fallback kind |
@@ -248,7 +278,7 @@ the audit projection writes their log records:
 
 Rules:
 
-- `turn.started` and `turn.completed` use the same `thread_id` and, when available, the same top-level `turn_id`.
+- `turn.started` and `turn.completed` use the same `conversation_id` and, when available, the same top-level `turn_id`.
 - `turn.completed` includes `duration_ms` and compact metadata such as `node_trace` and `tool_call_count`.
 - `turn_retry` is a client-side transport retry marker. It must reuse the same `turn_id` and does not mean the daemon should persist a second user message.
 - `turn_retry` metadata retains the previous client failure phase, daemon
@@ -272,18 +302,15 @@ Rules:
   delivered identities. Daemon activity subscription batches use it before
   presentation so a later file fallback returns only events not already
   delivered.
-- Chat service-tool logs should include the active `thread_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
-- Approval-gated tool execution writes `approval_prompted` before waiting for
-  confirmation. The live REPL treats it as user-relevant interactive activity
-  so the visible prompt appears before input is read.
-- Every completed approval interaction writes exactly one `approval_decided`
-  event before returning or invoking the approved callable. Its exact metadata
-  is `tool`, boolean `approved`, nullable `approver`, and
-  `input_kind=affirmative|declined|eof`. It is a decision record, not a tool
-  execution record.
-- Approval events use one sealed shared definition registry with fixed
-  messages, levels, statuses, forbidden errors/durations, and exact metadata.
-  Decorators do not choose projection defaults locally.
+- Chat service-tool logs should include the active `conversation_id` and, when available, the logical top-level `turn_id` so a tool call can be tied back to one chat turn.
+- Approval-gated tools publish `chat/tool.activity` with
+  `frontend_event=approval_requested` before asking the injected approval port,
+  then publish `frontend_event=approval_decided`. The same runtime envelope is
+  projected to the terminal, daemon activity transport, durable logs, or a
+  future web frontend; no separate approval-log protocol exists.
+- Approval metadata includes the service component, operation, safe summary,
+  boolean decision, and input kind. It never carries arbitrary tool arguments
+  or results.
 
 Observed runtime-event publication treats only projection delivery failure as
 a best-effort projection failure. If one or more projections fail, all matching
@@ -390,7 +417,8 @@ is written to disk.
 | `chat`       | `chat.log`       | Conversation turns                                                   |
 | `memory`     | `memory.log`     | Memory operations                                                    |
 | `persona`    | `persona.log`    | Persona activations, host decisions, competitive persona discussions |
-| `outbox`     | `outbox.log`     | Notification delivery attempts                                       |
+| `inbox`      | `inbox.log`      | User-attention item persistence and lifecycle                         |
+| `delivery`   | `delivery.log`   | External Inbox delivery attempts                                     |
 | `reflection` | `reflection.log` | Reflection scheduling                                                |
 | `reasoning`  | `reasoning.log`  | Long-run reasoning threads                                           |
 | `storage`    | `storage.log`    | Shared persistence lifecycle and backend infrastructure              |

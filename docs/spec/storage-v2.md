@@ -1,6 +1,6 @@
 # Storage
 
-Status: authoritative for v0.3.1.
+Status: authoritative for v0.4.0.
 
 NuSelf has one structured storage authority per selected scope: SQLite. The
 filesystem is used only for configuration, source documents, exports, logs,
@@ -27,12 +27,34 @@ lifecycle operations owned by `nuself init` and approved migration/import
 publication paths. A missing database is a typed CLI setup prerequisite, not
 an invitation for a business command to create storage.
 
-`nuself migrate-layout` is the only legacy layout migration command. Its source
+`scripts/migrate_legacy_layout.py` is the only legacy layout migration tool. Its source
 must contain a valid `nuself.sqlite`; it does not import file-backed
 collections. Migration takes exclusive source and destination leases, publishes
-atomically, and leaves a validated backup.
+atomically, and leaves a validated backup. Runtime locks and SQLite sidecars
+are transient coordination files: validation and copying ignore them, while
+the SQLite backup API captures committed WAL state consistently.
 
 ## Storage protocol
+
+Storage infrastructure lives in the import-light `nuself.storage` package:
+
+- `contract` owns backend/collection protocols, the collection catalog, and
+  opaque-key validation;
+- `atomic` owns durable atomic text and JSON replacement;
+- `authority` owns canonical SQLite selection and creation lifecycle;
+- `sqlite` owns the live SQLite backend, transaction semantics, schema identity
+  validation, schema leases, and consistent backup primitive;
+- `pack` owns explicit thought-pack integrity scanning, inspection, and import;
+- `workspace` adapts the authority's `workspace_entries` table to LangGraph's
+  official `BaseStore` contract and adds namespace-scoped agent views;
+- `audit` owns storage lifecycle audit definitions and reporting.
+
+The package root is empty and callers import the precise owner they use. These
+modules are infrastructure owners, not alternate storage authorities or a
+compatibility facade. A generic `model.py` is not part of this structure:
+storage exposes contracts and persisted records remain owned by their domains.
+The workspace adapter is not a second authority: it opens the same validated
+SQLite database and accesses only the schema-owned `workspace_entries` table.
 
 Repositories depend on `StorageBackend` and `StorageCollection`:
 
@@ -75,9 +97,12 @@ All related multi-record changes use `backend.transaction()`. SQLite provides
 the commit/rollback boundary; repositories must not retain file-era
 compensation logic for operations inside that boundary.
 
-The default backend cache is scoped by canonical authority path and is closed at
-CLI/daemon lifecycle boundaries. A closed backend and its collections reject
-further access.
+Each `ApplicationRuntime` lazily owns one backend for its canonical authority
+and closes it at the CLI/daemon lifecycle boundary. A closed backend and its
+collections reject further access. Legacy direct-construction test helpers may
+use a pytest-scoped owner that closes selected backends after each test;
+production provides no default-backend cache, override, reset API, or global
+storage lock.
 
 ## Collections
 
@@ -91,19 +116,20 @@ Public/domain collections:
 | `source_documents` | ingested source metadata |
 | `source_chunks` | source retrieval chunks |
 | `persona_prompts` | persona definitions |
-| `chat_threads` | conversation state and archive status |
+| `conversations` | conversation state and archive status |
 | `reason_threads` | long-running reason threads |
 | `reason_steps` | reason steps |
 | `trace_nodes` | thought traces |
 | `trace_edges` | trace links |
 | `reflection_entries` | reflection inbox entries |
-| `notification_outbox` | notification delivery state |
+| `inbox_items` | durable user-attention items |
+| `delivery_records` | external adapter delivery state |
 
 Internal collections:
 
 | Collection | Content |
 | --- | --- |
-| `memory_curator_cursors` | curator replay cursor |
+| `memory_observations` | producer-neutral durable curation inbox |
 | `memory_curator_plans` | durable curator plans |
 | `scheduler_state` | background scheduler cursors |
 
@@ -192,8 +218,8 @@ These paths may remain files:
 - JSONL operational logs;
 - pack exports/imports and backups;
 - PID, socket, and advisory lock files;
-- rebuildable derived indexes.
+- explicit user-requested data exports.
 
 Chat threads, memory, profile, curator state, scheduler state, reasoning,
-traces, reflections, and notifications are structured data and therefore live
+traces, reflections, Inbox items, and delivery records are structured data and therefore live
 only in SQLite.

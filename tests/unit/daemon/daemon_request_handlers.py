@@ -3,6 +3,7 @@ from typing import cast
 
 import pytest
 
+from nuself.agent.chat.types import ChatResult
 from nuself.daemon import request_handlers
 from nuself.daemon.protocol import (
     REQUEST_TYPES,
@@ -18,12 +19,24 @@ from nuself.daemon.request_handlers import (
     build_daemon_request_registry,
     handle_request,
 )
-from nuself.logs import LogEvent, write_log_event
+from nuself.log.store import write_log_event
+from nuself.log.record import LogEvent
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 from nuself.runtime.handlers import (
     HandlerRegistry,
     HandlerRegistryCoverageError,
     UnknownHandlerError,
+)
+from nuself.runtime.feature.approval import (
+    ApprovalEffectRequest,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequired,
+    ToolEffectResolution,
+)
+from nuself.daemon.payloads import (
+    ChatToolEffectPayload,
+    decode_chat_payload,
 )
 
 
@@ -36,23 +49,49 @@ class RecordingActivityBroker:
 
 
 class MiddlewareState:
-    def __init__(self, project_root: Path) -> None:
-        self.project_root = project_root
+    def __init__(self, authority_root: Path) -> None:
+        self.authority_root = authority_root
         self.activity_broker = RecordingActivityBroker()
 
 
-def test_daemon_request_registry_is_complete_and_sealed() -> None:
-    assert DAEMON_REQUEST_HANDLERS.sealed
-    assert set(DAEMON_REQUEST_HANDLERS.registered_keys) == set(
-        REQUEST_TYPES
+def test_chat_handler_returns_typed_tool_effect(tmp_path: Path) -> None:
+    effect_request = ApprovalEffectRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create exact memory",
     )
 
+    class ApprovalState(MiddlewareState):
+        def run_chat(
+            self,
+            message: str,
+            *,
+            conversation_id: str,
+            turn_id: str | None,
+            effect_resolution: ToolEffectResolution | None,
+        ) -> ChatResult:
+            del message, conversation_id, turn_id, effect_resolution
+            raise ToolEffectRequired(effect_request)
 
-def test_daemon_request_registry_builder_isolated() -> None:
-    rebuilt = build_daemon_request_registry()
+    response = handle_request(
+        DaemonRequest(
+            type="chat",
+            payload={
+                "message": "remember this",
+                "conversation_id": "default",
+                "turn_id": "turn-1",
+            },
+        ),
+        cast(DaemonRequestState, ApprovalState(tmp_path)),
+    )
 
-    assert rebuilt is not DAEMON_REQUEST_HANDLERS
-    assert rebuilt.sealed
+    assert response.status == "ok"
+    payload = decode_chat_payload(response.payload)
+    assert isinstance(payload, ChatToolEffectPayload)
+    assert payload.request == effect_request
 
 
 def test_daemon_request_registry_uses_shared_catalog_coverage(
@@ -168,7 +207,7 @@ def test_daemon_middleware_applies_context_and_activity_observation(
             "daemon",
             "middleware_test",
             "middleware test",
-            project_root=state.project_root,
+            project_root=state.authority_root,
         )
         return DaemonResponse.ok(request)
 

@@ -31,7 +31,7 @@ must not use a formatting failure as a new application failure.
 | Transport | daemon socket timeout, connection refused, broken pipe | Yes, once in REPL chat | Print the transport error, preserve logs, retry the same user message once |
 | Application | conversation graph node failure, LLM protocol parse failure, memory validation error | No | Print concise error and return to prompt |
 | User input | missing command arg, invalid ID, unsupported command | No | Print command-specific error/help; do not run side effects |
-| Background | curator, reflection, notification loop failure | No immediate chat retry | Log error and keep the owning loop/process alive when possible |
+| Background | curator, reflection, Delivery loop failure | No immediate chat retry | Log error and keep the owning loop/process alive when possible |
 | Fatal process | daemon cannot bind socket, corrupted runtime path permissions | No | Exit current command with non-zero status |
 
 ## User-Facing Failure Disposition
@@ -120,7 +120,8 @@ When daemon chat handling fails:
 - The daemon request layer writes `daemon/chat_turn_failed` with:
   - `level=error`
   - `status=error`
-  - `thread_id`
+  - `conversation_id`
+  - `reason_id`
   - `request_id`
   - `turn_id` when the request supplied one
   - compact exception chain in `error`
@@ -142,13 +143,13 @@ The daemon request layer owns one sealed audit contract:
 |---|---|---|---|---|
 | `request_rejected` | warning | `error` | required error, no duration | `request_type` |
 | `chat_turn_failed` | error | `error` | required error, no duration | none |
-| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references`, boolean `memory_changed` |
+| `chat_turn_completed` | info | `ok` | no error, required duration | non-negative `evidence_references` |
 | `shutdown_requested` | info | `accepted` | no error or duration | none |
 
 Messages are fixed by the request audit adapter. Producers supply only event
 schema data and correlation; they cannot choose messages, levels, statuses, or
 error policy. Unknown events, missing or extra metadata, invalid counts,
-non-boolean flags, and invalid duration/error combinations fail before the
+invalid counts and duration/error combinations fail before the
 best-effort sink.
 
 Request events are distinct from Chat runtime events: Chat `turn.*` describes
@@ -205,44 +206,20 @@ decoding are not retryable. Send and every later phase mean the request may
 already have completed; connect and request encoding do not. The exception
 message remains concise and the original cause remains chained.
 
-## Background Worker Boundary
+## Daemon Task Boundary
 
-Every daemon-owned background worker must keep its loop alive after an
-unexpected per-iteration exception unless shutdown has been requested.
-
-- The outer iteration boundary catches `Exception`, preserves the compact
-  exception chain in a structured error log, and continues after the normal
-  configured interval.
-- Catching only an expected application exception is insufficient at this
-  boundary because validation, storage, and adapter failures must not silently
-  terminate the worker thread.
-- Workers track their last successful run, last error, consecutive failure
-  count, and thread liveness so daemon status can expose degraded subsystems.
-- All worker targets run inside `source="daemon.worker.<name>"` runtime
-  context. A target-level exception that escapes initialization or the loop is
-  recorded in health and published as `daemon/worker.failed`
-  before the owned thread becomes stopped.
-- Daemon worker targets are long-lived. Returning from the complete target
-  before daemon shutdown is requested is an unexpected exit even when no
-  exception escaped. The supervisor records a typed unexpected-exit failure in
-  health and publishes the same `daemon/worker.failed` lifecycle event before
-  `worker.stopped`. Returning after shutdown is requested is graceful and does
-  not create a failure.
-- The structured error write is a secondary reporting effect. If it fails,
-  shared observability emits a Python warning; logging failure must not escape
-  the iteration boundary or terminate an otherwise recoverable worker.
-- The loop itself must not retry the failed operation immediately. The next
-  configured scheduled iteration is the retry boundary.
-- Dependencies required before a worker loop starts are constructed by its
-  synchronous `start_background_*` boundary before thread ownership. Those
-  initialization failures remain daemon startup failures and surface to the
-  caller.
-- A retryable worker operation must persist its retry/attempt transition before
-  scheduling another execution. If that durable transition fails, log the
-  state-persistence failure separately and do not enqueue an untracked retry.
-- Worker join timeouts produce a daemon warning with worker identity and
-  timeout. The worker remains reported alive/timed-out until its target exits;
-  shutdown must not claim a successful join.
+Every daemon task executes through the unified scheduler boundary. An
+unexpected `Exception` completes that task as failed, records only its
+payload-safe type and task kind as current scheduler degradation, and publishes
+`daemon/task.failed` with the existing sanitized diagnostic boundary.
+The next successful task clears current scheduler degradation; historical
+failure detail belongs in logs rather than the health snapshot.
+Recurring tasks are admitted again only after completion, so failures cannot
+kill a dedicated subsystem loop or create overlap. Domain retries must persist
+their attempt transition before admitting a successor. Reporting remains a
+secondary best-effort effect. Scheduler shutdown closes admission, cancels
+pending volatile wake-ups, and waits for already-dispatched authoritative work
+within the daemon lifecycle deadline.
 
 ## Daemon Lifecycle Cleanup
 
@@ -269,8 +246,9 @@ the child process:
   receives no more than the remaining budget, so socket I/O cannot silently
   extend it.
 - CLI start, default startup, restart, and interactive restart use the
-  lifecycle failure's stable safe message. One-shot commands exit non-zero;
-  interactive restart returns to the existing REPL.
+  lifecycle failure's stable safe message through one formatter shared by
+  start and stop errors. One-shot commands exit non-zero; interactive restart
+  returns to the existing REPL.
 - A failed lifecycle operation is projected as a structured lifecycle audit
   with the reason, latest status, exit code when known, and sanitized compact
   exception chain. The terminal still receives only the stable outer message.
@@ -367,14 +345,13 @@ before instance-lock release succeed. Failed cleanup emits
 lifecycle error. Failure of that diagnostic does not alter the retained error
 set.
 
-Daemon process/supervisor failures use one sealed operations audit contract:
+Daemon process cleanup failures use one sealed operations audit contract:
 
 | Event | Level | Status | Exact metadata |
 |---|---|---|---|
-| `thread_timeout` | warning | `timed_out` | non-empty `worker`, finite non-negative `timeout_seconds` |
 | `shutdown_cleanup_failed` | error | `error` | non-empty ordered `failures` records containing non-empty `step` and canonical `error`, boolean `primary_failed` |
 
-Both events require a canonical top-level error and forbid duration. Cleanup
+The event requires a canonical top-level error and forbids duration. Cleanup
 metadata preserves each retained failure because the aggregate lifecycle
 exception intentionally summarizes only the count. The adapter sanitizes each
 failure chain through the shared diagnostic path; callers do not format nested
@@ -387,11 +364,10 @@ Storage teardown uses one sealed storage operations audit contract:
 | `backend_close_failed` | warning | `degraded` | non-empty `backend_type` |
 | `cli_cleanup_failed` | error | `error` | non-empty ordered `failures` records containing non-empty `step` and canonical `error`, boolean `primary_failed` |
 
-Both events require a canonical top-level error and forbid duration. Each
-backend close failure is recorded against its project root before the complete
-`DefaultBackendResetError` is raised. CLI cleanup preserves every retained
-step/error chain before raising `CliLifecycleError`; it does not reduce nested
-reset failures to step names.
+Both events require a canonical top-level error and forbid duration. A runtime
+records its backend close failure against the authority root and re-raises that
+same failure into outer cleanup aggregation. CLI cleanup preserves every
+retained step/error chain before raising `CliLifecycleError`.
 
 Daemon lifecycle operations and their typed transition results are
 authoritative. The server's contention/started/stopped records and the one-shot
@@ -564,6 +540,9 @@ protocol, or output failure, the fallback must instead state that the
 configured LLM request failed and direct the user to diagnostics. It must
 remain non-empty, must not claim the API is unconfigured, and must not expose
 provider response text, credentials, prompts, or endpoint URLs.
+Both fallback variants derive their optional last-message context through one
+shared last-user-message extractor; their cause-specific text and epistemic
+policies remain separate.
 
 Chat response synthesis prefers the exact typed LangChain
 `structured_response`. When an OpenAI-compatible agent successfully returns no
@@ -619,10 +598,10 @@ and organizer completion audits are secondary projections; failure of a
 projection or its structured diagnostic cannot replace or replay committed
 domain results.
 
-Notification adapter `False` outcomes for missing email configuration, SMTP
+Delivery adapter `False` outcomes for missing email configuration, SMTP
 failure, and osascript failure are authoritative. Their failure diagnostics
 are secondary and cannot leave an entry pending by raising before
-`record_adapter_result`. Log-only, dry-run, external send, and outbox state
+the adapter-result write. Log-only, dry-run, external send, and Delivery state
 writes remain authoritative effects. Once a terminal adapter result is
 persisted, crash recovery may finalize its global projection but cannot invoke
 that adapter again.
@@ -650,12 +629,17 @@ contains the new complete value in the running system, while survival across a
 crash remains uncertain. It exposes `destination_path` and `sync_error`, uses
 the sync failure as its explicit cause, and never attempts to unlink the
 already-consumed temporary pathname.
+File-content and parent-directory durability use one internal fsync primitive;
+the atomic writer's position before or after replacement, not a duplicate
+helper, determines which typed failure contract applies.
 
 SQLite transaction rollback dual failure uses the existing
 `SqliteTransactionCleanupError`. It exposes both `primary_error` and
 `rollback_error` as `BaseException` values and uses `primary_error` as its
 explicit cause. This applies uniformly to transaction-body, interruption,
 commit, and rollback-only failures; message text is diagnostic, not a schema.
+Rollback-only and rollback-cleanup failures are separate direct runtime errors;
+there is no transaction-error family without an independent catch policy.
 Workspace SQLite batches follow the same provenance rule across operation,
 commit, rollback, and connection-close failures. Their lifecycle error retains
 the primary failure plus any rollback and close failures, and uses the primary
@@ -781,6 +765,16 @@ For retryable failures, the REPL must:
 Retry idempotency:
 
 - The retry must not persist the same user input twice.
+- A persisted `turn_id` is permanently bound to its original user input. A
+  retry that reuses the ID with different input fails with an explicit turn
+  conflict before model or tool execution.
+- Before model or tool execution, a stable turn writes an internal pending
+  marker containing its ID and input digest into the locked thread state. The
+  completed thread write removes that marker in the same transaction that
+  saves the assistant reply. A retry that finds a matching unfinished marker
+  fails closed instead of replaying a possibly committed tool side effect; a
+  mismatched digest is a turn conflict. A process crash or final thread-write
+  failure intentionally leaves the marker as recovery evidence.
 - If the daemon completed the first attempt after the client timed out, the retry must return the already-persisted assistant reply for that `turn_id`.
 - Already-produced logs, including persona activation and persona discussion logs, remain the record of the logical turn. A retry that resolves from an already-completed `turn_id` must not rerun persona work just to recreate those logs.
 
@@ -822,5 +816,5 @@ Error-handling changes should include tests for:
 - REPL does not retry daemon/application errors;
 - logs produced before failure are still printed/captured;
 - transcript export remains valid Markdown when failure logs are included.
-- curator, reflection, reason, export, and notification worker boundaries stay
+- curator, reflection, reason, export, and Delivery worker boundaries stay
   alive and log an unexpected non-`RuntimeError` iteration failure.

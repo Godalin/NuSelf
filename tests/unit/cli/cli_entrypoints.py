@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.cli import entrypoints
 from nuself.cli.entrypoints import (
     EntrypointCallbacks,
@@ -19,6 +19,18 @@ from nuself.daemon.lifecycle import (
     DaemonStartResult,
     DaemonStatus,
 )
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
+from nuself.config.settings import runtime_paths
+
+
+@pytest.fixture(autouse=True)
+def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
+    runtime = open_application_runtime(tmp_path)
+    try:
+        with use_application_runtime(runtime):
+            yield
+    finally:
+        runtime.close()
 
 
 class RecordingCallbacks:
@@ -29,21 +41,23 @@ class RecordingCallbacks:
         self,
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
     ) -> int:
-        self.calls.append(("daemon", message, project_root, thread_id))
+        self.calls.append(("daemon", message, project_root, conversation_id))
         return 0
 
     def send_daemon_chat_interactive(
         self,
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: object | None = None,
     ) -> InteractiveChatResult:
+        del effect_resolution
         self.calls.append(
-            ("daemon-interactive", message, project_root, thread_id, turn_id)
+            ("daemon-interactive", message, project_root, conversation_id, turn_id)
         )
         return InteractiveChatResult(code=0, reply="daemon reply")
 
@@ -51,21 +65,23 @@ class RecordingCallbacks:
         self,
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
     ) -> int:
-        self.calls.append(("one-shot", message, project_root, thread_id))
+        self.calls.append(("one-shot", message, project_root, conversation_id))
         return 0
 
     def send_one_shot_chat_interactive(
         self,
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: object | None = None,
     ) -> InteractiveChatResult:
+        del effect_resolution
         self.calls.append(
-            ("one-shot-interactive", message, project_root, thread_id, turn_id)
+            ("one-shot-interactive", message, project_root, conversation_id, turn_id)
         )
         return InteractiveChatResult(code=0, reply="one-shot reply")
 
@@ -74,13 +90,15 @@ class RecordingCallbacks:
         send_message: InteractiveSender,
         project_root: Path | None,
         *,
-        initial_thread_id: str = "default",
+        initial_conversation_id: str = "default",
         daemon_activity: bool = False,
     ) -> int:
         self.calls.append(
-            ("interactive", project_root, initial_thread_id, daemon_activity)
+            ("interactive", project_root, initial_conversation_id, daemon_activity)
         )
-        result = send_message("interactive message", initial_thread_id, "turn-1")
+        result = send_message(
+            "interactive message", initial_conversation_id, "turn-1", None
+        )
         self.calls.append(("interactive-result", result.reply))
         return result.code
 
@@ -146,7 +164,11 @@ def test_default_entrypoint_reuses_its_initial_status(
     monkeypatch.setattr(entrypoints.lifecycle, "start", start)
 
     result = RecordingCallbacks().controller().handle_default(
-        argparse.Namespace(project_root=tmp_path, message="hello")
+        argparse.Namespace(
+            project_root=tmp_path,
+            scope=runtime_paths(tmp_path).scope,
+            message="hello",
+        )
     )
 
     assert result == 0
@@ -178,7 +200,11 @@ def test_default_entrypoint_reports_typed_start_failure(
     callbacks = RecordingCallbacks()
 
     result = callbacks.controller().handle_default(
-        argparse.Namespace(project_root=tmp_path, message="hello")
+        argparse.Namespace(
+            project_root=tmp_path,
+            scope=runtime_paths(tmp_path).scope,
+            message="hello",
+        )
     )
 
     assert result == 1
@@ -277,7 +303,7 @@ def test_running_chat_injects_daemon_sender_into_repl(
     ]
 
 
-def test_new_thread_deep_link_routes_message_then_local_repl(
+def test_new_conversation_deep_link_routes_message_then_local_repl(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -289,10 +315,10 @@ def test_new_thread_deep_link_routes_message_then_local_repl(
     callbacks = RecordingCallbacks()
     args = argparse.Namespace(
         project_root=tmp_path,
-        thread_id=None,
+        conversation_id=None,
         deep_link=(
-            "nuself://new-thread?"
-            "title=proactive-thread&message=hello%20there"
+            "nuself://new-conversation?"
+            "title=proactive-conversation&message=hello%20there"
         ),
         message=None,
         create=False,
@@ -302,15 +328,15 @@ def test_new_thread_deep_link_routes_message_then_local_repl(
 
     assert result == 0
     assert args.message is None
-    assert "proactive-thread" in ThreadStore(tmp_path).list()
+    assert "proactive-conversation" in ConversationStore(tmp_path).list()
     assert callbacks.calls == [
-        ("one-shot", "hello there", tmp_path, "proactive-thread"),
-        ("interactive", tmp_path, "proactive-thread", False),
+        ("one-shot", "hello there", tmp_path, "proactive-conversation"),
+        ("interactive", tmp_path, "proactive-conversation", False),
         (
             "one-shot-interactive",
             "interactive message",
             tmp_path,
-            "proactive-thread",
+            "proactive-conversation",
             "turn-1",
         ),
         ("interactive-result", "one-shot reply"),

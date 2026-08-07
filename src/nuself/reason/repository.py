@@ -1,21 +1,17 @@
-"""File-backed reasoning repository — ported to StorageBackend."""
+"""SQLite-backed reasoning repository."""
 
 from __future__ import annotations
 
 import threading
-from pathlib import Path
 from contextlib import contextmanager
 from typing import Generator
 
-from nuself.handles import VisibleHandleError, resolve_visible_item
-from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
-from nuself.reason.domain import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
+from nuself.runtime.handles import VisibleHandleError, resolve_visible_item
+from nuself.config.settings import RuntimePaths
+from nuself.reason.model import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
 from nuself.reason.errors import ReasonNotFound
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
-
-REASON_STORAGE_VERSION = "NuSelfReasonStore/v1"
+from nuself.storage.contract import StorageBackend
 
 _write_lock = threading.RLock()
 
@@ -34,19 +30,12 @@ class ReasonRepository:
         self._steps = backend.collection("reason_steps")
         self._paths = paths
 
-    @property
-    def project_root(self) -> Path | None:
-        return self._paths.project_root
-
     @contextmanager
     def batch_write(self) -> Generator[None]:
         """Commit a step + thread update as one backend transaction."""
         with _write_lock:
             with self._backend.transaction():
                 yield
-
-    def ensure(self) -> None:
-        pass  # collections create directories automatically
 
     # ── Thread operations ──────────────────────────────────────────
 
@@ -69,7 +58,7 @@ class ReasonRepository:
                 ReasoningThread.from_wire,
                 component="reasoning",
                 collection="reason_threads",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if thread is None:
                 continue
@@ -118,28 +107,9 @@ class ReasonRepository:
                 ReasoningStep.from_wire,
                 component="reasoning",
                 collection="reason_steps",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if step is None:
                 continue
             steps.append(step)
         return sorted(steps, key=lambda s: (s.created_at, s.id))
-
-    def get_step(self, step_id: str) -> ReasoningStep:
-        raw = self._steps.get(step_id)
-        if raw is None:
-            raise ReasonNotFound(step_id)
-        return ReasoningStep.from_wire(raw)
-
-    # ── Index ──────────────────────────────────────────────────────
-
-    def reindex(self) -> Path:
-        records: list[object] = [
-            {"_record_kind": "thread", **thread.to_wire()}
-            for thread in self.list_threads(status="all")
-        ]
-        for raw in self._steps.list():
-            records.append({"_record_kind": "step", **raw})
-        return write_derived_index(
-            self._paths, "reason_index.json", records
-        )

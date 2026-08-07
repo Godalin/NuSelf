@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.agent.structured import StructuredAgent
-from nuself.application import compose_trace_services
-from nuself.config import RuntimePaths, runtime_paths
-from nuself.domain.memory import (
+from nuself.trace.composition import compose_trace_services
+from nuself.config.settings import RuntimePaths, runtime_paths
+from nuself.memory.model import (
     MemoryTypeRegistry,
     RelationDescriptorRegistry,
 )
@@ -16,15 +16,18 @@ from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
 )
-from nuself.memory.curator_plan import MemoryCuratorPlanStore
-from nuself.memory.curator_contract import (
+from nuself.memory.curator.plan import MemoryCuratorPlanStore
+from nuself.memory.curator.contract import (
     CuratorActionsOutput,
     MemoryCuratorSettings,
 )
-from nuself.memory.curator import MemoryCurator as _MemoryCurator
-from nuself.memory.source_repository import SourceRepository
+from nuself.memory.curator.worker import MemoryCurator as _MemoryCurator
+from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
+from nuself.source.repository import SourceRepository
+from nuself.source.service import SourceService
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import StorageBackend, get_default_backend
+from nuself.storage.contract import StorageBackend
+from tests.backend import owned_backend
 from nuself.trace.service import TraceRecorder
 
 
@@ -37,7 +40,7 @@ def _resources(
         if isinstance(root_or_paths, RuntimePaths)
         else runtime_paths(root_or_paths)
     )
-    return paths, backend or get_default_backend(paths.project_root)
+    return paths, backend or owned_backend(paths.authority_root)
 
 
 def memory_entry_repository(
@@ -100,23 +103,10 @@ def source_repository(
     backend: StorageBackend | None = None,
     candidate_repository: MemoryCandidateRepository | None = None,
     profile_repository: ProfileItemRepository | None = None,
-) -> SourceRepository:
+) -> SourceService:
+    del candidate_repository, profile_repository
     paths, selected_backend = _resources(root_or_paths, backend)
-    profile = profile_repository or ProfileItemRepository(
-        paths,
-        backend=selected_backend,
-    )
-    candidates = candidate_repository or memory_candidate_repository(
-        paths,
-        backend=selected_backend,
-        profile_repository=profile,
-    )
-    return SourceRepository(
-        paths,
-        backend=selected_backend,
-        candidate_repository=candidates,
-        profile_repository=profile,
-    )
+    return SourceService(SourceRepository(paths, backend=selected_backend))
 
 
 class MemoryCurator(_MemoryCurator):
@@ -126,9 +116,9 @@ class MemoryCurator(_MemoryCurator):
         self,
         project_root: Path,
         *,
-        agent: StructuredAgent[CuratorActionsOutput] | None = None,
+        agent: StructuredAgent[CuratorActionsOutput],
         settings: MemoryCuratorSettings | None = None,
-        thread_store: ThreadStore | None = None,
+        conversation_store: ConversationStore | None = None,
         repository: MemoryEntryRepository | None = None,
         candidate_repository: MemoryCandidateRepository | None = None,
         profile_repository: ProfileItemRepository | None = None,
@@ -138,6 +128,11 @@ class MemoryCurator(_MemoryCurator):
         backend: StorageBackend | None = None,
     ) -> None:
         paths, selected_backend = _resources(project_root, backend)
+        self._test_paths = paths
+        self._test_conversations = conversation_store or ConversationStore(
+            paths.authority_root, backend=selected_backend
+        )
+        self._test_observations = MemoryObservationRepository(selected_backend)
         entries = repository or memory_entry_repository(
             paths,
             backend=selected_backend,
@@ -157,8 +152,7 @@ class MemoryCurator(_MemoryCurator):
             paths,
             agent=agent,
             settings=settings,
-            thread_store=thread_store
-            or ThreadStore(paths.project_root, backend=selected_backend),
+            observation_repository=self._test_observations,
             repository=entries,
             candidate_repository=candidates,
             profile_repository=profile,
@@ -171,5 +165,59 @@ class MemoryCurator(_MemoryCurator):
                 backend=selected_backend,
                 registry=registry,
             ),
-            backend=selected_backend,
         )
+
+    def run_once(
+        self,
+        observation_id: str = "default",
+        *,
+        source_trace_id: str | None = None,
+    ):
+        observation = self.prepare_observation(
+            observation_id,
+            source_trace_id=source_trace_id,
+        )
+        if observation is None:
+            from nuself.memory.curator.contract import MemoryCuratorResult
+            return MemoryCuratorResult(0, 0, 0, 0, self._test_paths.logs_dir / "memory.log")
+        return super().run_once(observation.id)
+
+    def prepare_observation(
+        self,
+        conversation_id: str = "default",
+        *,
+        source_trace_id: str | None = None,
+    ) -> MemoryObservation | None:
+        prefix = f"test-interaction:{conversation_id}:"
+        pending = [
+            item for item in self._test_observations.pending()
+            if item.source_ref.startswith(prefix)
+        ]
+        if pending:
+            return pending[0]
+        processed_end = 0
+        for item in self._test_observations.list():
+            source_ref = item.source_ref
+            if not source_ref.startswith(prefix):
+                continue
+            try:
+                processed_end = max(processed_end, int(source_ref.rsplit("-", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+        state = self._test_conversations.load(conversation_id)
+        start = max(processed_end, state.message_start_index)
+        offset = start - state.message_start_index
+        messages = state.messages[offset:]
+        if not messages:
+            return None
+        source_ref = f"{prefix}{start}-{state.next_message_index}"
+        observation = self._test_observations.observe(
+            MemoryObservation.create(
+                source_ref=source_ref,
+                fragments=tuple(
+                    f"{message.role}: {message.content}" for message in messages
+                ),
+                source_trace_id=source_trace_id,
+            )
+        )
+        return observation

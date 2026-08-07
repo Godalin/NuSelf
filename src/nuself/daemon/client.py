@@ -7,18 +7,18 @@ import time
 from collections.abc import Callable
 from math import isfinite
 from pathlib import Path
-from typing import Literal, TypeAlias, TypeVar
+from typing import Literal
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
-    ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
-    ActivityOpenResponsePayload,
+    ActivitySubscriptionPayload,
     ChatRequestPayload,
-    ChatResponsePayload,
-    HealthResponsePayload,
-    MessagePayload,
+    DaemonChatPayload,
+    EmptyPayload,
+    SchedulerHealthPayload,
+    decode_chat_payload,
 )
 from nuself.daemon.protocol import (
     DaemonRequest,
@@ -28,12 +28,12 @@ from nuself.daemon.protocol import (
     RequestType,
 )
 from nuself.daemon.transport import read_socket_frame
-from nuself.logs import LogEvent
+from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import current_cancellation
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
-PayloadT = TypeVar("PayloadT")
-DaemonConnectionPhase: TypeAlias = Literal[
+type DaemonConnectionPhase = Literal[
     "connect",
     "request_encode",
     "send",
@@ -97,7 +97,7 @@ class ActivityStreamGapError(DaemonApplicationError):
         self.dropped_count = dropped_count
 
 
-def request(
+def _request(
     request_type: RequestType,
     payload: dict[str, JsonValue] | None = None,
     *,
@@ -114,12 +114,6 @@ def request(
         raise ValueError("daemon request timeout must be positive and finite")
     req = DaemonRequest(type=request_type, payload=payload or {})
     paths = runtime_paths(project_root)
-    if not paths.socket_path.exists():
-        raise DaemonConnectionError(
-            f"daemon socket does not exist: {paths.socket_path}",
-            phase="connect",
-            request_id=req.request_id,
-        )
 
     phase: DaemonConnectionPhase = "connect"
     try:
@@ -188,7 +182,7 @@ def request(
         ) from exc
 
 
-def decode_response(
+def _decode_response[PayloadT](
     response: DaemonResponse,
     decoder: Callable[[dict[str, JsonValue]], PayloadT],
     *,
@@ -219,12 +213,12 @@ def ping(
     """Return whether the daemon responds to ping."""
 
     try:
-        response = request(
+        response = _request(
             "ping",
             project_root=project_root,
             timeout=timeout,
         )
-        payload = decode_response(
+        payload = _decode_response(
             response,
             DaemonIdentityPayload.from_wire,
             operation="ping",
@@ -232,26 +226,23 @@ def ping(
     except (DaemonConnectionError, DaemonApplicationError):
         return False
     expected_id = runtime_paths(project_root).scope.authority_id
-    return (
-        payload.message == "pong"
-        and payload.authority_id == expected_id
-    )
+    return payload.authority_id == expected_id
 
 
 def health(
     project_root: Path | None = None,
     *,
     timeout: float = 2.0,
-) -> HealthResponsePayload:
+) -> SchedulerHealthPayload:
     """Return a fully validated daemon worker-health snapshot."""
 
-    return decode_response(
-        request(
+    return _decode_response(
+        _request(
             "health",
             project_root=project_root,
             timeout=timeout,
         ),
-        HealthResponsePayload.from_wire,
+        SchedulerHealthPayload.from_wire,
         operation="health",
     )
 
@@ -259,26 +250,28 @@ def health(
 def chat(
     message: str,
     *,
-    thread_id: str = "default",
+    conversation_id: str = "default",
     turn_id: str | None = None,
     project_root: Path | None = None,
     timeout: float,
-) -> ChatResponsePayload:
+    effect_resolution: ToolEffectResolution | None = None,
+) -> DaemonChatPayload:
     """Run one chat request and decode its complete success payload."""
 
     payload = ChatRequestPayload(
         message=message,
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         turn_id=turn_id,
+        effect_resolution=effect_resolution,
     )
-    return decode_response(
-        request(
+    return _decode_response(
+        _request(
             "chat",
             payload.to_wire(),
             project_root=project_root,
             timeout=timeout,
         ),
-        ChatResponsePayload.from_wire,
+        decode_chat_payload,
         operation="chat",
     )
 
@@ -290,22 +283,16 @@ def shutdown(
 ) -> None:
     """Request shutdown and validate the acknowledgement payload."""
 
-    response = request(
+    response = _request(
         "shutdown",
         project_root=project_root,
         timeout=timeout,
     )
-    payload = decode_response(
+    _decode_response(
         response,
-        MessagePayload.from_wire,
+        EmptyPayload.from_wire,
         operation="shutdown",
     )
-    if payload.message != "shutdown requested":
-        raise DaemonConnectionError(
-            "daemon shutdown response is malformed: unexpected message",
-            phase="payload_decode",
-            request_id=response.request_id,
-        )
 
 
 def open_activity(
@@ -315,14 +302,14 @@ def open_activity(
 ) -> str:
     """Open one turn-scoped daemon activity subscription."""
 
-    response = request(
+    response = _request(
         "activity_open",
         {"turn_id": turn_id},
         project_root=project_root,
     )
-    payload = decode_response(
+    payload = _decode_response(
         response,
-        ActivityOpenResponsePayload.from_wire,
+        ActivitySubscriptionPayload.from_wire,
         operation="activity open",
     )
     return payload.subscription_id
@@ -337,7 +324,7 @@ def next_activity(
 ) -> tuple[LogEvent, ...]:
     """Long-poll the next bounded activity batch."""
 
-    response = request(
+    response = _request(
         "activity_next",
         {
             "subscription_id": subscription_id,
@@ -347,7 +334,7 @@ def next_activity(
         project_root=project_root,
         timeout=max(1.0, timeout_ms / 1000 + 0.5),
     )
-    payload = decode_response(
+    payload = _decode_response(
         response,
         ActivityEventsResponsePayload.from_wire,
         operation="activity next",
@@ -361,17 +348,16 @@ def close_activity(
     subscription_id: str,
     *,
     project_root: Path | None = None,
-) -> bool:
+) -> None:
     """Close a daemon activity subscription."""
 
-    response = request(
+    response = _request(
         "activity_close",
         {"subscription_id": subscription_id},
         project_root=project_root,
     )
-    payload = decode_response(
+    _decode_response(
         response,
-        ActivityCloseResponsePayload.from_wire,
+        EmptyPayload.from_wire,
         operation="activity close",
     )
-    return payload.closed

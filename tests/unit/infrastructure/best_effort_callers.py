@@ -7,13 +7,25 @@ import nuself.runtime.observability as observability
 from nuself.agent.chat.persona import ConversationPersonaOrchestrator
 from nuself.application.composition import compose_application
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.commands.persona import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
-from nuself.logs import read_log_events
-from nuself.config import runtime_paths
-from nuself.persona import PersonaInput, PersonaTurnState
+from nuself.cli.application import cli_application
+from nuself.cli.persona_management import _record_lifecycle  # pyright: ignore[reportPrivateUsage]
+from nuself.log.reader import read_log_events
+from nuself.config.settings import runtime_paths
+from nuself.persona.definition import PersonaInput, PersonaTurnState
 from nuself.persona.prompt_repo import PersonaPrompt
 from nuself.persona.tools import _record_prompt_trace  # pyright: ignore[reportPrivateUsage]
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
+
+
+@pytest.fixture(autouse=True)
+def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
+    runtime = open_application_runtime(tmp_path)
+    try:
+        with use_application_runtime(runtime):
+            yield
+    finally:
+        runtime.close()
 
 
 class _Memory:
@@ -36,7 +48,12 @@ def test_memory_trace_failure_is_observed_without_failing_command(
         fail,
     )
 
-    record_memory_trace(tmp_path, _Memory(), "add")
+    record_memory_trace(
+        cli_application().trace.recorder,
+        tmp_path,
+        _Memory(),
+        "add",
+    )
 
     event = read_log_events(project_root=tmp_path, component="memory")[-1]
     assert event.event == "trace_recording_failed"
@@ -65,7 +82,7 @@ def test_persona_trace_failure_is_observed_without_failing_tool(
 
     application = compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     _record_prompt_trace(
         prompt,
@@ -102,6 +119,7 @@ def test_cli_persona_trace_failure_is_observed_after_mutation(
     )
 
     _record_lifecycle(
+        cli_application().trace.recorder,
         tmp_path,
         action="prompt_created",
         persona=prompt,
@@ -129,6 +147,7 @@ def test_cli_persona_unknown_trace_action_propagates(
 
     with pytest.raises(AttributeError):
         _record_lifecycle(
+            cli_application().trace.recorder,
             tmp_path,
             action="unknown",
             persona=prompt,
@@ -175,7 +194,7 @@ def test_persona_failure_log_cannot_mask_discussion_failure(
     ):
         result = orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
             topic="compare",
-            thread_id="thread-1",
+            conversation_id="thread-1",
             trigger="requested",
             turn_state=turn_state,
             should_escalate=True,
@@ -220,7 +239,7 @@ def test_persona_discussion_implementation_errors_propagate(
     with pytest.raises(type(error)) as caught:
         orchestrator._run_discussion(  # pyright: ignore[reportPrivateUsage]
             topic="compare",
-            thread_id="thread-1",
+            conversation_id="thread-1",
             trigger="requested",
             turn_state=turn_state,
             should_escalate=True,

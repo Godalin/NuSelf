@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,
     MemoryEvidence,
@@ -21,7 +21,7 @@ def test_memory_entry_detaches_and_freezes_nested_inputs() -> None:
     relations = {"related_to": related}
     evidence = [
         MemoryEvidence(
-            source_type="thread",
+            source_type="observation",
             source_ref="thread:default:0-1",
         )
     ]

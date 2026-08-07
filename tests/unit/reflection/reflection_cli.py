@@ -8,22 +8,32 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
+from nuself.application.lifecycle import open_application_runtime, use_application_runtime
+
+
+@pytest.fixture(autouse=True)
+def _application_runtime(tmp_path: Path):  # pyright: ignore[reportUnusedFunction]
+    runtime = open_application_runtime(tmp_path)
+    try:
+        with use_application_runtime(runtime):
+            yield
+    finally:
+        runtime.close()
 
 
 @pytest.fixture
 def project_root(tmp_path: Path) -> Path:
     (tmp_path / "private" / "runtime").mkdir(parents=True)
     (tmp_path / "private" / "logs").mkdir(parents=True)
-    (tmp_path / "private" / "outbox").mkdir(parents=True)
     (tmp_path / "private" / "reflections").mkdir(parents=True)
     return tmp_path
 
 
 def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[ReflectionEntry]:
-    repo = ReflectionRepository(runtime_paths(project_root), backend=get_default_backend(project_root))
+    repo = ReflectionRepository(runtime_paths(project_root), backend=owned_backend(project_root))
     entries: list[ReflectionEntry] = []
     for i in range(count):
         entry = ReflectionEntry(
@@ -39,17 +49,17 @@ def _seed_reflection_entries(project_root: Path, count: int = 3) -> list[Reflect
             status="pending" if i < 2 else "dismissed",
             discussion_approved=i % 2 == 0,
             discussion_trace=(f"turn-1: analyst scores 0.{8 + i}",),
-            deep_link="nuself://thread/reflections",
+            deep_link="nuself://conversation/reflections",
             created_at=f"2024-01-0{i + 1}T12:00:00+00:00",
             reviewed_at=None,
         )
-        repo.add(entry)
+        repo.save(entry)
         entries.append(entry)
     return entries
 
 
 def test_reflection_list_empty(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     args = argparse.Namespace(project_root=project_root, status=None, as_json=False)
@@ -57,7 +67,7 @@ def test_reflection_list_empty(project_root: Path) -> None:
 
 
 def test_reflection_list_with_entries(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     entries = _seed_reflection_entries(project_root, 3)
@@ -75,7 +85,7 @@ def test_reflection_list_with_entries(project_root: Path, capsys: pytest.Capture
 
 
 def test_reflection_list_filters_by_status(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     _seed_reflection_entries(project_root, 3)
@@ -88,7 +98,7 @@ def test_reflection_list_filters_by_status(project_root: Path, capsys: pytest.Ca
 
 
 def test_reflection_list_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_list
+    from nuself.cli.commands.reflections import handle_reflection_list
     import argparse
 
     _seed_reflection_entries(project_root, 2)
@@ -104,7 +114,7 @@ def test_reflection_list_json(project_root: Path, capsys: pytest.CaptureFixture[
 
 
 def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     entries = _seed_reflection_entries(project_root, 3)
@@ -116,7 +126,7 @@ def test_reflection_show_by_id(project_root: Path, capsys: pytest.CaptureFixture
 
 
 def test_reflection_show_by_numeric_handle(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     _seed_reflection_entries(project_root, 3)
@@ -127,7 +137,7 @@ def test_reflection_show_by_numeric_handle(project_root: Path, capsys: pytest.Ca
 
 
 def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     entries = _seed_reflection_entries(project_root, 1)
@@ -139,7 +149,7 @@ def test_reflection_show_json(project_root: Path, capsys: pytest.CaptureFixture[
 
 
 def test_reflection_show_invalid_index(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     _seed_reflection_entries(project_root, 2)
@@ -148,7 +158,7 @@ def test_reflection_show_invalid_index(project_root: Path) -> None:
 
 
 def test_reflection_show_empty(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_show
+    from nuself.cli.commands.reflections import handle_reflection_show
     import argparse
 
     args = argparse.Namespace(project_root=project_root, entry_id="0", as_json=False)
@@ -156,7 +166,7 @@ def test_reflection_show_empty(project_root: Path) -> None:
 
 
 def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_dismiss
+    from nuself.cli.commands.reflections import handle_reflection_dismiss
     import argparse
 
     entries = _seed_reflection_entries(project_root, 2)
@@ -164,12 +174,12 @@ def test_reflection_dismiss(project_root: Path, capsys: pytest.CaptureFixture[st
     assert handle_reflection_dismiss(args) == 0
     output = capsys.readouterr().out
     assert f"Dismissed: {entries[0].id}" in output
-    repo = ReflectionRepository(runtime_paths(project_root), backend=get_default_backend(project_root))
+    repo = ReflectionRepository(runtime_paths(project_root), backend=owned_backend(project_root))
     assert repo.get(entries[0].id).status == "dismissed"
 
 
 def test_reflection_dismiss_by_numeric_handle(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_dismiss
+    from nuself.cli.commands.reflections import handle_reflection_dismiss
     import argparse
 
     _seed_reflection_entries(project_root, 2)
@@ -180,7 +190,7 @@ def test_reflection_dismiss_by_numeric_handle(project_root: Path, capsys: pytest
 
 
 def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from nuself.cli import handle_reflection_archive
+    from nuself.cli.commands.reflections import handle_reflection_archive
     import argparse
 
     entries = _seed_reflection_entries(project_root, 2)
@@ -188,12 +198,12 @@ def test_reflection_archive(project_root: Path, capsys: pytest.CaptureFixture[st
     assert handle_reflection_archive(args) == 0
     output = capsys.readouterr().out
     assert f"Archived: {entries[0].id}" in output
-    repo = ReflectionRepository(runtime_paths(project_root), backend=get_default_backend(project_root))
+    repo = ReflectionRepository(runtime_paths(project_root), backend=owned_backend(project_root))
     assert repo.get(entries[0].id).status == "archived"
 
 
 def test_reflection_dismiss_missing(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_dismiss
+    from nuself.cli.commands.reflections import handle_reflection_dismiss
     import argparse
 
     args = argparse.Namespace(project_root=project_root, entry_id="missing")
@@ -201,7 +211,7 @@ def test_reflection_dismiss_missing(project_root: Path) -> None:
 
 
 def test_reflection_archive_missing(project_root: Path) -> None:
-    from nuself.cli import handle_reflection_archive
+    from nuself.cli.commands.reflections import handle_reflection_archive
     import argparse
 
     args = argparse.Namespace(project_root=project_root, entry_id="missing")

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from pathlib import Path
+from threading import RLock
 from typing import Any, Protocol, cast
+from uuid import uuid4
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy as _ToolStrategy
@@ -15,6 +17,8 @@ from langchain_core.messages import (
     SystemMessage,
 )
 from langchain_core.tools import BaseTool
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command, GraphOutput
 
 from nuself.agent.errors import AgentInvalidOutputError
 from nuself.agent.chat.types import (
@@ -22,31 +26,71 @@ from nuself.agent.chat.types import (
     ConversationTurnState,
 )
 from nuself.agent.chat.audit import (
-    report_chat_failure,
-    write_chat_audit,
+    CHAT_AUDIT,
 )
 from nuself.agent.failover import (
     invoke_agent_endpoint,
     is_recoverable_agent_failure,
 )
 from nuself.agent.middleware import (
+    ExecutedTool,
     ToolCaptureMiddleware,
-    ToolOutcome,
-    ToolOutcomeLogger,
 )
 from nuself.agent.structured import require_structured_response
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     redacted_llm_diagnostic,
 )
+from nuself.runtime.context import current_runtime_context
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequest,
+    ToolEffectRequired,
+    ToolEffectResolution,
+)
+
+
+class _ContinuationRegistry:
+    """Own ephemeral agent continuations without leaking partial failures."""
+
+    def __init__(self) -> None:
+        self._lock = RLock()
+        self._values: dict[str, _LangChainChatSupervisor] = {}
+
+    def get(self, key: str) -> _LangChainChatSupervisor | None:
+        with self._lock:
+            return self._values.get(key)
+
+    def put(self, key: str, value: _LangChainChatSupervisor) -> None:
+        with self._lock:
+            self._values[key] = value
+
+    def take(self, key: str) -> _LangChainChatSupervisor | None:
+        with self._lock:
+            return self._values.pop(key, None)
+
+
 class ConversationResponseService(Protocol):
-    """Typed response capability consumed by the conversation graph."""
+    """Typed response capability consumed by the conversation pipeline."""
 
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput: ...
+
+    def finalize(
+        self,
+        state: ConversationTurnState,
+        draft: ChatStructuredOutput,
+    ) -> ChatStructuredOutput: ...
+
+
+class BasicConversationResponseService(Protocol):
+    """Response service that does not own resumable Tool continuations."""
+
+    def complete(self, prompt: list[BaseMessage]) -> ChatStructuredOutput: ...
 
     def finalize(
         self,
@@ -64,21 +108,23 @@ class ConversationResponseSynthesizer:
         project_root: Path | None,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         tools: Iterable[BaseTool],
-        log_tool_outcome: ToolOutcomeLogger,
-        report_tool_log_failure: Callable[[Exception], None] | None = None,
     ) -> None:
         self._project_root = project_root
         self._langchain_models = langchain_models
         self._tools = tuple(tools)
-        self._log_tool_outcome = log_tool_outcome
-        self._report_tool_log_failure = report_tool_log_failure
+        self._continuations = _ContinuationRegistry()
 
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput:
         if self._langchain_models:
-            return self._complete_with_langchain_tools(prompt)
+            return self._complete_with_langchain_tools(
+                prompt,
+                effect_resolution=effect_resolution,
+            )
         return _local_response_output(prompt)
 
     def finalize(
@@ -86,10 +132,10 @@ class ConversationResponseSynthesizer:
         state: ConversationTurnState,
         draft: ChatStructuredOutput,
     ) -> ChatStructuredOutput:
-        write_chat_audit(
+        CHAT_AUDIT.write(
             "final_response_completed",
             project_root=self._project_root,
-            thread_id=state.thread_id,
+            conversation_id=state.conversation_id,
             metadata={"epistemic_status": draft.epistemic_status},
         )
         return draft
@@ -97,7 +143,28 @@ class ConversationResponseSynthesizer:
     def _complete_with_langchain_tools(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None,
     ) -> ChatStructuredOutput:
+        checkpoint_key = _checkpoint_key()
+        pending = self._continuations.get(checkpoint_key)
+        if pending is not None:
+            if effect_resolution is None:
+                raise ToolEffectRequired(pending.require_effect_request())
+            if pending.effect_request != effect_resolution.request:
+                raise ToolEffectRequired(pending.require_effect_request())
+            pending = self._continuations.take(checkpoint_key)
+            assert pending is not None
+            try:
+                return pending.complete(
+                    prompt,
+                    effect_resolution=effect_resolution,
+                )
+            except ToolEffectRequired:
+                self._continuations.put(checkpoint_key, pending)
+                raise
+        if effect_resolution is not None:
+            raise RuntimeError("chat Tool effect checkpoint is unavailable")
         retry_suppressed = False
         failed_endpoint = self._langchain_models[0]
 
@@ -109,11 +176,12 @@ class ConversationResponseSynthesizer:
             supervisor = _LangChainChatSupervisor(
                 endpoint=endpoint,
                 tools=self._tools,
-                log_tool_outcome=self._log_tool_outcome,
-                report_tool_log_failure=self._report_tool_log_failure,
             )
             try:
                 return supervisor.complete(prompt)
+            except ToolEffectRequired:
+                self._continuations.put(checkpoint_key, supervisor)
+                raise
             except Exception:
                 if supervisor.has_mutating_tool_outcomes:
                     retry_suppressed = True
@@ -127,17 +195,21 @@ class ConversationResponseSynthesizer:
                 component="chat",
                 attempts_per_endpoint=2,
                 retry_if=lambda exc: (
-                    not retry_suppressed
+                    not isinstance(exc, ToolEffectRequired)
+                    and not retry_suppressed
                     and is_recoverable_agent_failure(exc)
                 ),
                 failover_if=lambda exc: (
-                    not retry_suppressed
+                    not isinstance(exc, ToolEffectRequired)
+                    and not retry_suppressed
                     and is_recoverable_agent_failure(exc)
                     and is_endpoint_availability_error(exc)
                 ),
                 on_retry=self._log_retry,
                 retry_delay_seconds=0.25,
             )
+        except ToolEffectRequired:
+            raise
         except Exception as exc:
             if retry_suppressed:
                 self._log_retry_suppressed(
@@ -149,7 +221,7 @@ class ConversationResponseSynthesizer:
                 return _configured_failure_response_output(prompt)
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_chat_failure(
+            CHAT_AUDIT.failure(
                 redacted_llm_diagnostic(exc),
                 event="llm_endpoints_exhausted",
                 project_root=self._project_root,
@@ -161,7 +233,7 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             redacted_llm_diagnostic(error),
             event="llm_retry_suppressed_after_tool_call",
             project_root=self._project_root,
@@ -173,7 +245,7 @@ class ConversationResponseSynthesizer:
         endpoint: LangChainLLMEndpoint,
         error: Exception,
     ) -> None:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             redacted_llm_diagnostic(error),
             event="llm_endpoint_retry",
             project_root=self._project_root,
@@ -188,54 +260,89 @@ class _LangChainChatSupervisor:
         *,
         endpoint: LangChainLLMEndpoint,
         tools: Iterable[BaseTool],
-        log_tool_outcome: ToolOutcomeLogger,
-        report_tool_log_failure: Callable[[Exception], None] | None,
     ) -> None:
         self._endpoint = endpoint
         self._tools = tuple(tools)
-        self._log_tool_outcome = log_tool_outcome
-        self._report_tool_log_failure = report_tool_log_failure
-        self._tool_outcomes: list[ToolOutcome] = []
+        self._tool_outcomes: list[ExecutedTool] = []
+        self._checkpointer = InMemorySaver()
+        self._agent: Any | None = None
+        self._effect_request: ToolEffectRequest | None = None
 
     @property
-    def has_tool_outcomes(self) -> bool:
-        return bool(self._tool_outcomes)
+    def effect_request(self) -> ToolEffectRequest | None:
+        return self._effect_request
+
+    def require_effect_request(self) -> ToolEffectRequest:
+        request = self._effect_request
+        if request is None:
+            raise RuntimeError("chat checkpoint has no Tool effect request")
+        return request
 
     @property
     def has_mutating_tool_outcomes(self) -> bool:
-        readonly_names = {
-            tool.name
-            for tool in self._tools
-            if "readonly" in (tool.tags or ())
-        }
         return any(
-            outcome.name not in readonly_names
+            outcome.execution == "mutating"
             for outcome in self._tool_outcomes
         )
 
     def complete(
         self,
         prompt: list[BaseMessage],
+        *,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ChatStructuredOutput:
-        system_prompt, messages = _split_prompt(prompt)
-        middleware = ToolCaptureMiddleware(
-            log_callback=self._log_tool_outcome,
-            log_error_callback=self._report_tool_log_failure,
-            captured=self._tool_outcomes,
-            cache={},
+        checkpoint_key = _checkpoint_key()
+        if self._agent is None:
+            system_prompt, messages = _split_prompt(prompt)
+            middleware = ToolCaptureMiddleware(
+                captured=self._tool_outcomes,
+                cache={},
+            )
+            create_agent = cast(Any, _create_agent)
+            self._agent = create_agent(
+                model=self._endpoint.model,
+                tools=list(self._tools),
+                system_prompt=system_prompt,
+                response_format=_ToolStrategy(
+                    schema=ChatStructuredOutput
+                ),
+                middleware=[middleware],
+                checkpointer=self._checkpointer,
+            )
+            graph_input: object = {"messages": messages}
+        else:
+            if effect_resolution is None:
+                raise RuntimeError(
+                    "chat checkpoint resume requires a Tool effect resolution"
+                )
+            graph_input = Command(resume=effect_resolution)
+        agent = cast(Any, self._agent)
+        raw = agent.invoke(
+            graph_input,
+            {"configurable": {"thread_id": checkpoint_key}},
+            version="v2",
         )
-        create_agent = cast(Any, _create_agent)
-        agent = create_agent(
-            model=self._endpoint.model,
-            tools=list(self._tools),
-            system_prompt=system_prompt,
-            response_format=_ToolStrategy(
-                schema=ChatStructuredOutput
-            ),
-            middleware=[middleware],
-        )
-        result = agent.invoke({"messages": messages})
-        return _structured_output_from_state(result)
+        if not isinstance(raw, GraphOutput):
+            raise TypeError("chat agent returned an invalid graph output")
+        output = cast(GraphOutput[object], raw)
+        if output.interrupts:
+            if len(output.interrupts) != 1:
+                raise RuntimeError("chat turn produced multiple Tool effect interrupts")
+            request = output.interrupts[0].value
+            if not isinstance(request, ToolEffectRequest):
+                raise TypeError("chat Tool effect interrupt has an invalid payload")
+            self._effect_request = request
+            raise ToolEffectRequired(request)
+        self._effect_request = None
+        self._checkpointer.delete_thread(checkpoint_key)
+        return _structured_output_from_state(output.value)
+
+
+def _checkpoint_key() -> str:
+    context = current_runtime_context()
+    if context.turn_id is None:
+        return f"chat:ephemeral:{uuid4().hex}"
+    return f"chat:{context.conversation_id}:{context.turn_id}"
 
 
 def _endpoint_metadata(
@@ -287,21 +394,10 @@ def _compatible_final_message(
     return None
 
 
-def _looks_like_tool_call(text: str) -> bool:
-    return "minimax:tool_call" in text
-
-
 def _local_response_output(
     prompt: list[BaseMessage],
 ) -> ChatStructuredOutput:
-    last_user = next(
-        (
-            message.text
-            for message in reversed(prompt)
-            if isinstance(message, HumanMessage)
-        ),
-        "",
-    )
+    last_user = _last_user_text(prompt)
     return ChatStructuredOutput(
         answer=(
             "LLM API is not configured yet. I saved the message and can use "
@@ -314,14 +410,7 @@ def _local_response_output(
 def _configured_failure_response_output(
     prompt: list[BaseMessage],
 ) -> ChatStructuredOutput:
-    last_user = next(
-        (
-            message.text
-            for message in reversed(prompt)
-            if isinstance(message, HumanMessage)
-        ),
-        "",
-    )
+    last_user = _last_user_text(prompt)
     return ChatStructuredOutput(
         answer=(
             "The configured LLM request failed, so I could not generate a "
@@ -333,10 +422,21 @@ def _configured_failure_response_output(
     )
 
 
+def _last_user_text(prompt: list[BaseMessage]) -> str:
+    return next(
+        (
+            message.text
+            for message in reversed(prompt)
+            if isinstance(message, HumanMessage)
+        ),
+        "",
+    )
+
+
 def _reject_visible_tool_call(
     response: ChatStructuredOutput,
 ) -> None:
-    if _looks_like_tool_call(response.answer):
+    if "minimax:tool_call" in response.answer:
         raise AgentInvalidOutputError(
             "Agent produced visible tool call text instead of "
             "a structured response"

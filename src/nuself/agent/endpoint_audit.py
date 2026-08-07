@@ -6,23 +6,22 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
-from nuself.llm import redacted_llm_diagnostic
-from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
+from nuself.agent.endpoint import redacted_llm_diagnostic
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.observability import report_observed_failure
+from nuself.runtime.audit.catalog import AuditCatalog
 
-AgentEndpointComponent = Literal[
+type AgentEndpointComponent = Literal[
     "chat",
     "memory",
     "persona",
     "reasoning",
     "reflection",
 ]
-AgentEndpointAuditEvent = Literal[
+type AgentEndpointAuditEvent = Literal[
     "llm_endpoint_failed_over",
     "llm_endpoint_unavailable",
 ]
@@ -46,13 +45,11 @@ _MESSAGES: dict[AgentEndpointAuditEvent, str] = {
 
 def _validate_endpoint_metadata(metadata: Mapping[str, object]) -> None:
     expected = frozenset({"endpoint_index", "model"})
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "agent endpoint audit metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
+    require_exact_metadata(
+        metadata,
+        expected,
+        context="agent endpoint audit metadata",
+    )
     endpoint_index = metadata["endpoint_index"]
     if type(endpoint_index) is not int or endpoint_index < 0:
         raise AuditSchemaError(
@@ -66,10 +63,10 @@ def _validate_endpoint_metadata(metadata: Mapping[str, object]) -> None:
         )
 
 
-def _build_registry() -> AuditDefinitionRegistry:
-    registry = AuditDefinitionRegistry()
+def _definitions() -> tuple[AuditEventDefinition, ...]:
+    definitions: list[AuditEventDefinition] = []
     for component in AGENT_ENDPOINT_COMPONENTS:
-        registry.register(
+        definitions.append(
             AuditEventDefinition(
                 component=component,
                 event="llm_endpoint_failed_over",
@@ -79,7 +76,7 @@ def _build_registry() -> AuditDefinitionRegistry:
                 metadata_validator=_validate_endpoint_metadata,
             )
         )
-        registry.register(
+        definitions.append(
             AuditEventDefinition(
                 component=component,
                 event="llm_endpoint_unavailable",
@@ -89,10 +86,13 @@ def _build_registry() -> AuditDefinitionRegistry:
                 metadata_validator=_validate_endpoint_metadata,
             )
         )
-    return registry.seal()
+    return tuple(definitions)
 
 
-AGENT_ENDPOINT_AUDIT_REGISTRY = _build_registry()
+AGENT_ENDPOINT_AUDIT = AuditCatalog[AgentEndpointAuditEvent](
+    _definitions(),
+    _MESSAGES,
+)
 
 
 def report_agent_endpoint_failure(
@@ -111,25 +111,15 @@ def report_agent_endpoint_failure(
         if has_next
         else "llm_endpoint_unavailable"
     )
-    definition = AGENT_ENDPOINT_AUDIT_REGISTRY.resolve(component, event)
     metadata: dict[str, object] = {
         "endpoint_index": endpoint_index,
         "model": model,
     }
     diagnostic = redacted_llm_diagnostic(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=diagnostic_exception_chain(diagnostic),
-        metadata=metadata,
-    )
-    report_observed_failure(
+    AGENT_ENDPOINT_AUDIT.failure(
         diagnostic,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
+        event=event,
+        component=component,
         project_root=project_root,
-        level=definition.level,
-        status=definition.status or "exhausted",
         metadata=metadata,
     )

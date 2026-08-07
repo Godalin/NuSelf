@@ -7,8 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from nuself.eval import EvalResult, load_fixtures, run_eval
-from nuself.notification_eval import run_notification_eval
+from nuself.evaluation.suite import EvalResult, load_fixtures, run_eval
 
 
 def handle_eval(args: argparse.Namespace) -> int:
@@ -36,30 +35,6 @@ def handle_eval(args: argparse.Namespace) -> int:
             print(
                 "Fixtures directory not found: "
                 f"{fixtures_directory}",
-                file=sys.stderr,
-            )
-
-    if component in ("notifications", "all"):
-        notifications_directory = (
-            _repository_root()
-            / "tests"
-            / "fixtures"
-            / "notifications"
-        )
-        if notifications_directory.exists():
-            with tempfile.TemporaryDirectory() as temporary:
-                results = run_notification_eval(
-                    Path(temporary),
-                    notifications_directory,
-                )
-            passed, total = _result_counts(results)
-            passed_total += passed
-            fixture_total += total
-            _print_results("notifications", results)
-        else:
-            print(
-                "Fixtures directory not found: "
-                f"{notifications_directory}",
                 file=sys.stderr,
             )
 

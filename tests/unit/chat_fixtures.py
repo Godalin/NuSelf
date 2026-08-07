@@ -2,39 +2,47 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
 
-from langchain_core.tools import BaseTool
 
-from nuself.agent.chat import (
-    ChatAgentSettings,
+from nuself.agent.chat.engine import (
     ConversationGraphRuntime as _ConversationGraphRuntime,
 )
-from thread_fixtures import ThreadStore
-from nuself.agent.chat.response import ConversationResponseService
-from nuself.agent.text import TextAgent
+from nuself.agent.chat.types import ChatAgentSettings
+from conversation_fixtures import ConversationStore
+from nuself.conversation import ConversationService
+from nuself.agent.chat.response import (
+    BasicConversationResponseService,
+    ConversationResponseService,
+)
+from nuself.agent.chat.resources import ConversationResources
+from nuself.agent.tools.resources import ToolResources
+from nuself.agent.text import LangChainTextAgent, TextAgent
 from nuself.application.composition import compose_application
-from nuself.application.reason import compose_reason_service
-from nuself.config import runtime_paths
-from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryQueryService
+from nuself.application.projection import load_personas_from_memory
+from nuself.config.settings import runtime_paths
+from nuself.agent.endpoint import (
+    LangChainLLMEndpoint,
+    configured_langchain_chat_models,
+)
+from nuself.log.store import runtime_event_log_sink
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
-from nuself.persona.tools import build_persona_tools
+from nuself.source.service import SourceService
 from nuself.persona.definition import (
     PersonaDefinition,
-    load_persona_definitions,
 )
 from nuself.profile.repository import ProfileItemRepository
 from nuself.reason.output_contracts import SectionPlanner
 from nuself.reason.service import ReasonService
 from nuself.reflection.repository import ReflectionRepository
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.jobs import JobSink
-from nuself.storage import get_default_backend
+from nuself.reflection.organizer import ReflectionOrganizer
+from nuself.reflection.service import ReflectionService
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.job.message import JobSink
+from nuself.runtime.feature.protocol import ToolEffectPort
+from tests.backend import owned_backend
 from nuself.trace.service import TraceQueryService, TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
 
 
 class ConversationGraphRuntime(_ConversationGraphRuntime):
@@ -46,67 +54,112 @@ class ConversationGraphRuntime(_ConversationGraphRuntime):
         *,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
         settings: ChatAgentSettings | None = None,
-        memory_query_service: MemoryQueryService | None = None,
-        thread_store: ThreadStore | None = None,
+        memory_query_service: MemoryService | None = None,
+        conversation_store: ConversationStore | None = None,
         job_sink: JobSink | None = None,
         section_planner: SectionPlanner | None = None,
         event_publisher: EventPublisher | None = None,
-        response_service: ConversationResponseService | None = None,
+        response_service: (
+            ConversationResponseService | BasicConversationResponseService | None
+        ) = None,
         compression_agent: TextAgent | None = None,
         memory_repository: MemoryEntryRepository | None = None,
-        source_repository: SourceRepository | None = None,
+        source_service: SourceService | None = None,
         profile_repository: ProfileItemRepository | None = None,
         reflection_repository: ReflectionRepository | None = None,
         trace_recorder: TraceRecorder | None = None,
         reason_service: ReasonService | None = None,
         trace_query_service: TraceQueryService | None = None,
-        persona_tools: Sequence[BaseTool] | None = None,
         persona_definitions: tuple[PersonaDefinition, ...] | None = None,
+        effect_port: ToolEffectPort | None = None,
     ) -> None:
         application = compose_application(
             runtime_paths(project_root),
-            get_default_backend(project_root),
+            owned_backend(project_root),
         )
-        entries = memory_repository or application.memory.entries
-        sources = source_repository or application.memory.sources
-        profile = profile_repository or application.memory.profile
-        super().__init__(
-            project_root,
-            langchain_models=langchain_models,
-            settings=settings,
-            memory_query_service=memory_query_service
-            or MemoryQueryService(entries, sources, profile),
-            thread_store=thread_store
-            or ThreadStore(
+        effective_models = (
+            langchain_models
+            if langchain_models is not None
+            else configured_langchain_chat_models(
                 project_root,
-                backend=application.backend,
-            ),
-            job_sink=job_sink,
-            section_planner=section_planner,
-            event_publisher=event_publisher,
-            response_service=response_service,
-            compression_agent=compression_agent,
-            memory_repository=entries,
-            reflection_repository=reflection_repository
-            or application.reflection,
-            trace_recorder=trace_recorder or application.trace.recorder,
-            reason_service=reason_service
-            or compose_reason_service(application),
-            reason_workspace_store=PrivateWorkspaceStore(
-                runtime_paths(project_root),
-                scope="reason",
-            ),
-            trace_query_service=trace_query_service
-            or application.trace.query,
-            persona_tools=persona_tools
-            or build_persona_tools(
-                project_root,
-                repository=application.persona_prompts,
+                config=application.config,
+            )
+        )
+        memory = (
+            MemoryService(memory_repository)
+            if memory_repository is not None
+            else application.memory
+        )
+        sources = source_service or application.sources
+        del profile_repository
+        reflections = (
+            application.reflection
+            if reflection_repository is None
+            else ReflectionService(
+                reflection_repository,
+                application.reason,
+                application.trace.recorder,
+                ReflectionOrganizer(
+                    project_root,
+                    repository=reflection_repository,
+                ),
+            )
+        )
+        resources = ConversationResources(
+            tools=ToolResources(
+                project_root=project_root,
+                memory=memory_query_service or memory,
+                sources=sources,
+                reflections=reflections,
+                reasons=reason_service
+                or application.reason,
+                traces=trace_query_service
+                or application.trace.query,
+                personas=application.personas,
+                persona_agent=LangChainTextAgent(
+                    endpoints=effective_models,
+                    project_root=project_root,
+                    component="persona",
+                ),
                 trace_recorder=application.trace.recorder,
+                job_sink=job_sink,
+                section_planner=section_planner,
             ),
-            persona_definitions=persona_definitions
-            or load_persona_definitions(
-                application.memory.entries,
+            trace_recorder=trace_recorder
+            or application.trace.recorder,
+            personas=persona_definitions
+            or load_personas_from_memory(
+                memory_query_service or memory,
                 project_root=project_root,
             ),
+            conversation_store=(
+                ConversationService(conversation_store)
+                if conversation_store is not None
+                else application.conversations
+            ),
+            reflection_settings=application.config.reflection,
+            language_preference=application.config.chat.language_preference,
+        )
+        publisher = event_publisher
+        if publisher is None:
+            publisher = EventPublisher()
+            publisher.attach_projection(runtime_event_log_sink(project_root))
+        super().__init__(
+            resources,
+            langchain_models=effective_models,
+            settings=settings or ChatAgentSettings(
+                recent_messages=(
+                    application.config.chat.context.recent_messages
+                ),
+                summary_trigger_messages=(
+                    application.config.chat.context.summary_trigger_messages
+                ),
+                summary_target_chars=(
+                    application.config.chat.context.summary_target_chars
+                ),
+            ),
+            event_publisher=publisher,
+            response_service=response_service,
+            compression_agent=compression_agent,
+            effect_port=effect_port,
         )

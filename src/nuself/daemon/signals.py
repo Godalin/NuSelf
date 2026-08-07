@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from types import FrameType
 
-SignalHandler = int | Callable[[int, FrameType | None], object]
+type SignalHandler = int | Callable[[int, FrameType | None], object]
 
 
 @dataclass(frozen=True)
@@ -53,20 +53,11 @@ class DaemonSignalOwner:
     def __init__(self, shutdown_requested: threading.Event) -> None:
         self._shutdown_requested = shutdown_requested
         self._owned: dict[int, SignalHandler] = {}
-        self._installed = False
-
-    @property
-    def installed(self) -> bool:
-        return self._installed
-
-    @property
-    def owned_signals(self) -> tuple[int, ...]:
-        return tuple(self._owned)
 
     def install(self) -> bool:
         """Install both handlers, rolling back a partial installation."""
 
-        if self._installed:
+        if len(self._owned) == len(self._SIGNALS):
             return False
         if self._owned:
             raise RuntimeError(
@@ -88,17 +79,14 @@ class DaemonSignalOwner:
                     failures
                 ) from install_error
             raise
-        self._installed = True
         return True
 
     def restore(self) -> bool:
         """Restore every still-owned signal in reverse installation order."""
 
         if not self._owned:
-            self._installed = False
             return False
         failures = self._restore_owned()
-        self._installed = bool(self._owned)
         if failures:
             raise DaemonSignalRestoreError(failures)
         return True

@@ -10,12 +10,8 @@ from memory_fixtures import (
 
 from pathlib import Path
 
-from nuself.config import runtime_paths
-from nuself.memory.repository import MemoryCandidateRepository
-from nuself.profile.repository import ProfileItemRepository
-from nuself.domain.source import SourceChunk, SourceDocument
-from nuself.memory.source_repository import SourceRepository, load_source_file
-from nuself.storage import get_default_backend
+from nuself.source.record import SourceChunk, SourceDocument
+from nuself.source.local import load
 
 
 def test_source_document_and_chunk_round_trip() -> None:
@@ -65,7 +61,7 @@ def test_load_markdown_source_extracts_metadata_and_chunks(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    document, chunks = load_source_file(source_path, tags=["imported"])
+    document, chunks = load(source_path, tags=["imported"])
 
     assert document.title == "Mirror Notes"
     assert document.kind == "markdown"
@@ -83,24 +79,24 @@ def test_source_repository_ingests_file_and_replaces_chunks(tmp_path: Path) -> N
     source_path.write_text("Local note title\n\nBody text for ingestion.", encoding="utf-8")
     repo = source_repository(tmp_path)
 
-    result = repo.ingest_path(source_path, tags=["notes"])
-    document = repo.list_documents()[0]
-    chunks = repo.list_chunks(document.id)
+    result = repo.ingest(source_path, tags=["notes"])
+    document = repo.list()[0]
+    chunks = repo.chunks(document.id)
 
     assert result.documents == 1
     assert result.chunks == 1
-    assert repo.get_document(document.id) == document
+    assert repo.get(document.id) == document
     assert document.title == "Local note title"
     assert document.tags == ("notes",)
     assert chunks[0].source_ref == f"source:{document.id}:0"
 
     source_path.write_text("Local note title\n\nUpdated body.", encoding="utf-8")
-    second_result = repo.ingest_path(source_path)
+    second_result = repo.ingest(source_path)
 
     assert second_result.documents == 1
     assert second_result.chunks == 1
-    assert len(repo.list_chunks(document.id)) == 1
-    assert repo.list_chunks(document.id)[0].text == "Local note title\n\nUpdated body."
+    assert len(repo.chunks(document.id)) == 1
+    assert repo.chunks(document.id)[0].text == "Local note title\n\nUpdated body."
 
 
 def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: Path) -> None:
@@ -121,7 +117,7 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     second_path = tmp_path / "other.txt"
     second_path.write_text("Cooking note\n\nUnrelated text.", encoding="utf-8")
     repo = source_repository(tmp_path)
-    repo.ingest_path(tmp_path)
+    repo.ingest(tmp_path)
 
     matches = repo.search("stable memory references")
 
@@ -132,28 +128,7 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     assert "tag" in matches[0].reasons
 
 
-def test_source_repository_reindex(tmp_path: Path) -> None:
-    source_path = tmp_path / "note.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Indexed Source",
-                "tags: [index]",
-                "privacy: shareable",
-                "---",
-                "Indexed source body.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    repo = source_repository(tmp_path)
-    repo.ingest_path(source_path)
-
-    repo.reindex()
-
-
-def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
+def test_source_delete_has_no_memory_or_profile_side_effects(tmp_path: Path) -> None:
     source_path = tmp_path / "profile.md"
     source_path.write_text(
         "\n".join(
@@ -169,47 +144,8 @@ def test_source_repository_extracts_profile_candidates(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     repo = source_repository(tmp_path)
-    repo.ingest_path(source_path)
-    document = repo.list_documents()[0]
-
-    candidates = repo.extract_candidates(document.id)
-
-    assert len(candidates) == 1
-    assert candidates[0].type == "profile_fact"
-    assert candidates[0].source_refs == (f"source:{document.id}:0",)
-    assert candidates[0].evidence[0].source_type == "source"
-    assert candidates[0].evidence[0].source_ref == candidates[0].source_refs[0]
-
-
-def test_source_repository_delete_cascades_derived_candidates_and_profile_items(tmp_path: Path) -> None:
-    source_path = tmp_path / "profile.md"
-    source_path.write_text(
-        "\n".join(
-            [
-                "---",
-                "title: Profile Source",
-                "tags: [mirror]",
-                "date: 2026-05-07",
-                "---",
-                "A source paragraph about durable preferences.",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    source_repo = source_repository(tmp_path)
-    source_repo.ingest_path(source_path)
-    document = source_repo.list_documents()[0]
-    candidate_repo = memory_candidate_repository(tmp_path)
-    candidate = source_repo.extract_candidates(document.id)[0]
-    candidate_repo.save(candidate)
-    candidate_repo.accept(candidate.id)
-
-    assert candidate_repo.list(include_reviewed=True)
-    assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list()
-
-    source_repo.delete_document(document.id)
-
-    assert source_repo.list_documents() == []
-    assert source_repo.list_chunks(document.id) == []
-    assert candidate_repo.list(include_reviewed=True) == []
-    assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list() == []
+    repo.ingest(source_path)
+    document = repo.list()[0]
+    repo.delete(document.id)
+    assert repo.list() == []
+    assert repo.chunks(document.id) == []

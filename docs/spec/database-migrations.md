@@ -112,3 +112,20 @@ Release compatibility tests migrate the oldest supported schema through every
 intermediate version. The compact storage redesign begins at schema v4. Schema
 v5 removes v4's redundant prefix indexes through an explicit reversible
 migration rather than silently redefining an already-applied schema version.
+
+Schema v6 performs the breaking persistent-chat terminology migration. It
+renames collection `chat_threads` to `conversations` and transforms every
+conversation-owned record field from `thread_id` to `conversation_id`, while
+preserving record identity, message order/content, summaries, pending turns,
+archive state, cursor positions, timestamps, and references. The downgrade is
+the exact inverse and rejects a destination collision before mutation. Runtime
+startup never performs this migration implicitly.
+
+Schema v7 replaces conversation-backed curator cursors with the generic
+`memory_observations` inbox. Upgrade projects every unprocessed visible v6
+range into an opaque, deterministic observation; existing recovery plans are
+rewritten to observation ownership, evidence becomes observation-sourced, and
+the obsolete cursor records are removed. Downgrade retains observation records
+as forward-compatible data and parks v7 recovery plans in an ignored holding
+collection; re-upgrade restores them exactly. The v6 runtime does not process
+those retained observations, but no observation content is discarded.

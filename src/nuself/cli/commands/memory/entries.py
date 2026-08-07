@@ -8,35 +8,30 @@ import json
 import sys
 from pathlib import Path
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.application import cli_application
+from nuself.agent.structured import LangChainStructuredAgent
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.commands.output import (
+from nuself.cli.memory_preview import format_memory_preview
+from nuself.cli.output import (
     print_ansi,
     resolve_handle,
     resolve_handle_selection,
 )
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntry,
     default_memory_type_registry,
 )
-from nuself.memory.intake import MemoryIntakeAgent
-from nuself.memory.query import MemoryQuery, MemoryQueryService
+from nuself.agent.endpoint import configured_langchain_chat_models
+from nuself.memory.intake import IntakeResultOutput, MemoryIntakeAgent
 from nuself.memory.repository import (
     MemoryEntryNotFound,
     MemoryRelationFilters,
     MemoryRelationIndexRecord,
     MemorySearchFilters,
     MemoryStats,
-    memory_stats,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import get_default_backend
-from nuself.tui.memory import (
-    render_memory_entry_detail,
-    render_memory_entry_row,
-)
-
-DEFAULT_PREVIEW_LIMIT = 8
+from nuself.tui.memory import render_memory_entry_detail, render_memory_entry_row
 
 
 def memory_type_choices() -> list[str]:
@@ -49,7 +44,7 @@ def _entries_for_list(
     sort_by: str = "updated_at",
     review_state: str | None = None,
 ) -> list[MemoryEntry]:
-    entries = compose_cli_application(project_root).memory.entries.list()
+    entries = cli_application().memory.list_entries()
     if review_state is not None:
         entries = [
             entry
@@ -95,26 +90,6 @@ def _resolve_entry_ids(
         label="memory",
         get_id=lambda entry: entry.id,
     )
-
-
-def format_memory_preview(
-    project_root: Path | None,
-    limit: int = DEFAULT_PREVIEW_LIMIT,
-) -> str:
-    normalized_limit = max(limit, 1)
-    entries = compose_cli_application(project_root).memory.entries.list()
-    if not entries:
-        return "No memory entries."
-    shown = entries[:normalized_limit]
-    lines = [render_memory_entry_row(entry) for entry in shown]
-    lines.append("")
-    lines.append(f"  {len(shown)}/{len(entries)} entries shown.")
-    if len(entries) > normalized_limit:
-        lines.append(
-            "  Use `nuself memory list` or "
-            "`nuself memory preview --limit N` to see more."
-        )
-    return "\n".join(lines)
 
 
 def _format_counts(counts: Mapping[str, int]) -> str:
@@ -193,7 +168,7 @@ def handle_memory_show(args: argparse.Namespace) -> int:
     if entry_id is None:
         return 1
     try:
-        entry = compose_cli_application(args.project_root).memory.entries.get(entry_id)
+        entry = cli_application().memory.get_entry(entry_id)
     except MemoryEntryNotFound:
         print(
             f"Memory entry not found: {entry_id}",
@@ -206,10 +181,18 @@ def handle_memory_show(args: argparse.Namespace) -> int:
 
 def handle_memory_add(args: argparse.Namespace) -> int:
     try:
-        application = compose_cli_application(args.project_root)
+        application = cli_application()
         inferred = MemoryIntakeAgent(
-            args.project_root,
-            profile_repository=application.memory.profile,
+            agent=LangChainStructuredAgent(
+                IntakeResultOutput,
+                endpoints=configured_langchain_chat_models(
+                    application.paths.authority_root,
+                    config=application.config,
+                ),
+                project_root=application.paths.authority_root,
+                component="memory",
+            ),
+            profile_repository=application.profiles,
         ).infer(
             body=args.body,
             title=args.title,
@@ -235,21 +218,24 @@ def handle_memory_add(args: argparse.Namespace) -> int:
             else inferred.importance
         ),
     )
-    repository = compose_cli_application(args.project_root).memory.entries
-    repository.save(entry)
-    repository.reindex()
-    record_memory_trace(args.project_root, entry, "add")
+    application.memory.save_entry(entry)
+    record_memory_trace(
+        application.trace.recorder,
+        args.project_root,
+        entry,
+        "add",
+    )
     print_ansi(render_memory_entry_row(entry))
     return 0
 
 
 def handle_memory_edit(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.entries
+    service = cli_application().memory
     entry_id = _resolve_entry_id(args)
     if entry_id is None:
         return 1
     try:
-        entry = repository.get(entry_id)
+        entry = service.get_entry(entry_id)
     except MemoryEntryNotFound:
         print(
             f"Memory entry not found: {entry_id}",
@@ -263,34 +249,32 @@ def handle_memory_edit(args: argparse.Namespace) -> int:
         importance=args.importance,
         review_state=args.review_state,
     )
-    repository.save(updated)
-    repository.reindex()
+    service.save_entry(updated)
     print_ansi(render_memory_entry_row(updated))
     return 0
 
 
 def handle_memory_delete(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.entries
+    service = cli_application().memory
     entry_ids = _resolve_entry_ids(args)
     if entry_ids is None:
         return 1
     for entry_id in entry_ids:
         try:
-            repository.delete(entry_id)
+            service.delete_entry(entry_id)
         except MemoryEntryNotFound:
             print(
                 f"Memory entry not found: {entry_id}",
                 file=sys.stderr,
             )
             return 1
-    repository.reindex()
     for entry_id in entry_ids:
         print(f"Deleted memory entry: {entry_id}")
     return 0
 
 
 def handle_memory_search(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.entries
+    application = cli_application()
     filters = MemorySearchFilters(
         type=args.type,
         tag=args.tag,
@@ -300,27 +284,7 @@ def handle_memory_search(args: argparse.Namespace) -> int:
         valid_on=args.valid_on,
         min_importance=args.min_importance,
     )
-    eligible_ids = {
-        entry.id for entry in repository.search("", filters)
-    }
-    matches = MemoryQueryService(repository).search(
-        MemoryQuery(
-            text=args.query,
-            limit=max(len(eligible_ids), 1),
-            review_states=(
-                "draft",
-                "reviewed",
-                "rejected",
-                "quarantined",
-                "archived",
-            ),
-        )
-    )
-    entries = [
-        match.entry
-        for match in matches
-        if match.entry.id in eligible_ids
-    ]
+    entries = application.memory.search_entries(args.query, filters)
     if not entries:
         print("No matching memory entries.")
         return 0
@@ -330,19 +294,12 @@ def handle_memory_search(args: argparse.Namespace) -> int:
 
 
 def handle_memory_stats(args: argparse.Namespace) -> int:
-    repositories = compose_cli_application(args.project_root).memory
-    print(
-        _format_stats(
-            memory_stats(repositories.entries, repositories.candidates)
-        )
-    )
+    print(_format_stats(cli_application().memory.statistics()))
     return 0
 
 
 def handle_memory_relations(args: argparse.Namespace) -> int:
-    records = compose_cli_application(
-        args.project_root
-    ).memory.entries.list_relations(
+    records = cli_application().memory.list_relations(
         MemoryRelationFilters(
             relation=args.relation,
             source_id=args.source_id,
@@ -395,29 +352,11 @@ def handle_memory_types(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_memory_reindex(args: argparse.Namespace) -> int:
-    repository = compose_cli_application(args.project_root).memory.entries
-    memory_path = repository.reindex()
-    relation_path = repository.reindex_relations()
-    graph_path = repository.reindex_symbolic_graph()
-    source_path = compose_cli_application(args.project_root).memory.sources.reindex()
-    profile_path = compose_profile_repository(
-        runtime_paths(args.project_root),
-        get_default_backend(args.project_root),
-    ).reindex()
-    print(f"Rebuilt memory index: {memory_path}")
-    print(f"Rebuilt relation index: {relation_path}")
-    print(f"Rebuilt symbolic graph: {graph_path}")
-    print(f"Rebuilt source index: {source_path}")
-    print(f"Rebuilt profile index: {profile_path}")
-    return 0
-
-
 def handle_memory_unquarantine(
     args: argparse.Namespace,
 ) -> int:
     try:
-        compose_cli_application(args.project_root).memory.entries.unquarantine(
+        cli_application().memory.unquarantine_entry(
             args.entry_id
         )
     except MemoryEntryNotFound:
@@ -431,5 +370,3 @@ def handle_memory_unquarantine(
         return 1
     print(f"Unquarantined memory entry: {args.entry_id}")
     return 0
-from nuself.application import compose_profile_repository
-from nuself.config import runtime_paths

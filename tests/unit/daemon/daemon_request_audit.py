@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 
 from nuself.daemon.request_audit import (
-    DAEMON_REQUEST_AUDIT_REGISTRY,
+    DAEMON_REQUEST_AUDIT,
     report_daemon_request_failure,
     write_daemon_request_audit,
 )
-from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.log.reader import read_log_events
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,
@@ -16,9 +16,9 @@ from nuself.runtime.audit_definitions import (
 
 
 def test_daemon_request_audit_registry_is_complete_and_sealed() -> None:
-    assert len(DAEMON_REQUEST_AUDIT_REGISTRY.definitions) == 4
+    assert len(DAEMON_REQUEST_AUDIT.registry.definitions) == 4
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        DAEMON_REQUEST_AUDIT_REGISTRY.register(
+        DAEMON_REQUEST_AUDIT.registry.register(
             AuditEventDefinition(
                 component="daemon",
                 event="request_extra",
@@ -35,7 +35,7 @@ def test_chat_completion_contract_is_exact() -> None:
             project_root=Path("."),
             request_id="request-1",
             duration_ms=1,
-            metadata={"evidence_references": 0},
+            metadata={},
         )
     with pytest.raises(AuditSchemaError, match="non-negative"):
         write_daemon_request_audit(
@@ -45,7 +45,6 @@ def test_chat_completion_contract_is_exact() -> None:
             duration_ms=1,
             metadata={
                 "evidence_references": -1,
-                "memory_changed": False,
             },
         )
 

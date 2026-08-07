@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from uuid import uuid4
 
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.output import print_ansi
 from nuself.cli.repl.activity import (
     ActivityReader,
     run_live_activity_send,
@@ -20,14 +20,20 @@ from nuself.cli.repl.notices import (
 )
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.agent.chat.audit import write_chat_audit
-from nuself.logs import InteractiveLogCursor, LogEvent
+from nuself.agent.chat.audit import CHAT_AUDIT
+from nuself.log.reader import InteractiveLogCursor
+from nuself.log.record import LogEvent
 from nuself.runtime.context import RuntimeContext, use_runtime_context
+from nuself.runtime.feature.protocol import ToolEffectResolution
+from nuself.tui.effect import TerminalToolEffectPort
 from nuself.tui.render import TerminalTheme
 
-SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
-ActivityPrinter = Callable[[list[LogEvent]], None]
-ReplyPrinter = Callable[[str], None]
+type SendMessage = Callable[
+    [str, str, str | None, ToolEffectResolution | None],
+    InteractiveChatResult,
+]
+type ActivityPrinter = Callable[[list[LogEvent]], None]
+type ReplyPrinter = Callable[[str], None]
 
 _theme = TerminalTheme()
 
@@ -35,7 +41,7 @@ _theme = TerminalTheme()
 def send_interactive_chat_turn(
     send_message: SendMessage,
     project_root: Path | None,
-    thread_id: str,
+    conversation_id: str,
     message: str,
     session: InteractiveSession,
     *,
@@ -54,7 +60,7 @@ def send_interactive_chat_turn(
     presented_notice_codes: set[str] = set()
     turn_id = session.prepare_turn(
         message=message,
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         new_turn_id=f"turn-{uuid4().hex}",
     )
 
@@ -69,16 +75,18 @@ def send_interactive_chat_turn(
             print_activity_events=print_activity_events,
         )
 
+    effect_resolution: ToolEffectResolution | None = None
     for attempt in range(1, max_attempts + 1):
+        events: list[LogEvent] = []
         with use_runtime_context(
             RuntimeContext(
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 turn_id=turn_id,
                 source="client",
             )
         ):
             if attempt > 1:
-                write_chat_audit(
+                CHAT_AUDIT.write(
                     "turn_retry",
                     project_root=project_root,
                     request_id=result.request_id,
@@ -98,23 +106,35 @@ def send_interactive_chat_turn(
                     f"Retrying message after failed attempt "
                     f"({attempt}/{max_attempts})..."
                 )
-            result, events, printed_logs = run_live_activity_send(
-                send_message,
-                message,
-                thread_id,
-                turn_id,
-                project_root,
-                log_cursor,
-                printed_logs=printed_logs,
-                daemon_activity=daemon_activity,
-                poll_interval_seconds=poll_interval_seconds,
-                read_events=read_activity_events,
-                present_events=present_events,
-            )
+            while True:
+                result, request_events, printed_logs = (
+                    run_live_activity_send(
+                        send_message,
+                        message,
+                        conversation_id,
+                        turn_id,
+                        project_root,
+                        log_cursor,
+                        effect_resolution=effect_resolution,
+                        printed_logs=printed_logs,
+                        daemon_activity=daemon_activity,
+                        poll_interval_seconds=poll_interval_seconds,
+                        read_events=read_activity_events,
+                        present_events=present_events,
+                    )
+                )
+                events.extend(request_events)
+                request = result.tool_effect_request
+                if request is None:
+                    break
+                effect_resolution = TerminalToolEffectPort().resolve(
+                    request,
+                    on_requested=lambda: None,
+                )
         _capture_turn_output(
             session,
             project_root,
-            thread_id,
+            conversation_id,
             events,
         )
         notices = tuple(
@@ -127,19 +147,13 @@ def send_interactive_chat_turn(
             presented_notice_codes.update(
                 notice.code for notice in notices
             )
-        if result.memory_update is not None:
-            if not printed_logs:
-                print()
-                print_ansi(_theme.paint("Logs:", "93"))
-                printed_logs = True
-            print_ansi(
-                f"{_theme.tag('[memory]', 'memory')} {result.memory_update}"
-            )
         if result.reply is not None:
             print()
             print_ansi(_theme.paint("NuSelf:", "96"))
             print()
             print_reply(result.reply)
+            if result.after_reply is not None:
+                result.after_reply()
         if result.code == 0:
             session.clear_retry()
             return CliExitCode.SUCCESS
@@ -154,7 +168,7 @@ def send_interactive_chat_turn(
     if result.retryable:
         session.offer_retry(
             message=message,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             turn_id=turn_id,
             request_may_have_completed=result.request_may_have_completed,
         )
@@ -191,16 +205,16 @@ def _present_activity_events(
 def _capture_turn_output(
     session: InteractiveSession,
     project_root: Path | None,
-    thread_id: str,
+    conversation_id: str,
     events: list[LogEvent],
 ) -> None:
     previous_next_index = session.captured_next_indexes.get(
-        thread_id,
-        session.start_index_for(project_root, thread_id),
+        conversation_id,
+        session.start_index_for(project_root, conversation_id),
     )
-    session.capture_new_messages(project_root, thread_id)
+    session.capture_new_messages(project_root, conversation_id)
     current_next_index = session.captured_next_indexes.get(
-        thread_id,
+        conversation_id,
         previous_next_index,
     )
     message_index = (
@@ -209,7 +223,7 @@ def _capture_turn_output(
         else None
     )
     session.capture_log_events(
-        thread_id,
+        conversation_id,
         events,
         message_index=message_index,
     )

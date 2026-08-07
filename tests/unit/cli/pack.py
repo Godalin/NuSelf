@@ -11,8 +11,7 @@ import stat
 import pytest
 
 from nuself.cli import main
-from nuself.storage import set_default_backend
-from nuself.storage_sqlite import COLLECTION_NAMES, SqliteStorageBackend
+from nuself.storage.sqlite import COLLECTION_NAMES, SqliteStorageBackend
 
 
 def _create_pack_schema(path: Path, *, version: int) -> None:
@@ -25,7 +24,16 @@ def _create_pack_schema(path: Path, *, version: int) -> None:
             "INSERT INTO _schema_version VALUES (?)",
             (version,),
         )
-        for name in COLLECTION_NAMES:
+        collections = (
+            tuple(
+                name for name in COLLECTION_NAMES
+                if name not in {"inbox_items", "delivery_records"}
+            )
+            + ("notification_outbox",)
+            if version <= 3
+            else COLLECTION_NAMES
+        )
+        for name in collections:
             connection.execute(
                 f'CREATE TABLE "col_{name}" '
                 "(id TEXT PRIMARY KEY)"
@@ -89,27 +97,29 @@ def test_pack_export_fails_without_db(tmp_path: Path) -> None:
 
 
 def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     backend = _create_sqlite_backend(
         tmp_path / ".nuself",
         db_path=tmp_path / ".nuself" / "nuself.sqlite",
     )
-    set_default_backend(backend, tmp_path / ".nuself")
-    backend.collection("memory_entries").put(
-        "live-entry",
-        {"id": "live-entry", "title": "Live WAL data"},
-    )
+    try:
+        backend.collection("memory_entries").put(
+            "live-entry",
+            {"id": "live-entry", "title": "Live WAL data"},
+        )
 
-    assert main(
-        [
-            "--workspace",
-            str(tmp_path),
-            "pack",
-            "export",
-            "live",
-        ]
-    ) == 0
+        assert main(
+            [
+                "--workspace",
+                str(tmp_path),
+                "pack",
+                "export",
+                "live",
+            ]
+        ) == 0
+    finally:
+        backend.close()
 
     snapshot = SqliteStorageBackend(
         tmp_path / ".nuself" / "exports" / "live.sqlite"
@@ -128,7 +138,7 @@ def test_pack_export_includes_live_wal_data(tmp_path: Path) -> None:
 def test_pack_import_copies_file(tmp_path: Path) -> None:
     # Create a "foreign" database
     foreign = tmp_path / "friend-thoughts.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
     be = _create_sqlite_backend(db_path=foreign)
     try:
         be.collection("memory_entries").put(
@@ -147,7 +157,7 @@ def test_pack_import_copies_file(tmp_path: Path) -> None:
 
 def test_pack_import_rejects_duplicate(tmp_path: Path) -> None:
     foreign = tmp_path / "thoughts.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
     _create_sqlite_backend(db_path=foreign).close()
 
     assert main(["--workspace", str(tmp_path), "pack", "import", str(foreign)]) == 0
@@ -243,7 +253,7 @@ def test_pack_import_accepts_legacy_schema_without_mutating_source(
 
 def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
     source = tmp_path / "live.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     backend = _create_sqlite_backend(db_path=source)
     backend.collection("memory_entries").put(
@@ -278,7 +288,7 @@ def test_pack_import_includes_source_wal_data(tmp_path: Path) -> None:
 
 
 def test_pack_inspect_shows_summary(tmp_path: Path) -> None:
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
     db = tmp_path / "pack.sqlite"
     be = _create_sqlite_backend(db_path=db)
     try:
@@ -338,7 +348,7 @@ def test_pack_inspect_counts_live_wal_data(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / "live-inspect.sqlite"
-    from nuself.storage import _create_sqlite_backend
+    from nuself.storage.authority import _create_sqlite_backend
 
     backend = _create_sqlite_backend(db_path=source)
     backend.collection("memory_entries").put(

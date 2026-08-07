@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
-from nuself.reason.domain import ReasoningStep
-from nuself.reason.domain import ReasoningThread
+from nuself.config.settings import runtime_paths
+from nuself.reason.model import ReasoningStep
+from nuself.reason.model import ReasoningThread
 from nuself.reason.output_contracts import (
     ReasonOutputManifest,
     ReasonOutputPaths,
@@ -17,11 +17,11 @@ from nuself.reason.output_contracts import (
 from reason_output_fixtures import ReasonOutputService
 from nuself.reason.repository import ReasonRepository
 from reason_fixtures import ReasonService
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _reason_service(tmp_path: Path) -> ReasonService:
-    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
+    return ReasonService(repository=ReasonRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)), project_root=tmp_path, prompt_generator=lambda *a, **k: "P")
 
 
 def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31,7 +31,11 @@ def test_compose_with_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     service.advance_thread(thread.id, step=_step(thread.id, "B", "Out B", "D B"))
 
     output_service = ReasonOutputService(project_root=tmp_path, reason_service=service)
-    manifest = output_service.plan_job(thread.id, segment_size=1)
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=lambda _message: None,
+    )
 
     def _fake_generate_pdf(
         self: ReasonOutputService,
@@ -90,7 +94,11 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
         project_root=tmp_path,
         reason_service=service,
     )
-    manifest = output_service.plan_job(thread.id, segment_size=1)
+    manifest = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=lambda _message: None,
+    )
     primary_error = RuntimeError("runner failed")
 
     def fail_runner(
@@ -120,7 +128,7 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
         fail_log,
     )
     monkeypatch.setattr(
-        "nuself.reason.output.write_reason_audit",
+        "nuself.reason.output.REASON_AUDIT.write",
         drop_lifecycle_audit,
     )
 
@@ -140,6 +148,6 @@ def test_chunk_failure_log_cannot_mask_runner_exception(
 
 
 def _step(thread_id: str, summary: str, output: str, delta: str):
-    from nuself.reason.domain import ReasoningStep
+    from nuself.reason.model import ReasoningStep
 
     return ReasoningStep(thread_id=thread_id, summary=summary, output=output, delta=delta)

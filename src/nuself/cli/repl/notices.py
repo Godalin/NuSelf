@@ -7,11 +7,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from nuself.config import ConfigSystem
-from nuself.logs import LogEvent, read_log_events
+from nuself.cli.application import cli_application
+from nuself.log.reader import read_log_events
+from nuself.log.record import LogEvent
 
 _REPAIRABLE_COLLECTION_ALIASES = {
-    "chat_threads": "threads",
+    "conversations": "conversations",
     "memory_entries": "memory",
 }
 
@@ -37,18 +38,8 @@ def startup_interactive_notices(
         else None
     )
     notices: list[InteractiveNotice] = []
-    try:
-        config = ConfigSystem.load(project_root=project_root)
-    except (OSError, ValueError):
-        config = None
-        notices.append(
-            InteractiveNotice(
-                "configuration-invalid",
-                "The selected authority configuration is invalid or unreadable; "
-                "run `nuself dev config` to inspect it.",
-            )
-        )
-    if config is not None and not any(
+    config = cli_application().config
+    if not any(
         endpoint.api_key.strip()
         and endpoint.base_url.strip()
         and endpoint.model.strip()

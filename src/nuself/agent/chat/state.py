@@ -12,7 +12,7 @@ from nuself.agent.chat.types import (
     ConversationNodeResult,
     ConversationTurnState,
 )
-from nuself.agent.chat.thread import ThreadMessage, ThreadState
+from nuself.conversation import ConversationMessage, ConversationState
 from nuself.agent.text import TextAgent
 
 
@@ -31,8 +31,8 @@ class ConversationStateManager:
     def update(
         self, state: ConversationTurnState
     ) -> ConversationNodeResult:
-        updated = ThreadState(
-            thread_id=state.thread_id,
+        updated = ConversationState(
+            conversation_id=state.conversation_id,
             summary=state.persisted_state.summary,
             messages=list(state.saved_messages),
             message_start_index=(
@@ -42,34 +42,20 @@ class ConversationStateManager:
                 state.persisted_state.message_start_index
                 + len(state.saved_messages)
             ),
+            archived=state.persisted_state.archived,
+            pending_turns=state.persisted_state.pending_turns,
         )
         return ConversationNodeResult(
             state=replace(
                 state,
-                updated_thread_state=updated,
+                updated_conversation_state=updated,
                 node_trace=(*state.node_trace, "state_update"),
             )
         )
 
-    def compress(
-        self, state: ConversationTurnState
-    ) -> ConversationNodeResult:
-        updated = state.updated_thread_state
-        if updated is None:
-            raise RuntimeError(
-                "conversation runtime thread state is missing"
-            )
-        return ConversationNodeResult(
-            state=replace(
-                state,
-                updated_thread_state=self.compress_thread(
-                    updated
-                ),
-                node_trace=(*state.node_trace, "compression"),
-            )
-        )
-
-    def compress_thread(self, state: ThreadState) -> ThreadState:
+    def compress_conversation(
+        self, state: ConversationState
+    ) -> ConversationState:
         if (
             len(state.messages)
             <= self._settings.summary_trigger_messages
@@ -82,20 +68,22 @@ class ConversationStateManager:
             : -self._settings.recent_messages
         ]
         summary = self._summarize(state.summary, older)
-        return ThreadState(
-            thread_id=state.thread_id,
+        return ConversationState(
+            conversation_id=state.conversation_id,
             summary=summary,
             messages=recent,
             message_start_index=(
                 state.next_message_index - len(recent)
             ),
             next_message_index=state.next_message_index,
+            archived=state.archived,
+            pending_turns=state.pending_turns,
         )
 
     def _summarize(
         self,
         previous_summary: str,
-        messages: list[ThreadMessage],
+        messages: list[ConversationMessage],
     ) -> str:
         transcript = "\n".join(
             f"{message.role}: {message.content}"

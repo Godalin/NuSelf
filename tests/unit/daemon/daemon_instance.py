@@ -9,14 +9,46 @@ from typing import IO, cast
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon.instance import (
     DaemonInstanceLock,
     DaemonInstanceLockCleanupError,
     DaemonInstanceLockContended,
 )
-from nuself.daemon.workers import DaemonWorkerReadinessError
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
+from nuself.config.scope import NuSelfScope
+
+
+def test_daemon_entrypoint_reconstructs_workspace_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import nuself.daemon.server as server_module
+
+    user_root = tmp_path / "user"
+    workspace_root = tmp_path / "workspace"
+    captured: NuSelfScope | None = None
+
+    def run(scope: NuSelfScope) -> int:
+        nonlocal captured
+        captured = scope
+        return 7
+
+    monkeypatch.setattr(server_module, "run_daemon", run)
+
+    assert server_module.main(
+        [
+            "--user-root",
+            str(user_root),
+            "--workspace-root",
+            str(workspace_root),
+        ]
+    ) == 7
+    assert captured is not None
+    assert captured.kind == "workspace"
+    assert captured.user_root == user_root.resolve()
+    assert captured.workspace_root == workspace_root.resolve()
+    assert captured.root == (workspace_root / ".nuself").resolve()
 
 
 def test_instance_lock_contends_then_releases(tmp_path: Path) -> None:
@@ -25,14 +57,11 @@ def test_instance_lock_contends_then_releases(tmp_path: Path) -> None:
     contender = DaemonInstanceLock(lock_path)
 
     owner.acquire()
-    assert owner.acquired is True
     with pytest.raises(DaemonInstanceLockContended):
         contender.acquire()
 
     owner.release()
-    assert owner.acquired is False
     contender.acquire()
-    assert contender.acquired is True
     contender.release()
     assert lock_path.exists()
 
@@ -100,7 +129,6 @@ def test_instance_lock_acquire_retains_flock_and_close_failures(
     assert str(error.cleanup_error) == "close failed"
     assert error.__cause__ is error.primary_error
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_acquire_retains_single_system_failure(
@@ -132,7 +160,6 @@ def test_instance_lock_acquire_retains_single_system_failure(
         lock.acquire()
 
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_release_retains_unlock_and_close_failures(
@@ -159,7 +186,6 @@ def test_instance_lock_release_retains_unlock_and_close_failures(
     assert str(error.cleanup_error) == "close failed"
     assert error.__cause__ is error.primary_error
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_release_retains_single_unlock_failure(
@@ -181,7 +207,6 @@ def test_instance_lock_release_retains_single_unlock_failure(
         lock.release()
 
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_instance_lock_release_retains_single_close_failure(
@@ -207,7 +232,6 @@ def test_instance_lock_release_retains_single_close_failure(
         lock.release()
 
     assert handle.close_calls == 1
-    assert lock.acquired is False
 
 
 def test_contended_daemon_preserves_owner_resources(
@@ -395,51 +419,42 @@ def test_recovery_audit_failure_cannot_restore_stale_metadata(
     assert not paths.pid_path.exists()
 
 
+class _SchedulerSnapshot:
+    def __init__(self, running: bool) -> None:
+        self.running = running
+
+
+class _TestScheduler:
+    def __init__(self, state: _UnstartedDaemonState) -> None:
+        self._state = state
+        self.error: RuntimeError | None = None
+        self.stop_error: RuntimeError | None = None
+
+    def snapshot(self) -> _SchedulerSnapshot:
+        self._state.readiness_checks += 1
+        if self.error is not None:
+            raise self.error
+        return _SchedulerSnapshot(
+            running=not self._state.shutdown_requested.is_set()
+        )
+
+    def shutdown(self) -> None:
+        self._state.stop_calls.append("scheduler")
+        if self.stop_error is not None:
+            raise self.stop_error
+
+
 class _UnstartedDaemonState:
     def __init__(self, project_root: Path) -> None:
-        self.project_root = project_root
+        self.authority_root = project_root
         self.shutdown_requested = threading.Event()
         self.start_calls: list[str] = []
         self.stop_calls: list[str] = []
         self.readiness_checks = 0
+        self.scheduler = _TestScheduler(self)
 
-    def start_background_memory_curator(self) -> None:
-        self.start_calls.append("memory")
-
-    def start_background_reflection_scheduler(self) -> None:
-        self.start_calls.append("reflection")
-
-    def start_background_reason_scheduler(self) -> None:
-        self.start_calls.append("reason")
-
-    def start_background_export_worker(self) -> None:
-        self.start_calls.append("export")
-
-    def start_background_notification_delivery(self) -> None:
-        self.start_calls.append("notification")
-
-    def require_background_workers_ready(self) -> None:
-        self.readiness_checks += 1
-        if self.shutdown_requested.is_set():
-            raise DaemonWorkerReadinessError(
-                "daemon shutdown was requested before readiness"
-            )
-
-    def stop_background_memory_curator(self) -> None:
-        self.stop_calls.append("memory")
-
-    def stop_background_reflection_scheduler(self) -> None:
-        self.stop_calls.append("reflection")
-
-    def stop_background_reason_scheduler(self) -> None:
-        self.stop_calls.append("reason")
-
-    def stop_background_export_worker(self) -> None:
-        self.stop_calls.append("export")
-
-    def stop_background_notification_delivery(self) -> None:
-        self.stop_calls.append("notification")
-
+    def start_background_tasks(self) -> None:
+        self.start_calls.append("scheduler")
 
 def test_pid_is_published_only_after_successful_bind(
     tmp_path: Path,
@@ -453,12 +468,12 @@ def test_pid_is_published_only_after_successful_bind(
     pid_observed_after_bind = False
 
     class ExitingState(_UnstartedDaemonState):
-        def start_background_memory_curator(self) -> None:
+        def start_background_tasks(self) -> None:
             nonlocal pid_observed_after_bind
             pid_observed_after_bind = (
                 int(paths.pid_path.read_text(encoding="utf-8")) > 0
             )
-            super().start_background_memory_curator()
+            super().start_background_tasks()
 
     class BoundServer:
         def __init__(
@@ -487,12 +502,8 @@ def test_pid_is_published_only_after_successful_bind(
         def handle_request(self) -> None:
             self.state.shutdown_requested.set()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> ExitingState:
-        return ExitingState(project_root)
+    def make_state(application: object) -> ExitingState:
+        return ExitingState(paths.authority_root)
 
     def ignore_signal(
         signal_number: int,
@@ -504,7 +515,7 @@ def test_pid_is_published_only_after_successful_bind(
     monkeypatch.setattr(server_module, "NuSelfUnixServer", BoundServer)
     monkeypatch.setattr(signal, "signal", ignore_signal)
 
-    assert server_module._run_owned_daemon(paths) == 0
+    server_module._run_owned_daemon(paths)
     assert pid_observed_after_bind is True
     assert not paths.pid_path.exists()
 
@@ -522,9 +533,9 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
     transitions: list[str] = []
 
     class OrderedState(_UnstartedDaemonState):
-        def start_background_memory_curator(self) -> None:
+        def start_background_tasks(self) -> None:
             assert int(paths.pid_path.read_text(encoding="utf-8")) > 0
-            super().start_background_memory_curator()
+            super().start_background_tasks()
 
     class OneRequestServer:
         def __init__(
@@ -553,25 +564,15 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
             transitions.append("request")
             self.state.shutdown_requested.set()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> OrderedState:
-        state = OrderedState(project_root)
+    def make_state(application: object) -> OrderedState:
+        state = OrderedState(paths.authority_root)
         states.append(state)
         return state
 
     def capture_write(envelope: object, **_kwargs: object) -> object:
         event = envelope.name  # type: ignore[union-attr]
         if event == "started":
-            assert states[0].start_calls == [
-                "memory",
-                "reflection",
-                "reason",
-                "export",
-                "notification",
-            ]
+            assert states[0].start_calls == ["scheduler"]
             assert states[0].readiness_checks == 1
             transitions.append("started")
         elif event == "stopped":
@@ -593,7 +594,7 @@ def test_readiness_is_published_after_all_workers_and_before_requests(
     )
     monkeypatch.setattr(signal, "signal", ignore_signal)
 
-    assert server_module._run_owned_daemon(paths) == 0
+    server_module._run_owned_daemon(paths)
     assert transitions == ["started", "request", "stopped"]
 
 
@@ -611,8 +612,8 @@ def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
     start_error = RuntimeError("reason worker start failed")
 
     class FailingState(_UnstartedDaemonState):
-        def start_background_reason_scheduler(self) -> None:
-            super().start_background_reason_scheduler()
+        def start_background_tasks(self) -> None:
+            super().start_background_tasks()
             raise start_error
 
     class BoundServer:
@@ -635,12 +636,8 @@ def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
         ) -> None:
             return None
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> FailingState:
-        state = FailingState(project_root)
+    def make_state(application: object) -> FailingState:
+        state = FailingState(paths.authority_root)
         states.append(state)
         return state
 
@@ -672,18 +669,8 @@ def test_partial_worker_start_failure_never_publishes_ready_lifecycle(
 
     assert captured.value is start_error
     assert lifecycle_events == []
-    assert states[0].start_calls == [
-        "memory",
-        "reflection",
-        "reason",
-    ]
-    assert states[0].stop_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
+    assert states[0].start_calls == ["scheduler"]
+    assert states[0].stop_calls == ["scheduler"]
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
 
@@ -702,9 +689,9 @@ def test_worker_readiness_failure_never_publishes_ready_lifecycle(
     readiness_error = RuntimeError("export worker already stopped")
 
     class UnreadyState(_UnstartedDaemonState):
-        def require_background_workers_ready(self) -> None:
-            super().require_background_workers_ready()
-            raise readiness_error
+        def __init__(self, project_root: Path) -> None:
+            super().__init__(project_root)
+            self.scheduler.error = readiness_error
 
     class BoundServer:
         timeout = 0.0
@@ -728,12 +715,8 @@ def test_worker_readiness_failure_never_publishes_ready_lifecycle(
         ) -> None:
             return None
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> UnreadyState:
-        state = UnreadyState(project_root)
+    def make_state(application: object) -> UnreadyState:
+        state = UnreadyState(paths.authority_root)
         states.append(state)
         return state
 
@@ -764,20 +747,8 @@ def test_worker_readiness_failure_never_publishes_ready_lifecycle(
 
     assert captured.value is readiness_error
     assert states[0].readiness_checks == 1
-    assert states[0].start_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
-    assert states[0].stop_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
+    assert states[0].start_calls == ["scheduler"]
+    assert states[0].stop_calls == ["scheduler"]
     assert lifecycle_events == []
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
@@ -795,12 +766,8 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
     paths.socket_path.write_text("stale", encoding="utf-8")
     states: list[_UnstartedDaemonState] = []
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> _UnstartedDaemonState:
-        state = _UnstartedDaemonState(project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(paths.authority_root)
         states.append(state)
         return state
 
@@ -828,13 +795,7 @@ def test_bind_failure_starts_no_workers_and_cleans_owned_resources(
 
     assert len(states) == 1
     assert states[0].start_calls == []
-    assert states[0].stop_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
+    assert states[0].stop_calls == ["scheduler"]
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
 
@@ -871,12 +832,8 @@ def test_pid_publication_failure_cleans_bound_socket_without_starting_workers(
         ) -> None:
             return None
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> _UnstartedDaemonState:
-        state = _UnstartedDaemonState(project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(paths.authority_root)
         states.append(state)
         return state
 
@@ -906,13 +863,7 @@ def test_pid_publication_failure_cleans_bound_socket_without_starting_workers(
     assert captured.value is publication_error
     assert len(states) == 1
     assert states[0].start_calls == []
-    assert states[0].stop_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
+    assert states[0].stop_calls == ["scheduler"]
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
 
@@ -922,29 +873,31 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import signal
+    import nuself.application.lifecycle as runtime_module
     import nuself.daemon.server as server_module
-    import nuself.storage as storage_module
+    import nuself.storage.authority as storage_module
 
     paths = runtime_paths(tmp_path)
     paths.runtime_dir.mkdir(parents=True)
     states: list[_UnstartedDaemonState] = []
-    reset_roots: list[Path | None] = []
+    close_roots: list[Path] = []
+    backend = storage_module.auto_backend(paths.authority_root)
 
-    class FailingCleanupState(_UnstartedDaemonState):
-        def stop_background_memory_curator(self) -> None:
-            super().stop_background_memory_curator()
-            raise RuntimeError("memory stop failed")
+    class FailingCloseBackend:
+        def collection(self, name: str):
+            return backend.collection(name)
 
-        def stop_background_reason_scheduler(self) -> None:
-            super().stop_background_reason_scheduler()
-            raise RuntimeError("reason stop failed")
+        def transaction(self):
+            return backend.transaction()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> FailingCleanupState:
-        state = FailingCleanupState(project_root)
+        def close(self) -> None:
+            close_roots.append(paths.authority_root)
+            backend.close()
+            raise RuntimeError("storage close failed")
+
+    def make_state(application: object) -> _UnstartedDaemonState:
+        state = _UnstartedDaemonState(paths.authority_root)
+        state.scheduler.stop_error = RuntimeError("scheduler stop failed")
         states.append(state)
         return state
 
@@ -955,9 +908,9 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     ) -> object:
         raise OSError("bind failed")
 
-    def fail_reset(project_root: Path | None = None) -> None:
-        reset_roots.append(project_root)
-        raise RuntimeError("storage reset failed")
+    def open_backend(project_root: Path) -> FailingCloseBackend:
+        assert project_root == paths.authority_root
+        return FailingCloseBackend()
 
     def ignore_signal(
         signal_number: int,
@@ -967,7 +920,7 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
 
     monkeypatch.setattr(server_module, "DaemonState", make_state)
     monkeypatch.setattr(server_module, "NuSelfUnixServer", fail_bind)
-    monkeypatch.setattr(storage_module, "reset_default_backend", fail_reset)
+    monkeypatch.setattr(runtime_module, "auto_backend", open_backend)
     monkeypatch.setattr(
         signal,
         "signal",
@@ -981,18 +934,11 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert str(captured.value.__cause__) == "bind failed"
     assert captured.value.primary_error is captured.value.__cause__
     assert [failure.step for failure in captured.value.failures] == [
-        "worker.memory_curator.stop",
-        "worker.reason_scheduler.stop",
+        "scheduler.stop",
         "application_runtime.close",
     ]
-    assert states[0].stop_calls == [
-        "memory",
-        "reflection",
-        "reason",
-        "export",
-        "notification",
-    ]
-    assert reset_roots == [paths.project_root]
+    assert states[0].stop_calls == ["scheduler"]
+    assert close_roots == [paths.authority_root]
     assert not paths.socket_path.exists()
     assert not paths.pid_path.exists()
     event = read_log_events(
@@ -1003,16 +949,12 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert event.metadata == {
         "failures": (
             {
-                "step": "worker.memory_curator.stop",
-                "error": "memory stop failed",
-            },
-            {
-                "step": "worker.reason_scheduler.stop",
-                "error": "reason stop failed",
+                "step": "scheduler.stop",
+                "error": "scheduler stop failed",
             },
             {
                 "step": "application_runtime.close",
-                "error": "storage reset failed",
+                "error": "storage close failed",
             },
         ),
         "primary_failed": True,
@@ -1020,16 +962,12 @@ def test_owned_daemon_attempts_all_cleanup_and_preserves_primary(
     assert event.to_record()["metadata"] == {
         "failures": [
             {
-                "step": "worker.memory_curator.stop",
-                "error": "memory stop failed",
-            },
-            {
-                "step": "worker.reason_scheduler.stop",
-                "error": "reason stop failed",
+                "step": "scheduler.stop",
+                "error": "scheduler stop failed",
             },
             {
                 "step": "application_runtime.close",
-                "error": "storage reset failed",
+                "error": "storage close failed",
             },
         ],
         "primary_failed": True,
@@ -1125,12 +1063,8 @@ def test_stopped_event_is_written_after_owned_cleanup(
         def handle_request(self) -> None:
             self.state.shutdown_requested.set()
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> ExitingState:
-        state = ExitingState(project_root)
+    def make_state(application: object) -> ExitingState:
+        state = ExitingState(paths.authority_root)
         states.append(state)
         return state
 
@@ -1140,13 +1074,7 @@ def test_stopped_event_is_written_after_owned_cleanup(
         if event == "started":
             raise OSError("audit store unavailable")
         if event == "stopped":
-            assert states[0].stop_calls == [
-                "memory",
-                "reflection",
-                "reason",
-                "export",
-                "notification",
-            ]
+            assert states[0].stop_calls == ["scheduler"]
             assert not paths.socket_path.exists()
             assert not paths.pid_path.exists()
             stopped_observed = True
@@ -1181,7 +1109,7 @@ def test_stopped_event_is_written_after_owned_cleanup(
         RuntimeWarning,
         match="runtime/observability_sink_failed",
     ):
-        assert server_module._run_owned_daemon(paths) == 0
+        server_module._run_owned_daemon(paths)
     assert stopped_observed is True
 
 
@@ -1204,12 +1132,8 @@ def test_signal_restore_failure_joins_daemon_cleanup_failures(
         def restore(self) -> bool:
             raise OSError("signal restore failed")
 
-    def make_state(
-        project_root: Path,
-        *,
-        application_runtime: object,
-    ) -> _UnstartedDaemonState:
-        return _UnstartedDaemonState(project_root)
+    def make_state(application: object) -> _UnstartedDaemonState:
+        return _UnstartedDaemonState(paths.authority_root)
 
     def fail_bind(
         socket_path: str,

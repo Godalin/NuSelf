@@ -3,24 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable
-from threading import RLock
+from threading import Lock
 from types import MappingProxyType
-from typing import Generic, ParamSpec, Protocol, TypeVar
-
-HandlerKey = TypeVar("HandlerKey", bound=Hashable)
-HandlerParams = ParamSpec("HandlerParams")
-HandlerResult = TypeVar("HandlerResult")
-MiddlewareKey = TypeVar(
-    "MiddlewareKey",
-    bound=Hashable,
-    contravariant=True,
-)
-MiddlewareResult = TypeVar("MiddlewareResult")
+from typing import Protocol
 
 
-class HandlerMiddleware(
-    Protocol[MiddlewareKey, HandlerParams, MiddlewareResult]
-):
+class HandlerMiddleware[
+    MiddlewareKey: Hashable,
+    **HandlerParams,
+    MiddlewareResult,
+](Protocol):
     """One typed synchronous wrapper around the next request handler."""
 
     def __call__(
@@ -32,23 +24,19 @@ class HandlerMiddleware(
     ) -> MiddlewareResult: ...
 
 
-class HandlerRegistryError(RuntimeError):
-    """Base class for handler registry composition errors."""
-
-
-class DuplicateHandlerError(HandlerRegistryError):
+class DuplicateHandlerError(RuntimeError):
     """Raised when the same handler key is registered twice."""
 
 
-class HandlerRegistrySealedError(HandlerRegistryError):
+class HandlerRegistrySealedError(RuntimeError):
     """Raised when registration is attempted after composition."""
 
 
-class HandlerRegistryUnsealedError(HandlerRegistryError):
+class HandlerRegistryUnsealedError(RuntimeError):
     """Raised when runtime dispatch starts before composition is sealed."""
 
 
-class HandlerRegistryCoverageError(HandlerRegistryError):
+class HandlerRegistryCoverageError(RuntimeError):
     """Raised when a closed catalog and its registered handlers differ."""
 
     def __init__(
@@ -66,13 +54,11 @@ class HandlerRegistryCoverageError(HandlerRegistryError):
         )
 
 
-class UnknownHandlerError(HandlerRegistryError):
+class UnknownHandlerError(RuntimeError):
     """Raised when dispatch targets an unregistered key."""
 
 
-class HandlerRegistry(
-    Generic[HandlerKey, HandlerParams, HandlerResult]
-):
+class HandlerRegistry[HandlerKey: Hashable, **HandlerParams, HandlerResult]:
     """Maps one key to one callable and seals after composition."""
 
     def __init__(
@@ -93,17 +79,7 @@ class HandlerRegistry(
             HandlerKey,
             Callable[HandlerParams, HandlerResult],
         ] | None = None
-        self._lock = RLock()
-
-    @property
-    def sealed(self) -> bool:
-        with self._lock:
-            return self._sealed
-
-    @property
-    def registered_keys(self) -> tuple[HandlerKey, ...]:
-        with self._lock:
-            return tuple(self._handlers)
+        self._lock = Lock()
 
     def register(
         self,
@@ -231,7 +207,7 @@ class HandlerRegistry(
         return handler(*args, **kwargs)
 
 
-def _wrap_handler(
+def _wrap_handler[HandlerKey: Hashable, **HandlerParams, HandlerResult](
     key: HandlerKey,
     middleware: HandlerMiddleware[
         HandlerKey,

@@ -9,9 +9,9 @@ import sqlite3
 
 import pytest
 
-from nuself.config import runtime_paths
-from nuself.workspace import PrivateWorkspaceStore
-from nuself.storage import _create_sqlite_backend
+from nuself.config.settings import runtime_paths
+from nuself.storage.workspace import PrivateWorkspaceStore
+from nuself.storage.authority import _create_sqlite_backend
 
 
 def test_private_workspace_store_resolves_main_authority_without_side_tree(
@@ -20,14 +20,14 @@ def test_private_workspace_store_resolves_main_authority_without_side_tree(
     _create_sqlite_backend(db_path=tmp_path / "nuself.sqlite").close()
     store = PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
 
-    workspace = store.ensure("reason-abc")
+    workspace = store.paths("reason-abc")
 
     db_path = tmp_path / "nuself.sqlite"
     assert workspace.root == tmp_path / "exports" / "reason" / "reason-abc"
     assert workspace.database == db_path
     assert not workspace.root.exists()
 
-    from nuself.store import SqliteStore
+    from nuself.storage.workspace import SqliteStore
     s = SqliteStore(db_path)
     s.put(("reason-abc",), "key", {"hello": "world"})
     assert db_path.is_file()
@@ -46,4 +46,4 @@ def test_private_workspace_store_rejects_path_segments(tmp_path: Path) -> None:
 
     store = PrivateWorkspaceStore(runtime_paths(tmp_path), scope="reason")
     with pytest.raises(ValueError):
-        store.ensure("../bad")
+        store.paths("../bad")

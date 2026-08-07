@@ -1,37 +1,14 @@
-"""File-backed repository for derived profile items."""
+"""SQLite-backed repository for derived profile items."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
-from pathlib import Path
-from nuself.clock import utc_now_iso
-from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
-from nuself.domain.memory import MemoryCandidate, merge_relations
-from nuself.domain.profile import ProfileItem
+from dataclasses import dataclass
+from nuself.runtime.clock import utc_now_iso
+from nuself.config.settings import RuntimePaths
+from nuself.memory.model import MemoryCandidate, merge_relations
+from nuself.profile.model import ProfileItem
 from nuself.runtime.observability import decode_observed_record
-from nuself.runtime import freeze_json_value
-from nuself.storage import StorageBackend
-
-
-def empty_str_counts() -> dict[str, int]:
-    return {}
-
-
-@dataclass(frozen=True)
-class ProfileStats:
-    """Compact summary of derived profile state."""
-
-    items_total: int
-    items_by_type: Mapping[str, int] = field(default_factory=empty_str_counts)
-    items_with_evidence: int = 0
-
-    def __post_init__(self) -> None:
-        frozen = freeze_json_value(self.items_by_type)
-        if not isinstance(frozen, Mapping):
-            raise TypeError("field 'items_by_type' must be a mapping")
-        object.__setattr__(self, "items_by_type", frozen)
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)
@@ -69,7 +46,7 @@ class ProfileItemRepository:
                 ProfileItem.from_wire,
                 component="memory",
                 collection="profile_items",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if item is not None:
                 items.append(item)
@@ -122,30 +99,6 @@ class ProfileItemRepository:
         item = ProfileItem.from_candidate(candidate)
         self.save(item)
         return item
-
-    def reindex(self) -> Path:
-        return write_derived_index(
-            self._paths,
-            "profile_index.json",
-            [item.to_wire() for item in self.list()],
-        )
-
-
-def profile_stats(repository: ProfileItemRepository) -> ProfileStats:
-    items = repository.list()
-    return ProfileStats(
-        items_total=len(items),
-        items_by_type=_counts(item.type for item in items),
-        items_with_evidence=sum(1 for item in items if item.evidence),
-    )
-
-
-def _counts(values: Iterable[str]) -> dict[str, int]:
-    result: dict[str, int] = {}
-    for value in values:
-        result[value] = result.get(value, 0) + 1
-    return result
-
 
 def _matches_text(item: ProfileItem, normalized_query: str) -> bool:
     if normalized_query == "":

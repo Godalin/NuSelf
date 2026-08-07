@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nuself.trace.domain import ThoughtTrace, TraceLink
+from nuself.trace.model import ThoughtTrace, TraceLink
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
@@ -22,8 +22,8 @@ def render_trace_row(trace: ThoughtTrace, *, index: int | None = None, color: bo
         render_key_value_field("visibility", trace.visibility),
         render_key_value_field("created", format_display_timestamp(trace.created_at)),
     ]
-    if trace.thread_id is not None:
-        fields.append(render_key_value_field("thread", trace.thread_id))
+    if trace.conversation_id is not None:
+        fields.append(render_key_value_field("conversation", trace.conversation_id))
     return render_record_block(label, fields, body=trace.title)
 
 
@@ -36,8 +36,8 @@ def render_trace_detail(trace: ThoughtTrace, links: list[TraceLink] | None = Non
         render_key_value_field("visibility", trace.visibility),
         render_key_value_field("created_at", trace.created_at),
     ]
-    if trace.thread_id is not None:
-        fields.append(render_key_value_field("thread", trace.thread_id))
+    if trace.conversation_id is not None:
+        fields.append(render_key_value_field("conversation", trace.conversation_id))
     lines = [render_record_header(f"{tag} {trace.title}", fields)]
     lines.extend(render_section("summary", [trace.summary], theme))
     lines.extend(render_section("inputs", trace.inputs, theme))

@@ -10,7 +10,6 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict
 
-from nuself.agent import endpoint_audit
 from nuself.agent import failover as failover_module
 from nuself.agent import structured as structured_module
 from nuself.agent.errors import (
@@ -19,7 +18,8 @@ from nuself.agent.errors import (
     AgentProtocolError,
 )
 from nuself.agent.structured import LangChainStructuredAgent
-from nuself.llm import (
+from nuself.runtime.audit.definition import AuditEventDefinition
+from nuself.agent.endpoint import (
     LLMSettings,
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
@@ -171,8 +171,9 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         error: BaseException,
         **kwargs: object,
     ) -> None:
+        definition = cast(AuditEventDefinition, kwargs["definition"])
         events.append(
-            (str(kwargs["event"]), str(kwargs["status"]))
+            (definition.event, str(definition.status))
         )
 
     def record_success(
@@ -187,8 +188,7 @@ def test_structured_agent_fails_over_only_for_endpoint_availability(
         create_agent,
     )
     monkeypatch.setattr(
-        endpoint_audit,
-        "report_observed_failure",
+        "nuself.runtime.audit.catalog.report_defined_failure",
         report_failure,
     )
     monkeypatch.setattr(
@@ -305,6 +305,19 @@ def test_shared_endpoint_runner_uses_model_unavailable_error() -> None:
             project_root=None,
             component="memory",
         )
+
+
+def test_default_structured_agent_does_not_resolve_hidden_endpoints() -> None:
+    runner = structured_module.default_structured_agent(
+        ExampleOutput,
+        component="memory",
+    )
+
+    with pytest.raises(
+        AgentModelUnavailableError,
+        match="no configured LangChain model",
+    ):
+        runner.invoke([HumanMessage(content="hello")])
 
 
 def test_shared_endpoint_runner_rejects_invalid_attempt_count() -> None:

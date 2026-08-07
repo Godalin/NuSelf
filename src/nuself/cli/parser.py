@@ -30,15 +30,7 @@ from nuself.cli.commands.dev import (
 )
 from nuself.cli.commands.eval import handle_eval
 from nuself.cli.commands.memory.parser import add_memory_parser
-from nuself.cli.commands.notifications import (
-    handle_notify_clear,
-    handle_notify_dismiss,
-    handle_notify_list,
-    handle_notify_send,
-    handle_notify_show,
-    handle_notify_stats,
-    handle_notify_watch,
-)
+from nuself.cli.commands.source import add_source_parser
 from nuself.cli.commands.pack import (
     handle_pack_export,
     handle_pack_import,
@@ -54,6 +46,7 @@ from nuself.cli.commands.persona import (
     handle_persona_show,
 )
 from nuself.cli.commands.reason import (
+    handle_reason_watch,
     REASON_VERBS,
     handle_reason_delete,
     handle_reason_list,
@@ -65,7 +58,6 @@ from nuself.cli.commands.scope import (
     handle_dev_config,
     handle_dev_paths,
     handle_init,
-    handle_migrate_layout,
 )
 from nuself.cli.commands.reflections import (
     handle_reflection_archive,
@@ -74,26 +66,39 @@ from nuself.cli.commands.reflections import (
     handle_reflection_organize,
     handle_reflection_promote,
     handle_reflection_show,
+    handle_reflection_run,
+    handle_reflection_status,
+)
+from nuself.cli.commands.inbox import (
+    handle_inbox,
+    handle_inbox_clear,
+    handle_inbox_dismiss,
+    handle_inbox_list,
+    handle_inbox_read,
+    handle_inbox_resolve,
+    handle_inbox_send,
+    handle_inbox_show,
+    handle_inbox_stats,
+    handle_inbox_watch,
 )
 from nuself.cli.commands.system import (
     handle_health,
     handle_logs,
     handle_status,
 )
-from nuself.cli.commands.threads import (
-    handle_thread_archive,
-    handle_thread_archived,
-    handle_thread_branch,
-    handle_thread_create,
-    handle_thread_delete,
-    handle_thread_list,
-    handle_thread_rename,
-    handle_thread_show,
-    handle_thread_unarchive,
+from nuself.cli.commands.conversations import (
+    handle_conversation_archive,
+    handle_conversation_archived,
+    handle_conversation_branch,
+    handle_conversation_create,
+    handle_conversation_delete,
+    handle_conversation_list,
+    handle_conversation_rename,
+    handle_conversation_show,
+    handle_conversation_unarchive,
 )
 from nuself.cli.commands.trace import (
     handle_trace_list,
-    handle_trace_reindex,
     handle_trace_related,
     handle_trace_search,
     handle_trace_show,
@@ -105,9 +110,8 @@ from nuself.cli.readiness import (
     MODEL_READY,
     NO_READINESS,
 )
-from nuself.cli.repl.commands import handle_reason_watch
-from nuself.logs import LOG_COMPONENTS
-from nuself.trace.domain import TRACE_KINDS
+from nuself.runtime.audit.types import LOG_COMPONENTS
+from nuself.trace.model import TRACE_KINDS
 
 
 @dataclass(frozen=True)
@@ -115,7 +119,7 @@ class EntrypointHandlers:
     default_entrypoint: CliHandler
     chat: CliHandler
     attach: CliHandler
-    open_thread: CliHandler
+    open_conversation: CliHandler
 
 
 def _add_log_arguments(
@@ -165,43 +169,6 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         handle_init,
         requirements=NO_READINESS,
     )
-    migrate_layout_parser = subparsers.add_parser(
-        "migrate-layout",
-        help="Explicitly migrate a legacy private/ layout.",
-    )
-    migrate_layout_parser.add_argument(
-        "--from",
-        dest="source",
-        type=Path,
-        required=True,
-        metavar="PATH",
-    )
-    migration_target = migrate_layout_parser.add_mutually_exclusive_group(
-        required=True
-    )
-    migration_target.add_argument(
-        "--to",
-        choices=("user",),
-        help="Migrate to the default user authority.",
-    )
-    migration_target.add_argument(
-        "--to-local",
-        action="store_true",
-        help="Migrate to ./.nuself.",
-    )
-    migration_target.add_argument(
-        "--workspace",
-        dest="migration_workspace",
-        type=Path,
-        metavar="PATH",
-        help="Migrate to PATH/.nuself.",
-    )
-    bind_handler(
-        migrate_layout_parser,
-        handle_migrate_layout,
-        requirements=NO_READINESS,
-    )
-
     data_parser = subparsers.add_parser(
         "data",
         help="Inspect and safely edit authoritative data.",
@@ -292,7 +259,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         requirements=NO_READINESS,
     )
     bind_handler(
-        daemon_subparsers.add_parser("health", help="Show background worker health."),
+        daemon_subparsers.add_parser("health", help="Show daemon scheduler health."),
         handle_daemon_health,
     )
     bind_handler(
@@ -338,94 +305,107 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     )
 
     add_memory_parser(subparsers, bindings)
+    add_source_parser(subparsers, bindings)
 
-    thread_parser = subparsers.add_parser(
-        "thread",
-        help="Manage conversation threads.",
-        description="Manage conversation threads.",
+    conversation_parser = subparsers.add_parser(
+        "conversation",
+        help="Manage conversations.",
+        description="Manage conversations.",
     )
-    bind_help(thread_parser)
-    thread_subparsers = thread_parser.add_subparsers(
-        dest="thread_command", metavar="<command>"
+    bind_help(conversation_parser)
+    conversation_subparsers = conversation_parser.add_subparsers(
+        dest="conversation_command", metavar="<command>"
     )
     bind_handler(
-        thread_subparsers.add_parser("list", help="List conversation threads."),
-        handle_thread_list,
+        conversation_subparsers.add_parser("list", help="List conversations."),
+        handle_conversation_list,
     )
-    thread_show_parser = thread_subparsers.add_parser(
-        "show", help="Show one conversation thread."
+    conversation_show_parser = conversation_subparsers.add_parser(
+        "show", help="Show one conversation."
     )
-    thread_show_parser.add_argument("thread_id")
-    bind_handler(thread_show_parser, handle_thread_show)
-    thread_create_parser = thread_subparsers.add_parser(
-        "new", help="Create an empty conversation thread."
+    conversation_show_parser.add_argument("conversation_id")
+    bind_handler(conversation_show_parser, handle_conversation_show)
+    conversation_create_parser = conversation_subparsers.add_parser(
+        "new", help="Create an empty conversation."
     )
-    thread_create_parser.add_argument("thread_id")
-    bind_handler(thread_create_parser, handle_thread_create)
-    thread_open_parser = thread_subparsers.add_parser(
-        "open", help="Open or create a thread for chat."
+    conversation_create_parser.add_argument("conversation_id")
+    bind_handler(conversation_create_parser, handle_conversation_create)
+    conversation_open_parser = conversation_subparsers.add_parser(
+        "open", help="Open or create a conversation for chat."
     )
-    thread_open_parser.add_argument("thread_id", nargs="?", default=None)
-    thread_open_parser.add_argument("--message", "-m", default=None)
-    thread_open_parser.add_argument("--create", action="store_true")
-    thread_open_parser.add_argument("--deep-link", default=None)
+    conversation_open_parser.add_argument("conversation_id", nargs="?", default=None)
+    conversation_open_parser.add_argument("--message", "-m", default=None)
+    conversation_open_parser.add_argument("--create", action="store_true")
+    conversation_open_parser.add_argument("--deep-link", default=None)
     bind_handler(
-        thread_open_parser,
-        handlers.open_thread,
+        conversation_open_parser,
+        handlers.open_conversation,
         requirements=INTERACTIVE_MODEL_READY,
     )
-    thread_rename_parser = thread_subparsers.add_parser(
-        "rename", help="Rename a conversation thread."
+    conversation_rename_parser = conversation_subparsers.add_parser(
+        "rename", help="Rename a conversation."
     )
-    thread_rename_parser.add_argument("old_thread_id")
-    thread_rename_parser.add_argument("new_thread_id")
-    bind_handler(thread_rename_parser, handle_thread_rename)
-    thread_branch_parser = thread_subparsers.add_parser(
-        "branch", help="Create a thread branch from an existing thread."
+    conversation_rename_parser.add_argument("old_conversation_id")
+    conversation_rename_parser.add_argument("new_conversation_id")
+    bind_handler(conversation_rename_parser, handle_conversation_rename)
+    conversation_branch_parser = conversation_subparsers.add_parser(
+        "branch", help="Create a conversation branch from an existing conversation."
     )
-    thread_branch_parser.add_argument("source_thread_id")
-    thread_branch_parser.add_argument("new_thread_id")
-    thread_branch_parser.add_argument("--index", type=int, default=None)
-    bind_handler(thread_branch_parser, handle_thread_branch)
-    thread_archive_parser = thread_subparsers.add_parser(
-        "archive", help="Archive a conversation thread."
+    conversation_branch_parser.add_argument("source_conversation_id")
+    conversation_branch_parser.add_argument("new_conversation_id")
+    conversation_branch_parser.add_argument("--index", type=int, default=None)
+    bind_handler(conversation_branch_parser, handle_conversation_branch)
+    conversation_archive_parser = conversation_subparsers.add_parser(
+        "archive", help="Archive a conversation."
     )
-    thread_archive_parser.add_argument("thread_id")
-    bind_handler(thread_archive_parser, handle_thread_archive)
-    thread_delete_parser = thread_subparsers.add_parser(
-        "delete", help="Delete a conversation thread."
+    conversation_archive_parser.add_argument("conversation_id")
+    bind_handler(conversation_archive_parser, handle_conversation_archive)
+    conversation_delete_parser = conversation_subparsers.add_parser(
+        "delete", help="Delete a conversation."
     )
-    thread_delete_parser.add_argument("thread_id")
-    bind_handler(thread_delete_parser, handle_thread_delete)
-    thread_unarchive_parser = thread_subparsers.add_parser(
-        "unarchive", help="Restore an archived conversation thread."
+    conversation_delete_parser.add_argument("conversation_id")
+    bind_handler(conversation_delete_parser, handle_conversation_delete)
+    conversation_unarchive_parser = conversation_subparsers.add_parser(
+        "unarchive", help="Restore an archived conversation."
     )
-    thread_unarchive_parser.add_argument("thread_id")
-    bind_handler(thread_unarchive_parser, handle_thread_unarchive)
+    conversation_unarchive_parser.add_argument("conversation_id")
+    bind_handler(conversation_unarchive_parser, handle_conversation_unarchive)
     bind_handler(
-        thread_subparsers.add_parser(
-            "archived", help="List archived conversation threads."
+        conversation_subparsers.add_parser(
+            "archived", help="List archived conversations."
         ),
-        handle_thread_archived,
+        handle_conversation_archived,
     )
 
     inbox_parser = subparsers.add_parser(
         "inbox",
-        help="Manage proactive reflection and notification items.",
-        description="Manage proactive reflection and notification items.",
+        help="Manage durable user-attention items.",
+        description="Manage durable user-attention items.",
     )
-    bind_help(inbox_parser)
+    bind_handler(inbox_parser, handle_inbox)
     inbox_subparsers = inbox_parser.add_subparsers(
         dest="inbox_command", metavar="<command>"
     )
-    reflection_parser = inbox_subparsers.add_parser(
+    reflection_parser = subparsers.add_parser(
         "reflection",
-        help="Review reflection candidates.",
-        description="Review reflection candidates.",
+        help="Generate and manage proactive reflections.",
+        description="Generate and manage proactive reflections.",
     )
     bind_help(reflection_parser)
     reflection_subparsers = reflection_parser.add_subparsers(
         dest="reflection_command", metavar="<command>"
+    )
+    bind_handler(
+        reflection_subparsers.add_parser(
+            "run", help="Run one reflection cycle now."
+        ),
+        handle_reflection_run,
+    )
+    bind_handler(
+        reflection_subparsers.add_parser(
+            "status", help="Show reflection scheduling status."
+        ),
+        handle_reflection_status,
     )
     reflection_list_parser = reflection_subparsers.add_parser(
         "list", help="List reflection entries."
@@ -468,61 +448,30 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         handle_reflection_organize,
     )
 
-    notify_parser = inbox_subparsers.add_parser(
-        "notify",
-        help="Manage notification outbox entries.",
-        description="Manage notification outbox entries.",
+    inbox_list_parser = inbox_subparsers.add_parser("list", help="List Inbox items.")
+    inbox_list_parser.add_argument(
+        "--status", choices=["pending", "read", "dismissed", "resolved"], default=None
     )
-    bind_help(notify_parser)
-    notify_subparsers = notify_parser.add_subparsers(
-        dest="notify_command", metavar="<command>"
+    bind_handler(inbox_list_parser, handle_inbox_list)
+    for name, help_text, handler in (
+        ("show", "Show one Inbox item.", handle_inbox_show),
+        ("read", "Mark one Inbox item read.", handle_inbox_read),
+        ("dismiss", "Dismiss one Inbox item.", handle_inbox_dismiss),
+        ("resolve", "Resolve one Inbox item.", handle_inbox_resolve),
+        ("send", "Deliver one Inbox item now.", handle_inbox_send),
+    ):
+        command = inbox_subparsers.add_parser(name, help=help_text)
+        command.add_argument("entry_id")
+        bind_handler(command, handler)
+    bind_handler(inbox_subparsers.add_parser("stats", help="Show Inbox statistics."), handle_inbox_stats)
+    inbox_watch_parser = inbox_subparsers.add_parser("watch", help="Watch for new Inbox items.")
+    inbox_watch_parser.add_argument("--interval", type=int, default=5)
+    bind_handler(inbox_watch_parser, handle_inbox_watch)
+    inbox_clear_parser = inbox_subparsers.add_parser("clear", help="Clear terminal Inbox items.")
+    inbox_clear_parser.add_argument(
+        "--status", choices=["dismissed", "resolved", "all-terminal"], default="all-terminal"
     )
-    notify_list_parser = notify_subparsers.add_parser(
-        "list", help="List notification entries."
-    )
-    notify_list_parser.add_argument(
-        "--status", choices=["pending", "sent", "failed", "dismissed"], default=None
-    )
-    bind_handler(notify_list_parser, handle_notify_list)
-    notify_show_parser = notify_subparsers.add_parser(
-        "show", help="Show one notification entry."
-    )
-    notify_show_parser.add_argument("entry_id")
-    bind_handler(notify_show_parser, handle_notify_show)
-    notify_send_parser = notify_subparsers.add_parser(
-        "send", help="Send one pending notification now."
-    )
-    notify_send_parser.add_argument("entry_id")
-    bind_handler(notify_send_parser, handle_notify_send)
-    notify_dismiss_parser = notify_subparsers.add_parser(
-        "dismiss", help="Dismiss one notification entry."
-    )
-    notify_dismiss_parser.add_argument("entry_id")
-    bind_handler(notify_dismiss_parser, handle_notify_dismiss)
-    bind_handler(
-        notify_subparsers.add_parser(
-            "stats", help="Show notification outbox statistics."
-        ),
-        handle_notify_stats,
-    )
-    notify_watch_parser = notify_subparsers.add_parser(
-        "watch", help="Watch for pending notifications."
-    )
-    notify_watch_parser.add_argument(
-        "--interval", type=int, default=5, help="Poll interval in seconds"
-    )
-    bind_handler(notify_watch_parser, handle_notify_watch)
-    notify_clear_parser = notify_subparsers.add_parser(
-        "clear",
-        help="Clear terminal notifications.",
-    )
-    notify_clear_parser.add_argument(
-        "--status",
-        choices=["sent", "failed", "dismissed", "all-terminal"],
-        default="all-terminal",
-        help="Terminal status to clear (default: all-terminal)",
-    )
-    bind_handler(notify_clear_parser, handle_notify_clear)
+    bind_handler(inbox_clear_parser, handle_inbox_clear)
 
     reason_parser = subparsers.add_parser(
         "reason",
@@ -657,11 +606,6 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
         "--json", action="store_true", default=False, dest="as_json"
     )
     bind_handler(trace_related_parser, handle_trace_related)
-    bind_handler(
-        trace_subparsers.add_parser("reindex", help="Rebuild thought trace indexes."),
-        handle_trace_reindex,
-    )
-
     persona_parser = subparsers.add_parser(
         "persona",
         help="Manage synthesized persona snapshots.",
@@ -747,7 +691,7 @@ def build_parser(handlers: EntrypointHandlers) -> argparse.ArgumentParser:
     dev_eval_parser = dev_subparsers.add_parser("eval", help="Run evaluation fixtures.")
     dev_eval_parser.add_argument("--fixtures", type=Path, default=None)
     dev_eval_parser.add_argument(
-        "--component", choices=["conversations", "notifications", "all"], default="all"
+        "--component", choices=["conversations", "all"], default="all"
     )
     bind_handler(
         dev_eval_parser,

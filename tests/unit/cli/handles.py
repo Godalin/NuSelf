@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nuself.handles import (
+from nuself.runtime.handles import (
     VisibleHandleError,
     parse_visible_index_selection,
     resolve_visible_handle,

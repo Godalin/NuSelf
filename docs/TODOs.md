@@ -31,22 +31,24 @@ same change.
   flows through PyPI and Homebrew. Define artifact provenance, upgrade and
   uninstall behavior, platform support, and release automation first.
 
-## Reasoning And Notifications
-
-- [ ] Define and implement the long-run reason notification policy. Specify
-  which state transitions are user-visible, how notification deduplication and
-  quiet hours apply, and how reason events map onto the existing notification
-  outbox before implementation.
-
 ## Semi-Durable Chat Threads
 
-- [ ] Make ThreadStore lifecycle mutations crash-durable across directories.
+- [ ] Make ConversationStore lifecycle mutations crash-durable across directories.
   Specify journaling or idempotent recovery for rename/archive/unarchive,
   durable deletion, directory synchronization, and duplicate old/new names
   before strengthening the current semi-durable contract.
-- [ ] Remove `ThreadState` constructor index inference for explicit integer
+- [ ] Remove `ConversationState` constructor index inference for explicit integer
   values. Use a distinct missing sentinel for legacy derivation so internal
   construction rejects inconsistent indexes as strictly as wire decoding.
+
+## Durable Agent Tools
+
+- [ ] Give non-idempotent domain tools stable operation identities independent
+  of one chat transport retry. Start with reflection mutations that use
+  shifting numeric handles and reason-thread creation/export. Specify replay
+  results and domain-level atomicity before considering a persistent LangGraph
+  checkpointer; framework checkpoints do not make an already-started external
+  side effect exactly-once by themselves.
 
 ## Test Runtime Hygiene
 

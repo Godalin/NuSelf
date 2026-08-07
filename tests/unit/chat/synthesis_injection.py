@@ -18,15 +18,16 @@ from typing import Any, cast
 import pytest
 from langchain_core.messages import BaseMessage
 
-from nuself.agent.chat import (
+from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
-    ThreadState,
 )
-from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryQueryService
+from nuself.conversation import ConversationState
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.persona import PersonaGraphAgents
+from nuself.persona.discussion import PersonaDiscussionAgents
+from nuself.persona.graph import PersonaGraphAgents
 from nuself.persona.definition import (
     PersonaActivationOutput,
     PersonaContributionOutput,
@@ -136,6 +137,23 @@ def _install_persona_agents(
         "nuself.agent.chat.persona.persona_graph_agents",
         fake_persona_graph_agents,
     )
+
+    def fake_discussion_agents(
+        project_root: Path | None = None,
+        *,
+        endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
+    ) -> PersonaDiscussionAgents:
+        del project_root, endpoints
+        return PersonaDiscussionAgents(
+            scoring=cast(Any, graph_agents.synthesis),
+            selection=cast(Any, graph_agents.synthesis),
+            moderator=cast(Any, graph_agents.synthesis),
+        )
+
+    monkeypatch.setattr(
+        "nuself.persona.discussion.default_persona_discussion_agents",
+        fake_discussion_agents,
+    )
     return cast(tuple[object, ...], (object(),))
 
 
@@ -153,7 +171,7 @@ def test_selves_consult_returns_internal_synthesis(
         tmp_path,
         response_service=llm,
         langchain_models=cast(Any, models),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
@@ -165,37 +183,6 @@ def test_selves_consult_returns_internal_synthesis(
     assert "skeptic_self" in result or "builder_self" in result
 
 
-def test_synthesis_not_in_chat_result_payload(tmp_path: Path) -> None:
-    """Verify that synthesis remains internal and does NOT appear in ChatResult.to_payload()."""
-    runtime = ConversationGraphRuntime(
-        tmp_path,
-        response_service=StaticResponseService(
-            ChatStructuredOutput(answer="Final answer.", confidence=0.5)
-        ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
-    )
-
-    _, result, _ = runtime.run_turn(
-        ThreadState.empty("payload-test"),
-        "What are the risks and implementation steps for this?",
-        "payload-test",
-    )
-
-    # Verify ChatResult payload doesn't include synthesis info
-    payload = result.to_payload()
-    payload_str = str(payload)
-    assert "Internal perspective fusion" not in payload_str
-    assert "synthesizer_self" not in payload_str
-    assert "synthesis" not in payload_str.lower()
-    
-    # Verify expected fields are present and correct
-    assert payload["answer"] == "Final answer."
-    assert payload["reply"] == "Final answer."
-    assert payload["thread_id"] == "payload-test"
-    assert isinstance(payload["evidence_references"], list)
-    assert isinstance(payload["epistemic_status"], str)
-
-
 def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
     """Verify that the chat graph does not include synthesis sections in the normal respond path."""
     runtime = ConversationGraphRuntime(
@@ -203,11 +190,11 @@ def test_chat_graph_does_not_auto_activate_personas(tmp_path: Path) -> None:
         response_service=StaticResponseService(
             ChatStructuredOutput(answer="No synthesis reply.", confidence=0.5)
         ),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("no-synthesis"),
+        ConversationState.empty("no-synthesis"),
         "Hello there.",
         "no-synthesis",
     )
@@ -246,7 +233,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
         tmp_path,
         response_service=llm,
         langchain_models=cast(Any, models),
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     result = runtime._consult_selves_tool(  # type: ignore[reportPrivateUsage]
@@ -262,7 +249,7 @@ def test_selves_consult_handles_explicit_multi_persona_request(
 
 def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path: Path) -> None:
     """Verify that the normal respond path preserves essential system prompt sections."""
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
     
     repo = memory_entry_repository(tmp_path)
     repo.save(
@@ -278,11 +265,11 @@ def test_synthesis_injection_preserves_existing_system_prompt_sections(tmp_path:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=llm,
-        memory_query_service=MemoryQueryService(repo),
+        memory_query_service=MemoryService(repo),
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("preserved-test"),
+        ConversationState.empty("preserved-test"),
         "What are the risks in this approach?",  # Triggers skeptic
         "preserved-test",
     )
@@ -312,11 +299,11 @@ def test_respond_node_uses_main_prompt(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("synth-test"),
+        ConversationState.empty("synth-test"),
         "What are the risks and implementation steps for this decision?",
         "synth-test",
     )
@@ -347,11 +334,11 @@ def test_non_activated_turn_uses_main_llm_prompt(tmp_path: Path) -> None:
     runtime = ConversationGraphRuntime(
         tmp_path,
         response_service=response_service,
-        memory_query_service=MemoryQueryService(memory_entry_repository(tmp_path)),
+        memory_query_service=MemoryService(memory_entry_repository(tmp_path)),
     )
 
     turn_state = ConversationTurnState.start(
-        ThreadState.empty("normal-test"),
+        ConversationState.empty("normal-test"),
         "Hello there.",
         "normal-test",
     )

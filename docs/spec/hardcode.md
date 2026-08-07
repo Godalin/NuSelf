@@ -2,7 +2,7 @@
 
 All non-configurable numeric constants, thresholds, and caps that affect
 behavior, grouped by subsystem. Configurable defaults live in
-[`config.md`](config.md) and `src/nuself/config.py`.
+[`config.md`](config.md) and `src/nuself/config/settings.py`.
 
 ## Reason
 
@@ -32,13 +32,13 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `DEFAULT_MEMORY_LIMIT` | `memory/query.py:14` | 8 | Default memory search result limit |
-| scoring weights | `memory/query.py:201-236` | various | Title/body/tag/confidence/importance boost values |
-| `min_quality_chars` | `memory/curator.py:28` | 120 | Minimum body chars for memory curation |
-| `existing_memory_limit` | `memory/curator.py:29` | 12 | Existing entries loaded for dedup context |
+| `DEFAULT_MEMORY_LIMIT` | `memory/service.py:14` | 8 | Default memory search result limit |
+| scoring weights | `memory/service.py:201-236` | various | Title/body/tag/confidence/importance boost values |
+| `min_quality_chars` | `memory/curator/worker.py` | 120 | Minimum body chars for memory curation |
+| `existing_memory_limit` | `memory/curator/worker.py` | 12 | Existing entries loaded for dedup context |
 | `memory_limit` | `memory/optimizer.py:25` | 50 | Batch size for memory optimization |
-| `DEFAULT_CHUNK_TARGET_CHARS` | `memory/source_repository.py:17` | 1200 | Target chunk size for source ingestion |
-| `DEFAULT_SOURCE_SEARCH_LIMIT` | `memory/source_repository.py:18` | 8 | Default source search limit |
+| `CHUNK_TARGET_CHARS` | `source/local.py` | 1200 | Target chunk size for local-source ingestion |
+| `DEFAULT_LIMIT` | `source/service.py` | 8 | Default Source search limit |
 | `limit=8, depth=1` | `memory/repository.py:305-306` | 8, 1 | Default graph search limit and depth |
 
 ## Persona
@@ -57,52 +57,47 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `MAX_EXPORT_ATTEMPTS` | `daemon/reason_export.py` | 5 | Max export job composition retries |
-| `EXPORT_RETRY_BASE_SECONDS` | `daemon/reason_export.py` | 10 s | Export retry base backoff |
-| `EXPORT_RETRY_MAX_SECONDS` | `daemon/reason_export.py` | 600 s | Export retry max backoff |
-| `EXPORT_QUEUE_POLL_SECONDS` | `daemon/reason_export.py` | 1 s | Export queue poll timeout |
-| `EXPORT_QUEUE_CAPACITY` | `daemon/reason_export.py` | 256 | Maximum distinct pending Reason export wake-ups |
+| `MAX_EXPORT_ATTEMPTS` | `reason/export.py` | 5 | Max export job composition retries |
+| `EXPORT_RETRY_BASE_SECONDS` | `reason/export.py` | 10 s | Export retry base backoff |
+| `EXPORT_RETRY_MAX_SECONDS` | `reason/export.py` | 600 s | Export retry max backoff |
 | startup readiness timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for a spawned daemon to become ready |
 | startup poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and child-exit checks |
-| shutdown ownership timeout | `daemon/lifecycle.py` | 2 s | Maximum monotonic wait for request delivery, cleanup, and instance-lock release |
+| shutdown ownership timeout | `daemon/lifecycle.py` | 30 s | Maximum monotonic wait for request delivery, cleanup, and instance-lock release |
 | shutdown poll interval | `daemon/lifecycle.py` | 0.05 s | Maximum sleep between readiness and instance-lock checks |
 | `timeout=2.0` | `daemon/client.py:21` | 2 s | Daemon socket connection timeout |
 | `MAX_DAEMON_FRAME_BYTES` | `daemon/protocol.py` | 1 MiB | Maximum request/response JSONL frame including newline |
 | `DAEMON_REQUEST_IO_TIMEOUT_SECONDS` | `daemon/socket_server.py` | 5 s | Server timeout for receiving one request frame and delivering its response |
 
-## Notification
+## Inbox And Delivery
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| retention days | `notification/__init__.py:263` | 7 | Dismissed outbox entries cleaned after 7 days |
 | daemon raw log size/backups | `daemon/lifecycle.py` | 5 MiB / 3 | Startup-time retention for inherited stdout/stderr |
-| `timeout=30` | `notification/email.py:81` | 30 s | SMTP connection timeout |
+| `timeout=30` | `delivery/email.py` | 30 s | SMTP connection timeout |
 
 ## CLI
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `CHAT_REQUEST_TIMEOUT_SECONDS` | `cli/__init__.py:116` | 120 s | Interactive chat request timeout |
-| `DEFAULT_MEMORY_PREVIEW_LIMIT` | `cli/__init__.py:117` | 8 | Memory preview entry count |
-| `INTERACTIVE_CHAT_ATTEMPTS` | `cli/__init__.py:118` | 2 | Max interactive chat retries |
-| `INTERACTIVE_LOG_POLL_INTERVAL_SECONDS` | `cli/__init__.py:119` | 0.1 s | Log poll interval |
+| `INTERACTIVE_CHAT_ATTEMPTS` | `cli/__init__.py` | 2 | Max interactive chat retries |
+| `INTERACTIVE_LOG_POLL_INTERVAL_SECONDS` | `cli/__init__.py` | 0.1 s | Log poll interval |
 | profile display | `cli/repl/commands.py:467` | 6 | Max profile items shown inline |
 
 ## LLM
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `timeout_seconds` | `llm.py:64` | 60 s | Default LLM endpoint timeout |
-| `max_retries: 0` | `llm.py:246` | 0 | LangChain model retries (NuSelf handles retries) |
-| `temperature: 0.1` | `llm.py:248` | 0.1 | Structured output temperature |
-| error truncation | `llm.py:299` | 500 | LLM error message truncation |
+| `timeout_seconds` | `agent/endpoint.py` | 60 s | Default LLM endpoint timeout |
+| `max_retries: 0` | `agent/endpoint.py` | 0 | LangChain model retries (NuSelf handles retries) |
+| `temperature: 0.1` | `agent/endpoint.py` | 0.1 | Structured output temperature |
+| error truncation | `agent/endpoint.py` | 500 | LLM error message truncation |
 
 ## Store / Workspace
 
 | Constant | File:Line | Value | Effect |
 |----------|-----------|-------|--------|
-| `limit=10, offset=0` | `store.py:228` | 10 | Default workspace entry listing limit |
-| `limit=100, offset=0` | `store.py:242` | 100 | Default namespace listing limit |
+| `limit=10, offset=0` | `storage/workspace.py` | 10 | Default workspace entry listing limit |
+| `limit=100, offset=0` | `storage/workspace.py` | 100 | Default namespace listing limit |
 
 ## Agent
 
@@ -125,7 +120,7 @@ behavior, grouped by subsystem. Configurable defaults live in
 
 ## Design Notes
 
-- **Config candidates**: Constants with `default=` in `config.py` are already
+- **Config candidates**: Constants with `default=` in `config/settings.py` are already
   user-configurable. The rest are candidates for promotion when a user need
   arises.
 - **Internal vs external**: Truncation limits (120, 140, 180 chars) and

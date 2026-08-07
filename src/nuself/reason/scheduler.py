@@ -5,12 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from nuself.clock import utc_now
-from nuself.reason.advancer import ReasonAdvancer
-from nuself.reason.audit import report_reason_failure, write_reason_audit
-from nuself.reason.domain import ReasoningThread
-from nuself.reason.repository import ReasonRepository
-from nuself.reason.service import ReasonService
+from nuself.runtime.clock import utc_now
+from nuself.reason.audit import REASON_AUDIT
+from nuself.reason.model import ReasoningThread
+from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
 from nuself.runtime.context import runtime_context
 
 
@@ -19,24 +17,19 @@ class ReasonScheduler:
 
     def __init__(
         self,
-        project_root: Path | None = None,
-        advancer: ReasonAdvancer | None = None,
+        project_root: Path,
+        advancer: ReasonAdvancerProtocol,
         interval_seconds: int = 600,
         *,
         service: ReasonService,
-        repository: ReasonRepository,
     ) -> None:
         self._project_root = project_root
         self._advancer = advancer
         self._service = service
-        self._repository = repository
         self._interval_seconds = interval_seconds
 
     def run_once(self) -> None:
         """Advance exactly one thread if any active thread is not on cooldown."""
-        if self._advancer is None:
-            return
-
         threads = self._service.list_threads(status=None)
         active = [t for t in threads if t.status == "active"]
 
@@ -57,14 +50,14 @@ class ReasonScheduler:
             return
 
         with runtime_context(
-            thread_id=candidate.id,
+            reason_id=candidate.id,
             source="reason_scheduler",
         ):
             try:
                 step = self._advancer.advance(candidate)
             except Exception as exc:
                 self._apply_cooldown(candidate)
-                report_reason_failure(
+                REASON_AUDIT.failure(
                     exc,
                     event="scheduler_advance_failed",
                     project_root=self._project_root,
@@ -76,7 +69,7 @@ class ReasonScheduler:
                 return
             updated = self._service.advance_thread(candidate.id, step=step)
             self._apply_cooldown(updated)
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "scheduler_advance_completed",
                 project_root=self._project_root,
                 metadata={"step_kind": step.kind, "step_id": step.id},
@@ -86,22 +79,7 @@ class ReasonScheduler:
         cooldown_end = (
             utc_now() + timedelta(seconds=self._interval_seconds)
         ).isoformat()
-        cooled = ReasoningThread(
-            id=thread.id,
-            topic=thread.topic,
-            status=thread.status,
-            working_summary=thread.working_summary,
-            evidence_refs=list(thread.evidence_refs),
-            priority=thread.priority,
-            last_advanced_at=thread.last_advanced_at,
-            next_review_after=thread.next_review_after,
-            skip_next_advance_until=cooldown_end,
-            created_at=thread.created_at,
-            updated_at=thread.updated_at,
-            active_items_data=thread.active_items_data,
-            pending_items_data=thread.pending_items_data,
-            next_steps_data=thread.next_steps_data,
-            mandates_data=thread.mandates_data,
-            reasoning_prompt=thread.reasoning_prompt,
+        self._service.defer_advancement(
+            thread.id,
+            until=cooldown_end,
         )
-        self._repository.save_thread(cooled)

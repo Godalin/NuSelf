@@ -14,13 +14,11 @@ from nuself.cli.commands.memory.candidate import (
     handle_memory_candidate_show,
 )
 from nuself.cli.commands.memory.entries import (
-    DEFAULT_PREVIEW_LIMIT,
     handle_memory_add,
     handle_memory_delete,
     handle_memory_edit,
     handle_memory_list,
     handle_memory_preview,
-    handle_memory_reindex,
     handle_memory_relations,
     handle_memory_search,
     handle_memory_show,
@@ -29,6 +27,7 @@ from nuself.cli.commands.memory.entries import (
     handle_memory_unquarantine,
     memory_type_choices,
 )
+from nuself.cli.memory_preview import DEFAULT_PREVIEW_LIMIT
 from nuself.cli.commands.memory.graph import (
     handle_memory_graph_closure,
     handle_memory_graph_edges,
@@ -49,21 +48,11 @@ from nuself.cli.commands.memory.plan import (
 from nuself.cli.commands.memory.profile import (
     handle_memory_profile_delete,
     handle_memory_profile_list,
-    handle_memory_profile_reindex,
     handle_memory_profile_search,
     handle_memory_profile_show,
 )
-from nuself.cli.commands.memory.source import (
-    handle_memory_source_chunks,
-    handle_memory_source_delete,
-    handle_memory_source_extract,
-    handle_memory_source_ingest,
-    handle_memory_source_list,
-    handle_memory_source_search,
-    handle_memory_source_show,
-)
 from nuself.cli.handlers import CliHandlerBindings
-from nuself.domain.memory import default_relation_descriptor_registry
+from nuself.memory.model import default_relation_descriptor_registry
 
 
 def add_memory_parser(
@@ -74,8 +63,8 @@ def add_memory_parser(
     bind_help = bindings.bind_help
     memory_parser = subparsers.add_parser(
         "memory",
-        help="Manage memory entries, sources, profiles, reviews, and the memory graph.",
-        description="Manage memory entries, sources, profiles, reviews, and the memory graph.",
+        help="Manage personal memories, profiles, reviews, and the memory graph.",
+        description="Manage personal memories, profiles, reviews, and the memory graph.",
     )
     bind_help(memory_parser)
     memory_subparsers = memory_parser.add_subparsers(
@@ -219,20 +208,20 @@ def add_memory_parser(
     )
     plan_show_parser = plan_subparsers.add_parser(
         "show",
-        help="Show payload-safe recovery metadata for one thread.",
+        help="Show payload-safe recovery metadata for one observation.",
     )
-    plan_show_parser.add_argument("thread_id")
+    plan_show_parser.add_argument("observation_id")
     bind_handler(plan_show_parser, handle_memory_plan_show)
     plan_discard_parser = plan_subparsers.add_parser(
         "discard",
-        help="Discard one thread's recovery plan without changing its cursor.",
+        help="Discard one observation recovery plan.",
     )
-    plan_discard_parser.add_argument("thread_id")
+    plan_discard_parser.add_argument("observation_id")
     plan_discard_parser.add_argument(
         "--force",
         action="store_true",
         required=True,
-        help="Acknowledge that the source range may be modeled again.",
+        help="Acknowledge that the observation may be modeled again.",
     )
     bind_handler(plan_discard_parser, handle_memory_plan_discard)
     optimize_parser = memory_subparsers.add_parser(
@@ -286,60 +275,6 @@ def add_memory_parser(
     )
     profile_delete_parser.add_argument("profile_id")
     bind_handler(profile_delete_parser, handle_memory_profile_delete)
-    bind_handler(
-        profile_subparsers.add_parser(
-            "reindex", help="Rebuild derived profile entries."
-        ),
-        handle_memory_profile_reindex,
-    )
-    source_parser = memory_subparsers.add_parser(
-        "source",
-        help="Manage source documents and extracted chunks.",
-        description="Manage source documents and extracted chunks.",
-    )
-    bind_help(source_parser)
-    source_subparsers = source_parser.add_subparsers(
-        dest="source_command", metavar="<command>"
-    )
-    source_ingest_parser = source_subparsers.add_parser(
-        "ingest", help="Ingest a source document."
-    )
-    source_ingest_parser.add_argument("path", type=Path)
-    source_ingest_parser.add_argument("--tag", action="append", default=[])
-    source_ingest_parser.add_argument(
-        "--privacy", choices=["private", "shareable"], default="private"
-    )
-    bind_handler(source_ingest_parser, handle_memory_source_ingest)
-    bind_handler(
-        source_subparsers.add_parser("list", help="List source documents."),
-        handle_memory_source_list,
-    )
-    source_show_parser = source_subparsers.add_parser(
-        "show", help="Show one source document by ID or visible index."
-    )
-    source_show_parser.add_argument("source_id")
-    bind_handler(source_show_parser, handle_memory_source_show)
-    source_delete_parser = source_subparsers.add_parser(
-        "delete", help="Delete one source document by ID or visible index."
-    )
-    source_delete_parser.add_argument("source_id")
-    bind_handler(source_delete_parser, handle_memory_source_delete)
-    source_chunks_parser = source_subparsers.add_parser(
-        "chunks", help="List chunks for one source document."
-    )
-    source_chunks_parser.add_argument("source_id", nargs="?")
-    bind_handler(source_chunks_parser, handle_memory_source_chunks)
-    source_search_parser = source_subparsers.add_parser(
-        "search", help="Search source chunks."
-    )
-    source_search_parser.add_argument("query")
-    source_search_parser.add_argument("--limit", type=int, default=8)
-    bind_handler(source_search_parser, handle_memory_source_search)
-    source_extract_parser = source_subparsers.add_parser(
-        "extract", help="Extract memory candidates from one source document."
-    )
-    source_extract_parser.add_argument("source_id")
-    bind_handler(source_extract_parser, handle_memory_source_extract)
     candidate_parser = memory_subparsers.add_parser(
         "review",
         help="Review pending memory candidates.",
@@ -399,10 +334,6 @@ def add_memory_parser(
     )
     types_parser.add_argument("--json", action="store_true")
     bind_handler(types_parser, handle_memory_types)
-    bind_handler(
-        memory_subparsers.add_parser("reindex", help="Rebuild memory derived indexes."),
-        handle_memory_reindex,
-    )
     unquarantine_parser = memory_subparsers.add_parser(
         "unquarantine", help="Move one quarantined memory entry back to draft."
     )

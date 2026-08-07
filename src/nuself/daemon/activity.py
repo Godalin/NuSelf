@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from threading import Condition
 from uuid import uuid4
 
-from nuself.logs import LogEvent
+from nuself.log.record import LogEvent
 
 
 class ActivitySubscriptionNotFound(LookupError):
@@ -110,10 +110,9 @@ class ActivityBroker:
                     return ActivityBatch((), 0)
                 self._condition.wait(remaining)
 
-    def close(self, subscription_id: str) -> bool:
+    def close(self, subscription_id: str) -> None:
         with self._condition:
-            removed = self._subscriptions.pop(subscription_id, None)
-            return removed is not None
+            self._subscriptions.pop(subscription_id, None)
 
     def _expire_locked(self) -> None:
         cutoff = time.monotonic() - self._ttl_seconds

@@ -1,20 +1,18 @@
-"""File-backed trace repository."""
+"""SQLite-backed trace repository."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 import threading
 from typing import Literal, cast
 
-from nuself.handles import VisibleHandleError, resolve_visible_item
-from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
+from nuself.runtime.handles import VisibleHandleError, resolve_visible_item
+from nuself.config.settings import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
-from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
+from nuself.storage.contract import StorageBackend
+from nuself.trace.model import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 
-TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
+type TraceVisibilityFilter = Literal["default", "private", "shareable", "internal", "all"]
 
 
 class TraceNotFound(ValueError):
@@ -35,7 +33,7 @@ class TraceRepository:
     ) -> None:
         self._traces = backend.collection("trace_nodes")
         self._links = backend.collection("trace_edges")
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
         self._paths = paths
 
     def save_trace(self, trace: ThoughtTrace) -> ThoughtTrace:
@@ -62,7 +60,7 @@ class TraceRepository:
                 ThoughtTrace.from_wire,
                 component="reasoning",
                 collection="trace_nodes",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if trace is None:
                 continue
@@ -154,24 +152,13 @@ class TraceRepository:
                 links.append(link)
         return sorted(links, key=lambda link: (link.created_at, link.id))
 
-    def reindex(self) -> Path:
-        records: list[object] = [
-            {"_record_kind": "trace", **item.to_wire()}
-            for item in self.list_traces(visibility="all")
-        ]
-        for wire in self._links.list():
-            records.append({"_record_kind": "link", **wire})
-        return write_derived_index(
-            self._paths, "trace_index.json", records
-        )
-
     def _decode_link(self, wire: dict[str, object]) -> TraceLink | None:
         return decode_observed_record(
             wire,
             TraceLink.from_wire,
             component="reasoning",
             collection="trace_edges",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
         )
 
 

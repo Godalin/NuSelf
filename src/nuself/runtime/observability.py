@@ -4,39 +4,37 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import TypeVar
 
-from nuself.logs import (
+from nuself.log.store import (
     DEFAULT_LOG_RETENTION,
-    LogComponent,
-    LogEvent,
-    LogLevel,
     LogRetentionPolicy,
     create_audit_envelope,
     write_audit_envelope,
     write_log_event,
 )
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.types import LogComponent, LogLevel
+from nuself.log.record import LogEvent
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata,
 )
-from nuself.runtime.audit_types import LOG_COMPONENTS
+from nuself.runtime.audit.types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
     sanitize_diagnostic_metadata,
 )
-from nuself.runtime.events import EventDeliveryError, EventPublisher
+from nuself.runtime.event.publisher import EventDeliveryError, EventPublisher
 from nuself.runtime.messages import RuntimeEnvelope
-from nuself.runtime.warning_definitions import (
+from nuself.runtime.warning import (
     TerminalWarningDefinition,
     TerminalWarningRegistry,
     TerminalWarningSchemaError,
     emit_registered_terminal_warning,
 )
 
-T = TypeVar("T")
 DEFAULT_DECODE_ERRORS: tuple[type[Exception], ...] = (
     ValueError,
     KeyError,
@@ -52,13 +50,11 @@ def _require_exact_metadata(
     metadata: Mapping[str, object],
     expected: frozenset[str],
 ) -> None:
-    actual = frozenset(metadata)
-    if actual != expected:
-        raise AuditSchemaError(
-            "observability metadata fields differ "
-            f"(missing={sorted(expected - actual)!r}, "
-            f"extra={sorted(actual - expected)!r})"
-        )
+    require_exact_metadata(
+        metadata,
+        expected,
+        context="observability metadata",
+    )
     for field in expected:
         value = metadata[field]
         if not isinstance(value, str) or not value.strip():
@@ -144,7 +140,7 @@ OBSERVABILITY_TERMINAL_WARNING_REGISTRY = (
 )
 
 
-def run_observed_best_effort(
+def run_observed_best_effort[T](
     operation: Callable[[], T],
     *,
     component: LogComponent,
@@ -174,6 +170,41 @@ def run_observed_best_effort(
         return None
 
 
+def report_defined_failure(
+    exc: BaseException,
+    *,
+    definition: AuditEventDefinition,
+    message: str,
+    project_root: Path | None,
+    metadata: dict[str, object] | None = None,
+) -> None:
+    """Validate and project one domain-selected audit failure definition."""
+
+    event_metadata = metadata or {}
+    error = diagnostic_exception_chain(exc)
+    definition.validate(
+        level=definition.level,
+        status=definition.status,
+        error=error,
+        metadata=event_metadata,
+    )
+    if definition.status is None:
+        raise AuditSchemaError(
+            f"{definition.component}/{definition.event} failure "
+            "requires a status"
+        )
+    report_observed_failure(
+        exc,
+        component=definition.component,
+        event=definition.event,
+        message=message,
+        project_root=project_root,
+        metadata=dict(event_metadata),
+        level=definition.level,
+        status=definition.status,
+    )
+
+
 def write_observed_log_event(
     component: LogComponent,
     event: str,
@@ -181,7 +212,7 @@ def write_observed_log_event(
     *,
     project_root: Path | None = None,
     level: LogLevel = "info",
-    thread_id: str | None = None,
+    conversation_id: str | None = None,
     request_id: str | None = None,
     turn_id: str | None = None,
     job_id: str | None = None,
@@ -201,7 +232,7 @@ def write_observed_log_event(
         event,
         message,
         level=level,
-        thread_id=thread_id,
+        conversation_id=conversation_id,
         request_id=request_id,
         turn_id=turn_id,
         job_id=job_id,
@@ -243,22 +274,12 @@ def report_observability_projection_failure(
         component=component,
         event=OBSERVABILITY_PROJECTION_FAILED,
     )
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=component,
-        event=OBSERVABILITY_PROJECTION_FAILED,
+        definition=definition,
         message="Secondary observability projection failed",
         project_root=project_root,
         metadata=metadata,
-        level=definition.level,
-        status=definition.status or "degraded",
     )
 
 
@@ -280,7 +301,7 @@ def publish_observed_event(
             payload=payload,
         )
     except EventDeliveryError as exc:
-        report_internal_event_delivery_failure(
+        _report_internal_event_delivery_failure(
             exc,
             component=failure_component,
             project_root=project_root,
@@ -288,7 +309,7 @@ def publish_observed_event(
         return exc.event
 
 
-def report_internal_event_delivery_failure(
+def _report_internal_event_delivery_failure(
     exc: EventDeliveryError,
     *,
     component: LogComponent,
@@ -304,26 +325,16 @@ def report_internal_event_delivery_failure(
         component,
         INTERNAL_EVENT_DELIVERY_FAILED,
     )
-    error = diagnostic_exception_chain(exc)
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        metadata=metadata,
-    )
-    report_observed_failure(
+    report_defined_failure(
         exc,
-        component=component,
-        event=INTERNAL_EVENT_DELIVERY_FAILED,
+        definition=definition,
         message="Internal event delivery failed",
         project_root=project_root,
         metadata=metadata,
-        level=definition.level,
-        status=definition.status or "degraded",
     )
 
 
-def decode_observed_record(
+def decode_observed_record[T](
     wire: Mapping[str, object],
     decoder: Callable[[dict[str, object]], T],
     *,

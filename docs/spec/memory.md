@@ -26,7 +26,7 @@
 8. The generated type must be registered and the normalized title and tags
    must remain non-empty.
 9. Result is written directly to `MemoryEntryRepository` (bypasses candidate
-   queue), then `reindex()` is called.
+   queue); SQLite is immediately authoritative and no sidecar index is written.
 
 ## Temporal Memory Contract
 
@@ -42,15 +42,15 @@ Rules:
 
 - Runtime storage keeps timestamps as timezone-aware ISO strings.
 - `created_at` and `updated_at` are storage metadata; they do not necessarily describe when the remembered thing happened.
-- `observed_at` should be filled when the source has an event/date or when a chat-derived memory is created from a thread turn.
+- `observed_at` should be filled when the source has an event/date or when a chat-derived memory is created from a conversation turn.
 - For chat-derived memories, `observed_at` should use the curation source time and evidence should carry the same observation time.
 - Retrieval context shown to chat must include available temporal fields so NuSelf can reason about whether a memory is old, recent, current, or historically bounded.
 - Missing temporal fields must be omitted from compact prompts rather than rendered as `None`.
 
 ## Read-Model Collection Ownership
 
-`MemoryEntry`, `MemoryCandidate`, `MemoryObject`, `ProfileItem`, and
-`SourceDocument` are immutable persisted read models. They must not retain
+`MemoryEntry`, `MemoryCandidate`, `MemoryObject`, and `ProfileItem` are
+immutable persisted read models. They must not retain
 aliases to caller-owned containers. Construction and wire decoding recursively
 freeze tags, source references, relations, payload, metadata, and collection
 membership around immutable `MemoryEvidence` records.
@@ -61,6 +61,9 @@ that result must not affect the model or a later serialization. Descriptor
 validation, merge, conversion, retrieval, and relation traversal must accept
 the immutable in-memory `Mapping` and `Sequence` forms without weakening their
 existing wire-shape validation.
+Required and optional string fields share one codec each across concrete dict
+records and abstract mapping payloads. Container annotation differences must
+not create duplicate validators with identical accepted values and errors.
 
 `relations` is the only persisted relation field for memory entries,
 candidates, profile items, and the entry payload embedded in `MemoryObject`.
@@ -69,25 +72,12 @@ payload fields `supersedes` and `related_memory_ids` are neither written nor
 decoded; records using those shapes require an explicit storage migration
 before they can be loaded.
 
-Repository statistics results follow the same read-ownership principle.
-`MemoryStats` and `ProfileStats` detach and freeze their mapping fields during
-construction. A caller may retain or inspect a statistics snapshot but cannot
-mutate an apparently frozen result or alter the dictionaries supplied by the
-repository while composing that snapshot.
-
-### Source Ingestion (`source ingest`)
-
-1. Accept single `.md`/`.txt` files or recurse into directories.
-2. Parse YAML front matter (`title`, `tags`, `date`, `origin`, `privacy`).
-3. Chunk by paragraphs targeting ~1200 chars per chunk.
-4. Write one `SourceDocument` and per-chunk `SourceChunk` files under `<authority-root>/sources/`.
-5. No candidates created automatically.
-
-### Source Extraction (`source extract`)
-
-1. Create one `MemoryCandidate` per chunk with `action="create"`, `type="profile_fact"`.
-2. Deterministic ID: `cand_<uuid5(source_ref)>`.
-3. Save to `MemoryCandidateRepository` for manual review.
+Memory statistics results follow the same read-ownership principle.
+`MemoryStats` detaches and freezes its mapping fields during construction. A
+caller may retain or inspect a statistics snapshot but cannot mutate an
+apparently frozen result or alter the dictionaries supplied while composing
+that snapshot. Profile does not expose a parallel statistics API without a
+product consumer.
 
 ### Validation Gates on Save
 
@@ -101,95 +91,92 @@ repository while composing that snapshot.
 
 ### Triggers
 
-1. Daemon background thread every `daemon.memory_curator.interval_seconds` (default `300`).
-2. After every daemon chat turn.
-3. Manual CLI: `nuself memory update`.
+1. After committing a reply, the conversation boundary selects the completed
+   turn and calls the generic memory `observe()` API. The API durably stores a
+   producer-neutral observation before curation is requested.
+2. The daemon's unified scheduler coalesces observation IDs and processes them
+   promptly. Every `daemon.memory_curator.interval_seconds` (default `300`) it
+   scans the memory-owned pending observation inbox. It never scans
+   conversation storage.
+3. Direct local chat runs curation at its owned post-turn/exit lifecycle
+   boundary because no daemon worker exists.
+4. Manual CLI: `nuself memory update`.
 
 Post-chat curation is a secondary effect after the assistant reply has already
-been produced and persisted. A declared recoverable `RuntimeError` must not
-replace that reply: the daemon returns it with no `memory_update` and emits
-`memory/post_chat_curation_failed` through the shared observability boundary.
-The event inherits the chat request, thread, turn, and source context and
-preserves the compact exception chain. Undeclared storage or implementation
-errors are not degraded and continue to the daemon request backstop.
+been produced and persisted. Daemon curation failures belong to the worker
+health and observability boundary and cannot alter the completed chat response.
+Each requested or discovered observation ID is passed explicitly to
+`MemoryCurator.run_once`. Memory does not accept a conversation store, state,
+message, or identifier.
 
-### Per-Thread Cursor
+### Durable Observation And Recovery Plan
 
-- Load cursor from `<authority-root>/memory/cursors/{thread_id}.json`.
-- A missing cursor means the thread has not been processed and starts at zero.
-- A present cursor is an authoritative typed record containing the same
-  `thread_id` as its filename/request and a non-negative integer
-  `processed_message_count`.
-- Invalid JSON, non-object shape, mismatched identity, boolean/non-integer
-  counts, and negative counts are corrupt state. The curator reports a
-  payload-safe `record_decode_failed` event and aborts that run; it must not
-  reinterpret corruption as cursor zero and replay old messages.
-- Cursor updates use atomic same-directory replacement.
+- `MemoryObservation` contains a stable `obs_...` ID, opaque source reference,
+  ordered text fragments, observation time, optional trace correlation, and
+  `pending`/`processed` status. `observe()` is idempotent and rejects an ID
+  collision with different content.
 - Before applying a ready model decision, persist one typed curator plan at
-  `<authority-root>/memory/plans/{thread_id}.json`. The plan owns the exact source
-  range and structured actions. A plan write failure occurs before any
+  `memory_curator_plans`. The plan owns the observation ID, opaque source
+  reference, time, and structured actions. A plan write failure occurs before any
   candidate mutation and aborts the run.
 - Candidate IDs produced from a curator plan are deterministic over the plan's
   source reference and action index. Resuming a plan reuses a repository
   candidate with that ID; an accepted candidate is not staged or accepted
   again, while a pending candidate may continue through the configured
   auto-accept policy.
-- If candidate application completes but cursor persistence fails, the plan
-  remains authoritative. The next run resumes that saved plan without invoking
-  the model, advances only to the plan's original end position, and leaves
-  later thread messages for a subsequent run.
-- One plan file exists per thread. Once its end position is at or behind the
-  durable cursor it is stale and may be atomically replaced by the next ready
-  decision, so plans do not grow without bound.
-- A plan is an authoritative typed record. Invalid JSON, identity/range
-  mismatch, invalid actions, or an end position beyond the currently known
-  thread are corrupt state: report `record_decode_failed` and abort rather than
-  calling the model or guessing whether prior candidate effects committed.
-- Curator runtime and operator tooling share one typed plan store for path
-  validation, strict decoding, corruption reporting, and exact-thread delete.
-- `nuself memory plan show <thread>` exposes only operational metadata:
-  thread, source range, observation time, action count, action/type, optional
+- If candidate application is interrupted, the plan remains authoritative.
+  The next run resumes it without invoking the model. After the observation is
+  marked processed, its plan is removed.
+- A plan is an authoritative typed record. Invalid JSON, observation identity,
+  source reference, or actions are corrupt state: report `record_decode_failed` and abort rather than
+  calling the model or guessing whether prior candidate effects committed. The
+  typed `MemoryCuratorPlanCorruptError` crosses the curator boundary directly;
+  callers do not erase it into a generic error with the same safe message.
+- Curator runtime and operator tooling share one typed plan store and one
+  `get()` read operation for path validation, strict decoding, corruption
+  reporting, and exact-observation deletion. Recovery is a use of that read,
+  not a parallel store API.
+- `nuself memory plan show <observation>` exposes only operational metadata:
+  observation ID, source reference, observation time, action count, action/type, optional
   target ID, and deterministic candidate ID. It must not print candidate
   title/body, tags, or model reason.
-- `nuself memory plan discard <thread> --force` removes exactly that thread's
-  plan and does not alter its cursor or candidates. `--force` is mandatory
-  because discarding an unfinished plan makes the source range eligible for a
+- `nuself memory plan discard <observation> --force` removes exactly that observation's
+  plan and does not alter its observation or candidates. `--force` is mandatory
+  because discarding an unfinished plan makes the observation eligible for a
   new model decision. Missing and corrupt plans remain explicitly
   diagnosable; there is no automatic discard.
-- Curator plan/candidate/cursor mutation for one thread is guarded by a stable
-  advisory lock at `<authority-root>/memory/locks/{thread_id}.lock`. The lock is
-  per-thread, so unrelated threads remain concurrent; it is separate from the
-  chat ThreadStore lock so model curation never blocks message persistence.
+- Curator plan/candidate/observation mutation is guarded by a stable advisory
+  lock keyed by observation ID. Unrelated observations remain concurrent, and
+  no conversation lock is shared or acquired.
 - Lock acquisition is exclusive and non-blocking. A curator run that finds the
-  same thread busy performs no model call or plan/candidate/cursor mutation,
+  same observation busy performs no model call or plan/candidate/observation mutation,
   emits
   `memory/curator_contended`, and returns a zero-change result. This is a normal
   deferred outcome, not a worker failure.
-- `memory plan discard` holds the same lock across existence check and unlink.
+- `memory plan discard` holds the same lock across existence check and delete.
   Contention returns non-zero and leaves the plan untouched. `memory plan show`
   reads one atomic snapshot and does not acquire the mutation lock.
 - Lock files are stable coordination inodes and are not deleted after release.
   Acquisition/release must close owned handles and preserve primary lock
   errors when cleanup also fails.
-- If `cursor >= next_message_index`, no-op (idempotent).
-- If thread was compressed (`cursor < message_start_index`), log gap and start from `visible_start`.
-- Advance cursor to `visible_end` after processing.
-- Gap, deferred, candidate, and completion observations are structured
+- A processed observation is an idempotent no-op.
+- Deferred, candidate, and completion events are structured
   `memory` log events. The curator never appends raw text to `memory.log`;
   that file remains JSONL under the shared log contract.
-- Memory curation owns one sealed audit registry shared by curator and
-  optimizer. Unknown events and invalid status/error/metadata fail before the
+- Memory curation owns one sealed audit registry and one
+  `write_memory_audit()` operation shared by curator and optimizer. Unknown
+  events and invalid status/error/metadata fail before the
   best-effort sink. Candidate audit metadata is identity-only: it may contain
-  candidate ID, target ID, action, memory type, thread/source identity, and
+  candidate ID, target ID, action, memory type, observation/source identity, and
   aggregate counts, but never candidate title/body or free-form model reason.
 - Curator audit persistence is auxiliary. Failure to write one audit or its
   diagnostic cannot replace a saved candidate/entry, prevent an authoritative
-  cursor update, or make a completed run eligible for replay.
+  observation completion, or make a completed run eligible for replay.
 
 ### Quality Gate (`_has_memory_worthy_signal`)
 
-- Inspect only `role=="user"` messages.
-- If concatenated user text `< 120` chars AND contains none of the registered
+- Inspect the producer-selected observation fragments.
+- If concatenated text `< 120` chars AND contains none of the registered
   durable markers, return `processed_messages=0` without an LLM call. Marker
   matching uses the union of English, Simplified/Traditional Chinese, and
   Japanese durable-signal registries so mixed-language text is not excluded by
@@ -222,7 +209,7 @@ errors are not degraded and continue to the daemon request backstop.
   empty normalized tags, unknown `type`, raw-transcript bodies (`>=2`
   occurrences of `user:`/`assistant:`), and `update` without a non-empty
   `entry_id`.
-- LLM prompt includes: thread summary, up to 12 existing memory entries, up to 12 profile items, and the current registered memory type names from `MemoryTypeRegistry`.
+- LLM prompt includes: conversation summary, up to 12 existing memory entries, up to 12 profile items, and the current registered memory type names from `MemoryTypeRegistry`.
 
 ### Conflict Detection
 
@@ -320,10 +307,9 @@ The closed Memory curation taxonomy is:
 
 | Event | Level | Status | Metadata |
 |---|---|---|---|
-| `curator_history_gap` | `warning` | `degraded` | thread, cursor, visible start |
-| `curator_contended` | `info` | `deferred` | thread |
-| `curator_deferred` | `info` | `deferred` | thread, source range, zero processed count |
-| `curator_completed` | `info` | `completed` | thread, source range, processed/create/update/ignore counts |
+| `curator_contended` | `info` | `deferred` | observation |
+| `curator_deferred` | `info` | `deferred` | observation, source reference, zero processed count |
+| `curator_completed` | `info` | `completed` | observation, source reference, processed/create/update/ignore counts |
 | `candidate_merged` | `info` | `created` | candidate, target, memory type |
 | `candidate_created` | `info` | `created` | candidate and memory type |
 | `candidate_updated` | `info` | `created` | candidate, target, memory type |
@@ -341,8 +327,8 @@ daemon request handler, or Memory CLI operation initiates the work. Those
 callers use Memory-domain adapters and never construct raw `component=memory`
 records. Post-chat completion is already represented by `curator_completed`;
 clients must not emit a second `curator_changed` record or copy its free-form
-summary into audit metadata. Chat trace failures use runtime context for thread
-correlation rather than duplicating the thread id.
+summary into audit metadata. Chat trace failures use runtime context for
+conversation correlation rather than duplicating the conversation id.
 
 ## Candidate Review Queue
 
@@ -388,7 +374,17 @@ ProfileItem and delete targets have no MemoryEntry review-state transition.
 | `quarantined` | Unknown type, awaiting recovery |
 | `rejected` | Explicitly rejected |
 
-## Query / Retrieval (`MemoryQueryService`)
+## Memory Service (`MemoryService`)
+
+The application composes one service for user-facing retrieval and bounded
+entry mutation. It owns typed search results, filtered counts, archive, and
+importance updates; successful mutations are complete when the repository write
+returns. Agent tools receive only this service and never the entry repository.
+Repository bundles remain internal application resources for workflows that
+coordinate candidates, observations, curator plans, and profiles.
+Memory intake, curation, and optimization receive typed structured agents from
+CLI/application composition. Domain constructors do not resolve configuration
+or model endpoints and retain direct agent injection for deterministic tests.
 
 ### Filtering Before Scoring
 
@@ -419,8 +415,13 @@ The chat memory skill may not conclude from its first empty tool result. It
 must issue exactly one distinct broader `memory_search` using fewer, shorter,
 or synonymous keywords before reporting that no matching stored memory was
 found. The second empty result ends retrieval; the agent must not loop. This
-conversation policy does not change deterministic `MemoryQueryService`
+conversation policy does not change deterministic `MemoryService`
 scoring or make a claim that the authority contains no memories.
+
+Chat context preparation must not query Memory or inject a packed Memory
+section. Memory is available only through explicit Agent tool calls governed by
+the Memory skill. Tool adapters render typed `MemoryMatch` values for the model;
+the domain service does not construct prompt sections.
 
 The one-shot `memory search` command uses the same ranked token query service
 as the chat tool, then applies its CLI-only temporal and exact filters to those
@@ -500,7 +501,8 @@ disagree with chat for multi-keyword queries.
 ### Derived Graph Contract
 
 - Graph is **derived and rebuildable**, not authoritative.
-- `reindex()` writes `<authority-root>/derived/symbolic_graph.json` and `<authority-root>/derived/relation_index.json`.
+- Nodes and edges are computed from current SQLite memory entries when queried;
+  there is no persisted graph or relation-index sidecar.
 - Nodes are memory entries; edges generated from `entry.relations`.
 - Edge IDs are deterministic: `{source_id}:{relation}:{target_id}`.
 

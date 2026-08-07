@@ -7,12 +7,12 @@ from typing import BinaryIO, cast
 
 import pytest
 
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.instance import DaemonInstanceLock
-from nuself.logs import read_log_events
-from nuself.authority import ensure_authority_root
+from nuself.log.reader import read_log_events
 from nuself.runtime.definitions import DefinitionRegistrySealedError
+from nuself.config.scope import resolve_scope
 
 
 def test_daemon_lifecycle_warning_registry_is_complete_and_sealed() -> None:
@@ -27,17 +27,6 @@ def test_daemon_lifecycle_warning_registry_is_complete_and_sealed() -> None:
 
 def _no_sleep(seconds: float) -> None:
     del seconds
-
-
-def test_ensure_authority_root_creates_runtime_dirs(tmp_path: Path) -> None:
-    paths = ensure_authority_root(tmp_path)
-
-    assert paths.authority_root.is_dir()
-    assert paths.runtime_dir.is_dir()
-    assert paths.logs_dir.is_dir()
-    assert (tmp_path / "sources").is_dir()
-    assert (tmp_path / "derived").is_dir()
-    assert (tmp_path / "shares").is_dir()
 
 
 def test_status_when_daemon_is_missing(tmp_path: Path) -> None:
@@ -246,6 +235,70 @@ def test_start_isolates_raw_process_output_from_structured_daemon_log(
     )
     assert not paths.daemon_log_path.exists()
     assert read_log_events(project_root=tmp_path, component="daemon") == []
+
+
+def test_start_serializes_workspace_scope_for_daemon_process(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_root = tmp_path / "user"
+    workspace_root = tmp_path / "workspace"
+    scope = resolve_scope(
+        workspace=workspace_root,
+        environ={"NUSELF_HOME": str(user_root)},
+    )
+    paths = runtime_paths(scope)
+    stopped = lifecycle.DaemonStatus(
+        phase="stopped",
+        pid=None,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    ready = lifecycle.DaemonStatus(
+        phase="ready",
+        pid=42,
+        socket_path=paths.socket_path,
+        pid_path=paths.pid_path,
+    )
+    status_calls = 0
+    spawned_command: list[str] | None = None
+
+    def fake_status(
+        project_root: Path | None = None,
+        *,
+        ping_timeout: float = 2.0,
+    ) -> lifecycle.DaemonStatus:
+        del project_root, ping_timeout
+        nonlocal status_calls
+        status_calls += 1
+        return stopped if status_calls == 1 else ready
+
+    class Process:
+        def poll(self) -> None:
+            return None
+
+    def fake_popen(args: object, **kwargs: object) -> Process:
+        del kwargs
+        nonlocal spawned_command
+        spawned_command = cast(list[str], args)
+        return Process()
+
+    monkeypatch.setattr(lifecycle, "status", fake_status)
+    monkeypatch.setattr(lifecycle.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(lifecycle.time, "sleep", _no_sleep)
+
+    result = lifecycle.start(scope)
+
+    assert result.status is ready
+    assert spawned_command == [
+        lifecycle.sys.executable,
+        "-m",
+        "nuself.daemon.server",
+        "--user-root",
+        str(scope.user_root),
+        "--workspace-root",
+        str(scope.workspace_root),
+    ]
 
 
 def test_start_reuses_matching_initial_ready_status(
@@ -961,7 +1014,7 @@ def test_stop_timeout_retains_ambiguous_transport_failure(
     error = captured.value
     assert error.reason == "timeout"
     assert error.status is stopped
-    assert error.owner_active is True
+    assert error.status.owner_active is True
     assert error.__cause__ is request_error
     assert isclose(sum(sleeps), 0.12)
     assert str(error) == (
@@ -1010,7 +1063,7 @@ def test_stop_rejection_is_not_retried(
 
     error = captured.value
     assert error.reason == "request_failed"
-    assert error.owner_active is True
+    assert error.status.owner_active is True
     assert error.__cause__ is rejection
     assert str(error) == "daemon rejected the shutdown request"
     assert "private rejection" not in str(error)
@@ -1053,7 +1106,7 @@ def test_stop_wraps_instance_ownership_inspection_failure(
 
     error = captured.value
     assert error.reason == "ownership_check_failed"
-    assert error.owner_active is None
+    assert error.status.owner_active is None
     assert isinstance(error.__cause__, lifecycle.DaemonStatusError)
     assert error.__cause__.status == unknown
     assert error.__cause__.__cause__ is failure

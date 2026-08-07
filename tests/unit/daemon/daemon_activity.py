@@ -10,8 +10,22 @@ from nuself.daemon.activity import (
 )
 from nuself.daemon.protocol import DaemonRequest
 from nuself.daemon.request_handlers import handle_request
-from nuself.daemon.state import DaemonState
-from nuself.logs import LogEvent, project_log_events, write_log_event
+from nuself.daemon.state import DaemonState as _DaemonState
+from daemon_fixtures import DaemonStateOwner
+from nuself.log.store import project_log_events, write_log_event
+from nuself.log.record import LogEvent
+
+_STATE_OWNER = DaemonStateOwner()
+
+
+def DaemonState(project_root: Path) -> _DaemonState:
+    return _STATE_OWNER.create(project_root)
+
+
+@pytest.fixture(autouse=True)
+def _close_states():  # pyright: ignore[reportUnusedFunction]
+    yield
+    _STATE_OWNER.close()
 
 
 def _event(turn_id: str, message: str) -> LogEvent:
@@ -46,8 +60,8 @@ def test_activity_broker_filters_turns_and_bounds_queues() -> None:
 def test_activity_broker_close_and_expiry() -> None:
     broker = ActivityBroker(subscription_ttl_seconds=0.001)
     subscription_id = broker.open("turn-1")
-    assert broker.close(subscription_id) is True
-    assert broker.close(subscription_id) is False
+    broker.close(subscription_id)
+    broker.close(subscription_id)
 
     with pytest.raises(ActivitySubscriptionNotFound):
         broker.next_events(
@@ -96,7 +110,7 @@ def test_daemon_activity_request_lifecycle(tmp_path: Path) -> None:
         ),
         state,
     )
-    assert closed.payload == {"closed": True}
+    assert closed.payload == {}
 
 
 def test_request_scoped_log_projection_reaches_activity_broker(

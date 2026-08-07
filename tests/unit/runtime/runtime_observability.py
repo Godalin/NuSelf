@@ -5,15 +5,16 @@ from pathlib import Path
 import pytest
 
 import nuself.runtime.observability as observability
-from nuself.logs import LogAppendLifecycleError, read_log_events
-from nuself.runtime.events import EventPublisher
-from nuself.runtime.event_definitions import UnknownEventDefinitionError
-from nuself.runtime.audit_definitions import (
+from nuself.log.reader import read_log_events
+from nuself.log.store import LogAppendLifecycleError
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.event.definition import UnknownEventDefinitionError
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,
 )
-from nuself.runtime.audit_types import LOG_COMPONENTS
+from nuself.runtime.audit.types import LOG_COMPONENTS
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,

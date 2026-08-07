@@ -103,6 +103,10 @@ engine and its LLM-backed graph nodes so these records use the same project
 storage as the calling chat or reflection runtime. Diagnostic persistence
 failure cannot replace the documented fallback, stop the bounded discussion,
 or trigger a hidden LLM/diagnostic retry.
+The service receives resolved Reflection settings and language preference from
+application composition. It does not reload system configuration and does not
+accept a prebuilt discussion engine; focused substitution occurs at its narrow
+structured-agent inputs.
 
 The chat orchestration layer that invokes
 `SharedPersonaDiscussionService.discuss(...)` also uses the shared agent
@@ -165,6 +169,8 @@ candidate id, approval decision, participant/outcome counts, and step count.
 Persona owns every direct `component=persona` event, including events requested
 by Chat, Reflection, and CLI callers. Callers use Persona adapters; they do not
 construct raw log records or choose arbitrary levels/statuses.
+Chat's persona adapter writes these closed events at the lifecycle point that
+owns their metadata; it does not add one-use per-event forwarding methods.
 
 | Event | Level | Status | Metadata |
 |---|---|---|---|

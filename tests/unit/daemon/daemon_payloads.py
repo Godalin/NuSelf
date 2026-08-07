@@ -6,22 +6,25 @@ from typing import cast
 import pytest
 
 from nuself.daemon.payloads import (
-    ActivityCloseRequestPayload,
-    ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
-    ActivityOpenResponsePayload,
+    ActivitySubscriptionPayload,
     ChatRequestPayload,
+    ChatToolEffectPayload,
     ChatResponsePayload,
-    EmptyRequestPayload,
-    HealthResponsePayload,
-    MessagePayload,
-    WorkerHealthPayload,
+    DaemonIdentityPayload,
+    EmptyPayload,
+    SchedulerHealthPayload,
+    decode_chat_payload,
 )
 from nuself.daemon.protocol import JsonValue, ProtocolError
-from nuself.daemon.types import WorkerHealth
-from nuself.logs import LogEvent
+from nuself.log.record import LogEvent
+from nuself.runtime.feature.approval import (
+    ApprovalEffectDecision,
+    ApprovalEffectRequest,
+    ApprovalEffectResolution,
+)
 
 
 def test_chat_request_payload_validates_and_defaults() -> None:
@@ -34,6 +37,35 @@ def test_chat_request_payload_validates_and_defaults() -> None:
     assert payload == ChatRequestPayload(message="hello")
 
 
+def test_chat_effect_payloads_round_trip_exact_request_and_decision() -> None:
+    request = ApprovalEffectRequest(
+        component="memory",
+        operation="memory_create",
+        action="create",
+        resource="memory",
+        risk="reversible",
+        summary="Create memory A",
+    )
+    resolution = ApprovalEffectResolution(
+        request,
+        ApprovalEffectDecision(
+            True,
+            approver="tester",
+            input_kind="affirmative",
+        ),
+    )
+    chat_request = ChatRequestPayload(
+        message="remember this",
+        conversation_id="default",
+        turn_id="turn-1",
+        effect_resolution=resolution,
+    )
+    challenge = ChatToolEffectPayload("default", request)
+
+    assert ChatRequestPayload.from_wire(chat_request.to_wire()) == chat_request
+    assert decode_chat_payload(challenge.to_wire()) == challenge
+
+
 def test_chat_request_payload_requires_message() -> None:
     with pytest.raises(ProtocolError, match="must be a string"):
         ChatRequestPayload.from_wire({"message": 42})
@@ -43,8 +75,8 @@ def test_chat_request_payload_requires_message() -> None:
     "payload, field",
     [
         (
-            {"message": "hello", "thread_id": 42},
-            "thread_id",
+            {"message": "hello", "conversation_id": 42},
+            "conversation_id",
         ),
         (
             {"message": "hello", "turn_id": False},
@@ -64,59 +96,62 @@ def test_chat_request_rejects_invalid_optional_or_unknown_fields(
         ChatRequestPayload.from_wire(payload)
 
 
-def test_empty_request_payload_rejects_fields() -> None:
-    assert EmptyRequestPayload.from_wire({}) == EmptyRequestPayload()
+def test_empty_payload_round_trips_and_rejects_fields() -> None:
+    payload = EmptyPayload()
+
+    assert payload.to_wire() == {}
+    assert EmptyPayload.from_wire({}) == payload
     with pytest.raises(ProtocolError, match="unexpected"):
-        EmptyRequestPayload.from_wire({"unexpected": True})
+        EmptyPayload.from_wire({"unexpected": True})
+
+
+def test_daemon_identity_payload_contains_only_authority() -> None:
+    payload = DaemonIdentityPayload("authority-1")
+
+    assert payload.to_wire() == {"authority_id": "authority-1"}
+    assert DaemonIdentityPayload.from_wire(payload.to_wire()) == payload
+    with pytest.raises(ProtocolError, match="message"):
+        DaemonIdentityPayload.from_wire(
+            {"authority_id": "authority-1", "message": "pong"}
+        )
 
 
 def test_chat_response_payload_omits_absent_optional_fields() -> None:
     payload = ChatResponsePayload(
         answer="answer",
-        reply="answer",
-        thread_id="default",
+        conversation_id="default",
         evidence_references=("m1",),
         epistemic_status="grounded",
     )
 
     assert payload.to_wire() == {
         "answer": "answer",
-        "reply": "answer",
-        "thread_id": "default",
+        "conversation_id": "default",
         "evidence_references": ["m1"],
         "epistemic_status": "grounded",
     }
     assert ChatResponsePayload.from_wire(payload.to_wire()) == payload
 
 
-def test_health_response_payload_projects_worker_model() -> None:
-    worker = WorkerHealthPayload.from_health(
-        WorkerHealth(
-            name="memory",
-            alive=True,
-            last_success_at="now",
-            consecutive_failures=0,
-        )
+def test_scheduler_health_payload_round_trips_directly() -> None:
+    scheduler = SchedulerHealthPayload(
+        running=True,
+        accepting=True,
+        pending=2,
+        in_flight=1,
+        capacity=4,
+        last_error=None,
     )
 
-    assert HealthResponsePayload((worker,)).to_wire() == {
-        "workers": [
-            {
-                "name": "memory",
-                "alive": True,
-                "last_success_at": "now",
-                "last_error": None,
-                "consecutive_failures": 0,
-            }
-        ]
+    assert scheduler.to_wire() == {
+        "running": True,
+        "accepting": True,
+        "pending": 2,
+        "in_flight": 1,
+        "capacity": 4,
+        "last_error": None,
     }
-    assert MessagePayload("pong").to_wire() == {"message": "pong"}
-    assert HealthResponsePayload.from_wire(
-        HealthResponsePayload((worker,)).to_wire()
-    ) == HealthResponsePayload((worker,))
-    assert MessagePayload.from_wire(
-        MessagePayload("pong").to_wire()
-    ) == MessagePayload("pong")
+    assert SchedulerHealthPayload.from_wire(scheduler.to_wire()) == scheduler
 
 
 @pytest.mark.parametrize(
@@ -124,23 +159,19 @@ def test_health_response_payload_projects_worker_model() -> None:
     [
         (
             {
-                "workers": [
-                    {
-                        "name": "memory",
-                        "alive": "yes",
-                        "last_success_at": None,
-                        "last_error": None,
-                        "consecutive_failures": 0,
-                    }
-                ]
+                "running": "yes",
+                "accepting": True,
+                "pending": 0,
+                "in_flight": 0,
+                "capacity": 4,
+                "last_error": None,
             },
-            r"worker\[0\].*alive",
+            "running",
         ),
         (
             {
                 "answer": "answer",
-                "reply": "answer",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [1],
                 "epistemic_status": "grounded",
             },
@@ -149,8 +180,7 @@ def test_health_response_payload_projects_worker_model() -> None:
         (
             {
                 "answer": "answer",
-                "reply": "answer",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": "invented",
             },
@@ -159,8 +189,7 @@ def test_health_response_payload_projects_worker_model() -> None:
         (
             {
                 "answer": "answer",
-                "reply": "answer",
-                "thread_id": "default",
+                "conversation_id": "default",
                 "evidence_references": [],
                 "epistemic_status": None,
                 "confidence": 2,
@@ -174,8 +203,8 @@ def test_response_payloads_reject_malformed_nested_fields(
     error: str,
 ) -> None:
     decoder = (
-        HealthResponsePayload.from_wire
-        if "workers" in payload
+        SchedulerHealthPayload.from_wire
+        if "running" in payload
         else ChatResponsePayload.from_wire
     )
     with pytest.raises(ProtocolError, match=error):
@@ -190,20 +219,15 @@ def test_activity_response_payloads_round_trip_and_fail_atomically() -> None:
         event="test",
         message="test event",
     )
-    opened = ActivityOpenResponsePayload("sub-1")
+    opened = ActivitySubscriptionPayload("sub-1")
     events = ActivityEventsResponsePayload((event,))
-    closed = ActivityCloseResponsePayload(True)
 
-    assert ActivityOpenResponsePayload.from_wire(
+    assert ActivitySubscriptionPayload.from_wire(
         opened.to_wire()
     ) == opened
     assert ActivityEventsResponsePayload.from_wire(
         events.to_wire()
     ) == events
-    assert ActivityCloseResponsePayload.from_wire(
-        closed.to_wire()
-    ) == closed
-
     malformed = events.to_wire()
     raw_events = malformed["events"]
     assert isinstance(raw_events, list)
@@ -272,7 +296,7 @@ def test_activity_payloads_validate_bounds() -> None:
             "limt",
         ),
         (
-            ActivityCloseRequestPayload.from_wire,
+            ActivitySubscriptionPayload.from_wire,
             {"subscription_id": "   "},
             "non-blank",
         ),

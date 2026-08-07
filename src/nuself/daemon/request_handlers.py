@@ -6,27 +6,24 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, TypeVar
+from typing import Protocol
 
-from nuself.agent.chat import ConversationGraphRuntime
+from nuself.agent.chat.types import ChatResult
 from nuself.daemon.activity import (
     ActivityBroker,
     ActivitySubscriptionNotFound,
 )
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
-    ActivityCloseRequestPayload,
-    ActivityCloseResponsePayload,
     ActivityEventsResponsePayload,
     ActivityNextRequestPayload,
     ActivityOpenRequestPayload,
-    ActivityOpenResponsePayload,
+    ActivitySubscriptionPayload,
     ChatRequestPayload,
     ChatResponsePayload,
-    EmptyRequestPayload,
-    HealthResponsePayload,
-    MessagePayload,
-    WorkerHealthPayload,
+    ChatToolEffectPayload,
+    EmptyPayload,
+    SchedulerHealthPayload,
 )
 from nuself.daemon.protocol import (
     REQUEST_TYPES,
@@ -40,34 +37,38 @@ from nuself.daemon.request_audit import (
     report_daemon_request_failure,
     write_daemon_request_audit,
 )
-from nuself.daemon.types import WorkerHealth
-from nuself.logs import project_log_events
-from nuself.memory.audit import run_memory_observed
-from nuself.memory.curator import MemoryCurator
-from nuself.memory.curator_contract import MemoryCuratorResult
+from nuself.daemon.scheduler import DaemonScheduler
+from nuself.log.store import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
-
-RequestPayload = TypeVar("RequestPayload")
-
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequired,
+    ToolEffectResolution,
+)
 
 class DaemonRequestPayloadError(ProtocolError):
     """A direct request-specific payload codec rejected its input."""
 
 
 class DaemonRequestState(Protocol):
-    project_root: Path
+    authority_root: Path
     authority_id: str
-    conversation_runtime: ConversationGraphRuntime
-    memory_curator: MemoryCurator
     shutdown_requested: threading.Event
     activity_broker: ActivityBroker
+    scheduler: "DaemonScheduler"
 
-    def worker_health(self) -> tuple[WorkerHealth, ...]: ...
+    def run_chat(
+        self,
+        message: str,
+        *,
+        conversation_id: str,
+        turn_id: str | None,
+        effect_resolution: ToolEffectResolution | None,
+    ) -> ChatResult: ...
 
 
-DaemonRequestRegistry = HandlerRegistry[
+type DaemonRequestRegistry = HandlerRegistry[
     RequestType,
     [DaemonRequest, DaemonRequestState],
     DaemonResponse,
@@ -79,7 +80,6 @@ def build_daemon_request_registry() -> DaemonRequestRegistry:
     registry.use(_daemon_request_scope)
     registry.register("ping", _handle_ping)
     registry.register("health", _handle_health)
-    registry.register("echo", _handle_echo)
     registry.register("chat", _handle_chat)
     registry.register("shutdown", _handle_shutdown)
     registry.register("activity_open", _handle_activity_open)
@@ -110,11 +110,6 @@ def handle_request(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     """Dispatch a validated daemon request through the sealed registry."""
-    if request.type not in DAEMON_REQUEST_HANDLERS.registered_keys:
-        return DaemonResponse.fail(
-            request.request_id,
-            f"unsupported request type: {request.type}",
-        )
     try:
         return DAEMON_REQUEST_HANDLERS.dispatch(
             request.type,
@@ -129,7 +124,7 @@ def handle_request(
         report_daemon_request_failure(
             exc,
             event="request_rejected",
-            project_root=state.project_root,
+            project_root=state.authority_root,
             request_id=request.request_id,
             metadata={"request_type": request.type},
         )
@@ -140,11 +135,10 @@ def _handle_ping(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
+    _decode_request_payload(EmptyPayload.from_wire, request.payload)
     return DaemonResponse.ok(
         request,
         DaemonIdentityPayload(
-            message="pong",
             authority_id=state.authority_id,
         ).to_wire(),
     )
@@ -154,19 +148,17 @@ def _handle_health(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
-    payload = HealthResponsePayload(
-        tuple(WorkerHealthPayload.from_health(item) for item in state.worker_health())
+    _decode_request_payload(EmptyPayload.from_wire, request.payload)
+    snapshot = state.scheduler.snapshot()
+    payload = SchedulerHealthPayload(
+        running=snapshot.running,
+        accepting=snapshot.accepting,
+        pending=snapshot.pending,
+        in_flight=snapshot.in_flight,
+        capacity=snapshot.capacity,
+        last_error=snapshot.last_error,
     )
     return DaemonResponse.ok(request, payload.to_wire())
-
-
-def _handle_echo(
-    request: DaemonRequest,
-    state: DaemonRequestState,
-) -> DaemonResponse:
-    del state
-    return DaemonResponse.ok(request, request.payload)
 
 
 def _handle_chat(
@@ -179,25 +171,29 @@ def _handle_chat(
     )
     started_at = time.monotonic()
     with runtime_context(
-        thread_id=chat_request.thread_id,
+        conversation_id=chat_request.conversation_id,
         turn_id=chat_request.turn_id,
     ):
         try:
-            result = state.conversation_runtime.respond(
+            result = state.run_chat(
                 chat_request.message,
-                thread_id=chat_request.thread_id,
+                conversation_id=chat_request.conversation_id,
                 turn_id=chat_request.turn_id,
+                effect_resolution=chat_request.effect_resolution,
             )
-            memory_update = _run_memory_curator_once(
-                state.memory_curator,
-                project_root=state.project_root,
-                source_trace_id=result.trace_id,
+        except ToolEffectRequired as exc:
+            return DaemonResponse.ok(
+                request,
+                ChatToolEffectPayload(
+                    conversation_id=chat_request.conversation_id,
+                    request=exc.request,
+                ).to_wire(),
             )
         except RuntimeError as exc:
             report_daemon_request_failure(
                 exc,
                 event="chat_turn_failed",
-                project_root=state.project_root,
+                project_root=state.authority_root,
                 request_id=request.request_id,
             )
             return DaemonResponse.fail_from_exception(
@@ -208,31 +204,22 @@ def _handle_chat(
     duration_ms = int((time.monotonic() - started_at) * 1000)
     payload = ChatResponsePayload(
         answer=result.answer,
-        reply=result.reply,
-        thread_id=result.thread_id,
+        conversation_id=result.conversation_id,
         evidence_references=result.evidence_references,
         epistemic_status=result.epistemic_status,
         confidence=result.confidence,
-        memory_update=(
-            memory_update.summary()
-            if memory_update is not None and memory_update.changed
-            else None
-        ),
     )
     with runtime_context(
-        thread_id=result.thread_id,
+        conversation_id=result.conversation_id,
         turn_id=chat_request.turn_id,
     ):
         write_daemon_request_audit(
             "chat_turn_completed",
-            project_root=state.project_root,
+            project_root=state.authority_root,
             request_id=request.request_id,
             duration_ms=duration_ms,
             metadata={
                 "evidence_references": len(result.evidence_references),
-                "memory_changed": (
-                    memory_update.changed if memory_update is not None else False
-                ),
             },
         )
     return DaemonResponse.ok(request, payload.to_wire())
@@ -242,16 +229,16 @@ def _handle_shutdown(
     request: DaemonRequest,
     state: DaemonRequestState,
 ) -> DaemonResponse:
-    _decode_request_payload(EmptyRequestPayload.from_wire, request.payload)
+    _decode_request_payload(EmptyPayload.from_wire, request.payload)
     state.shutdown_requested.set()
     write_daemon_request_audit(
         "shutdown_requested",
-        project_root=state.project_root,
+        project_root=state.authority_root,
         request_id=request.request_id,
     )
     return DaemonResponse.ok(
         request,
-        MessagePayload("shutdown requested").to_wire(),
+        EmptyPayload().to_wire(),
     )
 
 
@@ -266,7 +253,7 @@ def _handle_activity_open(
     subscription_id = state.activity_broker.open(payload.turn_id)
     return DaemonResponse.ok(
         request,
-        ActivityOpenResponsePayload(subscription_id).to_wire(),
+        ActivitySubscriptionPayload(subscription_id).to_wire(),
     )
 
 
@@ -300,35 +287,14 @@ def _handle_activity_close(
     state: DaemonRequestState,
 ) -> DaemonResponse:
     payload = _decode_request_payload(
-        ActivityCloseRequestPayload.from_wire,
+        ActivitySubscriptionPayload.from_wire,
         request.payload,
     )
-    return DaemonResponse.ok(
-        request,
-        ActivityCloseResponsePayload(
-            state.activity_broker.close(payload.subscription_id)
-        ).to_wire(),
-    )
+    state.activity_broker.close(payload.subscription_id)
+    return DaemonResponse.ok(request, EmptyPayload().to_wire())
 
 
-def _run_memory_curator_once(
-    memory_curator: MemoryCurator,
-    *,
-    project_root: Path,
-    source_trace_id: str | None = None,
-) -> MemoryCuratorResult | None:
-    return run_memory_observed(
-        lambda: memory_curator.run_once(
-            source_trace_id=source_trace_id
-        ),
-        event="post_chat_curation_failed",
-        project_root=project_root,
-        metadata={},
-        errors=(RuntimeError,),
-    )
-
-
-def _decode_request_payload(
+def _decode_request_payload[RequestPayload](
     decoder: Callable[[dict[str, JsonValue]], RequestPayload],
     payload: dict[str, JsonValue],
 ) -> RequestPayload:

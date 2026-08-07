@@ -1,35 +1,21 @@
-"""Tool registration, skill loading, prompt metadata, and call logging."""
+"""Tool registration, skill loading, and prompt metadata."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
-from pathlib import Path
+from collections.abc import Callable
 from typing import cast
 
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools import BaseTool
 
-from nuself.agent.skills import (
-    AgentSkill,
+from nuself.agent.skill_loader import (
     load_agent_skills,
     render_tool_placeholders,
 )
-from nuself.agent.middleware import ToolOutcome
-from nuself.agent.tool_audit import ToolOutcomeProjection
-from nuself.agent.tool_utils import (
-    tool_service_component,
-)
-from nuself.agent.tools import build_langchain_chat_tools
-from nuself.memory.query import MemoryQueryService
-from nuself.memory.repository import MemoryEntryRepository
-from nuself.reflection.repository import ReflectionRepository
-from nuself.reason.output_contracts import SectionPlanner
-from nuself.reason.service import ReasonService
-from nuself.runtime.jobs import JobSink
-from nuself.trace.service import TraceQueryService
-from nuself.workspace import PrivateWorkspaceStore
-from nuself.runtime.observability import (
-    report_observability_projection_failure,
-)
+from nuself.agent.tools.composition import build_langchain_chat_tools
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.agent.tools.resources import ToolResources
+from nuself.decorators import component, observed, readonly, tool
+from nuself.runtime.feature.execution import FeatureExecutor
 
 
 class ConversationToolRuntime:
@@ -38,37 +24,33 @@ class ConversationToolRuntime:
     def __init__(
         self,
         *,
-        project_root: Path,
-        query_service: MemoryQueryService,
-        memory_repository: MemoryEntryRepository,
-        reflection_repository: ReflectionRepository,
-        reason_service: ReasonService,
-        reason_workspace_store: PrivateWorkspaceStore,
-        trace_query_service: TraceQueryService,
-        persona_tools: Sequence[BaseTool],
+        resources: ToolResources,
         selves_consult: Callable[..., str],
-        job_sink: JobSink | None = None,
-        section_planner: SectionPlanner | None = None,
+        feature_executor: FeatureExecutor | None = None,
     ) -> None:
-        self._project_root = project_root
+        self._feature_executor = feature_executor or FeatureExecutor()
         tools = build_langchain_chat_tools(
-            query_service=query_service,
-            memory_repository=memory_repository,
-            reflection_repository=reflection_repository,
-            reason_service=reason_service,
-            reason_workspace_store=reason_workspace_store,
-            trace_query_service=trace_query_service,
-            persona_tools=persona_tools,
-            project_root=project_root,
+            resources=resources,
             selves_consult=selves_consult,
-            job_sink=job_sink,
-            section_planner=section_planner,
+            feature_executor=self._feature_executor,
         )
         self._tools = {tool.name: tool for tool in tools}
-        self._skills = load_agent_skills()
+        loaded_skills = load_agent_skills()
+        tools_by_skill = {
+            skill.name: tuple(
+                name
+                for name in skill.allowed_tools
+                if name in self._tools
+            )
+            for skill in loaded_skills
+        }
+        self._skills = tuple(
+            skill
+            for skill in loaded_skills
+            if not skill.allowed_tools or tools_by_skill[skill.name]
+        )
         self._tools_by_skill = {
-            skill.name: _tools_for_skill(skill, self._tools)
-            for skill in self._skills
+            skill.name: tools_by_skill[skill.name] for skill in self._skills
         }
         self._tools["load_skill"] = self._build_skill_loader()
 
@@ -77,35 +59,30 @@ class ConversationToolRuntime:
         return self._tools
 
     def prompt_sections(self) -> list[str]:
-        return _tool_prompt_sections(self._tools.values())
-
-    def has_tool(self, name: str) -> bool:
-        return name in self._tools
-
-    def log_outcome(self, outcome: ToolOutcome) -> None:
-        """Project one immutable middleware tool outcome."""
-
-        tool = self._tools.get(outcome.name)
-        if tool is None:
-            return
-        service_component = tool_service_component(tool)
-        if service_component is None:
-            return
-        ToolOutcomeProjection(
-            component="chat",
-            service_component=service_component,
-            outcome=outcome,
-        ).write(project_root=self._project_root)
-
-    def report_log_failure(self, exc: Exception) -> None:
-        """Report a failed tool-log projection without changing tool execution."""
-
-        report_observability_projection_failure(
-            exc,
-            component="chat",
-            failed_event="service_tool_called",
-            project_root=self._project_root,
+        lines = [
+            "",
+            "Available tools:",
+            "The following LangChain tools are loaded in the current "
+            "NuSelf runtime.",
+            "CRITICAL: When the user asks a question that a tool can "
+            "answer, you MUST call the tool before generating your final "
+            "answer. Always use the tool to get the actual current state.",
+            "Tools are bound through LangChain's native tool-calling API.",
+            "Do not write visible markers such as "
+            '"[Tool call: memory_search]" or JSON tool fields in the '
+            "answer body.",
+            "The tool will be executed and its result injected back into "
+            "context. Only then generate your final answer.",
+            "Service skills define when and how to use tools. Use "
+            "`load_skill` to load a skill's behavioral policy.",
+            "Tools available:",
+        ]
+        lines.extend(
+            f"- {tool.name}({_tool_args_signature(tool)}): "
+            f"{tool.description}"
+            for tool in self._tools.values()
         )
+        return lines
 
     def _build_skill_loader(self) -> BaseTool:
         skill_lines = "\n".join(
@@ -113,6 +90,17 @@ class ConversationToolRuntime:
             for skill in self._skills
         )
 
+        @tool(
+            name="load_skill",
+            description=(
+                "Load a service skill's behavioral policy. Skills "
+                "define when and how the agent should use service "
+                f"tools.\n\nAvailable skills:\n{skill_lines}"
+            ),
+        )
+        @component("skill")
+        @readonly
+        @observed
         def load_skill(skill_name: str) -> str:
             for skill in self._skills:
                 if skill.name == skill_name:
@@ -131,65 +119,10 @@ class ConversationToolRuntime:
                 f"Available skills:\n{skill_lines}"
             )
 
-        return StructuredTool.from_function(  # pyright: ignore[reportUnknownMemberType]
-            name="load_skill",
-            description=(
-                "Load a service skill's behavioral policy. Skills "
-                "define when and how the agent should use service "
-                f"tools.\n\nAvailable skills:\n{skill_lines}"
-            ),
-            func=load_skill,
-            tags=("readonly",),
-            metadata={"service_component": "skill"},
+        return materialize_tool(
+            load_skill,
+            executor=self._feature_executor,
         )
-
-
-def _tool_prompt_sections(
-    tools: Iterable[BaseTool],
-) -> list[str]:
-    lines = [
-        "",
-        "Available tools:",
-        "The following LangChain tools are loaded in the current "
-        "NuSelf runtime.",
-        "CRITICAL: When the user asks a question that a tool can "
-        "answer, you MUST call the tool before generating your final "
-        "answer. Always use the tool to get the actual current state.",
-        "Tools are bound through LangChain's native tool-calling API.",
-        "Do not write visible markers such as "
-        '"[Tool call: memory_search]" or JSON tool fields in the '
-        "answer body.",
-        "The tool will be executed and its result injected back into "
-        "context. Only then generate your final answer.",
-        "Service skills define when and how to use tools. Use "
-        "`load_skill` to load a skill's behavioral policy.",
-        "Tools available:",
-    ]
-    for tool in tools:
-        lines.append(
-            f"- {tool.name}({_tool_args_signature(tool)}): "
-            f"{tool.description}"
-        )
-    return lines
-
-
-def _tools_for_skill(
-    skill: AgentSkill,
-    tools: dict[str, BaseTool],
-) -> tuple[str, ...]:
-    explicit = tuple(
-        name for name in skill.allowed_tools if name in tools
-    )
-    if explicit:
-        return explicit
-    service_component = (
-        "reasoning" if skill.name == "reason" else skill.name
-    )
-    return tuple(
-        name
-        for name, tool in tools.items()
-        if tool_service_component(tool) == service_component
-    )
 
 
 def _tool_args_signature(tool: BaseTool) -> str:

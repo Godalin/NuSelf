@@ -3,6 +3,20 @@
 ## Code Standard
 
 - Standard Python project managed by `uv`.
+- Prefer one descriptive word for repository-owned Python module filenames;
+  package context should carry the surrounding domain meaning. Use a compound
+  `snake_case` filename only when one word would be ambiguous or misleading,
+  or when an external framework contract fixes the name. Do not preserve a
+  compound filename merely to repeat its package, layer, or primary type.
+- The declared minimum Python version is the language baseline. Prefer stable
+  language and standard-library features available across every supported
+  version instead of retaining compatibility syntax for older, unsupported
+  Python releases. In particular, generic functions/classes/type aliases use
+  PEP 695 type-parameter and `type` syntax rather than module-level `TypeVar`,
+  `ParamSpec`, `Generic`, or `TypeAlias` declarations unless production code
+  needs the typing object itself at runtime. Do not use a newer feature until
+  the minimum version, Pyright target, build matrix, and runtime tests all
+  support it.
 - Type-check with the lockfile-managed `uv run --locked pyright`.
 - Sub-components must be individually tested.
 - Packages imported directly by runtime modules must be declared as direct
@@ -13,6 +27,12 @@
 - Tests live in a domain-oriented hierarchy under `tests/`, and test module
   filenames omit the redundant `test_` prefix. Ordinary tests live under
   `tests/unit/` and are the only default pytest collection root.
+- Tests describe current contracts, not the chronology of past refactors.
+  Prefer one declarative or parameterized architecture rule over repeated
+  per-file import assertions. Do not retain tombstone tests solely to prove an
+  obsolete internal module, symbol, or pre-release command remains deleted;
+  retain historical coverage only where a governing specification still
+  promises persisted-data, wire, migration, security, or user-facing behavior.
 - Real-provider tests live under `tests/live/`, inside the unified test tree
   but outside pytest's default `tests/unit/` collection root. They run only
   when that path and the
@@ -47,10 +67,12 @@
 ## Branch Strategy
 
 - `main` is the stable, releasable branch.
-- `dev/v0.3.x` is the active optimization branch for the current minor line.
-- `feature/*` branches are isolated experimental work for a single feature or fix.
-- Each `feature/*` branch should merge back into `dev/v0.3.x` before anything is promoted toward `main`.
-- Release work should land on the stabilization or stable branch first, then be tagged from the release commit.
+- `dev/v0.4.x` is the active optimization branch for the current minor line.
+- `feature/*` branches are short-lived boundaries for one independently
+  meaningful or higher-risk change. Feature PRs merge into the active minor
+  development branch; they do not bypass it to target `main`.
+- Release PRs promote the active minor development branch into `main`. The
+  merged release commit is tagged only after it is present on `main`.
 - CI runs for pushes to `main` and every `dev/**` development branch. Pull
   requests targeting either `main` or `dev/**` run the same validation matrix,
   so ordinary development is verified before and after integration rather than
@@ -58,6 +80,41 @@
 - Repository-owned workflows use maintained GitHub-hosted action generations
   that run on the current Node action runtime. CI and release must not retain an
   action major that GitHub reports as runtime-deprecated.
+
+## Pull Request Policy
+
+NuSelf uses Pull Requests even while maintained by one person when a change has
+independent semantics or elevated risk. A PR is not simulated group approval;
+it is the reviewable and revertible boundary that presents the complete diff,
+design motivation, scope limits, test evidence, and CI state in one place.
+
+The following changes require a short-lived feature branch and PR into the
+active minor development branch:
+
+- refactoring across package boundaries;
+- changing architectural ownership or dependency boundaries;
+- changing persisted formats, schemas, or migration behavior;
+- changing daemon, CLI, or other wire protocols;
+- changing a public API;
+- adding a subsystem;
+- changing execution semantics or safety behavior.
+
+Every version release requires a release PR from the active minor development
+branch into `main`. Spelling, comments, formatting, and obvious low-risk small
+fixes may be committed directly to the current development branch when they do
+not conceal an independent semantic change.
+
+Before merge, every required PR must have:
+
+- a clear description of motivation, impact, and exclusions;
+- a controlled diff containing one coherent change boundary;
+- relevant tests and the required CI matrix passing;
+- one completed diff review by Codex or a human, with actionable findings
+  resolved or explicitly moved out of scope.
+
+Single-maintainer development does not require CODEOWNERS, mandatory external
+reviewers, or enterprise-style approval rules. The evidence above is the merge
+gate; authorship and review may belong to the same maintainer-assisted workflow.
 
 ## Commit And Push Policy
 
@@ -89,8 +146,11 @@ Versioning and changelog rules live in [`versioning.md`](versioning.md). Release
    `git diff --check`.
 5. Confirm `uv run nuself --version` prints the intended version.
 6. Commit the release metadata with message `release: <version>`.
-7. Create an annotated git tag: `git tag -a v<version> -m "Release <version>"`.
-8. Push the release commit and tag together when the user asks to publish: `git push && git push origin v<version>`.
+7. Open a release PR from the active minor development branch into `main` and
+   satisfy the Pull Request Policy review and CI gates.
+8. Merge the release PR, then create an annotated tag on the merged release
+   commit: `git tag -a v<version> -m "Release <version>"`.
+9. Push the tag when the user asks to publish: `git push origin v<version>`.
 
 Do not tag unreleased feature commits directly. Tags mark release commits only.
 
@@ -119,14 +179,14 @@ Do not tag unreleased feature commits directly. Tags mark release commits only.
 
 ### Shared Time Boundary
 
-- Generic UTC clock helpers live in `nuself.clock`, never in a domain module.
+- Generic UTC clock helpers live in `nuself.runtime.clock`, never in a domain module.
   `utc_now()` returns an aware UTC `datetime`; `utc_now_iso()` is the shared
   producer for persisted ISO-8601 timestamps. Domains may keep specialized ID
   or scheduling helpers, but must compose them from the neutral clock.
 
 ### Shared Atomic File Boundary
 
-Runtime JSON and text state uses `nuself.storage.write_json_atomic()` or
+Runtime JSON and text state uses `nuself.storage.atomic.write_json_atomic()` or
 `write_text_atomic()`. The shared writer creates a unique sibling temporary
 file, writes and `fsync`s its complete content, atomically replaces the
 destination, then `fsync`s the parent directory. Success means both file
@@ -134,7 +194,7 @@ content and the replacement directory entry reached the operating system's
 stable-storage boundary.
 
 NuSelf-owned runtime state is private by default. Dependency-neutral helpers
-in `nuself.private_fs` create or harden owned directories to owner-only `0700`
+in `nuself.storage.filesystem` create or harden owned directories to owner-only `0700`
 and owned files to `0600`. Atomic writers, SQLite databases and internal
 snapshots, append-only logs, lock files, and other internal append streams all
 use that boundary. Sensitive content must never exist in a
@@ -154,15 +214,6 @@ cleaned. If parent-directory synchronization then fails,
 process-visible but its crash durability is uncertain; its `sync_error` is the
 explicit cause. The shared writer performs no hidden write, sync, replace, or
 cleanup retry.
-
-NuSelf-owned file deletion uses `delete_file_durable()`. It unlinks one exact
-non-directory path and then synchronizes its parent directory. A missing path
-is an explicit no-op result. A successful unlink followed by parent-sync
-failure raises `AtomicDeleteDurabilityError`: deletion is process-visible but
-crash durability is uncertain, and the sync failure is its explicit cause.
-The helper never retries or claims that the path remains present. Callers that
-need a logical multi-record transaction must inspect authoritative state
-before choosing compensation after either visible-but-uncertain mutation.
 
 `write_json_atomic()` validates and serializes the complete payload as strict
 JSON before creating its temporary file. Non-string mapping keys, arbitrary
@@ -226,7 +277,7 @@ Rules:
 
 ## Subsystem Service Architecture
 
-NuSelf is a multi-subservice system. Major domains such as memory, reflection, notification, trace, and reason should be implemented as clear subsystems rather than as incidental CLI helpers.
+NuSelf is a multi-subservice system. Major domains such as memory, reflection, Inbox, Delivery, trace, and reason should be implemented as clear subsystems rather than as incidental CLI helpers.
 
 Each subsystem should expose these layers when the domain is non-trivial:
 
@@ -311,10 +362,9 @@ calling `resolve()` or injecting its semantic adapter into a runtime owner.
 Composition-time inspection uses `definitions`; runtime owners must not retain
 a registry that remains open to late registration.
 
-Durable job wake-up owners use `runtime.jobs.JobAdmissionQueue` rather than raw
-`queue.Queue` or `SimpleQueue`. Capacity, identity coalescing, in-flight
-ownership, and explicit completion are shared transport mechanics; manifest
-reconciliation and retry policy remain domain-owned.
+Daemon-owned work uses `daemon.scheduler.DaemonScheduler`. Stable identity,
+bounded admission, resource serialization, delayed execution, and completion
+are shared mechanics; durable recovery and retry policy remain domain-owned.
 
 Owned delayed callbacks execute after the scheduler releases its lifecycle
 lock. A scheduled task may define one callback-error observer; callback
@@ -336,24 +386,32 @@ messages because decoded or externally supplied envelopes are untrusted.
 
 Result-producing one-shot thread boundaries use `runtime.execution.OwnedCall`.
 They must not reproduce ad hoc value/error boxes, daemonize authoritative work,
-or leave a successfully started call unreaped on an exceptional exit path.
+leave a successfully started call unreaped on an exceptional exit path, or
+stack subsystem-specific context binders around its target. `OwnedCall` owns
+complete `ContextVar` capture for that thread boundary.
 
 Process-local log delivery uses `project_log_events(...)` only for bounded
 synchronous projections. Projection callbacks must not perform network calls,
 retries, or unbounded waits. The logging core owns attachment identity and
 reentrancy suppression; callers must not build parallel recursion guards.
 
-Delayed callbacks use `runtime.scheduling.DelayedTaskScheduler` rather than
-domain-owned `threading.Timer` collections. Domains supply stable identities,
-delay values, callbacks, diagnostics, and recovery policy; the shared scheduler
-owns atomic start rollback, completion removal, duplicate suppression, and
-close/cancel lifecycle.
+Daemon domains express delayed work as scheduler tasks rather than owning
+`threading.Timer` collections. Domains supply stable identities, resources,
+delay values, diagnostics, and recovery policy.
 
 ## CLI Module Boundaries
 
 `nuself.cli` is a package whose `__init__.py` remains the composition root and
 public entrypoint. Parser, command, and REPL implementations live beside it
 under the same package.
+
+The root owns process lifecycle, parser/entrypoint binding, and the narrow
+binding of Chat adapters into REPL composition. `cli.repl.composition` owns the
+interactive callback graph and turn policy; `cli.presentation` owns shared
+one-shot and interactive reply rendering. Neither module opens or closes the
+application runtime. Fixed reply-printer and curator dependencies are bound
+directly when constructing entrypoint callbacks; the root does not add
+single-use forwarding functions around those adapters.
 
 - Importing the composition root must not replace process-global warning
   callables. A known third-party import warning may be filtered only with
@@ -384,6 +442,26 @@ under the same package.
   between daemon-backed and local interactive sessions. It receives chat and
   REPL execution as typed callbacks from the composition root and does not
   implement either capability itself.
+- CLI readiness owns expected invalid/unreadable configuration diagnostics
+  before application composition. REPL startup notices consume the composed
+  graph and must not catch graph/storage errors as configuration failures;
+  unexpected composition failures propagate to the outer lifecycle boundary.
+- Shared terminal workflows used by both argparse and REPL live in a narrow
+  CLI module rather than either adapter. `cli.reason_watch` owns the reasoning
+  polling loop; `commands.reason` owns its argparse adapter and the REPL
+  dispatcher calls the same loop directly. The top-level parser must not
+  import `cli.repl.commands` to obtain a one-shot handler.
+- `cli.persona_management` similarly owns Persona lookup, confirmation,
+  mutation, rendering feedback, and lifecycle trace shared by terminal
+  surfaces. Argparse handlers unpack namespaces into those functions; REPL
+  commands pass parsed values directly and must not synthesize namespaces or
+  call argparse handlers.
+- `cli.memory_preview` owns the compact query-and-render workflow shared by the
+  `memory preview` command and bare `:mem`. REPL modules must not import a
+  one-shot memory command module for this presentation path.
+- Shared ANSI output and visible-handle resolution belong to `cli.output`, not
+  the one-shot `cli.commands` package. Command and REPL adapters may both use
+  this primitive without creating an adapter-to-adapter dependency.
 - `cli/chat.py` owns CLI-facing daemon and one-shot chat adapters: configured
   request timeout, transport/application error translation, correlated audit
   writes, direct `ConversationGraphRuntime` invocation, and post-turn memory curator
@@ -401,14 +479,16 @@ under the same package.
 - `daemon/operations_audit.py` owns process cleanup and worker join-timeout
   diagnostics. It preserves ordered cleanup error records while server and
   supervisor owners retain control flow and exception propagation.
-- `storage_audit.py` owns backend-close and outer CLI storage-cleanup audit
+- `storage/audit.py` owns backend-close and outer CLI storage-cleanup audit
   schemas. Storage and CLI owners retain teardown control flow and exception
   aggregation but do not construct audit presentation.
 - `daemon/audit.py` owns the immutable lifecycle event definition registry,
-  exact per-event schema validation, and best-effort audit sink boundary.
-- `runtime/definitions.py` owns generic sealed definition-registry mechanics.
-  Runtime event and daemon audit registries adapt it without sharing semantic
-  definition types or transport policy.
+  exact per-event semantic validators, messages, and best-effort audit sink
+  boundary. Like daemon request and transport audits, it composes the shared
+  `runtime.audit.definition` contract rather than defining a parallel registry,
+  definition, schema error, or exact-field helper.
+- `runtime/definitions.py` owns generic sealed definition-registry mechanics;
+  `runtime/audit/definition.py` owns the shared direct persisted-audit contract.
 - `runtime/observability.py` owns the sealed secondary-failure taxonomy.
   Domain audit writers and event publishers provide only the failed primary
   identity; they never define local write/delivery failure event aliases.
@@ -421,19 +501,21 @@ under the same package.
 - `agent/middleware.py` owns its sealed callback/reporter terminal-warning
   registry. Tool execution and capture supply only safe caught diagnostics and
   never construct warning presentation.
-- `logs.py` owns its recursive-sensitive sealed infrastructure audit registry.
+- `log/store.py` owns its recursive-sensitive sealed infrastructure audit registry.
   Process-local observer delivery supplies only the caught exception; callable
   identity, presentation, schema, and terminal fallback remain logging-core
   policy.
-- `runtime/warning_definitions.py` owns reusable sealed terminal-warning
-  definition and rendering mechanics. `logs.py` composes its closed six-event
+- `runtime/warning.py` owns reusable sealed terminal-warning
+  definition and rendering mechanics. `log/warning.py` composes its closed six-event
   taxonomy and supplies typed facts, never free-form warning strings.
 - `daemon/lifecycle.py` owns the sealed raw process-log rotation warning
   contract. Startup supplies only the caught exception type and never
   constructs terminal warning presentation.
   `cli/daemon_lifecycle.py` owns shared observable start/stop/restart
   orchestration and typed transition projection for one-shot, launch, and REPL
-  surfaces.
+  surfaces. A restart result composes its complete stop and start transitions;
+  its final status is `start.status` and is not duplicated by a forwarding
+  field or property.
 - `cli/daemon_status.py` owns shared status observation, safe failure rendering,
   and status-line formatting. `cli/commands/daemon.py` owns only daemon command
   handlers plus list/health presentation and exit decisions.
@@ -441,22 +523,22 @@ under the same package.
   lifecycle handlers; REPL thread switching remains in the REPL layer.
 - `cli/commands/output.py` owns ANSI-aware printing and visible-handle error rendering
   shared by extracted command modules.
-- `cli/commands/notifications.py` owns one-shot notification list/show/stats/watch/send/
-  dismiss/clear handlers; notification REPL shortcuts remain in the REPL layer.
+- `cli/commands/inbox.py` owns one-shot Inbox list/show/stats/watch/send/read/
+  dismiss/resolve/clear handlers; Inbox REPL shortcuts remain in the REPL layer.
 - `cli/commands/reason.py` owns one-shot reason list/show/start/action/delete handlers.
   The long-running terminal watch loop remains with REPL/session orchestration.
-- `cli/commands/trace.py` owns one-shot trace list/show/search/related/reindex handlers
+- `cli/commands/trace.py` owns one-shot trace list/show/search/related handlers
   and their command-line filter normalization.
 - `cli/commands/reflections.py` owns one-shot reflection list/show/lifecycle/promote/
   organize handlers; reflection REPL shortcuts remain in the REPL layer.
 - `cli/commands/persona.py` owns dynamic persona list/create/show/delete/enable/
   disable handlers and visible-handle resolution shared with persona REPL
   shortcuts.
-- `cli/commands/dev.py` owns storage migration, SQLite schema inspection, and active
-  storage backend diagnostics.
+- `cli/commands/dev.py` owns SQLite schema inspection and active storage backend
+  diagnostics. One-time migrations live under source-checkout `scripts/`.
 - `cli/commands/pack.py` owns thought-pack export/import/list/inspect behavior,
   including pack path resolution and human-readable archive sizes.
-- `cli/commands/eval.py` owns conversation and notification fixture evaluation
+- `cli/commands/eval.py` owns conversation fixture evaluation
   orchestration for the canonical `dev eval` route. Every
   evaluator returns one typed `EvalResult` per scenario; the command derives
   totals and exit status from those results and must not infer fixture counts
@@ -466,17 +548,18 @@ under the same package.
   remain in `nuself.cli`.
 - Memory CLI commands live together under the `cli/commands/memory/` package and
   are split by subdomain instead of collected in one oversized module.
-  `cli/commands/memory/profile.py` owns profile list/search/show/delete/reindex
+  `cli/commands/memory/profile.py` owns profile list/search/show/delete
   handlers and their list ordering and handle resolution.
-  `cli/commands/memory/source.py` owns source ingest/list/show/delete/chunks/search/
-  extract handlers and source-specific output formatting.
+  External knowledge is not a Memory subdomain:
+  `cli/commands/source.py` owns source ingest/list/show/delete/chunks/search
+  handlers and source-specific output formatting.
   `cli/commands/memory/candidate.py` owns candidate review handlers, ordering, and
   single/multiple visible-handle resolution. `cli/commands/memory/common.py` owns
   command-layer memory trace recording shared across memory command modules.
   `cli/commands/memory/graph.py` owns symbolic graph nodes/edges/search/path/closure
   handlers and graph-specific text formatting.
   `cli/commands/memory/entries.py` owns durable entry CRUD/search/preview/stats/
-  relations/types/reindex/unquarantine handlers. It also exposes parser type
+  relations/types/unquarantine handlers. It also exposes parser type
   choices and REPL preview rendering as explicit shared CLI interfaces.
   `cli/commands/memory/maintenance.py` owns explicit curator/optimizer runs and
   durable entry import/export commands.
@@ -522,7 +605,7 @@ under the same package.
   session message/log association, memory/reply presentation order, and error
   deduplication. Configured retry/poll values and rendering effects are
   injected by the composition root.
-- `cli/repl/runtime.py` owns the interactive session loop and receives
+- `cli/repl/loop.py` owns the interactive session loop and receives
   application effects through `ReplCallbacks`. Transcript auto-save and memory
   curation execute once each through named cleanup aggregation that preserves
   any main-loop primary failure.
@@ -543,7 +626,8 @@ boundary and re-exports caller-facing names.
 - Prefer open typed memory (`MemoryObject + MemoryTypeDescriptor`) over closed enums.
 - Descriptors own validation, summarization, merge, decay, conflict, retrieval, and reflection rules.
 - Symbolic memory evolves as a derived open graph with `RelationDescriptor` rules.
-- SQLite private memory is authoritative; all indexes are derived and rebuildable.
+- SQLite private memory is authoritative; graph views derive from repository
+  records at query time rather than from JSON index sidecars.
 
 ## Private Memory
 

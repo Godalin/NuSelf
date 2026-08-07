@@ -15,10 +15,10 @@ from nuself.cli.readiness import (
     NO_READINESS,
     inspect_command_readiness,
 )
-from nuself.scope import NuSelfScope
+from nuself.config.scope import NuSelfScope
 
-CliHandler = Callable[[argparse.Namespace], int]
-CliHandlerRegistry = HandlerRegistry[
+type CliHandler = Callable[[argparse.Namespace], int]
+type CliHandlerRegistry = HandlerRegistry[
     str,
     [argparse.Namespace],
     int,

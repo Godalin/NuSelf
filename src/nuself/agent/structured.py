@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Protocol, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy
@@ -14,19 +14,11 @@ from pydantic import BaseModel
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.endpoint_audit import AgentEndpointComponent
 from nuself.agent.failover import invoke_agent_endpoint
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
-    configured_langchain_chat_models,
 )
 
-StructuredOutputT = TypeVar(
-    "StructuredOutputT",
-    bound=BaseModel,
-    covariant=True,
-)
-
-
-class StructuredAgent(Protocol[StructuredOutputT]):
+class StructuredAgent[StructuredOutputT: BaseModel](Protocol):
     """Typed agent capability consumed by domain subsystems."""
 
     def invoke(
@@ -35,7 +27,7 @@ class StructuredAgent(Protocol[StructuredOutputT]):
     ) -> StructuredOutputT: ...
 
 
-class LangChainStructuredAgent(Generic[StructuredOutputT]):
+class LangChainStructuredAgent[StructuredOutputT: BaseModel]:
     """Invoke one strict schema through LangChain with endpoint failover."""
 
     def __init__(
@@ -80,7 +72,7 @@ class LangChainStructuredAgent(Generic[StructuredOutputT]):
         )
 
 
-def require_structured_response(
+def require_structured_response[StructuredOutputT: BaseModel](
     result: object,
     schema: type[StructuredOutputT],
 ) -> StructuredOutputT:
@@ -104,16 +96,17 @@ def require_structured_response(
     return structured
 
 
-def default_structured_agent(
+def default_structured_agent[StructuredOutputT: BaseModel](
     schema: type[StructuredOutputT],
     *,
     project_root: Path | None = None,
     component: AgentEndpointComponent,
+    endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> StructuredAgent[StructuredOutputT]:
-    """Build the configured framework-native runner for one schema."""
+    """Build the framework-native runner from an explicit endpoint set."""
     return LangChainStructuredAgent(
         schema,
-        endpoints=configured_langchain_chat_models(project_root),
+        endpoints=endpoints or (),
         project_root=project_root,
         component=component,
     )

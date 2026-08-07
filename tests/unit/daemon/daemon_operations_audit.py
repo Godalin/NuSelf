@@ -3,23 +3,21 @@ from pathlib import Path
 import pytest
 
 from nuself.daemon.operations_audit import (
-    DAEMON_OPERATIONS_AUDIT_REGISTRY,
+    DAEMON_OPERATIONS_AUDIT,
     report_shutdown_cleanup_failure,
-    report_worker_join_timeout,
 )
-from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.log.reader import read_log_events
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
-    AuditSchemaError,
 )
 from nuself.runtime.cleanup import CleanupFailure
 
 
 def test_daemon_operations_registry_is_complete_and_sealed() -> None:
-    assert len(DAEMON_OPERATIONS_AUDIT_REGISTRY.definitions) == 2
+    assert len(DAEMON_OPERATIONS_AUDIT.registry.definitions) == 1
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        DAEMON_OPERATIONS_AUDIT_REGISTRY.register(
+        DAEMON_OPERATIONS_AUDIT.registry.register(
             AuditEventDefinition(
                 component="daemon",
                 event="operation_extra",
@@ -27,39 +25,6 @@ def test_daemon_operations_registry_is_complete_and_sealed() -> None:
                 status="error",
             )
         )
-
-
-@pytest.mark.parametrize("timeout", [-1.0, float("inf"), float("nan")])
-def test_worker_timeout_contract_rejects_invalid_duration(
-    timeout: float,
-) -> None:
-    with pytest.raises(AuditSchemaError, match="finite"):
-        report_worker_join_timeout(
-            RuntimeError("still alive"),
-            project_root=Path("."),
-            worker="memory",
-            timeout_seconds=timeout,
-        )
-
-
-def test_worker_timeout_projection_is_fixed(tmp_path: Path) -> None:
-    report_worker_join_timeout(
-        RuntimeError("memory did not stop within 0s"),
-        project_root=tmp_path,
-        worker="memory",
-        timeout_seconds=0,
-    )
-
-    [event] = read_log_events(
-        project_root=tmp_path,
-        component="daemon",
-    )
-    assert event.message == "Daemon worker join timed out"
-    assert event.status == "timed_out"
-    assert event.metadata == {
-        "worker": "memory",
-        "timeout_seconds": 0,
-    }
 
 
 def test_cleanup_projection_preserves_ordered_error_chains(

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 
-from nuself.config import ConfigSystem
-from nuself.layout_migration import migrate_legacy_layout
-from nuself.private_fs import ensure_managed_directory
-from nuself.scope import NuSelfScope, resolve_runtime_paths, resolve_scope
-from nuself.storage import get_default_backend
+from nuself.config.settings import ConfigSystem
+from nuself.cli.application import cli_backend
+from nuself.storage.filesystem import ensure_managed_directory
+from nuself.config.scope import NuSelfScope, resolve_runtime_paths
 
 
 def handle_init(args: argparse.Namespace) -> int:
@@ -23,7 +22,7 @@ def handle_init(args: argparse.Namespace) -> int:
         paths.runtime_dir,
     ):
         ensure_managed_directory(paths.authority_root, directory)
-    get_default_backend(paths.authority_root)
+    cli_backend()
     print(
         f"Initialized NuSelf {scope.kind} authority: "
         f"{paths.authority_root}"
@@ -66,24 +65,10 @@ def handle_dev_config(args: argparse.Namespace) -> int:
     print("config_effective:")
     effective = ConfigSystem.load_scope(scope)
     for key, value in sorted(
-        ConfigSystem().as_flat_dict(effective).items()
+        ConfigSystem.as_flat_dict(effective).items()
     ):
         print(f"  {key}: {value}")
     print(f"selected_config: {paths.config_file}")
-    return 0
-
-
-def handle_migrate_layout(args: argparse.Namespace) -> int:
-    target_scope = resolve_scope(
-        local=args.to_local,
-        workspace=args.migration_workspace,
-    )
-    target = migrate_legacy_layout(args.source, target_scope)
-    print(
-        f"Migrated legacy layout to {target_scope.kind} authority: "
-        f"{target}"
-    )
-    print(f"Source preserved: {args.source.expanduser().absolute()}")
     return 0
 
 

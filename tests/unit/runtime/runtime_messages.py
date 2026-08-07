@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 from collections.abc import Mapping
 from typing import cast
 
@@ -10,18 +9,19 @@ from nuself.reason.job_contracts import (
     REASON_OUTPUT_JOB_NAME,
     build_reason_job_definition_registry,
 )
-from nuself.runtime import (
-    RUNTIME_SCHEMA_VERSION,
-    JobMessage,
-    MessageKind,
+from nuself.runtime.context import (
     RuntimeContext,
-    RuntimeEnvelope,
-    bind_runtime_context,
     current_runtime_context,
-    decode_json_value,
-    encode_json_value,
     runtime_context,
     use_runtime_context,
+)
+from nuself.runtime.job.message import JobMessage
+from nuself.runtime.messages import (
+    RUNTIME_SCHEMA_VERSION,
+    MessageKind,
+    RuntimeEnvelope,
+    decode_json_value,
+    encode_json_value,
 )
 
 
@@ -49,73 +49,18 @@ def test_saved_runtime_context_replaces_ambient_and_restores() -> None:
 
     with runtime_context(
         request_id="ambient-request",
-        thread_id="ambient-thread",
+        conversation_id="ambient-thread",
         source="worker",
     ):
         with use_runtime_context(saved):
             assert current_runtime_context() == saved
         assert current_runtime_context() == RuntimeContext(
             request_id="ambient-request",
-            thread_id="ambient-thread",
+            conversation_id="ambient-thread",
             source="worker",
         )
 
     assert current_runtime_context() == RuntimeContext()
-
-
-def test_bound_runtime_callback_captures_context_across_thread() -> None:
-    observed: list[RuntimeContext] = []
-
-    with runtime_context(
-        request_id="captured-request",
-        thread_id="captured-thread",
-        source="client",
-    ):
-        bound = bind_runtime_context(
-            lambda: observed.append(current_runtime_context())
-        )
-
-    with runtime_context(request_id="invoker-request", source="test"):
-        worker = threading.Thread(target=bound)
-        worker.start()
-        worker.join()
-        assert current_runtime_context() == RuntimeContext(
-            request_id="invoker-request",
-            source="test",
-        )
-
-    assert observed == [
-        RuntimeContext(
-            request_id="captured-request",
-            thread_id="captured-thread",
-            source="client",
-        )
-    ]
-
-
-def test_bound_runtime_callback_restores_invoker_after_exception() -> None:
-    def fail(value: str) -> None:
-        assert value == "expected"
-        assert current_runtime_context() == RuntimeContext(
-            request_id="captured-request",
-            source="client",
-        )
-        raise RuntimeError("callback failed")
-
-    with runtime_context(request_id="captured-request", source="client"):
-        bound = bind_runtime_context(fail)
-
-    with runtime_context(request_id="invoker-request", source="test"):
-        with pytest.raises(RuntimeError, match="callback failed"):
-            bound("expected")
-        assert current_runtime_context() == RuntimeContext(
-            request_id="invoker-request",
-            source="test",
-        )
-
-    assert current_runtime_context() == RuntimeContext()
-
-
 def test_runtime_envelope_inherits_context_and_serializes_payload() -> None:
     with runtime_context(request_id="req-1"):
         envelope = RuntimeEnvelope(
@@ -357,6 +302,7 @@ def test_runtime_context_strictly_decodes_populated_fields() -> None:
     (
         {"request_id": ""},
         {"request_id": 42},
+        {"thread_id": "legacy-chat"},
         {"unknown": "value"},
     ),
 )

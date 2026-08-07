@@ -10,12 +10,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-from nuself.private_fs import (
+from nuself.storage.filesystem import (
     ensure_private_directory,
     ensure_private_file,
     require_private_file,
 )
-from nuself.runtime import decode_json_value, encode_json_value
+from nuself.runtime.messages import decode_json_value, encode_json_value
 from scripts.database_migrations.schema_identity import validate_schema
 
 
@@ -75,7 +75,7 @@ def migrate(
     require_private_file(database)
     connection = sqlite3.connect(database)
     try:
-        if validate_schema(connection) not in (4, 5):
+        if validate_schema(connection) not in (4, 5, 6, 7):
             raise ValueError("workspace migration requires compact schema v4+")
         connection.execute("BEGIN IMMEDIATE")
         for owner in owners:
@@ -163,7 +163,7 @@ def _restore_legacy(
     exports_root = authority / "exports" / "reason"
     created_legacy = False
     try:
-        if validate_schema(connection) not in (4, 5):
+        if validate_schema(connection) not in (4, 5, 6, 7):
             raise ValueError("workspace migration requires compact schema v4+")
         rows = connection.execute(
             "SELECT namespace,key,value,created_at,updated_at "

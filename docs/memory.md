@@ -1,7 +1,7 @@
 # Memory Guide
 
 NuSelf separates conversation history, durable memory, profile facts, imported
-sources, and derived indexes. This keeps raw chat from automatically becoming
+sources, and query views. This keeps raw chat from automatically becoming
 long-term memory.
 
 All personal data lives under the selected authority. The default user
@@ -47,9 +47,10 @@ stale type list into scripts.
 
 ## Curator And Review Queue
 
-The memory curator examines eligible conversation ranges and produces typed
-actions. Depending on configuration and confidence, candidates may be promoted
-automatically or remain available for review.
+Producers such as conversation submit selected evidence through the generic
+memory observation API. The curator examines pending observations and produces
+typed actions. Depending on configuration and confidence, candidates may be
+promoted automatically or remain available for review.
 
 Run one curation cycle:
 
@@ -68,36 +69,29 @@ uv run nuself memory review reject <candidate-id>
 
 Use `--help` for index selection and batch operations.
 
-## Import Source Documents
+## External Source Documents
 
 Place Markdown or plain-text material under the selected authority's
 `sources/`, then ingest a
 file or directory:
 
 ```bash
-uv run nuself memory source ingest .nuself/sources/notes.md --tag notes
-uv run nuself memory source ingest .nuself/sources/archive --tag archive
+uv run nuself source ingest .nuself/sources/notes.md --tag notes
+uv run nuself source ingest .nuself/sources/archive --tag archive
 ```
 
 Inspect imported sources and chunks:
 
 ```bash
-uv run nuself memory source list
-uv run nuself memory source show <source-id>
-uv run nuself memory source chunks <source-id>
-uv run nuself memory source search "citation"
+uv run nuself source list
+uv run nuself source show <source-id>
+uv run nuself source chunks <source-id>
+uv run nuself source search "citation"
 ```
 
-Extract reviewable profile candidates:
-
-```bash
-uv run nuself memory source extract <source-id>
-uv run nuself memory profile list
-uv run nuself memory profile search "preference"
-```
-
-Source deletion and profile deletion are explicit operations; read the
-subcommand help before removing data.
+Source is an independent external-knowledge library. It does not create
+personal memories or profile candidates. Chat searches it only when the Agent
+calls a Source tool.
 
 ## Relations And Graph
 
@@ -110,13 +104,8 @@ uv run nuself memory graph edges
 uv run nuself memory graph search "retrieval"
 ```
 
-Rebuild derived indexes when diagnosing projection state:
-
-```bash
-uv run nuself memory reindex
-```
-
-Derived indexes can be rebuilt; the authoritative records cannot.
+Graph and relation views are computed directly from authoritative SQLite
+records, so they do not require a separate rebuild step.
 
 ## Optimize Existing Memory
 

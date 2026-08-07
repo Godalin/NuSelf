@@ -12,13 +12,15 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.application.composition import compose_application
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths
 from nuself.persona.tools import (
     build_persona_tools,
     build_reason_persona_tools,
 )
-from nuself.store import ScopedWorkspace, SqliteStore
-from nuself.storage import _create_sqlite_backend, get_default_backend
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.storage.workspace import ScopedWorkspace, SqliteStore
+from nuself.storage.authority import _create_sqlite_backend
+from tests.backend import owned_backend
 
 
 class _TextAgent:
@@ -46,7 +48,7 @@ def _invoke_tool(tool: BaseTool, args: dict[str, object]) -> object:
 def _persona_dependencies(tmp_path: Path):
     return compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
 
 
@@ -57,9 +59,10 @@ def test_global_persona_think_uses_injected_text_agent(
     application = _persona_dependencies(tmp_path)
     tools = build_persona_tools(
         tmp_path,
-        repository=application.persona_prompts,
+        service=application.personas,
         trace_recorder=application.trace.recorder,
         text_agent=agent,
+        executor=FeatureExecutor(),
     )
     _invoke_tool(
         _tool(tools, "persona_craft"),
@@ -100,9 +103,10 @@ def test_persona_think_sanitizes_agent_failure(
     application = _persona_dependencies(tmp_path)
     tools = build_persona_tools(
         tmp_path,
-        repository=application.persona_prompts,
+        service=application.personas,
         trace_recorder=application.trace.recorder,
         text_agent=_FailingTextAgent(),
+        executor=FeatureExecutor(),
     )
     _invoke_tool(
         _tool(tools, "persona_craft"),
@@ -151,10 +155,11 @@ def test_persona_think_propagates_untyped_agent_errors(
         )
         tools = build_reason_persona_tools(
             paths=application.paths,
-            global_repository=application.persona_prompts,
+            global_service=application.personas,
             trace_recorder=application.trace.recorder,
             get_thread_workspace=lambda: workspace,
             text_agent=_UntypedFailureAgent(),
+            executor=FeatureExecutor(),
         )
         craft_args: dict[str, object] = {
             "name": "local-reviewer",
@@ -169,9 +174,10 @@ def test_persona_think_propagates_untyped_agent_errors(
         application = _persona_dependencies(tmp_path)
         tools = build_persona_tools(
             tmp_path,
-            repository=application.persona_prompts,
+            service=application.personas,
             trace_recorder=application.trace.recorder,
             text_agent=_UntypedFailureAgent(),
+            executor=FeatureExecutor(),
         )
         craft_args = {
             "name": "reviewer",
@@ -203,10 +209,11 @@ def test_reason_persona_think_uses_same_injected_text_agent(
     agent = _TextAgent("thread persona conclusion")
     tools = build_reason_persona_tools(
         paths=application.paths,
-        global_repository=application.persona_prompts,
+        global_service=application.personas,
         trace_recorder=application.trace.recorder,
         get_thread_workspace=lambda: workspace,
         text_agent=agent,
+        executor=FeatureExecutor(),
     )
     _invoke_tool(
         _tool(tools, "persona_craft"),

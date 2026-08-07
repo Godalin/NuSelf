@@ -14,30 +14,30 @@ from memory_fixtures import (
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Never
+from typing import Never, cast
 
 import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
-from thread_fixtures import ThreadStore
+from conversation_fixtures import ConversationStore
 from nuself.application.composition import compose_application
-from nuself.application.reflection import compose_reflection_scheduler
-from nuself.config import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
-from nuself.config import runtime_paths
-from nuself.domain.proactive import IdeaCandidate
-from nuself.logs import read_log_events
-from nuself.reflection import (
-    IdeaCandidateGenerator,
-    LLMRelevanceGate,
-    ReflectionScheduler,
-)
+from nuself.reflection.composition import compose_reflection_scheduler
+from nuself.config.settings import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
+from nuself.config.settings import runtime_paths
+from nuself.reflection.model import IdeaCandidate
+from nuself.log.reader import read_log_events
+from nuself.inbox.service import InboxService
+from nuself.delivery.store import DeliveryStore
+from nuself.reflection.candidates import IdeaCandidateGenerator
+from nuself.reflection.relevance import LLMRelevanceGate
+from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reflection.candidates import CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _local_datetime(year: int, month: int, day: int, hour: int, minute: int = 0) -> datetime:
@@ -162,7 +162,9 @@ def _fake_structured_agent(
     *,
     project_root: Path | None = None,
     component: str,
+    endpoints: object | None = None,
 ) -> object:
+    del project_root, component, endpoints
     if schema is CandidateListOutput:
         return _CandidateAgent()
     if schema is RelevanceScoreOutput:
@@ -173,7 +175,7 @@ def _fake_structured_agent(
 def _seed_memory(tmp_path: Path) -> None:
     """Seed one memory entry so IdeaCandidateGenerator has context."""
     from nuself.memory.repository import MemoryEntryRepository
-    from nuself.domain.memory import MemoryEntry
+    from nuself.memory.model import MemoryEntry
 
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(
@@ -188,23 +190,19 @@ def _generator(
     project_root: Path,
     *,
     agent: object,
-    config: ReflectionSettings | None = None,
 ) -> IdeaCandidateGenerator:
     application = compose_application(
         runtime_paths(project_root),
-        get_default_backend(project_root),
+        owned_backend(project_root),
     )
     return IdeaCandidateGenerator(
         project_root,
         agent=agent,  # type: ignore[arg-type]
-        config=config or _reflection_settings(),
-        memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
-        profile_repository=application.memory.profile,
-        thread_context=ThreadStore(
-            project_root,
-            backend=application.backend,
-        ),
+        memory_service=application.memory,
+        source_service=application.sources,
+        profile_service=application.profiles,
+        conversation_history=application.conversation_history,
+        language_preference="en",
     )
 
 
@@ -216,16 +214,13 @@ def _gate(
 ) -> LLMRelevanceGate:
     application = compose_application(
         runtime_paths(project_root),
-        get_default_backend(project_root),
+        owned_backend(project_root),
     )
     return LLMRelevanceGate(
         project_root,
         config or _reflection_settings(),
         agent=agent,  # type: ignore[arg-type]
-        schedule_collection=application.backend.collection(
-            "scheduler_state"
-        ),
-        repository=application.reflection,
+        service=application.reflection,
     )
 
 
@@ -243,7 +238,7 @@ def _sample_reflection_entry(index: int = 0) -> ReflectionEntry:
         status="pending",
         discussion_approved=None,
         discussion_trace=(),
-        deep_link="nuself://thread/reflections",
+        deep_link="nuself://conversation/reflections",
         created_at=f"2024-01-01T12:00:0{index}+00:00",
         reviewed_at=None,
     )
@@ -254,7 +249,6 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     # Create a minimal project structure
     (tmp_path / "runtime").mkdir(parents=True)
     (tmp_path / "logs").mkdir(parents=True)
-    (tmp_path / "outbox").mkdir(parents=True)
     monkeypatch.setattr(
         "nuself.reflection.candidates.default_structured_agent",
         _fake_structured_agent,
@@ -277,18 +271,21 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     )
     application = compose_application(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     )
     return compose_reflection_scheduler(
         application.paths,
-        application.backend,
+        application.memory,
+        application.profiles,
+        application.sources,
+        application.conversation_history,
+        application.reflection,
+        application.inbox,
+        application.deliveries,
+        application.trace.recorder,
         config=config,
-        repository=application.reflection,
-        outbox=application.notifications,
-        trace_recorder=application.trace.recorder,
-        memory_repository=application.memory.entries,
-        source_repository=application.memory.sources,
-        profile_repository=application.memory.profile,
+        language_preference="en",
+        langchain_models=(),
     )
 
 
@@ -381,19 +378,31 @@ def test_should_reflect_respects_daily_cap(scheduler: ReflectionScheduler) -> No
     assert scheduler.should_reflect(now.replace(hour=13)) is False
 
 
+def test_schedule_status_explains_current_gate(scheduler: ReflectionScheduler) -> None:
+    now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+    scheduler._write_last_reflection(now)
+
+    status = scheduler.schedule_status(now)
+
+    assert status.ready is False
+    assert status.blocked_by == "interval"
+    assert status.last_run_at == now
+    assert status.daily_count == 1
+
+
 # --- reflection pipeline tests ---
 
 def test_reflect_creates_reflection_entry(scheduler: ReflectionScheduler) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     result = scheduler.reflect(now)
     assert result is True
-    entries = scheduler._reflection_repo.list()
+    entries = scheduler._reflection_service.list_entries()
     assert len(entries) == 1
     assert entries[0].title == "Proactive insight about memory patterns"
     assert entries[0].status == "pending"
     assert entries[0].id.startswith("reflection-candidate-")
     assert entries[0].deep_link is not None
-    assert entries[0].deep_link.startswith("nuself://thread/reflections")
+    assert entries[0].deep_link.startswith("nuself://new-conversation?")
 
 
 def test_reflect_result_survives_unavailable_auxiliary_logs(
@@ -404,16 +413,11 @@ def test_reflect_result_survives_unavailable_auxiliary_logs(
         del args, kwargs
 
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_reflection_audit",
+        "nuself.reflection.scheduler.REFLECTION_AUDIT.write",
         drop_log,
     )
-    monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_persona_audit",
-        drop_log,
-    )
-
     assert scheduler.reflect(datetime(2024, 1, 1, 12, tzinfo=UTC)) is True
-    assert len(scheduler._reflection_repo.list()) == 1
+    assert len(scheduler._reflection_service.list_entries()) == 1
 
 
 def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
@@ -442,7 +446,7 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
         fail_log,
     )
     monkeypatch.setattr(
-        "nuself.reflection.scheduler.write_reflection_audit",
+        "nuself.reflection.scheduler.REFLECTION_AUDIT.write",
         drop_cycle_log,
     )
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -454,8 +458,10 @@ def test_reflect_trace_diagnostics_cannot_interrupt_persisted_cycle(
         result = scheduler.reflect(now)
 
     assert result is True
-    assert len(scheduler._reflection_repo.list()) == 1
-    assert scheduler._read_last_reflection() == now
+    assert len(scheduler._reflection_service.list_entries()) == 1
+    record = scheduler._reflection_service._repository._schedule_col.get("reflection")
+    assert record is not None
+    assert record["timestamp"] == "2024-01-01T12:00:00Z"
     assert read_log_events(
         project_root=scheduler._project_root,
         component="reflection",
@@ -472,10 +478,7 @@ def test_organizer_diagnostics_cannot_interrupt_best_effort_boundary(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    monkeypatch.setattr(
-        "nuself.reflection.scheduler.ReflectionOrganizer.organize_pending",
-        fail_organizer,
-    )
+    monkeypatch.setattr(scheduler._organizer, "organize_pending", fail_organizer)
     monkeypatch.setattr(
         "nuself.runtime.observability.write_log_event",
         fail_log,
@@ -497,10 +500,10 @@ def test_reflect_creates_multiple_reflection_entries(scheduler: ReflectionSchedu
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler.reflect(now)
     # Clear last reflection so the second run is not blocked by novelty gate
-    scheduler._schedule_collection.delete("reflection")
+    scheduler._reflection_service._repository._schedule_col.delete("reflection")
     time.sleep(0.01)  # ensure unique candidate id timestamp
     scheduler.reflect(now)
-    entries = scheduler._reflection_repo.list()
+    entries = scheduler._reflection_service.list_entries()
     assert len(entries) == 2
 
 
@@ -509,18 +512,20 @@ def test_reflect_does_not_skip_when_pending_reflections_exist(scheduler: Reflect
         relevance_threshold=0.0,
         persona_discussion_threshold=1.0,
     )
-    scheduler._reflection_repo.add(_sample_reflection_entry())
+    scheduler._reflection_service.save_generated_entry(_sample_reflection_entry())
 
     result = scheduler.reflect(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC))
 
     assert result is True
-    assert len(scheduler._reflection_repo.list(status="pending")) >= 1
+    assert len(
+        scheduler._reflection_service.list_entries(status="pending")
+    ) >= 1
     events = read_log_events(project_root=scheduler._project_root, component="reflection")
     assert not any(event.event == "cycle_pending_limit_reached" for event in events)
 
 
-def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler) -> None:
-    from nuself.config import ReflectionSettings
+def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: ReflectionScheduler) -> None:
+    from nuself.config.settings import ReflectionSettings
     scheduler._config = ReflectionSettings(
         scheduler=scheduler._config.scheduler,
         gate=scheduler._config.gate,
@@ -532,13 +537,22 @@ def test_reflect_auto_notify_creates_outbox_entry(scheduler: ReflectionScheduler
     result = scheduler.reflect(now)
     assert result is True
     # Reflection repo has the entry
-    refl_entries = scheduler._reflection_repo.list()
+    refl_entries = scheduler._reflection_service.list_entries()
     assert len(refl_entries) == 1
-    # Outbox has a notify entry pointing to it
-    outbox_entries = scheduler._outbox.list()
-    assert len(outbox_entries) == 1
-    assert outbox_entries[0].title.startswith("New reflection:")
-    assert refl_entries[0].id in outbox_entries[0].body
+    inbox_items = cast(InboxService, scheduler._inbox).list()
+    assert len(inbox_items) == 1
+    assert inbox_items[0].title.startswith("New reflection:")
+    assert inbox_items[0].body == refl_entries[0].body
+    assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
+
+
+def test_reflect_creates_inbox_without_delivery_by_default(
+    scheduler: ReflectionScheduler,
+) -> None:
+    assert scheduler.reflect(datetime(2024, 1, 1, 12, 0, tzinfo=UTC)) is True
+
+    assert len(cast(InboxService, scheduler._inbox).list()) == 1
+    assert cast(DeliveryStore, scheduler._deliveries).list() == []
 
 
 def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionScheduler) -> None:
@@ -557,26 +571,39 @@ def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionSchedu
     now = _local_datetime(2024, 1, 1, 23)
     result = scheduler.reflect(now)
     assert result is False
-    assert len(scheduler._reflection_repo.list()) == 0
+    assert len(scheduler._reflection_service.list_entries()) == 0
     events = read_log_events(project_root=scheduler._project_root, component="reflection")
     assert events[-1].event == "schedule_blocked"
     assert events[-1].status == "skipped"
     assert events[-1].metadata == {"reason": "quiet_hours"}
 
 
-# --- last reflection persistence ---
+def test_forced_reflection_bypasses_temporal_schedule_gates(
+    scheduler: ReflectionScheduler,
+) -> None:
+    scheduler._config = _reflection_settings(
+        interval_seconds=10,
+        cooldown_seconds=0,
+        quiet_start_hour=22,
+        quiet_end_hour=7,
+        daily_cap=100,
+        jitter_percent=0,
+        relevance_threshold=0.0,
+        persona_discussion_threshold=1.0,
+        max_discussion_rounds=2,
+        moderator_convergence_patience=1,
+    )
 
-def test_read_last_reflection_missing_file(scheduler: ReflectionScheduler) -> None:
-    assert scheduler._read_last_reflection() is None
+    assert scheduler.reflect(_local_datetime(2024, 1, 1, 23), force=True) is True
+    assert len(scheduler._reflection_service.list_entries()) == 1
 
 
-def test_read_write_last_reflection_roundtrip(scheduler: ReflectionScheduler) -> None:
+def test_write_last_reflection_persists_schedule_state(
+    scheduler: ReflectionScheduler,
+) -> None:
     now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
     scheduler._write_last_reflection(now)
-    loaded = scheduler._read_last_reflection()
-    assert loaded is not None
-    assert loaded.isoformat() == now.isoformat()
-    record = scheduler._schedule_collection.get("reflection")
+    record = scheduler._reflection_service._repository._schedule_col.get("reflection")
     assert record == {
         "id": "reflection",
         "daily_count": 1,
@@ -584,27 +611,6 @@ def test_read_write_last_reflection_roundtrip(scheduler: ReflectionScheduler) ->
         "schema_version": 1,
         "timestamp": "2024-01-01T12:00:00Z",
     }
-
-
-def test_read_last_reflection_corrupt_record(scheduler: ReflectionScheduler) -> None:
-    scheduler._schedule_collection.put("reflection", {"invalid": True})
-    with pytest.raises(
-        ReflectionScheduleStateError,
-        match="malformed or unsupported",
-    ):
-        scheduler._read_last_reflection()
-
-
-def test_read_last_reflection_invalid_timestamp(scheduler: ReflectionScheduler) -> None:
-    scheduler._schedule_collection.put(
-        "reflection",
-        {"timestamp": "not-a-date"},
-    )
-    with pytest.raises(
-        ReflectionScheduleStateError,
-        match="malformed or unsupported",
-    ):
-        scheduler._read_last_reflection()
 
 
 @pytest.mark.parametrize(
@@ -639,7 +645,7 @@ def test_corrupt_schedule_state_fails_closed(
     scheduler: ReflectionScheduler,
     record: dict[str, object],
 ) -> None:
-    scheduler._schedule_collection.put("reflection", record)
+    scheduler._reflection_service._repository._schedule_col.put("reflection", record)
 
     assert scheduler.should_reflect(
         datetime(2024, 1, 2, 12, tzinfo=UTC)
@@ -663,7 +669,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
-    scheduler._schedule_collection.put(
+    scheduler._reflection_service._repository._schedule_col.put(
         "reflection",
         {"schema_version": 1},
     )
@@ -690,7 +696,7 @@ def test_corrupt_schedule_diagnostics_cannot_change_fail_closed_decision(
 def test_reflect_reports_corrupt_schedule_state_as_blocked(
     scheduler: ReflectionScheduler,
 ) -> None:
-    scheduler._schedule_collection.put(
+    scheduler._reflection_service._repository._schedule_col.put(
         "reflection",
         {"schema_version": 1},
     )
@@ -732,7 +738,7 @@ def test_quiet_hours_non_wrapping_range() -> None:
 # --- IdeaCandidateGenerator tests ---
 
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
-    """No threads, no memory, no sources → no candidates."""
+    """No conversations, no memory, no sources → no candidates."""
     gen = _generator(tmp_path, agent=_CandidateAgent())
     candidates = gen.generate()
     assert candidates == []
@@ -748,15 +754,15 @@ def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
     assert candidates[0].title == "Proactive insight about memory patterns"
 
 
-def test_generator_produces_ideas_from_threads(tmp_path: Path) -> None:
+def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:
     """Conversations alone should be enough to generate ideas."""
-    from nuself.agent.chat import ThreadMessage, ThreadState
+    from nuself.conversation import ConversationMessage, ConversationState
 
-    store = ThreadStore(tmp_path)
-    state = ThreadState.empty("default")
-    state.messages.append(ThreadMessage(role="user", content="What is consciousness?"))
-    state = ThreadState(
-        thread_id=state.thread_id,
+    store = ConversationStore(tmp_path)
+    state = ConversationState.empty("default")
+    state.messages.append(ConversationMessage(role="user", content="What is consciousness?"))
+    state = ConversationState(
+        conversation_id=state.conversation_id,
         messages=state.messages,
         next_message_index=1,
     )
@@ -877,16 +883,22 @@ def test_generator_parses_multiple_candidates(tmp_path: Path) -> None:
 
 def test_generator_injects_language_instruction(tmp_path: Path) -> None:
     """Non-English language preference appends a language directive to the system prompt."""
-    private_dir = tmp_path
-    private_dir.mkdir(parents=True, exist_ok=True)
-    (private_dir / "config.yaml").write_text(
-        "chat:\n  language_preference: zh-CN\n",
-        encoding="utf-8",
-    )
     _seed_memory(tmp_path)
 
     agent = _CandidateAgent(candidates=[])
-    gen = _generator(tmp_path, agent=agent)
+    application = compose_application(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    )
+    gen = IdeaCandidateGenerator(
+        tmp_path,
+        agent=agent,
+        memory_service=application.memory,
+        source_service=application.sources,
+        profile_service=application.profiles,
+        conversation_history=application.conversation_history,
+        language_preference="zh-CN",
+    )
     gen.generate()
     assert len(agent.messages) == 1
     system_prompt = agent.messages[0][0].text
@@ -913,14 +925,12 @@ def _make_candidate(
         urgency=urgency,
         interruption_cost=interruption_cost,
         evidence_refs=(),
-        suggested_thread_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )
 
 
 def test_relevance_gate_allows_passing_candidate(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
     score = gate.score(_make_candidate("New insight about X"))
@@ -929,7 +939,6 @@ def test_relevance_gate_allows_passing_candidate(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_rejects_failing_candidate(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -945,7 +954,6 @@ def test_relevance_gate_rejects_failing_candidate(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     # LLM says passes=True even if scores look low — judgment overrides formula
     gate = _gate(
@@ -964,7 +972,6 @@ def test_relevance_gate_uses_llm_judgment_not_formula(tmp_path: Path) -> None:
 def test_relevance_gate_rejects_out_of_range_scores(
     tmp_path: Path,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -981,7 +988,6 @@ def test_relevance_gate_rejects_out_of_range_scores(
 
 
 def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_BrokenAgent())
     candidate = _make_candidate("Will fail")
@@ -995,7 +1001,6 @@ def test_relevance_gate_fallback_on_llm_failure(tmp_path: Path) -> None:
 def test_relevance_gate_fallback_on_invalid_structured_output(
     tmp_path: Path,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     class _InvalidRelevanceAgent:
         def invoke(
@@ -1018,7 +1023,6 @@ def test_relevance_gate_propagates_untyped_agent_errors(
     tmp_path: Path,
     error_type: type[Exception],
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     expected = error_type("raw agent implementation failure")
 
@@ -1037,7 +1041,6 @@ def test_relevance_gate_propagates_untyped_agent_errors(
 
 
 def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -1049,7 +1052,6 @@ def test_relevance_gate_fallback_on_missing_field(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_rejects_passes_from_string(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(
         tmp_path,
@@ -1070,12 +1072,11 @@ def test_relevance_gate_rejects_passes_from_string(tmp_path: Path) -> None:
 
 
 def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     config = _reflection_settings(cooldown_seconds=600)
     gate = _gate(tmp_path, config=config)
     now = datetime.now(UTC)
-    gate._schedule_collection.put("reflection", {
+    gate._service._repository._schedule_col.put("reflection", {
         "schema_version": 1,
         "timestamp": now.isoformat(),
         "daily_count": 1,
@@ -1087,10 +1088,9 @@ def test_relevance_gate_cooldown_uses_config(tmp_path: Path) -> None:
 def test_relevance_gate_corrupt_state_keeps_cooldown_active(
     tmp_path: Path,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
-    gate._schedule_collection.put(
+    gate._service._repository._schedule_col.put(
         "reflection",
         {"timestamp": "not-a-date"},
     )
@@ -1105,13 +1105,12 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     def fail_log(*args: object, **kwargs: object) -> None:
         raise OSError("audit store unavailable")
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
-    gate._schedule_collection.put(
+    gate._service._repository._schedule_col.put(
         "reflection",
         {"timestamp": "not-a-date"},
     )
@@ -1134,7 +1133,6 @@ def test_relevance_gate_corrupt_diagnostics_keep_cooldown_active(
 
 
 def test_relevance_gate_no_cooldown_when_no_last_reflection(tmp_path: Path) -> None:
-    from nuself.reflection import LLMRelevanceGate
 
     gate = _gate(tmp_path, agent=_RelevanceAgent())
     assert gate._cooldown_ok() is True

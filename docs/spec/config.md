@@ -6,12 +6,33 @@
 |---|---|---|
 | 1 (highest) | Selected workspace `.nuself/config.yaml` | Recursively overrides user configuration in explicit workspace scope |
 | 2 | User authority `config.yaml` | Overrides built-in defaults in every scope |
-| 3 (lowest) | Hardcoded defaults in `ConfigSystem._default_config()` | Safe production values |
+| 3 (lowest) | Typed `SystemConfig` field defaults | Safe production values |
 
 The final merged mapping is validated once. Sequences and scalar values replace
 the lower layer; mappings merge recursively. Scope selection and the strict
 separation between layered configuration and single-authority state are
 governed by [`scope.md`](scope.md).
+
+Application composition owns this effective immutable configuration for its
+resolved scope. Ordinary CLI and daemon consumers read `ApplicationGraph.config`
+instead of reloading configuration from an authority path, which cannot
+reconstruct the user layer beneath workspace scope. Explicit configuration and
+scope inspection commands remain separate read-only projections. Consumers
+read the required subsection at their operation boundary; single-use field
+getter functions must not mirror the immutable graph.
+
+The production configuration loader has no hidden test-mode defaults. Tests
+that need shorter intervals or alternate policies supply explicit typed config
+or fixture files; runtime behavior never branches on a test environment.
+
+`ConfigSystem.load_scope()` is the sole file-loading entry point. Callers that
+already own an authority root first construct its explicit `NuSelfScope`; there
+is no parallel path/config-file loader with different layering or hardening
+semantics.
+
+The flat inspection projection uses the model-shaped
+`llm.endpoints.<index>.*` namespace for every endpoint plus the derived
+`llm.count`. It does not duplicate the first endpoint under `llm.0.*`.
 
 ## Config Sections
 
@@ -65,7 +86,7 @@ explicit and limited to the selected managed authority.
 - Chat agent responses (including persona-synthesized and tool follow-up replies)
 - User-inspectable persona discussion text in logs, including participant notes, moderator notes, and synthesis summaries
 - Reflection idea titles and bodies
-- Notification texts derived from reflections
+- Inbox and Delivery text derived from reflections
 
 Internal prompts for memory curation, compression, routing, and structured decisions remain in English regardless of this setting. Persona discussion prompts may remain English, but their visible notes and summaries should ask the model to write in the configured language.
 
@@ -76,6 +97,13 @@ Supported values: any IETF language tag string (e.g. `en`, `zh-CN`, `zh-TW`). De
 If a configuration layer is missing, loading proceeds with lower layers. No
 error is raised.
 
+Configuration loaders do not retain process-global path/metadata caches.
+`ApplicationRuntime` already owns one immutable effective snapshot for each
+CLI invocation or daemon lifetime; explicit later loads read the current file
+instead of trusting potentially reused mtime/size metadata. Daemon
+configuration remains fixed until restart because its application graph is
+fixed, not because the loader caches files.
+
 `nuself dev health` does not report a missing config file as unhealthy.
 `nuself dev config` describes the effective file/default state and explicitly
 states that a running daemon must be restarted after configuration changes.
@@ -85,8 +113,8 @@ the disk projection is not presented as a live daemon reload.
 Malformed YAML, invalid encoding, and expected file-read failures print one
 concise warning and fall back to defaults. Unexpected exceptions are not
 configuration fallback: they propagate so programming defects remain visible.
-Callers must not wrap `ConfigSystem.load()` in a broad catch merely to recover
-one default field.
+Callers must not wrap `ConfigSystem.load_scope()` in a broad catch merely to
+recover one default field.
 
 ## LLM Endpoint List And Failover
 
@@ -189,12 +217,11 @@ are not accepted as booleans. Wrong top-level shapes, obsolete nested LLM
 objects, unknown fields, and invalid values fail explicitly rather than being
 silently discarded.
 
-The v0.3 loader has one narrow v0.2.5 compatibility boundary before strict
-validation: it removes the retired `experimental.langmem_adapter` field and
-emits one fixed, payload-free deprecation warning per configuration path. No
-other unknown field is ignored. The frozen official v0.2.5 example config must
-load successfully through this boundary, and the compatibility shim may be
-removed only with the future configuration-system redesign.
+The runtime loader accepts only the current schema. It does not remove,
+translate, warn about, or otherwise normalize retired configuration fields;
+unknown v0.2.5 fields such as `experimental.langmem_adapter` fail strict
+validation. One-time migrations belong in repository scripts rather than the
+installed runtime.
 
 Before reading a present `<authority-root>/config.yaml`, NuSelf hardens the
 managed authority root to `0700`, rejects non-regular files and symlinks, and
@@ -207,11 +234,9 @@ Secret values are never read from a permissive or redirected file.
 ## Email Delivery
 
 Email uses the selected authority's `config.yaml`. The obsolete
-`private/email.toml` path is not read. If an enabled configuration has no
-non-blank `email.to_address`, loading raises a typed configuration-migration
-error before Pydantic validation. The diagnostic explicitly explains that
-v0.3 no longer reads `private/email.toml` and names the current YAML fields,
-without reading or rendering any legacy credential.
+`private/email.toml` path is not read. Enabled email is validated solely from
+the current YAML fields; missing required values produce the same input-hidden
+Pydantic validation error as any other invalid current configuration.
 
 When `email.enabled` is true, `email.smtp.host`, `email.from_address`, and
 `email.to_address` must be non-empty. SMTP `username` and `password` must be

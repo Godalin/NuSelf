@@ -11,10 +11,10 @@ from types import MappingProxyType
 from typing import Literal, cast
 from uuid import uuid4
 
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso
 from nuself.runtime.context import RuntimeContext, current_runtime_context
 
-MessageKind = Literal["event", "job", "audit"]
+type MessageKind = Literal["event", "job", "audit"]
 RUNTIME_SCHEMA_VERSION = 1
 _MESSAGE_KINDS = frozenset({"event", "job", "audit"})
 _ENVELOPE_FIELDS = frozenset(

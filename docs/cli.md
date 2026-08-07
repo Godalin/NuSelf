@@ -23,14 +23,14 @@ uv run nuself --workspace /path/to/workspace init
 uv run nuself dev paths
 ```
 
-Legacy v0.3.0 checkout-local state is migrated only by an explicit command.
+Legacy v0.3.0 checkout-local state is migrated only by a source-checkout script.
 The source is validated and preserved, and an existing target is never merged
 or overwritten:
 
 ```bash
-uv run nuself migrate-layout --from ./private --to user
-uv run nuself migrate-layout --from ./private --to-local
-uv run nuself migrate-layout --from ./private --workspace /path/to/workspace
+uv run python scripts/migrate_legacy_layout.py --from ./private --to user
+uv run python scripts/migrate_legacy_layout.py --from ./private --to-local
+uv run python scripts/migrate_legacy_layout.py --from ./private --workspace /path/to/workspace
 ```
 
 ## Chat
@@ -68,17 +68,17 @@ uv run nuself daemon stop
 ```
 
 The daemon hosts chat plus background memory, reflection, reasoning, and
-notification workers over a local Unix socket.
+Delivery work over a local Unix socket.
 
-## Threads
+## Conversations
 
 ```bash
-uv run nuself thread list
-uv run nuself thread new research
-uv run nuself thread open research
-uv run nuself thread branch research research-alt
-uv run nuself thread archive research
-uv run nuself thread archived
+uv run nuself conversation list
+uv run nuself conversation new research
+uv run nuself conversation open research
+uv run nuself conversation branch research research-alt
+uv run nuself conversation archive research
+uv run nuself conversation archived
 ```
 
 Add `--help` to a subcommand for ID/index options and destructive-operation
@@ -92,7 +92,7 @@ uv run nuself memory search "retrieval"
 uv run nuself memory preview
 uv run nuself memory stats
 uv run nuself memory review list
-uv run nuself memory source list
+uv run nuself source list
 uv run nuself memory profile list
 uv run nuself memory graph search "project"
 ```
@@ -123,18 +123,22 @@ One-time record migrations are repository scripts rather than installed CLI
 commands. Preview with
 `uv run python scripts/migrate_legacy_memory_records.py --authority-root .nuself`
 and add `--apply` explicitly to commit. Unknown legacy data stays untouched.
+For a pre-refactor v0.3.1 database, preview Notification-to-Inbox migration
+with `uv run python scripts/inbox.py .nuself/nuself.sqlite`, then add `--apply`.
 
-## Reflections And Notifications
+## Reflections And Inbox
 
 ```bash
-uv run nuself inbox reflection list
-uv run nuself inbox reflection show <reflection-id>
-uv run nuself inbox reflection dismiss <reflection-id>
+uv run nuself reflection status
+uv run nuself reflection run
+uv run nuself reflection list
+uv run nuself reflection show <reflection-id>
+uv run nuself reflection dismiss <reflection-id>
 
-uv run nuself inbox notify list
-uv run nuself inbox notify show <notification-id>
-uv run nuself inbox notify send <notification-id>
-uv run nuself inbox notify dismiss <notification-id>
+uv run nuself inbox
+uv run nuself inbox show <item-id>
+uv run nuself inbox send <item-id>
+uv run nuself inbox dismiss <item-id>
 ```
 
 ## Long-Run Reasoning And Trace
@@ -181,8 +185,9 @@ Schema inspection is a developer operation:
 uv run nuself dev db-schema
 ```
 
-Use `nuself migrate-layout` for an explicit legacy directory move. It accepts
-only a valid SQLite authority; file-backed collection migration is retired.
+Use `scripts/migrate_legacy_layout.py` from a source checkout for an explicit
+legacy directory move. It accepts only a valid SQLite authority; file-backed
+collection migration is retired and the installed CLI carries no migration.
 
 ## Discoverability
 
@@ -191,7 +196,7 @@ The CLI help is the current command reference:
 ```bash
 uv run nuself --help
 uv run nuself memory --help
-uv run nuself memory source --help
+uv run nuself source --help
 ```
 
 The authoritative command, output, and REPL contracts are maintained in

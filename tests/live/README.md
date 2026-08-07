@@ -12,6 +12,8 @@ uv run --locked pytest tests/live -m live_api --run-live-api
 ```
 
 Running `uv run --locked pytest` or normal CI does not collect this directory.
+The suite's model/capability matrix belongs to `tests/live/matrix.py`; no live
+test configuration is shipped as part of the `nuself` production package.
 The suite checks raw transport, structured output, ordinary NuSelf chat, and
 the production-critical combination of tool calling plus a structured final
 response. Failures are reported through NuSelf's credential-redacting LLM

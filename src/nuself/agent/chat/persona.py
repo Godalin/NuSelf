@@ -6,23 +6,24 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from nuself.agent.failover import is_recoverable_agent_failure
-from nuself.domain.proactive import IdeaCandidate
-from nuself.llm import LangChainLLMEndpoint
-from nuself.memory.query import MemoryQuery, MemoryQueryService
-from nuself.persona import (
+from nuself.config.settings import ReflectionSettings
+from nuself.reflection.model import IdeaCandidate
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.persona.definition import (
+    PersonaDefinition,
+    PersonaInput,
+    PersonaTurnState,
+)
+from nuself.persona.discussion import SharedPersonaDiscussionService
+from nuself.persona.graph import (
     AgentBackedActivationPolicy,
     AgentBackedPersonaNode,
     AgentBackedSynthesizerNode,
-    PersonaDefinition,
     PersonaGraphDriver,
-    PersonaInput,
-    PersonaTurnState,
-    SharedPersonaDiscussionService,
     persona_graph_agents,
 )
 from nuself.persona.audit import (
-    report_persona_failure,
-    write_persona_audit,
+    PERSONA_AUDIT,
 )
 from nuself.runtime.context import current_runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
@@ -34,14 +35,13 @@ class ConversationPersonaOrchestrator:
     def __init__(
         self,
         *,
-        project_root: Path | None,
+        project_root: Path,
         langchain_models: tuple[LangChainLLMEndpoint, ...],
         language_preference: str,
-        memory_query_service: MemoryQueryService,
+        reflection_settings: ReflectionSettings,
         persona_definitions: tuple[PersonaDefinition, ...],
     ) -> None:
         self._project_root = project_root
-        self._memory_query_service = memory_query_service
         self._persona_definitions = persona_definitions
         graph_agents = (
             persona_graph_agents(
@@ -82,12 +82,14 @@ class ConversationPersonaOrchestrator:
         )
         self._discussion_service = SharedPersonaDiscussionService(
             project_root=project_root,
+            config=reflection_settings,
             synthesis_agent=(
                 graph_agents.synthesis
                 if graph_agents is not None
                 else None
             ),
             language_preference=language_preference,
+            langchain_models=langchain_models,
         )
 
     def consult(
@@ -96,17 +98,11 @@ class ConversationPersonaOrchestrator:
         mode: str = "consult",
         context: str | None = None,
     ) -> str:
-        thread_id = current_runtime_context().thread_id or "default"
-        memory_context = self._memory_query_service.pack(
-            MemoryQuery(text=topic)
-        ).text
+        conversation_id = current_runtime_context().conversation_id or "default"
         extra_context = context.strip() if isinstance(context, str) else ""
-        combined_context = "\n\n".join(
-            part for part in (memory_context, extra_context) if part
-        )
         persona_input = PersonaInput(
             user_message=topic,
-            memory_context=combined_context,
+            memory_context=extra_context,
         )
         activation = self._activation_policy.decide(persona_input)
         selected_personas = (
@@ -118,10 +114,14 @@ class ConversationPersonaOrchestrator:
         )
         updated_turn_state = self._persona_driver.run(turn_state)
         trigger = activation.trigger or "selves_consult"
-        self._write_summary_log(
-            updated_turn_state,
-            thread_id=thread_id,
-            trigger=trigger,
+        PERSONA_AUDIT.write(
+            "persona_summary",
+            project_root=self._project_root,
+            conversation_id=conversation_id,
+            metadata={
+                "persona_count": len(updated_turn_state.contributions),
+                "has_synthesis": updated_turn_state.synthesis is not None,
+            },
         )
 
         force_discussion = mode.strip().casefold() in {
@@ -131,19 +131,15 @@ class ConversationPersonaOrchestrator:
             "competitive",
         }
         should_escalate = activation.should_escalate or force_discussion
-        escalation_reason = activation.escalation_reason or (
-            "requested discussion mode"
-            if force_discussion
-            else "consultation only"
-        )
-        self._write_host_decision_log(
-            thread_id=thread_id,
-            should_escalate=should_escalate,
-            escalation_reason=escalation_reason,
+        PERSONA_AUDIT.write(
+            "host_discussion_decision",
+            project_root=self._project_root,
+            conversation_id=conversation_id,
+            metadata={"should_escalate": should_escalate},
         )
         discussion_note = self._run_discussion(
             topic=topic,
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             trigger=trigger,
             turn_state=updated_turn_state,
             should_escalate=should_escalate,
@@ -158,7 +154,7 @@ class ConversationPersonaOrchestrator:
         self,
         *,
         topic: str,
-        thread_id: str,
+        conversation_id: str,
         trigger: str,
         turn_state: PersonaTurnState,
         should_escalate: bool,
@@ -171,11 +167,16 @@ class ConversationPersonaOrchestrator:
             nonlocal step_number
             del entry
             step_number += 1
-            self._write_discussion_step_log(thread_id, step_number)
+            PERSONA_AUDIT.write(
+                "persona_discussion_step",
+                project_root=self._project_root,
+                conversation_id=conversation_id,
+                metadata={"step_number": step_number},
+            )
 
         try:
             candidate = self._build_candidate(
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 user_message=topic,
                 title=(
                     topic.splitlines()[0]
@@ -192,10 +193,10 @@ class ConversationPersonaOrchestrator:
                 candidate,
                 on_trace_entry=record_step,
             )
-            write_persona_audit(
+            PERSONA_AUDIT.write(
                 "persona_discussion",
                 project_root=self._project_root,
-                thread_id=thread_id,
+                conversation_id=conversation_id,
                 metadata={
                     "candidate_id": candidate.id,
                     "approved": result.approved,
@@ -211,7 +212,7 @@ class ConversationPersonaOrchestrator:
             if not is_recoverable_agent_failure(exc):
                 raise
             error = diagnostic_exception_message(exc)
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_failure",
                 project_root=self._project_root,
@@ -231,62 +232,17 @@ class ConversationPersonaOrchestrator:
         )
         return selected or tuple(self._persona_definitions[:3])
 
-    def _write_summary_log(
-        self,
-        turn_state: PersonaTurnState,
-        *,
-        thread_id: str,
-        trigger: str,
-    ) -> None:
-        del trigger
-        write_persona_audit(
-            "persona_summary",
-            project_root=self._project_root,
-            thread_id=thread_id,
-            metadata={
-                "persona_count": len(turn_state.contributions),
-                "has_synthesis": turn_state.synthesis is not None,
-            },
-        )
-
-    def _write_host_decision_log(
-        self,
-        *,
-        thread_id: str,
-        should_escalate: bool,
-        escalation_reason: str,
-    ) -> None:
-        del escalation_reason
-        write_persona_audit(
-            "host_discussion_decision",
-            project_root=self._project_root,
-            thread_id=thread_id,
-            metadata={"should_escalate": should_escalate},
-        )
-
-    def _write_discussion_step_log(
-        self,
-        thread_id: str,
-        step_number: int,
-    ) -> None:
-        write_persona_audit(
-            "persona_discussion_step",
-            project_root=self._project_root,
-            thread_id=thread_id,
-            metadata={"step_number": step_number},
-        )
-
     @staticmethod
     def _build_candidate(
         *,
-        thread_id: str,
+        conversation_id: str,
         user_message: str,
         title: str,
         source_summary: str,
     ) -> IdeaCandidate:
         now = datetime.now(UTC)
         return IdeaCandidate(
-            id=f"chat-{thread_id}-{int(now.timestamp())}",
+            id=f"chat-{conversation_id}-{int(now.timestamp())}",
             title=title,
             body=user_message,
             candidate_type=(
@@ -297,7 +253,6 @@ class ConversationPersonaOrchestrator:
             urgency=0.2,
             interruption_cost=0.1,
             evidence_refs=(),
-            suggested_thread_id=thread_id,
             source_summary=source_summary,
             created_at=now.isoformat(),
         )

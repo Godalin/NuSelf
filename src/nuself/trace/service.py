@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nuself.trace.domain import ThoughtTrace, TraceKind, TraceLink, TraceRelation, TraceVisibility
+from nuself.trace.model import ThoughtTrace, TraceKind, TraceLink, TraceVisibility
 from nuself.trace.repository import TraceRepository, TraceVisibilityFilter
 
 if TYPE_CHECKING:
-    from nuself.reason.domain import ReasoningStep, ReasoningThread
+    from nuself.reason.model import ReasoningStep, ReasoningThread
 
 
 class TraceRecorder:
@@ -17,7 +17,7 @@ class TraceRecorder:
     def __init__(self, repository: TraceRepository) -> None:
         self._repository = repository
 
-    def record(
+    def _record(
         self,
         *,
         kind: TraceKind,
@@ -29,7 +29,7 @@ class TraceRecorder:
         outputs: list[str] | None = None,
         participants: list[str] | None = None,
         decision_points: list[str] | None = None,
-        thread_id: str | None = None,
+        conversation_id: str | None = None,
         visibility: TraceVisibility = "private",
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
@@ -43,7 +43,7 @@ class TraceRecorder:
             outputs=outputs or [],
             participants=participants or [],
             decision_points=decision_points or [],
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             visibility=visibility,
             metadata=metadata or {},
         )
@@ -56,13 +56,13 @@ class TraceRecorder:
         summary: str,
         user_input: str,
         assistant_output: str,
-        thread_id: str,
+        conversation_id: str,
         evidence_refs: list[str] | None = None,
         participants: list[str] | None = None,
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="chat_turn",
             title=title,
             summary=summary,
@@ -71,7 +71,7 @@ class TraceRecorder:
             evidence_refs=evidence_refs or [],
             participants=participants or [],
             decision_points=decision_points or [],
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             metadata=metadata or {},
         )
 
@@ -82,7 +82,7 @@ class TraceRecorder:
         source_trace_ids: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="reason_thread",
             title=f"Reason thread created: {_short(thread.topic)}",
             summary=f"Created a durable reasoning thread for: {thread.topic}",
@@ -103,7 +103,7 @@ class TraceRecorder:
         step: ReasoningStep,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="reason_step",
             title=f"Reason step: {_short(thread.topic)}",
             summary=step.summary,
@@ -130,17 +130,17 @@ class TraceRecorder:
         candidate_type: str,
         composite_score: float,
         discussion_approved: bool | None,
-        thread_id: str | None = None,
+        conversation_id: str | None = None,
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="reflection",
             title=title,
             summary=body,
             outputs=[f"reflection:{reflection_id}"],
             participants=["reflection"],
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             decision_points=decision_points or [],
             visibility="private",
             metadata={
@@ -165,7 +165,7 @@ class TraceRecorder:
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
         evidence_refs = [f"trace:{source_trace_id}"] if source_trace_id else []
-        return self.record(
+        return self._record(
             kind="memory_update",
             title=title,
             summary=summary,
@@ -190,7 +190,7 @@ class TraceRecorder:
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="persona_prompt_created",
             title=f"Persona prompt: {name}",
             summary=f"Created or updated dynamic thinking persona: {name}",
@@ -208,7 +208,7 @@ class TraceRecorder:
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="persona_disabled",
             title=f"Persona disabled: {name}",
             summary=f"Disabled dynamic thinking persona: {name}",
@@ -226,7 +226,7 @@ class TraceRecorder:
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        return self.record(
+        return self._record(
             kind="persona_enabled",
             title=f"Persona enabled: {name}",
             summary=f"Enabled dynamic thinking persona: {name}",
@@ -244,7 +244,7 @@ class TraceRecorder:
         thread: ReasoningThread,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        trace = self.record(
+        trace = self._record(
             kind="promotion",
             title=f"Reflection promoted: {_short(reflection_title)}",
             summary=f"Promoted reflection into reason thread: {thread.topic}",
@@ -256,18 +256,15 @@ class TraceRecorder:
             visibility="private",
             metadata={"reflection_id": reflection_id, "thread_id": thread.id, **(metadata or {})},
         )
-        self.link(
-            f"reflection:{reflection_id}",
-            f"reason:{thread.id}",
-            "triggered",
-            "Reflection promotion created this reason thread.",
+        self._repository.save_link(
+            TraceLink(
+                source_id=f"reflection:{reflection_id}",
+                target_id=f"reason:{thread.id}",
+                relation="triggered",
+                summary="Reflection promotion created this reason thread.",
+            )
         )
         return trace
-
-    def link(self, source_id: str, target_id: str, relation: TraceRelation, summary: str) -> TraceLink:
-        return self._repository.save_link(
-            TraceLink(source_id=source_id, target_id=target_id, relation=relation, summary=summary)
-        )
 
 
 class TraceQueryService:
@@ -309,7 +306,6 @@ class TraceQueryService:
 
     def links_for_artifact(self, artifact_ref: str) -> list[TraceLink]:
         return self._repository.links_for_artifact(artifact_ref)
-
 
 def _short(value: str, limit: int = 80) -> str:
     normalized = " ".join(value.split())

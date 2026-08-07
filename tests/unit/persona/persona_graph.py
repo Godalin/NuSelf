@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Generic, Never, TypeVar
+from typing import Never
 
 import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
-from nuself.logs import read_log_events
-from nuself.persona import (
+from nuself.log.reader import read_log_events
+from nuself.persona.graph import (
     AgentBackedActivationPolicy,
     AgentBackedPersonaNode,
     AgentBackedSynthesizerNode,
@@ -32,10 +32,7 @@ from nuself.persona.definition import (
 )
 
 
-OutputT = TypeVar("OutputT", bound=BaseModel)
-
-
-class _StaticAgent(Generic[OutputT]):
+class _StaticAgent[OutputT: BaseModel]:
     def __init__(self, output: OutputT) -> None:
         self.output = output
         self.calls: list[Sequence[BaseMessage]] = []

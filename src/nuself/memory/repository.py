@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from dataclasses import asdict
-from pathlib import Path
 from typing import Literal, cast
 
-from nuself.clock import utc_now_iso
-from nuself.config import RuntimePaths
-from nuself.derived import write_derived_index
-from nuself.domain.memory import (
+from nuself.runtime.clock import utc_now_iso
+from nuself.config.settings import RuntimePaths
+from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,
     MemoryObject,
@@ -22,19 +20,11 @@ from nuself.domain.memory import (
     default_relation_descriptor_registry,
     merge_relations,
 )
-from nuself.domain.profile import ProfileItem
+from nuself.profile.model import ProfileItem
 from nuself.profile.contracts import ProfileRepositoryPort
 from nuself.runtime.observability import decode_observed_record
-from nuself.runtime import freeze_json_value
-from nuself.storage import StorageBackend
-
-
-def empty_str_counts() -> dict[str, int]:
-    return {}
-
-
-def empty_str_floats() -> dict[str, float]:
-    return {}
+from nuself.runtime.messages import freeze_json_value
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)
@@ -56,15 +46,23 @@ class MemoryStats:
 
     entries_total: int
     candidates_total: int
-    entries_by_type: Mapping[str, int] = field(default_factory=empty_str_counts)
-    entries_by_review_state: Mapping[str, int] = field(default_factory=empty_str_counts)
-    candidates_by_review_state: Mapping[str, int] = field(default_factory=empty_str_counts)
+    entries_by_type: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
+    entries_by_review_state: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
+    candidates_by_review_state: Mapping[str, int] = field(
+        default_factory=dict[str, int]
+    )
     entries_with_observed_at: int = 0
     entries_with_evidence: int = 0
     pending_candidates: int = 0
     avg_importance: float = 0.0
     max_importance: float = 0.0
-    avg_importance_by_type: Mapping[str, float] = field(default_factory=empty_str_floats)
+    avg_importance_by_type: Mapping[str, float] = field(
+        default_factory=dict[str, float]
+    )
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -161,7 +159,7 @@ class SymbolicGraphSearchResult:
     edges: tuple[SymbolicGraphEdge, ...]
 
 
-GraphAdjacency = dict[str, list[tuple[str, SymbolicGraphEdge]]]
+type GraphAdjacency = dict[str, list[tuple[str, SymbolicGraphEdge]]]
 
 
 def _freeze_stats_mapping(
@@ -220,7 +218,7 @@ class MemoryEntryRepository:
                 _entry_from_wire,
                 component="memory",
                 collection="memory_entries",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if entry is not None:
                 entries.append(entry)
@@ -256,57 +254,33 @@ class MemoryEntryRepository:
         self._col.put(updated.id, updated.to_wire())
         return updated
 
-    def save_object(self, memory: MemoryObject) -> MemoryObject:
-        self._registry.validate(memory)
-        self.save(MemoryEntry.from_memory_object(memory))
-        return memory
-
     def delete(self, entry_id: str) -> None:
         wire = self._col.get(entry_id)
         if wire is None:
             raise MemoryEntryNotFound(entry_id)
         self._col.delete(entry_id)
 
-    def reindex(self) -> Path:
-        return write_derived_index(
-            self._paths,
-            "memory_index.json",
-            [entry.to_wire() for entry in self.list()],
-        )
-
-    def reindex_relations(self) -> Path:
-        return write_derived_index(
-            self._paths,
-            "relation_index.json",
-            [asdict(record) for record in self._compute_relations()],
-        )
-
-    def reindex_symbolic_graph(self) -> Path:
-        nodes, edges = self._compute_graph()
-        return write_derived_index(
-            self._paths,
-            "symbolic_graph.json",
-            [
-                {
-                    "nodes": [asdict(node) for node in nodes],
-                    "edges": [asdict(edge) for edge in edges],
-                }
-            ],
-        )
-
-    def _compute_relations(self) -> list[MemoryRelationIndexRecord]:
+    def list_relations(
+        self,
+        filters: MemoryRelationFilters | None = None,
+    ) -> list[MemoryRelationIndexRecord]:
         entries = self.list()
         by_id = {e.id: e for e in entries}
-        return [
+        relations = [
             _relation_record_from_wire(r)
             for e in entries
             for r in _relation_index_records(e, by_id, self._relation_registry)
         ]
+        return [
+            relation
+            for relation in relations
+            if _matches_relation_filters(relation, filters)
+        ]
 
-    def list_relations(self, filters: MemoryRelationFilters | None = None) -> list[MemoryRelationIndexRecord]:
-        return [r for r in self._compute_relations() if _matches_relation_filters(r, filters)]
-
-    def _compute_graph(self) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
+    def compute_graph(
+        self,
+    ) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
+        """Build one symbolic graph for reuse across related operations."""
         entries = self.list()
         by_id = {e.id: e for e in entries}
         nodes = [_symbolic_node_from_wire(_symbolic_node_record(e)) for e in entries]
@@ -317,18 +291,12 @@ class MemoryEntryRepository:
         ]
         return nodes, edges
 
-    def compute_graph(self) -> tuple[list[SymbolicGraphNode], list[SymbolicGraphEdge]]:
-        """Public one-shot graph projection, so callers that need several closures
-        (e.g. retrieval expansion) can compute the graph once and reuse it instead
-        of rebuilding it from ``list()`` per closure."""
-        return self._compute_graph()
-
     def list_graph_nodes(self, filters: SymbolicGraphNodeFilters | None = None) -> list[SymbolicGraphNode]:
-        nodes, _ = self._compute_graph()
+        nodes, _ = self.compute_graph()
         return [n for n in nodes if _matches_graph_node_filters(n, filters)]
 
     def list_graph_edges(self, filters: SymbolicGraphEdgeFilters | None = None) -> list[SymbolicGraphEdge]:
-        _, edges = self._compute_graph()
+        _, edges = self.compute_graph()
         return [e for e in edges if _matches_graph_edge_filters(e, filters)]
 
     def search_graph(
@@ -339,7 +307,7 @@ class MemoryEntryRepository:
         limit: int = 8,
         depth: int = 1,
     ) -> SymbolicGraphSearchResult:
-        nodes, edges = self._compute_graph()
+        nodes, edges = self.compute_graph()
         matched_nodes = [
             node
             for node in nodes
@@ -378,7 +346,7 @@ class MemoryEntryRepository:
 
     def find_path(self, from_id: str, to_id: str) -> list[SymbolicGraphEdge]:
         """Return the shortest path from from_id to to_id as a list of edges."""
-        _, edges = self._compute_graph()
+        _, edges = self.compute_graph()
 
         adjacency = _build_graph_adjacency(edges, self._relation_registry, bidirectional=True)
 
@@ -402,7 +370,11 @@ class MemoryEntryRepository:
         self, node_id: str, relation: str
     ) -> SymbolicGraphSearchResult:
         """Return all nodes and edges reachable from node_id via the given relation."""
-        return self.transitive_closure_from(self._compute_graph(), node_id, relation)
+        return self.transitive_closure_from(
+            self.compute_graph(),
+            node_id,
+            relation,
+        )
 
     def transitive_closure_from(
         self,
@@ -470,7 +442,7 @@ class MemoryCandidateRepository:
                 MemoryCandidate.from_wire,
                 component="memory",
                 collection="memory_candidates",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if candidate is None:
                 continue
@@ -677,9 +649,13 @@ def memory_stats(
     return MemoryStats(
         entries_total=len(entries),
         candidates_total=len(candidates),
-        entries_by_type=_counts(entry.type for entry in entries),
-        entries_by_review_state=_counts(entry.review_state for entry in entries),
-        candidates_by_review_state=_counts(candidate.review_state for candidate in candidates),
+        entries_by_type=dict(Counter(entry.type for entry in entries)),
+        entries_by_review_state=dict(
+            Counter(entry.review_state for entry in entries)
+        ),
+        candidates_by_review_state=dict(
+            Counter(candidate.review_state for candidate in candidates)
+        ),
         entries_with_observed_at=sum(1 for entry in entries if entry.observed_at is not None),
         entries_with_evidence=sum(1 for entry in entries if entry.evidence),
         pending_candidates=sum(1 for candidate in candidates if candidate.review_state == "pending"),
@@ -975,10 +951,3 @@ def _expect_float(data: dict[str, object], field_name: str) -> float:
     if isinstance(value, int | float):
         return float(value)
     raise ValueError(f"field '{field_name}' must be a number")
-
-
-def _counts(values: Iterable[str]) -> dict[str, int]:
-    result: dict[str, int] = {}
-    for value in values:
-        result[value] = result.get(value, 0) + 1
-    return result

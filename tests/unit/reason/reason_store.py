@@ -11,13 +11,13 @@ from typing import Any, Callable, cast
 import pytest
 from langgraph.store.base import PutOp
 
-from nuself.store import (
+from nuself.storage.workspace import (
     ScopedWorkspace,
     SqliteStore,
     SqliteStoreLifecycleError,
 )
-from nuself.storage import _create_sqlite_backend
-from nuself.workspace import PrivateWorkspacePaths
+from nuself.storage.authority import _create_sqlite_backend
+from nuself.storage.workspace import PrivateWorkspacePaths
 
 
 def _paths(tmp_path: Path) -> PrivateWorkspacePaths:
@@ -25,8 +25,6 @@ def _paths(tmp_path: Path) -> PrivateWorkspacePaths:
     return PrivateWorkspacePaths(
         root=root,
         database=root / "workspace.sqlite",
-        artifacts=root / "artifacts",
-        notes=root / "notes",
     )
 
 
@@ -139,7 +137,7 @@ def test_store_batch_retains_primary_rollback_and_close_failures(
         fail_close=True,
     )
     monkeypatch.setattr(
-        "nuself.store.sqlite3.connect",
+        "nuself.storage.workspace.sqlite3.connect",
         _connection_factory(connection),
     )
 
@@ -164,7 +162,7 @@ def test_store_commit_failure_propagates_after_successful_cleanup(
     raw = sqlite3.connect(_db(tmp_path))
     connection = LifecycleConnectionProxy(raw, fail_commit=True)
     monkeypatch.setattr(
-        "nuself.store.sqlite3.connect",
+        "nuself.storage.workspace.sqlite3.connect",
         _connection_factory(connection),
     )
 
@@ -182,7 +180,7 @@ def test_store_surfaces_close_failure_after_successful_commit(
     raw = sqlite3.connect(_db(tmp_path))
     connection = LifecycleConnectionProxy(raw, fail_close=True)
     monkeypatch.setattr(
-        "nuself.store.sqlite3.connect",
+        "nuself.storage.workspace.sqlite3.connect",
         _connection_factory(connection),
     )
 
@@ -293,10 +291,14 @@ def test_workspace_delete(tmp_path: Path) -> None:
 
 
 def test_build_workspace_tools_put_get(tmp_path: Path) -> None:
-    from nuself.agent.tools import build_workspace_tools
+    from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
-    tools = build_workspace_tools(ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_put"]).invoke({"key": "k1", "value": '{"msg": "hello"}'})
@@ -307,12 +309,16 @@ def test_build_workspace_tools_put_get(tmp_path: Path) -> None:
 
 
 def test_build_workspace_tools_search(tmp_path: Path) -> None:
-    from nuself.agent.tools import build_workspace_tools
+    from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
     ws.put("a", {"type": "hypothesis", "text": "h1"})
     ws.put("b", {"type": "evidence", "text": "e1"})
-    tools = build_workspace_tools(ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_search"]).invoke({"filter_json": '{"type": "hypothesis"}'})
@@ -320,11 +326,15 @@ def test_build_workspace_tools_search(tmp_path: Path) -> None:
 
 
 def test_build_workspace_tools_delete(tmp_path: Path) -> None:
-    from nuself.agent.tools import build_workspace_tools
+    from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
     ws.put("k", {"v": 1})
-    tools = build_workspace_tools(ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_delete"]).invoke({"key": "k"})
@@ -333,10 +343,14 @@ def test_build_workspace_tools_delete(tmp_path: Path) -> None:
 
 
 def test_build_workspace_tools_put_invalid_json(tmp_path: Path) -> None:
-    from nuself.agent.tools import build_workspace_tools
+    from nuself.agent.tools.workspace import build_workspace_tools_from_provider
+    from nuself.runtime.feature.execution import FeatureExecutor
     store = SqliteStore(_db(tmp_path))
     ws = ScopedWorkspace(store, ("t1",))
-    tools = build_workspace_tools(ws)
+    tools = build_workspace_tools_from_provider(
+        lambda: ws,
+        executor=FeatureExecutor(),
+    )
     tool_map = {t.name: t for t in tools}
 
     result = cast(Any, tool_map["workspace_put"]).invoke({"key": "k", "value": "not json"})

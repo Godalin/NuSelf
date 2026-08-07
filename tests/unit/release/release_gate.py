@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from nuself.release_gate import check_release, check_release_git
+from scripts.release import check_release, check_release_git
 
 
 def _write_release_metadata(

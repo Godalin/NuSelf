@@ -16,10 +16,10 @@ from langchain_core.messages import BaseMessage
 
 import nuself.runtime.observability as observability
 from nuself.agent.errors import AgentModelUnavailableError
-from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryEntry
-from nuself.domain.profile import ProfileItem
-from nuself.logs import read_log_events
+from nuself.config.settings import runtime_paths
+from nuself.memory.model import MemoryEntry
+from nuself.profile.model import ProfileItem
+from nuself.log.reader import read_log_events
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
@@ -28,7 +28,7 @@ from nuself.memory.optimizer import (
 )
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryRepository
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 class FakeOptimizerAgent:
@@ -60,7 +60,7 @@ def _optimizer(
 ) -> MemoryOptimizer:
     profile = profile_repository or ProfileItemRepository(
         runtime_paths(project_root),
-        backend=get_default_backend(project_root),
+        backend=owned_backend(project_root),
     )
     return MemoryOptimizer(
         runtime_paths(project_root),
@@ -151,7 +151,7 @@ def test_memory_optimizer_updates_and_deletes_duplicate_entries(tmp_path: Path) 
 def test_memory_optimizer_includes_profile_context_in_prompt(tmp_path: Path) -> None:
     repo = memory_entry_repository(tmp_path)
     repo.save(MemoryEntry(type="belief", title="Keep memory concise", body="The user wants concise memory entries."))
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
@@ -424,4 +424,4 @@ def test_memory_optimizer_respects_limit(tmp_path: Path) -> None:
     result = optimizer.run_once()
 
     assert result.reviewed == 1
-from nuself.config import runtime_paths
+from nuself.config.settings import runtime_paths

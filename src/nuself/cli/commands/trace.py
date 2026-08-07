@@ -3,26 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import json
-from pathlib import Path
 import sys
 from typing import cast
 
-from nuself.application import TraceServices, compose_trace_services
-from nuself.cli.commands.output import print_ansi
-from nuself.config import runtime_paths
-from nuself.storage import get_default_backend
-from nuself.trace.domain import TRACE_KINDS, TraceKind
-from nuself.trace.repository import (
-    TraceNotFound,
-    TraceVisibilityFilter,
-)
+from nuself.cli.application import cli_application
+from nuself.cli.output import print_ansi, print_json_lines
+from nuself.trace.model import TRACE_KINDS, TraceKind
+from nuself.trace.repository import TraceNotFound, TraceVisibilityFilter
 from nuself.tui.trace import render_trace_detail, render_trace_row
-
-
-def _print_json(*entities: object) -> None:
-    for entity in entities:
-        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
 
 
 def _optional_trace_kind(value: str | None) -> TraceKind | None:
@@ -39,15 +27,8 @@ def _trace_visibility_filter(
     return "default"
 
 
-def _trace_services(project_root: Path | None) -> TraceServices:
-    return compose_trace_services(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
-
-
 def handle_trace_list(args: argparse.Namespace) -> int:
-    traces = _trace_services(args.project_root).query.list_traces(
+    traces = cli_application().trace.query.list_traces(
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
     )
@@ -55,7 +36,7 @@ def handle_trace_list(args: argparse.Namespace) -> int:
         print("No trace records.")
         return 0
     if args.as_json:
-        _print_json(*(trace.to_wire() for trace in traces))
+        print_json_lines(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces):
         print_ansi(render_trace_row(trace, index=index))
@@ -63,24 +44,24 @@ def handle_trace_list(args: argparse.Namespace) -> int:
 
 
 def handle_trace_show(args: argparse.Namespace) -> int:
-    repository = _trace_services(args.project_root).repository
+    service = cli_application().trace.query
     try:
-        trace = repository.resolve_trace(args.trace_id)
+        trace = service.show_trace(args.trace_id)
     except TraceNotFound:
         print(f"Trace not found: {args.trace_id}", file=sys.stderr)
         return 1
-    links = repository.links_for(trace.id)
+    links = service.links_for(trace.id)
     if args.as_json:
         payload = trace.to_wire()
         payload["links"] = [link.to_wire() for link in links]
-        _print_json(payload)
+        print_json_lines(payload)
         return 0
     print_ansi(render_trace_detail(trace, links))
     return 0
 
 
 def handle_trace_search(args: argparse.Namespace) -> int:
-    traces = _trace_services(args.project_root).query.search_traces(
+    traces = cli_application().trace.query.search_traces(
         args.query,
         kind=_optional_trace_kind(args.kind),
         visibility=_trace_visibility_filter(args.visibility),
@@ -89,7 +70,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
         print("No matching trace records.")
         return 0
     if args.as_json:
-        _print_json(*(trace.to_wire() for trace in traces))
+        print_json_lines(*(trace.to_wire() for trace in traces))
         return 0
     for index, trace in enumerate(traces):
         print_ansi(render_trace_row(trace, index=index))
@@ -97,7 +78,7 @@ def handle_trace_search(args: argparse.Namespace) -> int:
 
 
 def handle_trace_related(args: argparse.Namespace) -> int:
-    service = _trace_services(args.project_root).query
+    service = cli_application().trace.query
     traces = service.traces_for_artifact(
         args.artifact_ref,
         visibility=_trace_visibility_filter(args.visibility),
@@ -110,7 +91,7 @@ def handle_trace_related(args: argparse.Namespace) -> int:
         )
         return 0
     if args.as_json:
-        _print_json(
+        print_json_lines(
             {
                 "artifact_ref": args.artifact_ref,
                 "traces": [trace.to_wire() for trace in traces],
@@ -129,10 +110,4 @@ def handle_trace_related(args: argparse.Namespace) -> int:
                 f"  {link.relation}: {link.source_id} -> "
                 f"{link.target_id} ({link.summary})"
             )
-    return 0
-
-
-def handle_trace_reindex(args: argparse.Namespace) -> int:
-    path = _trace_services(args.project_root).repository.reindex()
-    print(f"Rebuilt trace index: {path}")
     return 0

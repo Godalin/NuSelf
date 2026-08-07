@@ -6,14 +6,13 @@ from collections.abc import Callable
 from pathlib import Path
 import time
 from math import isfinite
-from typing import TypeVar
 
 from nuself.agent.errors import AgentModelUnavailableError
 from nuself.agent.endpoint_audit import (
     AgentEndpointComponent,
     report_agent_endpoint_failure,
 )
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
     is_endpoint_availability_error,
     record_llm_endpoint_success,
@@ -21,9 +20,8 @@ from nuself.llm import (
 )
 
 
-ResultT = TypeVar("ResultT")
-FailurePredicate = Callable[[Exception], bool]
-RetryObserver = Callable[[LangChainLLMEndpoint, Exception], None]
+type FailurePredicate = Callable[[Exception], bool]
+type RetryObserver = Callable[[LangChainLLMEndpoint, Exception], None]
 _AGENT_IMPLEMENTATION_ERRORS = (
     AssertionError,
     AttributeError,
@@ -45,7 +43,7 @@ def is_recoverable_agent_failure(exc: Exception) -> bool:
     return not isinstance(exc, _AGENT_IMPLEMENTATION_ERRORS)
 
 
-def invoke_agent_endpoint(
+def invoke_agent_endpoint[ResultT](
     endpoints: tuple[LangChainLLMEndpoint, ...],
     operation: Callable[[LangChainLLMEndpoint], ResultT],
     *,
@@ -70,7 +68,7 @@ def invoke_agent_endpoint(
         raise ValueError(
             "retry_delay_seconds must be finite and non-negative"
         )
-    should_failover = failover_if or _is_availability_failure
+    should_failover = failover_if or is_endpoint_availability_error
 
     last_error: Exception | None = None
     for position, endpoint in enumerate(endpoints):
@@ -114,7 +112,3 @@ def invoke_agent_endpoint(
         "all configured LLM endpoints failed: "
         f"{redact_llm_error(last_error)}"
     ) from last_error
-
-
-def _is_availability_failure(exc: Exception) -> bool:
-    return is_endpoint_availability_error(exc)

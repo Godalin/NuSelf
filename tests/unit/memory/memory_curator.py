@@ -18,20 +18,20 @@ from typing import Literal
 import pytest
 from langchain_core.messages import BaseMessage
 
-from nuself.application import compose_trace_services
-from nuself.agent.chat import ThreadMessage, ThreadState
-from thread_fixtures import ThreadStore
-from nuself.config import runtime_paths
+from nuself.trace.composition import compose_trace_services
+from nuself.conversation import ConversationMessage, ConversationState
+from conversation_fixtures import ConversationStore
+from nuself.config.settings import runtime_paths
 from nuself.agent.errors import AgentModelUnavailableError
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntry,
     MemoryObject,
     MemoryTypeRegistry,
     MemoryValidationIssue,
 )
-from nuself.domain.profile import ProfileItem
-from nuself.logs import read_log_events
-from nuself.memory.curator_contract import (
+from nuself.profile.model import ProfileItem
+from nuself.log.reader import read_log_events
+from nuself.memory.curator.contract import (
     CuratorActionsOutput,
     MemoryCuratorSettings,
     actions_from_output as _actions_from_output,
@@ -41,15 +41,7 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import get_default_backend
-
-
-def _stored_record(
-    root: Path,
-    collection: str,
-    record_id: str,
-) -> dict[str, object] | None:
-    return get_default_backend(root).collection(collection).get(record_id)
+from tests.backend import owned_backend
 
 
 class FakeCuratorAgent:
@@ -105,12 +97,12 @@ def test_curator_action_schema_fails_closed(raw: str) -> None:
 def test_curator_rejects_complete_batch_when_one_action_is_invalid(
     tmp_path: Path,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that curator decisions must be validated "
@@ -133,7 +125,7 @@ def test_curator_rejects_complete_batch_when_one_action_is_invalid(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
@@ -144,13 +136,13 @@ def test_curator_rejects_complete_batch_when_one_action_is_invalid(
 
 
 def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="We should share working memory across terminals."),
-                ThreadMessage(role="assistant", content="Agreed. The default stream should be shared."),
+                ConversationMessage(role="user", content="We should share working memory across terminals."),
+                ConversationMessage(role="assistant", content="Agreed. The default stream should be shared."),
             ],
         )
     )
@@ -160,7 +152,7 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         '"tags":["memory"],"confidence":0.8,"reason":"important memory model decision"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -173,10 +165,10 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
     assert candidates[0].type == "episode"
     assert candidates[0].tags == ("memory",)
     assert candidates[0].review_state == "pending"
-    assert candidates[0].source_refs == ("thread:default:0-2",)
+    assert candidates[0].source_refs == ("test-interaction:default:0-2",)
     assert candidates[0].observed_at is not None
-    assert candidates[0].evidence[0].source_type == "thread"
-    assert candidates[0].evidence[0].source_ref == "thread:default:0-2"
+    assert candidates[0].evidence[0].source_type == "observation"
+    assert candidates[0].evidence[0].source_ref == "test-interaction:default:0-2"
     assert candidates[0].evidence[0].observed_at == candidates[0].observed_at
     assert candidates[0].evidence[0].summary == "important memory model decision"
     events = read_log_events(
@@ -196,193 +188,16 @@ def test_memory_curator_creates_episode_and_advances_cursor(tmp_path: Path) -> N
         encoding="utf-8"
     ).splitlines():
         assert isinstance(json.loads(line), dict)
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "thread_id": "default",
-        "processed_message_count": 2,
-    }
-
-
-@pytest.mark.parametrize(
-    "cursor_record",
-    [
-        {"thread_id": "other", "processed_message_count": 0},
-        {"thread_id": "default", "processed_message_count": True},
-        {"thread_id": "default", "processed_message_count": -1},
-    ],
-)
-def test_memory_curator_rejects_corrupt_cursor_without_replay(
-    tmp_path: Path,
-    cursor_record: dict[str, object],
-) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
-            messages=[
-                ThreadMessage(
-                    role="user",
-                    content=(
-                        "We decided that malformed cursor state must never "
-                        "replay already processed durable conversation history."
-                    ),
-                )
-            ],
-        )
-    )
-    get_default_backend(tmp_path).collection(
-        "memory_curator_cursors"
-    ).put("default", cursor_record)
-    agent = _curator_agent('{"actions":[]}')
-    curator = MemoryCurator(
-        tmp_path,
-        agent=agent,
-        thread_store=thread_store,
-        settings=MemoryCuratorSettings(auto_accept=False),
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="invalid memory curator cursor",
-    ):
-        curator.run_once()
-
-    assert agent.calls == []
-    assert memory_candidate_repository(tmp_path).list() == []
-    event = read_log_events(
-        project_root=tmp_path,
-        component="memory",
-    )[-1]
-    assert event.event == "record_decode_failed"
-    assert event.metadata == {
-        "collection": "memory_curator_cursors",
-        "record_id": "default",
-    }
-
-
-@pytest.mark.parametrize(
-    ("auto_accept", "candidate_state"),
-    [(False, "pending"), (True, "accepted")],
-)
-def test_memory_curator_resumes_saved_plan_after_cursor_write_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    auto_accept: bool,
-    candidate_state: str,
-) -> None:
-    first_message = ThreadMessage(
-        role="user",
-        content=(
-            "Remember that a failed curator cursor write must resume the "
-            "saved decision without invoking the model again."
-        ),
-    )
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(thread_id="default", messages=[first_message])
-    )
-    agent = _curator_agent(
-        '{"actions":[{"action":"create","type":"episode",'
-        '"title":"Resumable curator plan",'
-        '"body":"Cursor failure resumes the exact saved decision.",'
-        '"tags":["memory"],"confidence":0.9,'
-        '"reason":"explicit replay-safety requirement"}]}'
-    )
-    curator = MemoryCurator(
-        tmp_path,
-        agent=agent,
-        thread_store=thread_store,
-        settings=MemoryCuratorSettings(auto_accept=auto_accept),
-    )
-    real_cursor_put = curator._cursor_collection.put  # pyright: ignore[reportPrivateUsage]
-    fail_cursor = True
-
-    def fail_first_cursor_write(
-        key: str,
-        payload: dict[str, object],
-    ) -> None:
-        nonlocal fail_cursor
-        if fail_cursor:
-            fail_cursor = False
-            raise OSError("cursor store unavailable")
-        real_cursor_put(key, payload)
-
-    monkeypatch.setattr(
-        curator._cursor_collection,  # pyright: ignore[reportPrivateUsage]
-        "put",
-        fail_first_cursor_write,
-    )
-
-    with pytest.raises(OSError, match="cursor store unavailable"):
-        curator.run_once()
-
-    candidate_repo = memory_candidate_repository(tmp_path)
-    [first_candidate] = candidate_repo.list(include_reviewed=True)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
-            messages=[
-                first_message,
-                ThreadMessage(
-                    role="user",
-                    content=(
-                        "Remember that messages arriving during recovery "
-                        "belong to the next curator range."
-                    ),
-                ),
-            ],
-        )
-    )
-
-    resumed = curator.run_once()
-
-    assert resumed.processed_messages == 1
-    assert resumed.created == 1
-    assert len(agent.calls) == 1
-    [resumed_candidate] = candidate_repo.list(include_reviewed=True)
-    assert resumed_candidate == first_candidate
-    assert resumed_candidate.review_state == candidate_state
-    assert resumed_candidate.source_refs == ("thread:default:0-1",)
-    assert len(memory_entry_repository(tmp_path).list()) == int(auto_accept)
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "thread_id": "default",
-        "processed_message_count": 1,
-    }
-
-    later = curator.run_once()
-
-    assert later.processed_messages == 1
-    assert len(agent.calls) == 2
-    candidates = candidate_repo.list(include_reviewed=True)
-    assert len(candidates) == 2
-    assert {candidate.source_refs for candidate in candidates} == {
-        ("thread:default:0-1",),
-        ("thread:default:1-2",),
-    }
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "thread_id": "default",
-        "processed_message_count": 2,
-    }
-
-
 def test_memory_curator_plan_write_fails_before_candidate_effects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that a curator plan must be durable before "
@@ -416,7 +231,7 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         settings=MemoryCuratorSettings(auto_accept=False),
         plan_store=plan_store,
     )
@@ -426,87 +241,16 @@ def test_memory_curator_plan_write_fails_before_candidate_effects(
 
     assert len(agent.calls) == 1
     assert memory_candidate_repository(tmp_path).list() == []
-    assert (
-        get_default_backend(tmp_path)
-        .collection("memory_curator_cursors")
-        .get("default")
-        is None
-    )
-
-
-def test_memory_curator_rejects_incompatible_plan_without_model_replay(
-    tmp_path: Path,
-) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
-            messages=[
-                ThreadMessage(
-                    role="user",
-                    content=(
-                        "Remember that incompatible curator plans require "
-                        "repair instead of speculative model replay."
-                    ),
-                )
-            ],
-        )
-    )
-    get_default_backend(tmp_path).collection(
-        "memory_curator_plans"
-    ).put(
-        "default",
-        {
-                "thread_id": "default",
-                "source_start": 0,
-                "source_end": 2,
-                "observed_at": "2026-07-29T00:00:00+00:00",
-                "actions": [
-                    {
-                        "action": "ignore",
-                        "title": "",
-                        "body": "",
-                        "type": "episode",
-                        "tags": [],
-                        "entry_id": None,
-                        "confidence": 0.6,
-                        "reason": "no durable signal",
-                    }
-                ],
-            },
-    )
-    agent = _curator_agent('{"actions":[]}')
-    curator = MemoryCurator(
-        tmp_path,
-        agent=agent,
-        thread_store=thread_store,
-        settings=MemoryCuratorSettings(auto_accept=False),
-    )
-
-    with pytest.raises(ValueError, match="invalid memory curator plan"):
-        curator.run_once()
-
-    assert agent.calls == []
-    assert memory_candidate_repository(tmp_path).list() == []
-    event = read_log_events(
-        project_root=tmp_path,
-        component="memory",
-    )[-1]
-    assert event.event == "record_decode_failed"
-    assert event.metadata == {
-        "collection": "memory_curator_plans",
-        "record_id": "default",
-    }
 
 
 def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="I prefer concise memory previews."),
-                ThreadMessage(role="assistant", content="I will keep memory previews compact."),
+                ConversationMessage(role="user", content="I prefer concise memory previews."),
+                ConversationMessage(role="assistant", content="I will keep memory previews compact."),
             ],
         )
     )
@@ -525,7 +269,7 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
         + '","title":"Memory preview style","body":"The user prefers concise memory previews.",'
         '"tags":["memory","preview"],"confidence":0.75,"reason":"user clarified preview style"}]}'
     )
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = memory_candidate_repository(tmp_path).list()
@@ -535,23 +279,23 @@ def test_memory_curator_updates_existing_memory_as_draft(tmp_path: Path) -> None
     assert candidates[0].tags == ("memory", "preview")
     assert candidates[0].action == "update"
     assert candidates[0].target_entry_id == existing.id
-    assert candidates[0].source_refs == ("thread:default:0-2",)
+    assert candidates[0].source_refs == ("test-interaction:default:0-2",)
     assert candidates[0].observed_at is not None
     assert repo.get(existing.id).body == "The user likes memory previews."
 
 
 def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="I prefer concise memory previews."),
-                ThreadMessage(role="assistant", content="I will keep memory previews compact."),
+                ConversationMessage(role="user", content="I prefer concise memory previews."),
+                ConversationMessage(role="assistant", content="I will keep memory previews compact."),
             ],
         )
     )
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_repo.save(
         ProfileItem(
             type="profile_fact",
@@ -562,7 +306,7 @@ def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> No
         )
     )
     agent = _curator_agent('{"actions":[{"action":"ignore","reason":"no durable memory"}]}')
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, profile_repository=profile_repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, profile_repository=profile_repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     curator.run_once()
 
@@ -573,13 +317,13 @@ def test_memory_curator_includes_profile_context_in_prompt(tmp_path: Path) -> No
 
 
 def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="Remember this local fallback path."),
-                ThreadMessage(role="assistant", content="I can summarize it locally."),
+                ConversationMessage(role="user", content="Remember this local fallback path."),
+                ConversationMessage(role="assistant", content="I can summarize it locally."),
             ],
         )
     )
@@ -591,7 +335,7 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
             raise AgentModelUnavailableError("LLM unavailable")
 
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=FailingCuratorAgent(), thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=FailingCuratorAgent(), conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -603,12 +347,12 @@ def test_memory_curator_defers_when_agent_is_unavailable(tmp_path: Path) -> None
 def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     tmp_path: Path,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember this sufficiently detailed durable decision "
@@ -624,11 +368,13 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
-    with memory_curator_plan_store(tmp_path).exclusive("default"):
+    observation = curator.prepare_observation()
+    assert observation is not None
+    with memory_curator_plan_store(tmp_path).exclusive(observation.id):
         result = curator.run_once()
 
     assert result.processed_messages == 0
@@ -637,9 +383,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     assert result.ignored == 0
     assert agent.calls == []
     assert memory_candidate_repository(tmp_path).list() == []
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) is None
+    assert curator._test_observations.get(observation.id).status == "pending"  # pyright: ignore[reportPrivateUsage]
     events = [
         event
         for event in read_log_events(
@@ -650,7 +394,7 @@ def test_memory_curator_contention_is_deferred_without_model_or_mutation(
     ]
     assert len(events) == 1
     assert events[0].status == "deferred"
-    assert events[0].metadata == {"thread_id": "default"}
+    assert events[0].metadata == {"observation_id": observation.id}
 
 
 @pytest.mark.parametrize(
@@ -664,12 +408,12 @@ def test_memory_curator_propagates_untyped_agent_errors(
     tmp_path: Path,
     failure: Exception,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember this important preference because it should "
@@ -691,7 +435,7 @@ def test_memory_curator_propagates_untyped_agent_errors(
     curator = MemoryCurator(
         tmp_path,
         agent=BrokenCuratorAgent(),
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
@@ -702,19 +446,19 @@ def test_memory_curator_propagates_untyped_agent_errors(
 
 
 def test_memory_curator_ignores_trivial_chat_when_agent_says_ignore(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="NuSelf"),
-                ThreadMessage(role="assistant", content="I am here."),
+                ConversationMessage(role="user", content="NuSelf"),
+                ConversationMessage(role="assistant", content="I am here."),
             ],
         )
     )
     agent = _curator_agent('{"actions":[{"action":"ignore","reason":"trivial name ping"}]}')
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -739,11 +483,11 @@ def test_memory_curator_fast_gate_accepts_multilingual_durable_signal(
     tmp_path: Path,
     content: str,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
-            messages=[ThreadMessage(role="user", content=content)],
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
+            messages=[ConversationMessage(role="user", content=content)],
         )
     )
     agent = _curator_agent(
@@ -755,7 +499,7 @@ def test_memory_curator_fast_gate_accepts_multilingual_durable_signal(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
@@ -768,12 +512,12 @@ def test_memory_curator_fast_gate_accepts_multilingual_durable_signal(
 
 
 def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "I decided that memory should be captured from the depth and quality of a discussion, "
@@ -789,7 +533,7 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
         '"tags":["memory"],"confidence":0.85,"reason":"explicit memory-system decision"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = memory_candidate_repository(tmp_path).list()
@@ -797,42 +541,33 @@ def test_memory_curator_processes_single_high_quality_turn(tmp_path: Path) -> No
     assert result.processed_messages == 1
     assert result.created == 1
     assert candidates[0].type == "belief"
-    assert candidates[0].source_refs == ("thread:default:0-1",)
+    assert candidates[0].source_refs == ("test-interaction:default:0-1",)
 
 
-def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+def test_memory_curator_accepts_projected_content_after_conversation_compression(tmp_path: Path) -> None:
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             summary="Earlier compressed discussion.",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content="We decided that compressed threads must still allow new memory curation to continue.",
                 ),
-                ThreadMessage(role="assistant", content="I will keep using the absolute message range."),
+                ConversationMessage(role="assistant", content="I will keep using the absolute message range."),
             ],
             message_start_index=4,
             next_message_index=6,
         )
     )
-    get_default_backend(tmp_path).collection(
-        "memory_curator_cursors"
-    ).put(
-        "default",
-        {
-            "thread_id": "default",
-            "processed_message_count": 4,
-        },
-    )
     agent = _curator_agent(
         '{"actions":[{"action":"create","type":"episode","title":"Compressed cursor continuity",'
-        '"body":"Memory curation should continue after thread compression by using absolute message indexes.",'
+        '"body":"Memory curation should continue after conversation compression by using absolute message indexes.",'
         '"tags":["memory"],"confidence":0.8,"reason":"cursor correctness"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     second_result = curator.run_once()
@@ -841,17 +576,17 @@ def test_memory_curator_uses_absolute_cursor_after_thread_compression(tmp_path: 
     assert result.processed_messages == 2
     assert result.created == 1
     assert second_result.processed_messages == 0
-    assert candidates[0].source_refs == ("thread:default:4-6",)
+    assert candidates[0].source_refs == ("test-interaction:default:4-6",)
 
 
 def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="We need conservative memory updates."),
-                ThreadMessage(role="assistant", content="I will avoid raw transcript memory."),
+                ConversationMessage(role="user", content="We need conservative memory updates."),
+                ConversationMessage(role="assistant", content="I will avoid raw transcript memory."),
             ],
         )
     )
@@ -861,7 +596,7 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
         '"tags":["memory"],"confidence":0.9,"reason":"bad raw transcript"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -870,13 +605,13 @@ def test_memory_curator_rejects_raw_transcript_body(tmp_path: Path) -> None:
 
 
 def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="Remember that memory entries need explicit tags."),
-                ThreadMessage(role="assistant", content="I will require tags on curated memory candidates."),
+                ConversationMessage(role="user", content="Remember that memory entries need explicit tags."),
+                ConversationMessage(role="assistant", content="I will require tags on curated memory candidates."),
             ],
         )
     )
@@ -886,7 +621,7 @@ def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
         '"confidence":0.9,"reason":"bad missing tags"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -896,13 +631,13 @@ def test_memory_curator_rejects_create_without_tags(tmp_path: Path) -> None:
 
 
 def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="Remember that unknown memory types should not be coerced."),
-                ThreadMessage(role="assistant", content="I will reject unsupported memory action types."),
+                ConversationMessage(role="user", content="Remember that unknown memory types should not be coerced."),
+                ConversationMessage(role="assistant", content="I will reject unsupported memory action types."),
             ],
         )
     )
@@ -915,7 +650,7 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         repository=repo,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
@@ -930,13 +665,13 @@ def test_memory_curator_rejects_unknown_memory_type(tmp_path: Path) -> None:
 def test_memory_curator_accepts_typed_structured_output(
     tmp_path: Path,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="Use agent decisions for memory updates."),
-                ThreadMessage(role="assistant", content="I will dispatch structured actions."),
+                ConversationMessage(role="user", content="Use agent decisions for memory updates."),
+                ConversationMessage(role="assistant", content="I will dispatch structured actions."),
             ],
         )
     )
@@ -946,7 +681,7 @@ def test_memory_curator_accepts_typed_structured_output(
         '"tags":["memory"],"confidence":0.82,"reason":"durable memory-system decision"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -992,13 +727,13 @@ class RejectingEpisodeDescriptor:
 
 
 def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content="Remember that descriptor validation gates memory writes."),
-                ThreadMessage(role="assistant", content="I will validate proposed memory objects before saving."),
+                ConversationMessage(role="user", content="Remember that descriptor validation gates memory writes."),
+                ConversationMessage(role="assistant", content="I will validate proposed memory objects before saving."),
             ],
         )
     )
@@ -1008,7 +743,7 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
         '"tags":["memory"],"confidence":0.8,"reason":"typed memory pipeline"}]}'
     )
     repo = memory_entry_repository(tmp_path, registry=MemoryTypeRegistry([RejectingEpisodeDescriptor()]))
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
 
@@ -1019,18 +754,18 @@ def test_memory_curator_defers_descriptor_validation_until_candidate_acceptance(
 
 
 def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content="I like shared working memory because it allows multiple terminals to stay in sync without losing context.",
                 ),
-                ThreadMessage(
+                ConversationMessage(
                     role="assistant",
-                    content="Shared working memory is useful for continuity. When one terminal disconnects, another can pick up the same conversation thread without gaps.",
+                    content="Shared working memory is useful for continuity. When one terminal disconnects, another can pick up the same conversation without gaps.",
                 ),
             ],
         )
@@ -1049,7 +784,7 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
         '"body":"The user really likes shared working memory.",'
         '"tags":["memory"],"confidence":0.8,"reason":"duplicate detection test"}]}'
     )
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo, settings=MemoryCuratorSettings(auto_accept=False))
 
     result = curator.run_once()
     candidates = memory_candidate_repository(tmp_path).list()
@@ -1064,16 +799,16 @@ def test_memory_curator_merges_duplicate_into_existing_entry(tmp_path: Path) -> 
 
 def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     """With auto_accept=True (default), candidates become entries immediately."""
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(role="user", content=(
+                ConversationMessage(role="user", content=(
                     "I have decided to learn Rust for systems programming because I want "
                     "to build high-performance tools. I prefer it over C++ for memory safety."
                 )),
-                ThreadMessage(role="assistant", content="Great choice, Rust has excellent memory safety guarantees."),
+                ConversationMessage(role="assistant", content="Great choice, Rust has excellent memory safety guarantees."),
             ],
         )
     )
@@ -1083,7 +818,7 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
         '"tags":["rust"],"confidence":0.85,"reason":"explicit learning goal"}]}'
     )
     repo = memory_entry_repository(tmp_path)
-    curator = MemoryCurator(tmp_path, agent=agent, thread_store=thread_store, repository=repo)
+    curator = MemoryCurator(tmp_path, agent=agent, conversation_store=conversation_store, repository=repo)
 
     result = curator.run_once()
 
@@ -1105,12 +840,12 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that curator audit storage is auxiliary "
@@ -1142,7 +877,7 @@ def test_curator_audit_failure_cannot_replay_committed_candidate(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         settings=MemoryCuratorSettings(auto_accept=False),
     )
 
@@ -1165,12 +900,12 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
 ) -> None:
     from nuself.trace.service import TraceRecorder
 
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that trace persistence is auxiliary after "
@@ -1210,11 +945,11 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         repository=repository,
         trace_recorder=compose_trace_services(
             runtime_paths(tmp_path),
-            get_default_backend(tmp_path),
+            owned_backend(tmp_path),
         ).recorder,
     )
 
@@ -1237,12 +972,12 @@ def test_curator_trace_diagnostics_cannot_replace_reviewed_entry(
 def test_auto_accept_update_trace_retains_update_action(
     tmp_path: Path,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that I updated the durable memory policy: "
@@ -1273,11 +1008,11 @@ def test_auto_accept_update_trace_retains_update_action(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         repository=repository,
         trace_recorder=compose_trace_services(
             runtime_paths(tmp_path),
-            get_default_backend(tmp_path),
+            owned_backend(tmp_path),
         ).recorder,
     )
 
@@ -1286,7 +1021,7 @@ def test_auto_accept_update_trace_retains_update_action(
     assert result.updated == 1
     [trace] = compose_trace_services(
         runtime_paths(tmp_path),
-        get_default_backend(tmp_path),
+        owned_backend(tmp_path),
     ).query.list_traces(
         kind="memory_update"
     )
@@ -1296,12 +1031,12 @@ def test_auto_accept_update_trace_retains_update_action(
 def test_memory_curator_reports_recoverable_auto_accept_failure(
     tmp_path: Path,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that invalid candidate promotion must remain "
@@ -1324,7 +1059,7 @@ def test_memory_curator_reports_recoverable_auto_accept_failure(
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         repository=repo,
     )
 
@@ -1372,12 +1107,12 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
     accept_error: Exception,
     expected_error: str,
 ) -> None:
-    thread_store = ThreadStore(tmp_path)
-    thread_store.save(
-        ThreadState(
-            thread_id="default",
+    conversation_store = ConversationStore(tmp_path)
+    conversation_store.save(
+        ConversationState(
+            conversation_id="default",
             messages=[
-                ThreadMessage(
+                ConversationMessage(
                     role="user",
                     content=(
                         "Remember that a durable candidate must prevent source "
@@ -1407,7 +1142,7 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
     curator = MemoryCurator(
         tmp_path,
         agent=agent,
-        thread_store=thread_store,
+        conversation_store=conversation_store,
         candidate_repository=candidate_repo,
     )
 
@@ -1419,13 +1154,8 @@ def test_memory_curator_does_not_replay_durable_candidate_after_auto_accept_fail
     assert len(agent.calls) == 1
     [candidate] = candidate_repo.list()
     assert candidate.review_state == "pending"
-    assert _stored_record(
-        tmp_path, "memory_curator_cursors", "default"
-    ) == {
-        "id": "default",
-        "thread_id": "default",
-        "processed_message_count": 1,
-    }
+    [observation] = curator._test_observations.list()  # pyright: ignore[reportPrivateUsage]
+    assert observation.status == "processed"
     event = [
         item
         for item in read_log_events(

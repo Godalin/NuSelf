@@ -5,15 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
-from nuself.storage import get_default_backend
-from nuself.trace import ThoughtTrace, TraceNotFound, TraceRepository, TraceRecorder
+from nuself.config.settings import runtime_paths
+from tests.backend import owned_backend
+from nuself.trace.model import ThoughtTrace, TraceLink
+from nuself.trace.repository import TraceNotFound, TraceRepository
+from nuself.trace.service import TraceRecorder
 
 
 def _repository(root: Path) -> TraceRepository:
     return TraceRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 
@@ -26,12 +28,19 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
         summary="NuSelf answered using temporal memory context.",
         user_input="thread:default:1:user",
         assistant_output="thread:default:2:assistant",
-        thread_id="default",
+        conversation_id="default",
         evidence_refs=["mem_123"],
         participants=["chat_agent", "memory"],
         decision_points=["Memory context included observed_at."],
     )
-    link = recorder.link(trace.id, "mem_123", "cites", "The answer cited a memory entry.")
+    link = repo.save_link(
+        TraceLink(
+            source_id=trace.id,
+            target_id="mem_123",
+            relation="cites",
+            summary="The answer cited a memory entry.",
+        )
+    )
 
     traces = repo.list_traces()
     matches = repo.search_traces("temporal")
@@ -41,13 +50,13 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
     assert matches == [trace]
     assert links == [link]
     assert (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("trace_nodes")
         .get(trace.id)
         == trace.to_wire()
     )
     assert (
-        get_default_backend(tmp_path)
+        owned_backend(tmp_path)
         .collection("trace_edges")
         .get(link.id)
         == link.to_wire()
@@ -56,8 +65,7 @@ def test_trace_repository_saves_lists_searches_and_links(tmp_path: Path) -> None
 
 def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
-    recorder = TraceRecorder(repo)
-    memory_trace = recorder.record(
+    memory_trace = repo.save_trace(ThoughtTrace(
         kind="memory_update",
         title="Remembered preference",
         summary="Captured a durable preference.",
@@ -66,16 +74,23 @@ def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> N
             "primary_artifact": "memory:mem_123",
             "nested": {"references": ["memory:mem_nested"]},
         },
-    )
-    reason_trace = recorder.record(
+    ))
+    reason_trace = repo.save_trace(ThoughtTrace(
         kind="reason_step",
         title="Reason step",
         summary="Advanced with memory evidence.",
         inputs=["reason:abc"],
         evidence_refs=["memory:mem_123"],
         outputs=["reason:abc", "reason_step:step_1"],
+    ))
+    link = repo.save_link(
+        TraceLink(
+            source_id="memory:mem_123",
+            target_id="reason:abc",
+            relation="supports",
+            summary="Memory supported the reason thread.",
+        )
     )
-    link = recorder.link("memory:mem_123", "reason:abc", "supports", "Memory supported the reason thread.")
 
     assert repo.traces_for_artifact("memory:mem_123") == [memory_trace, reason_trace]
     assert repo.traces_for_artifact("memory:mem_nested") == [memory_trace]
@@ -108,17 +123,17 @@ def test_trace_repository_resolves_numeric_handle(tmp_path: Path) -> None:
 
 
 def test_trace_repository_concurrent_saves(tmp_path: Path) -> None:
+    repo = _repository(tmp_path)
     traces = tuple(
         ThoughtTrace(kind="decision", title=f"Trace {index}", summary=f"Summary {index}.")
         for index in range(16)
     )
 
     def save_trace(index: int) -> None:
-        _repository(tmp_path).save_trace(traces[index])
+        repo.save_trace(traces[index])
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         list(executor.map(save_trace, range(len(traces))))
 
-    repo = _repository(tmp_path)
     stored = repo.list_traces()
     assert {trace.id for trace in stored} == {trace.id for trace in traces}

@@ -8,19 +8,23 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal, Protocol
 
-from nuself.cli.commands.output import print_ansi
-from nuself.agent.chat.audit import report_chat_failure
+from nuself.cli.output import print_ansi
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.cli.repl.types import InteractiveChatResult
 from nuself.cli.exit_codes import CliExitCode
 from nuself.daemon import client
-from nuself.logs import InteractiveLogCursor, LogEvent
-from nuself.runtime.context import bind_runtime_context
+from nuself.log.reader import InteractiveLogCursor
+from nuself.log.record import LogEvent
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.execution import OwnedCall
+from nuself.runtime.feature.protocol import ToolEffectResolution
 from nuself.tui.render import render_log_event
 
-SendMessage = Callable[[str, str, str | None], InteractiveChatResult]
-ActivityTransportStage = Literal["open", "poll", "drain", "close"]
+type SendMessage = Callable[
+    [str, str, str | None, ToolEffectResolution | None],
+    InteractiveChatResult,
+]
+type ActivityTransportStage = Literal["open", "poll", "drain", "close"]
 
 
 class ActivityReader(Protocol):
@@ -72,7 +76,7 @@ def _report_activity_transport_degraded(
                 ),
             }
         )
-    report_chat_failure(
+    CHAT_AUDIT.failure(
         exc,
         event="activity_transport_degraded",
         project_root=project_root,
@@ -83,11 +87,12 @@ def _report_activity_transport_degraded(
 def run_live_activity_send(
     send_message: SendMessage,
     message: str,
-    thread_id: str,
+    conversation_id: str,
     turn_id: str | None,
     project_root: Path | None,
     log_cursor: InteractiveLogCursor,
     *,
+    effect_resolution: ToolEffectResolution | None = None,
     printed_logs: bool,
     daemon_activity: bool,
     poll_interval_seconds: float,
@@ -103,8 +108,11 @@ def run_live_activity_send(
     )
     send_call = OwnedCall(
         name="nuself-interactive-send",
-        target=bind_runtime_context(
-            lambda: send_message(message, thread_id, turn_id)
+        target=lambda: send_message(
+            message,
+            conversation_id,
+            turn_id,
+            effect_resolution,
         ),
     )
     captured_events: list[LogEvent] = []
@@ -132,7 +140,7 @@ def run_live_activity_send(
                             project_root=project_root,
                             subscription_id=subscription_id,
                         )
-                        close_activity_subscription(
+                        _close_activity_subscription(
                             subscription_id,
                             project_root,
                         )
@@ -162,7 +170,7 @@ def run_live_activity_send(
             try:
                 send_call.cancel()
             except Exception as cancellation_error:
-                report_chat_failure(
+                CHAT_AUDIT.failure(
                     cancellation_error,
                     event="interactive_send_failed",
                     project_root=project_root,
@@ -194,7 +202,7 @@ def run_live_activity_send(
         log_cursor.mark_seen(new_events)
     finally:
         if subscription_id is not None:
-            close_activity_subscription(
+            _close_activity_subscription(
                 subscription_id,
                 project_root,
             )
@@ -207,7 +215,7 @@ def run_live_activity_send(
         )
     if isinstance(outcome.error, Exception):
         error = outcome.error
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             error,
             event="interactive_send_failed",
             project_root=project_root,
@@ -312,7 +320,7 @@ def _drain_final_activity(
         )
 
 
-def close_activity_subscription(
+def _close_activity_subscription(
     subscription_id: str,
     project_root: Path | None,
 ) -> None:
@@ -361,7 +369,7 @@ def visible_interactive_activity_events(
 ) -> list[LogEvent]:
     """Return events that belong in the live user-facing activity stream."""
 
-    return [event for event in events if is_interactive_activity_log(event)]
+    return [event for event in events if _is_interactive_activity_log(event)]
 
 
 def captured_interactive_activity_events(
@@ -373,15 +381,12 @@ def captured_interactive_activity_events(
         event
         for event in events
         if event.component in {"chat", "daemon", "persona"}
-        or event.event == "approval_prompted"
     ]
 
 
-def is_interactive_activity_log(event: LogEvent) -> bool:
+def _is_interactive_activity_log(event: LogEvent) -> bool:
     """Return whether one event is visible while an interactive turn runs."""
 
-    if event.event == "approval_prompted":
-        return True
     if event.component == "persona":
         return event.event in {
             "persona_summary",
@@ -394,27 +399,31 @@ def is_interactive_activity_log(event: LogEvent) -> bool:
             "persona_think_failed",
         }
     if event.component == "chat":
+        if event.event == "tool.activity":
+            return event.status in {
+                "pending",
+                "decided",
+                "completed",
+                "failed",
+            }
         if event.event == "service_tool_called":
             return True
         if event.event in {
             "turn.started",
             "turn.completed",
             "turn.reused",
-            "turn_started",
-            "turn_completed",
-            "turn_reused",
             "turn_retry",
             "final_response_retry",
             "final_response_completed",
         }:
             return True
-        return is_failure_activity_log(event)
+        return _is_failure_activity_log(event)
     if event.component == "daemon":
-        return is_failure_activity_log(event)
+        return _is_failure_activity_log(event)
     return False
 
 
-def is_failure_activity_log(event: LogEvent) -> bool:
+def _is_failure_activity_log(event: LogEvent) -> bool:
     """Return whether an event represents a user-relevant turn failure."""
 
     if event.status in {"error", "failed", "failed_over", "exhausted"}:
@@ -426,5 +435,4 @@ def is_failure_activity_log(event: LogEvent) -> bool:
         "llm_endpoint_failed_over",
         "llm_endpoint_unavailable",
         "turn.failed",
-        "turn_failed",
     }

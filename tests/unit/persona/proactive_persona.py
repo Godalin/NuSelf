@@ -5,16 +5,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Generic, Never, TypeVar
+from typing import Never
 
 import pytest
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, ValidationError
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentModelUnavailableError
-from nuself.domain.proactive import IdeaCandidate
-from nuself.logs import read_log_events
-from nuself.persona import (
+from nuself.reflection.model import IdeaCandidate
+from nuself.log.reader import read_log_events
+from nuself.persona.discussion import (
     PersonaCompetitionResult,
     ProactivePersonaDiscussion,
 )
@@ -67,10 +67,7 @@ class _FakePersonaDriver:
         )
 
 
-OutputT = TypeVar("OutputT", bound=BaseModel)
-
-
-class _FixtureAgent(Generic[OutputT]):
+class _FixtureAgent[OutputT: BaseModel]:
     def __init__(
         self,
         fixture: _FakeLLM,
@@ -200,7 +197,6 @@ def _make_candidate(
         urgency=urgency,
         interruption_cost=interruption_cost,
         evidence_refs=(),
-        suggested_thread_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )
@@ -646,7 +642,6 @@ def test_proactive_persona_discussion_uses_llm_when_provided(monkeypatch: pytest
         urgency=0.5,
         interruption_cost=0.2,
         evidence_refs=(),
-        suggested_thread_id=None,
         source_summary="",
         created_at="2024-01-01T00:00:00",
     )

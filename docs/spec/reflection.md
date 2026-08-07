@@ -2,12 +2,19 @@
 
 ## Architecture
 
-The reflection subsystem has two layers:
+The reflection subsystem has two durable surfaces behind one repository:
 
-1. **ReflectionRepository** (`<authority-root>/reflections/`) — durable store for reflection ideas
-2. ** reflection.log** — audit trail of scheduler events
+1. **ReflectionRepository** — reflection entries plus typed access to the
+   canonical scheduler-state record in the selected authority
+2. **reflection.log** — audit trail of scheduler events
 
-Reflection ideas are first-class domain objects. They are **not** notification intents.
+Scheduler and relevance policy receive `ReflectionRepository`, never the raw
+`scheduler_state` collection. The repository owns strict schedule decoding and
+saving; callers own cooldown, daily-cap, corruption reporting, and timing
+decisions.
+
+Reflection ideas are first-class domain objects. Inbox stores only references
+to them, never a second Reflection record.
 
 ## ReflectionEntry
 
@@ -36,8 +43,8 @@ Stored as one JSON file per entry in `<authority-root>/reflections/{id}.json`.
 | Status | Meaning |
 |---|---|
 | `pending` | Produced by scheduler; user has not acted on it |
-| `dismissed` | User explicitly dismissed (`nuself inbox reflection dismiss`) |
-| `archived` | User explicitly archived (`nuself inbox reflection archive`) |
+| `dismissed` | User explicitly dismissed (`nuself reflection dismiss`) |
+| `archived` | User explicitly archived (`nuself reflection archive`) |
 
 ## Pipeline Flow
 
@@ -53,16 +60,17 @@ reflect()
   │   └─ cycle_filtered            (if !passes)
   ├─ persona_discussion            (if score ≥ persona_discussion_threshold)
   │   └─ cycle_discussion_rejected (if !approved)
-  └─ ReflectionRepository.add()    ( ReflectionEntry created )
+  └─ ReflectionRepository.save()   ( ReflectionEntry persisted )
        ├─ TraceRecorder.record_reflection_created()  ← kind="reflection"
-       └─ auto_notify? → NotificationOutbox.add(brief notify)
+       └─ InboxService.add(reference)
+            └─ auto_notify? → DeliveryService.request(item)
 ```
 
 ## Trace Recording
 
 Every published reflection must create a `ThoughtTrace` with `kind="reflection"`. This provides provenance for the reflection's existence so users can trace why it was created.
 
-The trace is recorded by `ReflectionScheduler.reflect()` immediately after `ReflectionRepository.add()` succeeds.
+The trace is recorded by `ReflectionScheduler.reflect()` immediately after `ReflectionRepository.save()` succeeds.
 
 Trace fields:
 
@@ -75,7 +83,7 @@ Trace fields:
 | `evidence_refs` | `[]` (no direct evidence chain in v0.2.0) |
 | `outputs` | `["reflection:{entry.id}"]` |
 | `participants` | `["reflection"]` |
-| `thread_id` | Key used for link building or cross-referencing, e.g. `"reflections"` |
+| `conversation_id` | Key used for link building or cross-referencing, e.g. `"reflections"` |
 | `visibility` | `"private"` |
 | `decision_points` | `["Relevance gate passed: composite=... threshold=...", "Persona discussion approved/rejected"]` |
 | `metadata` | `{"candidate_type": ..., "composite_score": ..., "discussion_approved": ...}` |
@@ -86,6 +94,8 @@ The gate is LLM-driven (L2 judgment). The agent receives the candidate, recent
 reflection history, and cooldown state, then returns an actual typed
 `RelevanceScoreOutput` through the shared framework-native
 `structured_response` boundary.
+The model is owned and imported from `nuself.reflection.relevance`; the
+scheduler does not re-export it.
 
 - The model is strict and forbids extra fields. It requires `novelty`,
   `confidence`, `urgency`, `interruption_cost`, and `composite` floats in
@@ -111,6 +121,8 @@ extra fields. Each item requires a non-empty title of at most 80 characters,
 a non-empty body, a declared `IdeaCandidateType`, and explicit confidence,
 novelty, urgency, and interruption-cost floats in `[0, 1]`. The complete list
 contains at most three items.
+The model is owned and imported from `nuself.reflection.candidates`; the
+scheduler does not re-export it.
 
 A malformed item rejects the complete generated batch and produces the
 existing empty result plus `candidate_generation_failed`. Candidate text is
@@ -136,7 +148,11 @@ Candidates below `persona_discussion_threshold` but passing the gate proceed dir
 
 There is no pending reflection count limit. Pending reflection growth is controlled by organization, not by blocking new reflection cycles.
 
-`ReflectionOrganizer` periodically scans pending entries, groups similar ideas, keeps the highest-scoring representative pending, folds short duplicate summaries into its body, and archives duplicate entries. Organization is best-effort: failure to organize must log an error and must not block the reflection cycle.
+`ReflectionOrganizer` requires the selected authority's resolved project root,
+periodically scans pending entries, groups similar ideas, keeps the
+highest-scoring representative pending, folds short duplicate summaries into
+its body, and archives duplicate entries. Organization is best-effort: failure
+to organize must log an error and must not block the reflection cycle.
 
 First implementation uses deterministic text similarity over title/body tokens. LLM-assisted cleanup can be added later, but the scheduler must not depend on an LLM to avoid unbounded duplicate growth.
 
@@ -156,6 +172,14 @@ The scheduler must enforce the configured deterministic schedule gates before ca
 Quiet hours and daily caps are interpreted in the current system timezone. Internal persisted timestamps remain timezone-aware ISO timestamps.
 
 If any schedule gate blocks a cycle, `reflect()` returns `false` before candidate generation and writes `schedule_blocked` with `status=skipped` and a short `reason` metadata value.
+Candidate generation receives only the context repositories/history, language
+preference, project authority, and typed-agent capability that it consumes. It
+does not receive `ReflectionSettings`; schedule and gate policy remain owned by
+the scheduler and relevance gate.
+The daemon's periodic reflection task invokes `reflect()` exactly once and
+does not preflight with `should_reflect()`: gate evaluation and blocked-cycle
+observation have one authoritative owner. `should_reflect()` remains the
+side-effect-light inspection API for evaluation and diagnostics.
 
 ### Schedule State
 
@@ -186,23 +210,32 @@ Trace recording after reflection persistence and best-effort pending-reflection
 organization are auxiliary effects. Their `trace_recording_failed` and
 `organizer_failed` projections also use shared reporting. Failure of either
 effect or its diagnostic cannot remove the persisted reflection, interrupt
-later schedule-state/outbox/cycle completion work, or introduce a hidden
-retry. Repository, schedule-state write, and outbox failures remain
+later schedule-state/Inbox/cycle completion work, or introduce a hidden
+retry. Repository, schedule-state write, and Inbox publication failures remain
 authoritative.
 
 Within `ReflectionOrganizer`, `organizer_completed` is an auxiliary projection
 written only after merged/archived repository state. Its audit or diagnostic
 failure cannot replace the returned organization result or undo those writes.
 
-## Optional Notify Bridge
+## Inbox And Optional Delivery
 
-If `reflection.auto_notify` is `true`, a brief `OutboxEntry` is created **pointing to** the reflection:
+Every published reflection creates an `InboxItem` pointing to the authoritative
+Reflection entry and carrying its complete user-facing text:
 
 - `title`: `"New reflection: {reflection.title}"`
-- `body`: `"A new reflection idea is available. View it with: nuself inbox reflection show {id}"`
-- `idempotency_key`: `"notify-{reflection.id}"`
+- `body`: the complete published `reflection.body`
+- `kind`: `reflection`
+- `source_id`: the Reflection ID
+- `idempotency_key`: `"reflection-{reflection.id}"`
 
-Default is `false` — no outbox entry created.
+If `reflection.auto_notify` is `true`, Reflection also creates an independent
+Delivery request for that Inbox item. The default is `false`: the Inbox item
+still exists, but no macOS/email/log delivery is requested.
+
+Email and macOS adapters display this body directly. A delivery surface may
+visually truncate long text, but NuSelf must not shorten the stored projection
+or substitute a command-only message.
 
 ## Audit Log Events
 
@@ -241,12 +274,14 @@ aliases.
 ## CLI Contracts
 
 ```
-nuself inbox reflection list [--status pending|dismissed|archived] [--json]
-nuself inbox reflection show <id_or_index> [--json]
-nuself inbox reflection dismiss <id_or_index>
-nuself inbox reflection archive <id_or_index>
-nuself inbox reflection promote <id_or_index>
-nuself inbox reflection organize
+nuself reflection run
+nuself reflection status
+nuself reflection list [--status pending|dismissed|archived] [--json]
+nuself reflection show <id_or_index> [--json]
+nuself reflection dismiss <id_or_index>
+nuself reflection archive <id_or_index>
+nuself reflection promote <id_or_index>
+nuself reflection organize
 ```
 
 - `list` default: shows **all** statuses.
@@ -256,5 +291,11 @@ nuself inbox reflection organize
 - `show` / `dismiss` / `archive` / `promote` accept either an entry ID or the 0-based visible index from `list`.
 - `promote`: creates a reason thread from the selected pending reflection, writes reason and promotion trace records, and leaves the source reflection pending.
 - `organize`: runs pending reflection organization once and prints how many groups and entries were merged.
+- `run`: executes one explicitly requested cycle and bypasses temporal
+  background scheduling gates; corrupt schedule state remains blocking.
+- `status`: inspects readiness, block reason, last-run timestamp, and current
+  daily count without invoking a model.
 
-REPL `:inbox reflection` lists **only pending** entries. `:inbox reflection list` lists **all** entries.
+REPL `:reflection` lists **only pending** entries. `:reflection list` lists
+**all** entries. Each published reflection also creates one generic Inbox item;
+Inbox owns attention state but no Reflection mutation command.

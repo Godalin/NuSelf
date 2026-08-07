@@ -15,7 +15,7 @@ Reason must integrate with trace. Reason owns durable long-run topic state; trac
 ## Non-Goals
 
 - No always-on high-frequency background thinking.
-- No automatic notification for every reasoning step.
+- No automatic external Delivery for every reasoning step.
 - No replacement of memory curation or reflection.
 - No raw hidden model chain-of-thought storage.
 - No explicit branch graph schema in the first storage slice.
@@ -53,12 +53,15 @@ schema fails, or invocation fails, thread creation fails with
 thread request -> invoke typed prompt agent -> persist `reasoning_prompt` ->
 reuse that prompt for every advance of the thread.
 
-Prompt generation does not construct configured models as an availability
-preflight. When no agent is injected, `default_structured_agent` constructs the
-endpoint set once and the shared endpoint runner reports unavailability during
-invocation. The generator translates that declared `RuntimeError` to
-`ReasonPromptError` while preserving it as the cause. An injected prompt agent
-does not read model configuration.
+Prompt generation never reads model configuration. `ReasonService` requires a
+prompt-generator capability at construction, and application composition binds
+that capability to the already-loaded application configuration. Provider
+clients are created lazily when a thread is started, so unrelated commands do
+not pay model setup cost. The generator passes one explicit endpoint tuple to
+`default_structured_agent`; an explicit empty tuple means no model. It
+translates the runner's declared `RuntimeError` to `ReasonPromptError` while
+preserving it as the cause. An injected prompt agent does not inspect endpoints
+or configuration.
 
 The generated prompt must define one bounded advance unit for the topic. For
 round-based simulations, debates, interviews, games, or staged discussions, one
@@ -221,6 +224,19 @@ worker receives one text capability at construction and invokes it with
 LangChain system and human messages for every section chunk. The handler does
 not construct `default_llm`, call `ChatLLM.complete()`, or use the deterministic
 local chat response as export content.
+
+`ReasonOutputService` exposes one body-composition boundary:
+`compose_with_runner(...)`. It owns durable chunk/manifest/progress handling
+while the caller supplies the text capability. There is no alternate local
+renderer or convenience `compose_job()` path that can bypass the daemon's
+model-backed composition policy.
+
+Export planning requires a concrete `JobSink` at the `plan_job()` operation
+boundary. The service does not retain an optional sink or silently create a
+planned manifest without a wake-up attempt. If a chat surface has no daemon job
+capability, `reason_export` is not registered and the `reason_output` skill is
+not advertised. Once a real enqueue attempt is made, its failure remains
+best-effort: the durable manifest is preserved for daemon reconciliation.
 
 `TextAgent` guarantees a stripped, non-empty result. Endpoint exhaustion,
 empty output, or invocation failure is a composition failure and enters the
@@ -405,7 +421,7 @@ Trace is the audit layer for Reason. Reason may be dynamic, revisable, branching
 ### Reflection Bridge
 
 ```
-nuself inbox reflection promote <id_or_index>
+nuself reflection promote <id_or_index>
 ```
 
 Promotion creates a reasoning thread from the reflection title/body and records the reflection id in `evidence_refs`. The original reflection must remain pending — promotion does not automatically archive or dismiss the source reflection.
@@ -439,23 +455,31 @@ advance(thread)
 
 CLI, REPL, scheduler, and service-driven advance must converge on the same `ReasonAdvancer` path when a generated step is needed. Silent downgrade to a raw `ChatLLM.complete()` path, a placeholder step, or any other fake advance is not allowed. If no LangChain model is configured, or if the advancer fails to return a structured step, the operation fails clearly and no step is persisted.
 
-Default `ReasonAdvancer` composition is owned by one reason-layer factory. The
-factory creates the reason-scoped workspace store and uses configured
-LangChain endpoints when no endpoint tuple is explicitly injected. CLI, REPL,
-and scheduler call this factory rather than assembling the capability
-themselves. Explicit endpoint/tool/workspace arguments remain authoritative
-for daemon reuse and tests; an explicitly empty endpoint tuple means no model,
-not "load defaults".
+Default `ReasonAdvancer` composition is owned by the application Reason
+factory. It resolves omitted LangChain endpoints from the existing
+`ApplicationGraph.config`, then passes one concrete tuple with workspace,
+persona, trace, and tool capabilities into the domain factory. CLI, REPL, and
+scheduler call this application factory rather than assembling the capability
+themselves. Explicit endpoints remain authoritative for daemon reuse and tests;
+an explicitly empty tuple means no model, not "load defaults".
 
-When daemon scheduling reuses the conversation runtime's configured endpoints
-and readonly tools, it receives them through the runtime's immutable public
-capability snapshot. Daemon code does not inspect chat runtime private fields
-or reproduce the readonly-tag selection rule.
+The same application factory owns prompt-generator composition. It captures
+the graph's resolved paths and immutable configuration, then lazily constructs
+the endpoint tuple only for `start_thread`. The Reason domain service receives
+the resulting callable and has no configuration or provider-factory fallback.
+
+Daemon composition supplies the same already-resolved endpoint tuple to chat
+and Reason scheduling. When scheduling reuses chat's readonly tools, it obtains
+their immutable membership through `ConversationGraphRuntime.readonly_tools()`.
+Daemon code does not inspect chat runtime private fields or reproduce the
+readonly-tag selection rule.
 
 Readonly, workspace, and persona tools reach `ReasonAdvancer` as framework
 `BaseTool` values. The advancer validates optional service-component metadata
 instead of using dynamic attribute detection or accepting arbitrary tool
-objects.
+objects. Workspace and persona tool groups share one thread-scoped workspace
+resolver, so both derive the same authority and namespace from the active
+runtime context.
 
 `ReasonAdvancer` builds one equivalent tool-enabled agent per configured
 endpoint and uses the shared agent endpoint-failover primitive only for
@@ -515,7 +539,7 @@ When an explicit `step` is provided to `advance_thread`, the service persists th
 - Integrates `new_findings`, `new_pending`, `retired_findings`, `next_steps`, and `evidence_refs` from the step into the updated thread state.
 - Captures each tool call through shared LangGraph middleware, emits a `service_tool_called` log event, and stores an explicit `tool_logs` snapshot on the persisted `ReasoningStep` so `reason show` and `reason watch` can render the step as a complete artifact later.
 - Establishes the active durable reason thread as
-  `RuntimeContext.thread_id` for the complete agent invocation. Workspace and
+  `RuntimeContext.reason_id` for the complete agent invocation. Workspace and
   thread-local persona tools resolve that shared context instead of a
   reason-specific `ContextVar`; existing request, turn, job, trace, and source
   correlation is preserved and the caller context is restored on every exit.
@@ -557,9 +581,10 @@ LLM-backed advance must preserve the graph nature of reasoning:
 
 Reason reflection is internal to the reason process. It audits existing reasoning state for contradictions, hallucination risk, weak evidence, or premature convergence. This differs from the reflection subsystem, which discovers new candidate topics.
 
-### Background Scheduler (ReasonScheduler)
+### Background Scheduling (`ReasonScheduler`)
 
-The daemon runs a `ReasonScheduler` background thread that periodically advances eligible threads:
+The daemon's unified scheduler periodically invokes `ReasonScheduler` to
+advance eligible threads:
 
 ```
 run_once()
@@ -570,7 +595,7 @@ run_once()
   ├─ call ReasonAdvancer.advance(thread)
   ├─ if step returned, call ReasonService.advance_thread(id, step=step)
   ├─ if advance raises, log scheduler_advance_failed and cool down the thread
-  ├─ set skip_next_advance_until to now + interval_seconds
+  ├─ call ReasonService.defer_advancement(id, until=now + interval_seconds)
   └─ log scheduler_advance_completed
 ```
 
@@ -582,8 +607,10 @@ retry.
 Config:
 
 - `daemon.reason_scheduler.interval_seconds` (default: 600) controls the check interval and per-thread cooldown.
-- The scheduler thread is daemonized and follows the same pattern as `memory_curator` and `reflection_scheduler`.
-- The scheduler is only active when the daemon is running. CLI and REPL manual advance use explicit user commands, not the scheduler loop.
+- The unified daemon scheduler submits the reason task on this interval; Reason
+  does not own a thread, loop, queue, or lifecycle lock.
+- Automatic scheduling is only active when the daemon is running. CLI and REPL
+  manual advance use explicit user commands, not the scheduler task.
 - A failed automatic advance must not kill the background scheduler. The failure
   is logged under the reasoning component, the selected thread receives the
   normal cooldown, and the scheduler can try again on a later pass.
@@ -918,9 +945,14 @@ For the reason subsystem specifically:
 - Tool logs should not be truncated by the capture layer; user-facing renderers may choose their own display policy, but persisted step snapshots should preserve the full captured result.
 - Any CLI, REPL, transcript, watch, or detail renderer that displays reason tool logs must call the common log renderer so reason output stays visually and semantically consistent with chat, memory, reflection, trace, and daemon service logs.
 
-### Notification Policy
+### Inbox Policy
 
-Integrate with notification outbox only after manual advance is stable.
+Every persisted non-`no_change` step with a summary, question, finding,
+pending item, or terminal recommendation publishes one idempotent
+`kind=reason_step` Inbox item. The item references the step ID and does not
+copy the complete Reason thread or mutate its lifecycle. Internal no-change
+steps never enter Inbox and Reason does not request external Delivery by
+default.
 
 Notify only when a step is user-worthy:
 

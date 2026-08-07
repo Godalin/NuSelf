@@ -6,30 +6,26 @@ from typing import cast
 import pytest
 
 from nuself.memory import audit
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
 
 _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
-    (
-        "curator_history_gap",
-        {"thread_id": "thread-1", "cursor": 2, "visible_start": 5},
-    ),
-    ("curator_contended", {"thread_id": "thread-1"}),
+    ("curator_contended", {"observation_id": "obs_1"}),
     (
         "curator_deferred",
         {
-            "thread_id": "thread-1",
-            "source_ref": "thread:thread-1:2-5",
+            "observation_id": "obs_1",
+            "source_ref": "interaction:opaque",
             "processed_messages": 0,
         },
     ),
     (
         "curator_completed",
         {
-            "thread_id": "thread-1",
-            "source_ref": "thread:thread-1:2-5",
+            "observation_id": "obs_1",
+            "source_ref": "interaction:opaque",
             "processed_messages": 3,
             "created": 1,
             "updated": 1,
@@ -91,7 +87,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
 def test_memory_registry_owns_complete_taxonomy() -> None:
     assert {
         definition.event
-        for definition in audit.MEMORY_AUDIT_REGISTRY.definitions
+        for definition in audit.MEMORY_AUDIT.registry.definitions
     } == {event for event, _ in _CANONICAL}
 
 
@@ -100,7 +96,7 @@ def test_memory_definitions_accept_canonical_payloads(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.MEMORY_AUDIT_REGISTRY.resolve(
+    definition = audit.MEMORY_AUDIT.registry.resolve(
         "memory",
         event,
     )
@@ -122,7 +118,7 @@ def test_memory_definitions_reject_unknown_metadata(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.MEMORY_AUDIT_REGISTRY.resolve(
+    definition = audit.MEMORY_AUDIT.registry.resolve(
         "memory",
         event,
     )
@@ -150,10 +146,13 @@ def test_memory_audit_rejects_unknown_event_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.audit.catalog.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_curator_audit(
+        audit.MEMORY_AUDIT.write(
             cast(audit.MemoryAuditEvent, "candidate_saved"),
             "invalid",
             project_root=tmp_path,

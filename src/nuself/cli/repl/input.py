@@ -13,17 +13,15 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.shortcuts import prompt as _prompt
 from prompt_toolkit.styles import Style
 
-from nuself.application.reason import compose_reason_repository
-from nuself.agent.chat.audit import run_chat_observed
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.agent.chat.audit import CHAT_AUDIT
+from nuself.cli.application import cli_application
 from nuself.cli.repl.registry import (
     command_tokens,
     render_help_lines,
     tokens_for,
 )
-from nuself.config import ensure_runtime_dirs, runtime_paths
-from nuself.reason.audit import run_reason_observed
-from nuself.storage import get_default_backend
+from nuself.config.settings import ensure_runtime_dirs, runtime_paths
+from nuself.reason.audit import REASON_AUDIT
 
 
 class DedupFileHistory(FileHistory):
@@ -39,7 +37,7 @@ class DedupFileHistory(FileHistory):
         self._project_root = project_root
 
     def append_string(self, string: str) -> None:
-        run_chat_observed(
+        CHAT_AUDIT.observe(
             lambda: self._append_string(string),
             event="interactive_history_write_failed",
             project_root=self._project_root,
@@ -70,12 +68,12 @@ class InteractiveCompleter(Completer):
 
         if any(
             stripped.startswith(f"{token} ")
-            for token in tokens_for("thread")
+            for token in tokens_for("conversation")
         ) and word and not word.startswith(":"):
-            yield from self._thread_completions(word)
+            yield from self._conversation_completions(word)
             return
         if stripped.startswith(":unarchive ") and word and not word.startswith(":"):
-            yield from self._archived_thread_completions(word)
+            yield from self._archived_conversation_completions(word)
             return
         if text.rstrip().endswith(tokens_for("reason")):
             for cmd, desc, _ in self._REASON_SUBCOMMANDS:
@@ -110,13 +108,13 @@ class InteractiveCompleter(Completer):
             f"{tokens_for('reason')[0]} "
         )
         subcmd = prefix.split()[0] if prefix.strip() else ""
-        # After a subcommand that takes a thread id, offer thread completions
+        # After a subcommand that takes a conversation id, offer conversation completions
         needs_id = any(cmd == subcmd for cmd, _, needs in self._REASON_SUBCOMMANDS if needs)
         if subcmd and needs_id and prefix.strip() != subcmd:
-            thread_words = prefix.removeprefix(subcmd).strip()
+            conversation_words = prefix.removeprefix(subcmd).strip()
             for tid in self._all_thread_ids_with_status():
-                if thread_words == "" or tid.startswith(thread_words):
-                    yield Completion(tid, start_position=-len(thread_words) if thread_words else 0)
+                if conversation_words == "" or tid.startswith(conversation_words):
+                    yield Completion(tid, start_position=-len(conversation_words) if conversation_words else 0)
             return
         # Offer subcommand completions with descriptions
         for cmd, desc, _ in self._REASON_SUBCOMMANDS:
@@ -125,14 +123,14 @@ class InteractiveCompleter(Completer):
 
     def _all_thread_ids_with_status(self) -> list[str]:
         def load() -> list[str]:
-            repo = compose_reason_repository(
-                runtime_paths(self._project_root),
-                get_default_backend(self._project_root),
-            )
-            return [f"{t.id} ({t.status}, {t.topic[:40]})" for t in repo.list_threads(status="all")]
+            service = cli_application().reason
+            return [
+                f"{thread.id} ({thread.status}, {thread.topic[:40]})"
+                for thread in service.list_threads(status="all")
+            ]
 
         return (
-            run_reason_observed(
+            REASON_AUDIT.observe(
                 load,
                 event="completion_load_failed",
                 project_root=self._project_root,
@@ -140,35 +138,31 @@ class InteractiveCompleter(Completer):
             or []
         )
 
-    def _thread_completions(self, word: str) -> Iterable[Completion]:
-        threads = (
-            run_chat_observed(
-                lambda: compose_cli_thread_store(
-                    self._project_root
-                ).list(),
+    def _conversation_completions(self, word: str) -> Iterable[Completion]:
+        conversations = (
+            CHAT_AUDIT.observe(
+                lambda: cli_application().conversations.list(),
                 event="completion_load_failed",
                 project_root=self._project_root,
-                metadata={"completion": "threads"},
+                metadata={"completion": "conversations"},
             )
             or []
         )
-        for t in threads:
+        for t in conversations:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
 
-    def _archived_thread_completions(self, word: str) -> Iterable[Completion]:
-        threads = (
-            run_chat_observed(
-                lambda: compose_cli_thread_store(
-                    self._project_root
-                ).list_archived(),
+    def _archived_conversation_completions(self, word: str) -> Iterable[Completion]:
+        conversations = (
+            CHAT_AUDIT.observe(
+                lambda: cli_application().conversations.list_archived(),
                 event="completion_load_failed",
                 project_root=self._project_root,
-                metadata={"completion": "archived_threads"},
+                metadata={"completion": "archived_conversations"},
             )
             or []
         )
-        for t in threads:
+        for t in conversations:
             if t.startswith(word):
                 yield Completion(t, start_position=-len(word))
 
@@ -179,7 +173,7 @@ class InteractiveInput:
     def __init__(self, project_root: Path | None) -> None:
         paths = runtime_paths(project_root)
         ensure_runtime_dirs(paths)
-        self._project_root = paths.project_root
+        self._project_root = paths.authority_root
         history_path = paths.runtime_dir / "interactive_history"
         self.history: FileHistory = DedupFileHistory(
             str(history_path),
@@ -190,7 +184,7 @@ class InteractiveInput:
     def read(self) -> str:
         """Read styled input, falling back to built-in input."""
 
-        styled = run_chat_observed(
+        styled = CHAT_AUDIT.observe(
             self._read_styled,
             event="interactive_prompt_failed",
             project_root=self._project_root,

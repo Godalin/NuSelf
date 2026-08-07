@@ -24,11 +24,3 @@ def index_tool_service_components(
         if service_component is not None:
             components[tool.name] = service_component
     return components
-
-
-def tool_result_text(result: object) -> str:
-    """Extract human-readable text from a tool result."""
-    content = getattr(result, "content", None)
-    if isinstance(content, str):
-        return content
-    return str(result)

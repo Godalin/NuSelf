@@ -7,9 +7,9 @@ from dataclasses import dataclass
 import threading
 from uuid import uuid4
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageCollection
+from nuself.storage.contract import StorageCollection
 
 # ── Unified ID prefix for persona prompts ──────────────────────────────
 ID_PREFIX = "pp"
@@ -75,9 +75,9 @@ class PersonaPromptRepository:
         collection: StorageCollection,
         paths: RuntimePaths,
     ) -> None:
-        self._project_root = paths.project_root
+        self._project_root = paths.authority_root
         self._collection = collection
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
 
     # Public API ---------------------------------------------------------------
 
@@ -139,4 +139,4 @@ def create_persona_prompt(name: str, prompt_text: str) -> PersonaPrompt:
         created_at=now,
         updated_at=now,
     )
-from nuself.clock import utc_now_iso
+from nuself.runtime.clock import utc_now_iso

@@ -16,7 +16,7 @@ from nuself.cli.readiness import (
     MODEL_READY,
     inspect_command_readiness,
 )
-from nuself.scope import resolve_scope
+from nuself.config.scope import resolve_scope
 
 
 class TypedSubparsersAction(Protocol):

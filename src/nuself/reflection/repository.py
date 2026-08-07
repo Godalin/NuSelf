@@ -6,9 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
+from nuself.reflection.schedule_state import (
+    ReflectionScheduleState,
+    decode_reflection_schedule_state,
+)
 from nuself.runtime.observability import decode_observed_record
-from nuself.storage import StorageBackend
+from nuself.storage.contract import StorageBackend
 
 
 @dataclass(frozen=True)
@@ -114,7 +118,20 @@ class ReflectionRepository:
         backend: StorageBackend,
     ) -> None:
         self._col = backend.collection("reflection_entries")
+        self._schedule_col = backend.collection("scheduler_state")
         self._paths = paths
+
+    def schedule_state(self) -> ReflectionScheduleState | None:
+        """Return the strictly decoded canonical scheduler state."""
+
+        return decode_reflection_schedule_state(
+            self._schedule_col.get("reflection")
+        )
+
+    def save_schedule_state(self, state: ReflectionScheduleState) -> None:
+        """Persist the canonical scheduler state."""
+
+        self._schedule_col.put("reflection", state.to_record())
 
     def list(self, status: str | None = None) -> list[ReflectionEntry]:
         entries: list[ReflectionEntry] = []
@@ -124,7 +141,7 @@ class ReflectionRepository:
                 ReflectionEntry.from_wire,
                 component="reflection",
                 collection="reflection_entries",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
             )
             if entry is None:
                 continue
@@ -138,21 +155,6 @@ class ReflectionRepository:
             raise ReflectionEntryNotFound(entry_id)
         return ReflectionEntry.from_wire(wire)
 
-    def add(self, entry: ReflectionEntry) -> ReflectionEntry:
+    def save(self, entry: ReflectionEntry) -> ReflectionEntry:
         self._col.put(entry.id, entry.to_wire())
         return entry
-
-    def update(self, entry: ReflectionEntry) -> ReflectionEntry:
-        return self.add(entry)
-
-    def dismiss(self, entry_id: str) -> ReflectionEntry:
-        entry = self.get(entry_id)
-        updated = entry.with_status("dismissed")
-        self.add(updated)
-        return updated
-
-    def archive(self, entry_id: str) -> ReflectionEntry:
-        entry = self.get(entry_id)
-        updated = entry.with_status("archived")
-        self.add(updated)
-        return updated

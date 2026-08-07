@@ -7,16 +7,61 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.tools.common import (
-    json_string_tuple_filter,
-    structured_tool_factory,
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import (
+    component,
+    mutating,
+    observed,
+    readonly,
+    requires_confirmation,
+    tool,
 )
-from nuself.memory.query import MemoryQuery, MemoryQueryService
-from nuself.memory.repository import (
-    MemoryEntryNotFound,
-    MemoryEntryRepository,
-)
+from nuself.memory.model import MemoryEntry, MemoryEntryType
+from nuself.memory.service import MemoryMatch, MemoryQuery, MemoryService
+from nuself.memory.repository import MemoryEntryNotFound
 from nuself.runtime.diagnostics import diagnostic_exception_message
+from nuself.runtime.feature.execution import FeatureExecutor
+
+
+def _string_tuple_filter(
+    value: list[str] | str | None,
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,) if value else ()
+    return tuple(str(item) for item in value if str(item))
+
+
+def _format_match(match: MemoryMatch) -> str:
+    entry = match.entry
+    tags = f" tags={','.join(entry.tags)}" if entry.tags else ""
+    relations = ";".join(
+        f"{name}:{','.join(targets)}"
+        for name, targets in entry.relations.items()
+        if targets
+    )
+    relation_text = f" relations={relations}" if relations else ""
+    return (
+        f"- {entry.title} [id={entry.id} type={entry.type} "
+        f"confidence={entry.confidence:.2f}{tags}{relation_text} "
+        f"match={','.join(match.reasons)}]: {entry.body}"
+    )
+
+
+def _create_memory_summary(
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> str:
+    title = kwargs.get("title", args[0] if args else "")
+    body = kwargs.get("body", args[1] if len(args) > 1 else "")
+    memory_type = kwargs.get("memory_type", "belief")
+    tags: object = kwargs.get("tags", ())
+    importance = kwargs.get("importance", 0.5)
+    return (
+        f'Create durable memory "{title}" '
+        f"(type={memory_type}, tags={tags}, importance={importance}): {body}"
+    )
 
 
 @dataclass(frozen=True)
@@ -27,37 +72,32 @@ class MemoryToolSet:
     write: tuple[BaseTool, ...]
 
 
-def build_memory_tools(
-    *,
-    query_service: MemoryQueryService,
-    repository: MemoryEntryRepository,
-    project_root: Path | None,
-) -> tuple[BaseTool, ...]:
-    """Build the memory service's chat tools."""
-    tools = build_memory_tool_set(
-        query_service=query_service,
-        repository=repository,
-        project_root=project_root,
-    )
-    return tools.readonly + tools.write
-
-
 def build_memory_tool_set(
     *,
-    query_service: MemoryQueryService,
-    repository: MemoryEntryRepository,
+    service: MemoryService,
     project_root: Path | None,
+    executor: FeatureExecutor,
 ) -> MemoryToolSet:
     """Build memory tools grouped for the public chat composition order."""
-    tool_from_function = structured_tool_factory()
-
+    execution = executor
+    @tool(
+        name="memory_search",
+        description=(
+            "Search personal long-term memory for relevant context. "
+            "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
+            "Returns formatted memory context with matches, scores, and match reasons."
+        ),
+    )
+    @component("memory")
+    @readonly
+    @observed
     def search_memory(
         query: str,
         limit: int = 8,
         types: list[str] | str | None = None,
         tags: list[str] | str | None = None,
     ) -> str:
-        """Search durable memory, profile, and source chunks for relevant context."""
+        """Search personal long-term memory for relevant context."""
         try:
             query_str = str(query) if query else ""
             limit_int = int(limit)
@@ -67,60 +107,145 @@ def build_memory_tool_set(
             return "Error: query must be a non-empty string"
         if limit_int < 1:
             return "Error: limit must be a positive integer"
-        packed = query_service.pack(
+        matches = service.search(
             MemoryQuery(
                 text=query_str.strip(),
                 limit=limit_int,
-                memory_types=json_string_tuple_filter(types),
-                tags=json_string_tuple_filter(tags),
+                memory_types=_string_tuple_filter(types),
+                tags=_string_tuple_filter(tags),
             )
         )
-        if not packed.text:
+        if not matches:
             return (
                 f"No matches found for query: {query_str}. "
                 "If this is the first empty search for the current question, "
                 "retry memory_search exactly once with a distinct broader "
                 "query using fewer, shorter, or synonymous keywords."
             )
-        return packed.text
+        return "\n".join(_format_match(match) for match in matches)
 
+    @tool(
+        name="memory_count",
+        description=(
+            "Count durable memory entries with optional type or tag filters. "
+            "Use when the user asks how many memories exist, or to get a quick count "
+            "before deciding whether to search more deeply. Returns a simple count."
+        ),
+    )
+    @component("memory")
+    @readonly
+    @observed
     def count_memory(
         types: list[str] | str | None = None,
         tags: list[str] | str | None = None,
     ) -> str:
         """Count durable memory entries, optionally filtered by type or tag."""
-        entries = repository.list()
-        if types:
-            type_set = set(json_string_tuple_filter(types))
-            entries = [entry for entry in entries if entry.type in type_set]
-        if tags:
-            tag_set = set(json_string_tuple_filter(tags))
-            entries = [
-                entry for entry in entries if tag_set.intersection(entry.tags)
-            ]
+        count = service.count(
+            memory_types=_string_tuple_filter(types),
+            tags=_string_tuple_filter(tags),
+        )
         suffix = (
             f" (filtered by type={types}, tags={tags})"
             if types or tags
             else ""
         )
-        return f"Memory entries: {len(entries)} total{suffix}"
+        return f"Memory entries: {count} total{suffix}"
 
+    @tool(
+        name="memory_create",
+        description=(
+            "Create a draft personal memory from the current conversation. "
+            "Use for durable preferences, beliefs, episodes, goals, or facts. "
+            "The user must approve the exact write before it is saved."
+        ),
+    )
+    @component("memory")
+    @mutating
+    @requires_confirmation(
+        action="create",
+        resource="memory",
+        summary=_create_memory_summary,
+    )
+    @observed
+    def create_memory(
+        title: str,
+        body: str,
+        memory_type: MemoryEntryType = "belief",
+        tags: list[str] | None = None,
+        importance: float = 0.5,
+    ) -> str:
+        """Create one user-approved draft durable memory."""
+
+        title = title.strip()
+        body = body.strip()
+        if not title:
+            return "Error: title must be a non-empty string"
+        if not body:
+            return "Error: body must be a non-empty string"
+        if not memory_type.strip():
+            return "Error: memory_type must be a non-empty string"
+        try:
+            importance_value = float(importance)
+        except (TypeError, ValueError):
+            return "Error: importance must be a number"
+        if not 0.0 <= importance_value <= 1.0:
+            return "Error: importance must be between 0.0 and 1.0"
+        try:
+            entry = service.save_entry(
+                MemoryEntry(
+                    type=memory_type,
+                    title=title,
+                    body=body,
+                    tags=tags or (),
+                    importance=importance_value,
+                    review_state="draft",
+                )
+            )
+        except ValueError as exc:
+            return (
+                "Error: could not create memory: "
+                f"{diagnostic_exception_message(exc)}"
+            )
+        return (
+            f'Created memory "{entry.title}" '
+            f"(id={entry.id}, review_state={entry.review_state})."
+        )
+
+    @tool(
+        name="memory_archive",
+        description=(
+            "Archive a memory entry so it is excluded from default search and chat context. "
+            "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
+            "Requires the memory entry_id."
+        ),
+    )
+    @component("memory")
+    @mutating
+    @observed
     def archive_memory_by_id(entry_id: str) -> str:
         """Archive a memory entry so it is excluded from default search."""
         if project_root is None:
             return "Error: project root is not configured"
         try:
-            entry = repository.get(entry_id)
+            updated = service.archive(entry_id)
         except MemoryEntryNotFound as exc:
             return (
                 "Error: could not find memory entry: "
                 f"{diagnostic_exception_message(exc)}"
             )
-        updated = entry.with_updates(review_state="archived")
-        repository.save(updated)
-        repository.reindex()
         return f'Archived "{updated.title}".'
 
+    @tool(
+        name="memory_update_importance",
+        description=(
+            "Adjust the importance score (0.0-1.0) of a memory entry. "
+            "Use when the user emphasizes or downplays the significance of a memory. "
+            "Requires the memory entry_id and a new importance value."
+        ),
+    )
+    @component("memory")
+    @mutating
+    @observed
     def update_memory_importance_by_id(
         entry_id: str,
         importance: float,
@@ -135,15 +260,15 @@ def build_memory_tool_set(
         if not 0.0 <= importance_float <= 1.0:
             return "Error: importance must be between 0.0 and 1.0"
         try:
-            entry = repository.get(entry_id)
+            updated = service.update_importance(
+                entry_id,
+                importance=importance_float,
+            )
         except MemoryEntryNotFound as exc:
             return (
                 "Error: could not find memory entry: "
                 f"{diagnostic_exception_message(exc)}"
             )
-        updated = entry.with_updates(importance=importance_float)
-        repository.save(updated)
-        repository.reindex()
         return (
             f'Updated importance of "{updated.title}" '
             f"to {importance_float:.2f}."
@@ -151,51 +276,15 @@ def build_memory_tool_set(
 
     return MemoryToolSet(
         readonly=(
-            tool_from_function(
-                search_memory,
-                name="memory_search",
-                description=(
-                    "Search durable memory (entries, derived profiles, and source chunks) for relevant context. "
-                    "Use natural language queries to find information about preferences, beliefs, episodes, and facts. "
-                    "Returns formatted memory context with matches, scores, and match reasons."
-                ),
-                tags=("readonly",),
-                metadata={"service_component": "memory"},
-            ),
-            tool_from_function(
-                count_memory,
-                name="memory_count",
-                description=(
-                    "Count durable memory entries with optional type or tag filters. "
-                    "Use when the user asks how many memories exist, or to get a quick count "
-                    "before deciding whether to search more deeply. Returns a simple count."
-                ),
-                tags=("readonly",),
-                metadata={"service_component": "memory"},
-            ),
+            materialize_tool(search_memory, executor=execution),
+            materialize_tool(count_memory, executor=execution),
         ),
         write=(
-            tool_from_function(
-                archive_memory_by_id,
-                name="memory_archive",
-                description=(
-                    "Archive a memory entry so it is excluded from default search and chat context. "
-                    "Use when the user says a memory is outdated, no longer relevant, or should be hidden. "
-                    "Requires the memory entry_id."
-                ),
-                tags=("write",),
-                metadata={"service_component": "memory"},
-            ),
-            tool_from_function(
+            materialize_tool(create_memory, executor=execution),
+            materialize_tool(archive_memory_by_id, executor=execution),
+            materialize_tool(
                 update_memory_importance_by_id,
-                name="memory_update_importance",
-                description=(
-                    "Adjust the importance score (0.0-1.0) of a memory entry. "
-                    "Use when the user emphasizes or downplays the significance of a memory. "
-                    "Requires the memory entry_id and a new importance value."
-                ),
-                tags=("write",),
-                metadata={"service_component": "memory"},
+                executor=execution,
             ),
         ),
     )

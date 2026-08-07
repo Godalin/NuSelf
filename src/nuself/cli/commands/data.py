@@ -11,44 +11,16 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from typing import Callable, cast
+from typing import cast
 
-from nuself.agent.chat import ThreadState
+from nuself.cli.application import cli_application
 from nuself.cli.control import ConfirmationDecision, read_confirmation
 from nuself.cli.exit_codes import CliExitCode
-from nuself.domain.memory import MemoryEntry
-from nuself.private_fs import ensure_private_directory
-from nuself.runtime import decode_json_value, encode_json_value
+from nuself.storage.filesystem import ensure_private_directory
+from nuself.runtime.messages import decode_json_value, encode_json_value
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.config import runtime_paths
-from nuself.logs import write_log_event
-from nuself.storage import COLLECTION_NAMES, get_default_backend
-
-
-_PUBLIC_ALIASES: dict[str, str] = {
-    "memory": "memory_entries",
-    "candidates": "memory_candidates",
-    "threads": "chat_threads",
-    "profile": "profile_items",
-    "sources": "source_documents",
-    "source-chunks": "source_chunks",
-    "persona": "persona_prompts",
-    "reason-threads": "reason_threads",
-    "reason-steps": "reason_steps",
-    "traces": "trace_nodes",
-    "trace-edges": "trace_edges",
-    "notifications": "notification_outbox",
-    "reflections": "reflection_entries",
-}
-_INTERNAL_COLLECTIONS = {
-    "memory_curator_cursors",
-    "memory_curator_plans",
-    "scheduler_state",
-}
-_VALIDATORS: dict[str, Callable[[dict[str, object]], object]] = {
-    "memory_entries": MemoryEntry.from_wire,
-    "chat_threads": ThreadState.from_wire,
-}
+from nuself.config.settings import runtime_paths
+from nuself.log.store import write_log_event
 
 
 def _write_change_audit(
@@ -78,19 +50,8 @@ def _write_change_audit(
         )
 
 
-def _collection_name(value: str, *, internal: bool) -> str:
-    name = _PUBLIC_ALIASES.get(value, value)
-    if name not in COLLECTION_NAMES:
-        raise ValueError(f"unknown data collection: {value}")
-    if name in _INTERNAL_COLLECTIONS and not internal:
-        raise ValueError(
-            f"internal collection requires --internal: {value}"
-        )
-    return name
-
-
 def _record_id(record: dict[str, object]) -> str:
-    value = record.get("id", record.get("thread_id"))
+    value = record.get("id", record.get("conversation_id"))
     return value if isinstance(value, str) else "<invalid-id>"
 
 
@@ -106,23 +67,20 @@ def _json_text(value: object, *, pretty: bool = False) -> str:
 
 
 def handle_data_collections(args: argparse.Namespace) -> int:
-    writable = set(_VALIDATORS)
-    for alias, name in _PUBLIC_ALIASES.items():
-        mode = "editable" if name in writable else "read-only"
-        print(f"{alias}\t{name}\t{mode}")
-    if args.internal:
-        for name in sorted(_INTERNAL_COLLECTIONS):
-            print(f"{name}\t{name}\tread-only")
+    for resource in cli_application().data.resources(include_internal=args.internal):
+        mode = "editable" if resource.editable else "read-only"
+        print(f"{resource.name}\t{resource.collection}\t{mode}")
     return 0
 
 
 def handle_data_list(args: argparse.Namespace) -> int:
+    service = cli_application().data
     try:
-        name = _collection_name(args.collection, internal=args.internal)
+        resource = service.resolve(args.collection, internal=args.internal)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    records = get_default_backend(args.project_root).collection(name).list()
+    records = service.list(resource)
     if args.json:
         for record in records:
             print(_json_text(record))
@@ -140,14 +98,13 @@ def handle_data_list(args: argparse.Namespace) -> int:
 
 
 def handle_data_show(args: argparse.Namespace) -> int:
+    service = cli_application().data
     try:
-        name = _collection_name(args.collection, internal=args.internal)
+        resource = service.resolve(args.collection, internal=args.internal)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    record = get_default_backend(args.project_root).collection(name).get(
-        args.record_id
-    )
+    record = service.get(resource, args.record_id)
     if record is None:
         print(
             f"Record not found: {args.collection}/{args.record_id}",
@@ -161,12 +118,12 @@ def handle_data_show(args: argparse.Namespace) -> int:
 def handle_data_check(args: argparse.Namespace) -> int:
     """Validate raw records and point to explicit repair operations."""
 
+    service = cli_application().data
     try:
-        name = _collection_name(args.collection, internal=args.internal)
-        validator = _VALIDATORS.get(name)
-        if validator is None:
+        resource = service.resolve(args.collection, internal=args.internal)
+        if not resource.editable:
             raise ValueError(
-                "collection has no generic validation contract: "
+                "data resource has no generic validation contract: "
                 f"{args.collection}"
             )
     except ValueError as exc:
@@ -176,11 +133,11 @@ def handle_data_check(args: argparse.Namespace) -> int:
         )
         return CliExitCode.FAILURE
 
-    records = get_default_backend(args.project_root).collection(name).list()
+    records = service.list(resource)
     invalid_ids: list[str] = []
     for record in records:
         try:
-            validator(record)
+            service.validate(resource, record)
         except (KeyError, TypeError, ValueError):
             invalid_ids.append(_record_id(record))
 
@@ -233,17 +190,15 @@ def _load_edited_record(args: argparse.Namespace, current: str) -> str:
 
 
 def handle_data_edit(args: argparse.Namespace) -> int:
+    service = cli_application().data
     try:
-        name = _collection_name(args.collection, internal=args.internal)
-        validator = _VALIDATORS.get(name)
-        if validator is None:
+        resource = service.resolve(args.collection, internal=args.internal)
+        if not resource.editable:
             raise ValueError(
-                f"collection is read-only through generic editing: "
+                f"data resource is read-only through generic editing: "
                 f"{args.collection}"
             )
-        backend = get_default_backend(args.project_root)
-        collection = backend.collection(name)
-        original = collection.get(args.record_id)
+        original = service.get(resource, args.record_id)
         if original is None:
             raise ValueError(
                 f"record not found: {args.collection}/{args.record_id}"
@@ -254,10 +209,10 @@ def handle_data_edit(args: argparse.Namespace) -> int:
         if not isinstance(decoded, dict):
             raise ValueError("edited record must be a JSON object")
         edited = cast(dict[str, object], decoded)
-        identity = edited.get("id", edited.get("thread_id"))
+        identity = edited.get("id", edited.get("conversation_id"))
         if identity != args.record_id:
             raise ValueError("edited record cannot change its stable identity")
-        validator(edited)
+        service.validate(resource, edited)
         if edited == original:
             print("No changes.")
             return 0
@@ -277,15 +232,12 @@ def handle_data_edit(args: argparse.Namespace) -> int:
             if decision is ConfirmationDecision.NO:
                 print("Cancelled.")
                 return CliExitCode.FAILURE
-        with backend.transaction():
-            if collection.get(args.record_id) != original:
-                raise ValueError(
-                    "record changed concurrently; reload before editing"
-                )
-            collection.put(args.record_id, edited)
+        if service.get(resource, args.record_id) != original:
+            raise ValueError("record changed concurrently; reload before editing")
+        service.update(resource, args.record_id, edited)
         _write_change_audit(
             action="updated",
-            collection=name,
+            collection=resource.collection,
             record_id=args.record_id,
             project_root=args.project_root,
         )
@@ -306,16 +258,15 @@ def handle_data_edit(args: argparse.Namespace) -> int:
 
 
 def handle_data_delete(args: argparse.Namespace) -> int:
+    service = cli_application().data
     try:
-        name = _collection_name(args.collection, internal=args.internal)
-        if name not in _VALIDATORS:
+        resource = service.resolve(args.collection, internal=args.internal)
+        if not resource.editable:
             raise ValueError(
-                f"collection is read-only through generic deletion: "
+                f"data resource is read-only through generic deletion: "
                 f"{args.collection}"
             )
-        backend = get_default_backend(args.project_root)
-        collection = backend.collection(name)
-        if collection.get(args.record_id) is None:
+        if service.get(resource, args.record_id) is None:
             raise ValueError(
                 f"record not found: {args.collection}/{args.record_id}"
             )
@@ -326,11 +277,10 @@ def handle_data_delete(args: argparse.Namespace) -> int:
             if decision is ConfirmationDecision.NO:
                 print("Cancelled.")
                 return CliExitCode.FAILURE
-        with backend.transaction():
-            collection.delete(args.record_id)
+        service.delete(resource, args.record_id)
         _write_change_audit(
             action="deleted",
-            collection=name,
+            collection=resource.collection,
             record_id=args.record_id,
             project_root=args.project_root,
         )
@@ -346,12 +296,13 @@ def handle_data_delete(args: argparse.Namespace) -> int:
 
 
 def handle_data_export(args: argparse.Namespace) -> int:
+    service = cli_application().data
     try:
-        name = _collection_name(args.collection, internal=args.internal)
+        resource = service.resolve(args.collection, internal=args.internal)
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    records = get_default_backend(args.project_root).collection(name).list()
+    records = service.list(resource)
     if args.format == "json":
         content = _json_text(list(records), pretty=True)
     else:

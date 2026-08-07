@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
 
-from nuself.private_fs import (
+from nuself.storage.filesystem import (
     PRIVATE_FILE_MODE,
     ensure_managed_directory,
     harden_managed_file,

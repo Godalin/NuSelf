@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 from threading import Lock
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from langchain.agents import create_agent as _create_agent  # pyright: ignore[reportUnknownVariableType]
 from langchain.agents.structured_output import ToolStrategy
@@ -15,56 +14,52 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.failover import invoke_agent_endpoint
-from nuself.agent.middleware import ToolCaptureMiddleware, ToolOutcome
-from nuself.agent.tool_audit import ToolOutcomeProjection
+from nuself.agent.text import LangChainTextAgent
+from nuself.agent.middleware import ExecutedTool, ToolCaptureMiddleware
 from nuself.agent.structured import require_structured_response
-from nuself.agent.tool_utils import (
-    index_tool_service_components,
-)
-from nuself.config import RuntimePaths
+from nuself.config.settings import RuntimePaths
 
-from nuself.llm import (
-    LangChainLLMEndpoint,
-    configured_langchain_chat_models,
-)
-from nuself.reason.domain import (
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.reason.model import (
     ReasoningStep,
     ReasoningThread,
     StepKind,
     TerminalStatus,
 )
-from nuself.reason.audit import report_reason_failure
+from nuself.reason.audit import REASON_AUDIT
 from nuself.reason.errors import ReasonAdvanceError
-from nuself.persona.prompt_repo import PersonaPromptRepository
-from nuself.runtime import current_runtime_context, runtime_context
+from nuself.reason.service import ReasonService
+from nuself.persona.service import PersonaService
+from nuself.runtime.context import current_runtime_context, runtime_context
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.log.store import runtime_event_log_sink
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspaceStore
+
+if TYPE_CHECKING:
+    from nuself.storage.workspace import ScopedWorkspace
 
 
 def _current_reason_thread_id() -> str:
-    thread_id = current_runtime_context().thread_id
+    thread_id = current_runtime_context().reason_id
     if thread_id is None:
         raise RuntimeError("reason tool requires an active reason thread context")
     return thread_id
 
 
-def _log_tool_outcome(
-    outcome: ToolOutcome,
-    *,
-    tool_service_map: dict[str, str] | None = None,
-    project_root: Path | None,
-) -> ToolOutcomeProjection:
-    """Emit a service_tool_called log event for a reasoning tool invocation."""
-    service_component = (
-        (tool_service_map or {}).get(outcome.name) or "reason_advancer"
-    )
-    projection = ToolOutcomeProjection(
-        component="reasoning",
-        service_component=service_component,
-        outcome=outcome,
-    )
-    projection.write_observed(project_root=project_root)
-    return projection
+def _execution_snapshot(outcome: ExecutedTool) -> dict[str, object]:
+    """Return safe Agent execution evidence for one Reason step."""
+
+    return {
+        "component": "reasoning",
+        "event": "tool.executed",
+        "message": "Tool execution tracked",
+        "status": "completed" if outcome.succeeded else "failed",
+        "metadata": {
+            "tool": outcome.name,
+            "execution": outcome.execution,
+        },
+    }
 
 
 class TrackedItemOutput(BaseModel):
@@ -78,10 +73,6 @@ class TrackedItemOutput(BaseModel):
     status: str = "active"
 
 
-def _empty_tracked_item_outputs() -> list[TrackedItemOutput]:
-    return []
-
-
 class ReasonStepOutput(BaseModel):
     """Framework-native structured response for one reason advance."""
 
@@ -93,10 +84,10 @@ class ReasonStepOutput(BaseModel):
     output: str = Field(description="Your full current thinking, analysis, or draft — the observable product of this step")
     evidence_refs: list[str] = Field(default_factory=list, description="Reference strings for sources or evidence used")
     confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="How confident you are in this step, from 0.0 to 1.0")
-    new_findings: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="New findings or ideas to track")
-    new_pending: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="New open questions or unresolved points")
-    retired_findings: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="Previously tracked items that are now completed or abandoned")
-    next_steps: list[TrackedItemOutput] = Field(default_factory=_empty_tracked_item_outputs, description="Planned next actions")
+    new_findings: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="New findings or ideas to track")
+    new_pending: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="New open questions or unresolved points")
+    retired_findings: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="Previously tracked items that are now completed or abandoned")
+    next_steps: list[TrackedItemOutput] = Field(default_factory=list[TrackedItemOutput], description="Planned next actions")
     terminal_status: TerminalStatus = Field(default="continue", description="One of: continue, suggest_resolved, suggest_paused")
     terminal_reason: str = Field(default="", description="Why this terminal status was chosen; empty if continuing normally")
 
@@ -223,20 +214,22 @@ class ReasonAdvancer:
         self,
         *,
         paths: RuntimePaths,
-        workspace_store: PrivateWorkspaceStore,
-        persona_repository: PersonaPromptRepository,
+        reason_service: ReasonService,
+        persona_service: PersonaService,
         trace_recorder: TraceRecorder,
+        feature_executor: FeatureExecutor,
         readonly_tools: Sequence[BaseTool] | None = None,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._paths = paths
-        self._project_root = paths.project_root
-        self._workspace_store = workspace_store
-        self._persona_repository = persona_repository
+        self._project_root = paths.authority_root
+        self._reason_service = reason_service
+        self._persona_service = persona_service
         self._trace_recorder = trace_recorder
+        self._feature_executor = feature_executor
         self._readonly_tools = tuple(readonly_tools) if readonly_tools else ()
         self._langchain_models = langchain_models or ()
-        self._captured: list[ToolOutcome] = []
+        self._captured: list[ExecutedTool] = []
         self._invoke_lock = Lock()
         self._middleware = ToolCaptureMiddleware(captured=self._captured)
         self._agents = self._build_agents()
@@ -251,7 +244,6 @@ class ReasonAdvancer:
         persona_tools = self._build_persona_tools()
         all_tools = list(self._readonly_tools) + list(ws_tools) + list(persona_tools)
         create_agent = cast(Any, _create_agent)
-        self._tool_service_map = index_tool_service_components(all_tools)
         return tuple(
             (
                 endpoint,
@@ -276,7 +268,7 @@ class ReasonAdvancer:
 
     def _advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         assert self._agents
-        with runtime_context(thread_id=thread.id):
+        with runtime_context(reason_id=thread.id):
             try:
                 self._captured.clear()
                 base = build_advance_prompt(thread)
@@ -294,7 +286,7 @@ class ReasonAdvancer:
                         )
                     except Exception as exc:
                         if self._captured:
-                            report_reason_failure(
+                            REASON_AUDIT.failure(
                                 exc,
                                 event=(
                                     "llm_failover_suppressed_after_tool_call"
@@ -339,7 +331,7 @@ class ReasonAdvancer:
                     tool_logs=step_tool_logs,
                 )
             except Exception as exc:
-                report_reason_failure(
+                REASON_AUDIT.failure(
                     exc,
                     event="advance_failed",
                     project_root=self._project_root,
@@ -352,72 +344,71 @@ class ReasonAdvancer:
     ) -> tuple[dict[str, object], ...]:
         snapshots: list[dict[str, object]] = []
         for outcome in self._captured:
-            projection = _log_tool_outcome(
-                outcome,
-                project_root=self._project_root,
-                tool_service_map=self._tool_service_map,
-            )
-            snapshots.append(projection.to_snapshot())
+            snapshots.append(_execution_snapshot(outcome))
         return tuple(snapshots)
 
     def _build_workspace_tools(self) -> tuple[BaseTool, ...]:
         """Build workspace tools once that resolve the active reason thread."""
-        ws_store = self._workspace_store
-        from nuself.agent.tools import build_workspace_tools_from_provider
-        from nuself.store import ScopedWorkspace, SqliteStore
+        from nuself.agent.tools.workspace import (
+            build_workspace_tools_from_provider,
+        )
 
-        def _resolve() -> ScopedWorkspace:
-            thread_id = _current_reason_thread_id()
-            wpath = ws_store.ensure(thread_id)
-            sqlite = SqliteStore(wpath.database)
-            return ScopedWorkspace(
-                sqlite,
-                ("workspace", "reason", thread_id),
-            )
-
-        return build_workspace_tools_from_provider(_resolve)
+        return build_workspace_tools_from_provider(
+            self._thread_workspace,
+            executor=self._feature_executor,
+        )
 
     def _build_persona_tools(self) -> tuple[BaseTool, ...]:
         """Build thread-scoped persona tools that resolve the current thread."""
-        ws_store = self._workspace_store
         from nuself.persona.tools import build_reason_persona_tools
-        from nuself.store import ScopedWorkspace, SqliteStore
-
-        def _thread_workspace() -> ScopedWorkspace:
-            thread_id = _current_reason_thread_id()
-            wpath = ws_store.ensure(thread_id)
-            return ScopedWorkspace(
-                SqliteStore(wpath.database),
-                ("workspace", "reason", thread_id),
-            )
 
         return build_reason_persona_tools(
             paths=self._paths,
-            global_repository=self._persona_repository,
+            global_service=self._persona_service,
             trace_recorder=self._trace_recorder,
-            get_thread_workspace=_thread_workspace,
+            get_thread_workspace=self._thread_workspace,
+            text_agent=LangChainTextAgent(
+                endpoints=self._langchain_models,
+                project_root=self._paths.authority_root,
+                component="persona",
+            ),
+            executor=self._feature_executor,
+        )
+
+    def _thread_workspace(self) -> ScopedWorkspace:
+        """Resolve one workspace from the active Reason thread context."""
+
+        from nuself.storage.workspace import ScopedWorkspace, SqliteStore
+
+        thread_id = _current_reason_thread_id()
+        workspace = self._reason_service.workspace_paths(thread_id)
+        return ScopedWorkspace(
+            SqliteStore(workspace.database),
+            ("workspace", "reason", thread_id),
         )
 
 
 def default_reason_advancer(
     *,
     paths: RuntimePaths,
-    workspace_store: PrivateWorkspaceStore,
-    persona_repository: PersonaPromptRepository,
+    reason_service: ReasonService,
+    persona_service: PersonaService,
     trace_recorder: TraceRecorder,
     readonly_tools: Sequence[BaseTool] | None = None,
-    langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+    langchain_models: tuple[LangChainLLMEndpoint, ...],
 ) -> ReasonAdvancer:
     """Build the default reason capability from explicit application resources."""
+    events = EventPublisher()
+    events.attach_projection(runtime_event_log_sink(paths.authority_root))
     return ReasonAdvancer(
         paths=paths,
-        workspace_store=workspace_store,
-        persona_repository=persona_repository,
+        reason_service=reason_service,
+        persona_service=persona_service,
         trace_recorder=trace_recorder,
-        readonly_tools=readonly_tools,
-        langchain_models=(
-            configured_langchain_chat_models(paths.project_root)
-            if langchain_models is None
-            else langchain_models
+        feature_executor=FeatureExecutor(
+            producer="reasoning",
+            events=events,
         ),
+        readonly_tools=readonly_tools,
+        langchain_models=langchain_models,
     )

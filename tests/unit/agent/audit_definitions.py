@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 import pytest
 
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistry,
     AuditDefinitionRegistrySealedError,
     AuditDefinitionRegistryUnsealedError,
@@ -12,12 +12,26 @@ from nuself.runtime.audit_definitions import (
     AuditSchemaError,
     DuplicateAuditDefinitionError,
     UnknownAuditDefinitionError,
+    require_exact_metadata,
 )
 
 
 def _validate_id(metadata: Mapping[str, object]) -> None:
-    if set(metadata) != {"id"} or not isinstance(metadata["id"], str):
+    require_exact_metadata(metadata, frozenset({"id"}))
+    if not isinstance(metadata["id"], str):
         raise AuditSchemaError("id metadata is invalid")
+
+
+def test_exact_metadata_validation_reports_missing_and_extra_fields() -> None:
+    with pytest.raises(
+        AuditSchemaError,
+        match=r"example fields differ .*missing=\['id'\].*extra=\['other'\]",
+    ):
+        require_exact_metadata(
+            {"other": 1},
+            frozenset({"id"}),
+            context="example",
+        )
 
 
 def test_audit_definition_registry_is_duplicate_safe_and_sealable() -> None:
@@ -103,7 +117,7 @@ def test_audit_definition_validates_exact_projection_contract() -> None:
             metadata={"id": "m1"},
             duration_ms=12,
         )
-    with pytest.raises(AuditSchemaError, match="id metadata"):
+    with pytest.raises(AuditSchemaError, match="missing=\\['id'\\]"):
         definition.validate(
             level="error",
             status="failed",

@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Callable, Sequence, cast
 from uuid import uuid4
 
-from nuself.clock import utc_now, utc_now_iso
-from nuself.reason.domain import ReasoningStep, ReasoningThread, partition_steps
+from nuself.runtime.clock import utc_now, utc_now_iso
+from nuself.reason.model import ReasoningStep, ReasoningThread, partition_steps
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.output_contracts import (
     REASON_OUTPUT_FORMATS,
@@ -30,20 +30,16 @@ from nuself.reason.job_contracts import (
     build_reason_job_definition_registry,
 )
 from nuself.reason.audit import (
-    report_reason_failure,
-    write_reason_audit,
+    REASON_AUDIT,
 )
 from nuself.reason.service import ReasonService
 from nuself.runtime.diagnostics import (
     diagnostic_exception_message,
     redact_sensitive_text,
 )
-from nuself.runtime.jobs import JobSink
-from nuself.runtime.job_definitions import JobDefinitionRegistry
-from nuself.runtime.observability import report_corrupt_record
-from nuself.storage import write_json_atomic, write_text_atomic
-from nuself.private_fs import ensure_private_directory
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.runtime.job.message import JobSink
+from nuself.storage.atomic import write_json_atomic, write_text_atomic
+from nuself.storage.filesystem import ensure_private_directory
 
 class ReasonOutputService:
     """Plan, compose, and persist reason-scoped long-form export jobs."""
@@ -52,57 +48,17 @@ class ReasonOutputService:
         self,
         project_root: Path,
         reason_service: ReasonService,
-        workspace_store: PrivateWorkspaceStore,
-        job_sink: JobSink | None = None,
-        job_definitions: JobDefinitionRegistry | None = None,
         section_planner: SectionPlanner | None = None,
     ) -> None:
         self._reason_service = reason_service
         self._project_root = project_root
-        self._workspace_store = workspace_store
-        self._job_sink = job_sink
-        self._job_definitions = (
-            job_definitions
-            if job_definitions is not None
-            else build_reason_job_definition_registry()
-        )
         self._section_planner = section_planner
-
-    def list_jobs(self, thread_id: str) -> list[ReasonOutputManifest]:
-        root = self._export_root(thread_id)
-        if not root.exists():
-            return []
-        jobs_dir = root / "jobs"
-        if not jobs_dir.exists():
-            return []
-        jobs: list[ReasonOutputManifest] = []
-        for job_dir in jobs_dir.iterdir():
-            if not job_dir.is_dir():
-                continue
-            manifest_path = job_dir / "manifest.json"
-            try:
-                manifest = self._read_manifest(manifest_path)
-                if (
-                    manifest.job_id != job_dir.name
-                    or manifest.thread_id != thread_id
-                ):
-                    raise ValueError(
-                        "reason output manifest identity does not match its path"
-                    )
-            except FileNotFoundError as exc:
-                self._report_corrupt_manifest(exc, job_dir.name)
-                continue
-            except (json.JSONDecodeError, ValueError) as exc:
-                self._report_corrupt_manifest(exc, job_dir.name)
-                continue
-            jobs.append(manifest)
-        return sorted(jobs, key=lambda m: (m.created_at, m.job_id))
 
     def get_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
         # The job directory is named by job_id, so read its manifest directly
         # instead of scanning and parsing every job manifest under the thread.
         try:
-            manifest_path = self._job_paths(thread_id, job_id).manifest
+            manifest_path = self.job_paths(thread_id, job_id).manifest
         except ValueError as exc:
             raise ReasonNotFound(job_id) from exc
         try:
@@ -124,6 +80,7 @@ class ReasonOutputService:
         start_index: int = 0,
         end_index: int | None = None,
         segment_size: int = 5,
+        job_sink: JobSink,
     ) -> ReasonOutputManifest:
         thread = self._reason_service.show_thread(thread_id)
         steps = self._reason_service.list_steps(thread.id)
@@ -146,7 +103,7 @@ class ReasonOutputService:
             segment_size=segment_size,
             source_step_ids=tuple(step.id for step in selected),
         )
-        paths = self._job_paths(thread.id, job_id)
+        paths = self.job_paths(thread.id, job_id)
         _clear_job_artifacts(paths)
         ensure_private_directory(paths.root)
         manifest = ReasonOutputManifest(
@@ -160,8 +117,8 @@ class ReasonOutputService:
             segment_size=segment_size,
             sections=tuple(sections),
         )
-        self._write_manifest(paths.manifest, manifest)
-        self._write_progress(
+        write_json_atomic(paths.manifest, manifest.to_wire())
+        write_json_atomic(
             paths.progress,
             ReasonOutputProgress(
                 job_id=job_id,
@@ -172,9 +129,9 @@ class ReasonOutputService:
                 pdf_status="pending",
                 pdf_path=None,
                 updated_at=manifest.updated_at,
-            ),
+            ).to_wire(),
         )
-        write_reason_audit(
+        REASON_AUDIT.write(
             "reason_output_planned",
             project_root=self._project_root,
             metadata={
@@ -189,69 +146,32 @@ class ReasonOutputService:
             },
         )
 
-        job_sink = self._job_sink
-        if job_sink is not None:
-            job_message = self._job_definitions.create(
-                name=REASON_OUTPUT_JOB_NAME,
-                producer="reasoning",
-                job_id=job_id,
-                resource_id=thread.id,
-                payload={"mode": mode, "output_format": output_format},
-            )
-
-            def enqueue() -> bool:
-                job_sink(job_message)
-                return True
-
-            try:
-                enqueued = enqueue()
-            except Exception as exc:
-                report_reason_failure(
-                    exc,
-                    event="export_job_enqueue_failed",
-                    project_root=self._project_root,
-                    metadata={"thread_id": thread.id, "job_id": job_id},
-                )
-                enqueued = False
-            if enqueued:
-                write_reason_audit(
-                    "export_job_enqueued",
-                    project_root=self._project_root,
-                    metadata={
-                        "thread_id": thread.id,
-                        "job_id": job_id,
-                    },
-                )
-        return manifest
-
-    def compose_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        return self.compose_with_runner(thread_id, job_id, _compose_runner)
-
-    def start_job(
-        self,
-        thread_id: str,
-        *,
-        mode: str = "narrative",
-        output_format: str = "markdown",
-        start_index: int = 0,
-        end_index: int | None = None,
-        segment_size: int = 5,
-        compose: bool = True,
-    ) -> ReasonOutputManifest:
-        manifest = self.plan_job(
-            thread_id,
-            mode=mode,
-            output_format=output_format,
-            start_index=start_index,
-            end_index=end_index,
-            segment_size=segment_size,
+        job_message = build_reason_job_definition_registry().create(
+            name=REASON_OUTPUT_JOB_NAME,
+            producer="reasoning",
+            job_id=job_id,
+            resource_id=thread.id,
+            payload={"mode": mode, "output_format": output_format},
         )
-        if compose:
-            return self.compose_job(thread_id, manifest.job_id)
+        try:
+            job_sink(job_message)
+        except Exception as exc:
+            REASON_AUDIT.failure(
+                exc,
+                event="export_job_enqueue_failed",
+                project_root=self._project_root,
+                metadata={"thread_id": thread.id, "job_id": job_id},
+            )
+        else:
+            REASON_AUDIT.write(
+                "export_job_enqueued",
+                project_root=self._project_root,
+                metadata={
+                    "thread_id": thread.id,
+                    "job_id": job_id,
+                },
+            )
         return manifest
-
-    def resume_job(self, thread_id: str, job_id: str) -> ReasonOutputManifest:
-        return self.compose_job(thread_id, job_id)
 
     def compose_with_runner(self, thread_id: str, job_id: str, runner: Callable[..., str]) -> ReasonOutputManifest:
         """Compose the job using an injected runner callable for each segment.
@@ -270,10 +190,14 @@ class ReasonOutputService:
         if len(selected) != len(manifest.source_step_ids):
             raise RuntimeError("Cannot compose export job: one or more source steps are missing")
 
-        paths = self._job_paths(thread.id, job_id)
+        paths = self.job_paths(thread.id, job_id)
         ensure_private_directory(paths.root)
         chunks: list[ReasonOutputChunk] = []
-        section_plan = self._resolve_section_plan(thread, manifest, selected)
+        section_plan = (
+            manifest.sections
+            if manifest.sections
+            else plan_sections(thread, list(selected), mode=manifest.mode)
+        )
         total = _chunk_count(len(selected), manifest.segment_size)
         batch_start = 0
         for index, batch in enumerate(partition_steps(selected, manifest.segment_size)):
@@ -287,7 +211,7 @@ class ReasonOutputService:
             if chunk_path.exists():
                 chunk = ReasonOutputChunk(index=index, filename=filename, step_ids=tuple(step.id for step in batch))
                 chunks.append(chunk)
-                write_reason_audit(
+                REASON_AUDIT.write(
                     "reason_output_chunk_skipped",
                     project_root=self._project_root,
                     metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
@@ -295,7 +219,7 @@ class ReasonOutputService:
                 continue
 
             # Emit chunk-level start event
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_chunk_started",
                 project_root=self._project_root,
                 metadata={"thread_id": thread.id, "job_id": manifest.job_id, "chunk_index": index},
@@ -307,7 +231,7 @@ class ReasonOutputService:
                 composed_text = runner(thread, manifest, batch, section=section, section_plan=section_plan, index=index, total=total)
                 duration_ms = int((utc_now().timestamp() - start_ts) * 1000)
             except Exception as exc:
-                report_reason_failure(
+                REASON_AUDIT.failure(
                     exc,
                     event="reason_output_chunk_failed",
                     project_root=self._project_root,
@@ -328,7 +252,7 @@ class ReasonOutputService:
             )
 
             # Emit chunk completed event
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_chunk_completed",
                 project_root=self._project_root,
                 duration_ms=duration_ms,
@@ -344,13 +268,10 @@ class ReasonOutputService:
         return self._finalize_job(thread, manifest, paths, chunks, section_plan)
 
     def job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
-        return self._job_paths(thread_id, job_id)
-
-    def _job_paths(self, thread_id: str, job_id: str) -> ReasonOutputPaths:
         _validate_segment(thread_id, "thread id")
         _validate_segment(job_id, "job id")
-        workspace = self._workspace_store.ensure(thread_id)
-        root = workspace.artifacts / "jobs" / job_id
+        workspace = self._reason_service.workspace_paths(thread_id)
+        root = workspace.root / "jobs" / job_id
         return ReasonOutputPaths(
             root=root,
             manifest=root / "manifest.json",
@@ -359,10 +280,6 @@ class ReasonOutputService:
             pdf=root / "combined.pdf",
             chunks_dir=root,
         )
-
-    def _export_root(self, thread_id: str) -> Path:
-        workspace = self._workspace_store.ensure(thread_id)
-        return workspace.artifacts
 
     def _finalize_job(
         self,
@@ -375,8 +292,8 @@ class ReasonOutputService:
         combined_text = _combine_chunks(thread, manifest, paths, chunks, section_plan=section_plan)
         write_text_atomic(paths.combined, combined_text)
         updated = manifest.with_updates(status="complete", chunks=tuple(chunks), sections=tuple(section_plan))
-        self._write_manifest(paths.manifest, updated)
-        self._write_progress(
+        write_json_atomic(paths.manifest, updated.to_wire())
+        write_json_atomic(
             paths.progress,
             ReasonOutputProgress(
                 job_id=manifest.job_id,
@@ -387,9 +304,9 @@ class ReasonOutputService:
                 pdf_status="pending",
                 pdf_path=None,
                 updated_at=updated.updated_at,
-            ),
+            ).to_wire(),
         )
-        write_reason_audit(
+        REASON_AUDIT.write(
             "reason_output_composed",
             project_root=self._project_root,
             metadata={
@@ -400,7 +317,7 @@ class ReasonOutputService:
         )
 
         # Generate PDF with timeout — combined.md is already written.
-        write_reason_audit(
+        REASON_AUDIT.write(
             "reason_output_pdf_started",
             project_root=self._project_root,
             metadata={
@@ -413,8 +330,13 @@ class ReasonOutputService:
             thread_id=thread.id,
             job_id=manifest.job_id,
         )
-        pdf_status, pdf_path_str = self._pdf_result(pdf_path, paths)
-        self._write_progress(
+        if pdf_path is not None:
+            pdf_status, pdf_path_str = "generated", str(pdf_path)
+        elif paths.pdf.exists():
+            pdf_status, pdf_path_str = "generated", str(paths.pdf)
+        else:
+            pdf_status, pdf_path_str = "failed", None
+        write_json_atomic(
             paths.progress,
             ReasonOutputProgress(
                 job_id=manifest.job_id,
@@ -425,7 +347,7 @@ class ReasonOutputService:
                 pdf_status=pdf_status,
                 pdf_path=pdf_path_str,
                 updated_at=utc_now_iso(),
-            ),
+            ).to_wire(),
         )
         return updated
 
@@ -434,35 +356,6 @@ class ReasonOutputService:
         if not isinstance(raw, dict):
             raise ValueError("reason output manifest must be a JSON object")
         return ReasonOutputManifest.from_wire(cast(dict[str, object], raw))
-
-    def _report_corrupt_manifest(
-        self,
-        exc: Exception,
-        job_id: str,
-    ) -> None:
-        report_corrupt_record(
-            exc,
-            component="reasoning",
-            collection="reason_output_manifests",
-            record_id=job_id,
-            project_root=self._project_root,
-        )
-
-    def _write_manifest(self, path: Path, manifest: ReasonOutputManifest) -> None:
-        write_json_atomic(path, manifest.to_wire())
-
-    def _write_progress(self, path: Path, progress: ReasonOutputProgress) -> None:
-        write_json_atomic(path, progress.to_wire())
-
-    def _resolve_section_plan(
-        self,
-        thread: ReasoningThread,
-        manifest: ReasonOutputManifest,
-        selected: Sequence[ReasoningStep],
-    ) -> tuple[ReasonOutputSection, ...]:
-        if manifest.sections:
-            return manifest.sections
-        return plan_sections(thread, list(selected), mode=manifest.mode)
 
     def _generate_pdf(
         self,
@@ -484,7 +377,7 @@ class ReasonOutputService:
                 timeout=120,
             )
         except subprocess.TimeoutExpired:
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_pdf_timeout",
                 project_root=self._project_root,
                 metadata={"thread_id": thread_id, "job_id": job_id},
@@ -504,7 +397,7 @@ class ReasonOutputService:
                 if process_error
                 else diagnostic_exception_message(exc)
             )
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_pdf_failed",
                 project_root=self._project_root,
                 error=error,
@@ -512,55 +405,13 @@ class ReasonOutputService:
             )
             return None
         if paths.pdf.is_file():
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "reason_output_pdf_created",
                 project_root=self._project_root,
                 metadata={"thread_id": thread_id, "job_id": job_id},
             )
             return paths.pdf
         return None
-
-    @staticmethod
-    def _pdf_result(pdf_path: Path | None, paths: ReasonOutputPaths) -> tuple[str, str | None]:
-        if pdf_path is not None:
-            return ("generated", str(pdf_path))
-        if paths.pdf.exists():
-            return ("generated", str(paths.pdf))
-        return ("failed", None)
-
-
-def _compose_runner(
-    thread: ReasoningThread,
-    manifest: ReasonOutputManifest,
-    steps: Sequence[ReasoningStep],
-    *,
-    index: int,
-    total: int,
-    **kw: object,
-) -> str:
-    """Default chunk runner used by compose_job."""
-    return _render_chunk(thread, manifest, steps, index=index, total=total)
-
-
-def _render_chunk(
-    thread: ReasoningThread,
-    manifest: ReasonOutputManifest,
-    steps: Sequence[ReasoningStep],
-    *,
-    index: int,
-    total: int,
-) -> str:
-    lines: list[str] = []
-    for step in steps:
-        lines.append(f"## {step.summary}")
-        lines.append("")
-        if step.output:
-            lines.append(step.output)
-        elif step.delta:
-            lines.append(step.delta)
-        lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
-
 
 def _combine_chunks(
     thread: ReasoningThread,

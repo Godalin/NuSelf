@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.application import cli_application
 from nuself.cli.commands.memory.common import record_memory_trace
-from nuself.cli.commands.output import (
+from nuself.cli.output import (
     print_ansi,
     resolve_handle,
     resolve_handle_selection,
 )
-from nuself.domain.memory import MemoryCandidate
+from nuself.memory.model import MemoryCandidate
+from nuself.memory.service import MemoryService
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryEntryNotFound,
@@ -26,15 +26,13 @@ from nuself.tui.memory import (
 
 
 def _candidates_for_list(
-    project_root: Path | None,
+    service: MemoryService,
     *,
     include_reviewed: bool = False,
     review_state: str | None = None,
     sort_by: str = "updated_at",
 ) -> list[MemoryCandidate]:
-    candidates = compose_cli_application(
-        project_root
-    ).memory.candidates.list(
+    candidates = service.list_candidates(
         include_reviewed=include_reviewed
     )
     if review_state is not None:
@@ -66,10 +64,11 @@ def _candidates_for_list(
 
 def _resolve_candidate_id(
     args: argparse.Namespace,
+    service: MemoryService,
 ) -> str | None:
     return resolve_handle(
         args.candidate_id,
-        _candidates_for_list(args.project_root),
+        _candidates_for_list(service),
         label="memory candidate",
         get_id=lambda candidate: candidate.id,
     )
@@ -77,10 +76,11 @@ def _resolve_candidate_id(
 
 def _resolve_candidate_ids(
     args: argparse.Namespace,
+    service: MemoryService,
 ) -> list[str] | None:
     return resolve_handle_selection(
         args.candidate_id,
-        _candidates_for_list(args.project_root),
+        _candidates_for_list(service),
         label="memory candidate",
         get_id=lambda candidate: candidate.id,
     )
@@ -89,8 +89,9 @@ def _resolve_candidate_ids(
 def handle_memory_candidate_list(
     args: argparse.Namespace,
 ) -> int:
+    service = cli_application().memory
     candidates = _candidates_for_list(
-        args.project_root,
+        service,
         include_reviewed=args.all,
         review_state=args.review_state,
         sort_by=args.sort_by,
@@ -119,13 +120,12 @@ def handle_memory_candidate_list(
 def handle_memory_candidate_show(
     args: argparse.Namespace,
 ) -> int:
-    candidate_id = _resolve_candidate_id(args)
+    service = cli_application().memory
+    candidate_id = _resolve_candidate_id(args, service)
     if candidate_id is None:
         return 1
     try:
-        candidate = compose_cli_application(
-            args.project_root
-        ).memory.candidates.get(candidate_id)
+        candidate = service.get_candidate(candidate_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",
@@ -139,13 +139,14 @@ def handle_memory_candidate_show(
 def handle_memory_candidate_accept(
     args: argparse.Namespace,
 ) -> int:
-    candidate_ids = _resolve_candidate_ids(args)
+    application = cli_application()
+    service = application.memory
+    candidate_ids = _resolve_candidate_ids(args, service)
     if candidate_ids is None:
         return 1
-    repository = compose_cli_application(args.project_root).memory.candidates
     for candidate_id in candidate_ids:
         try:
-            entry = repository.accept(candidate_id)
+            entry = service.accept_candidate(candidate_id)
         except MemoryCandidateNotFound:
             print(
                 f"Memory candidate not found: {candidate_id}",
@@ -155,7 +156,12 @@ def handle_memory_candidate_accept(
         except ValueError as exc:
             print(diagnostic_exception_message(exc), file=sys.stderr)
             return 1
-        record_memory_trace(args.project_root, entry, "accept")
+        record_memory_trace(
+            application.trace.recorder,
+            args.project_root,
+            entry,
+            "accept",
+        )
         print(
             f"Accepted memory candidate: {candidate_id} -> "
             f"{entry.id}"
@@ -166,13 +172,13 @@ def handle_memory_candidate_accept(
 def handle_memory_candidate_reject(
     args: argparse.Namespace,
 ) -> int:
-    candidate_ids = _resolve_candidate_ids(args)
+    service = cli_application().memory
+    candidate_ids = _resolve_candidate_ids(args, service)
     if candidate_ids is None:
         return 1
-    repository = compose_cli_application(args.project_root).memory.candidates
     for candidate_id in candidate_ids:
         try:
-            repository.reject(candidate_id)
+            service.reject_candidate(candidate_id)
         except MemoryCandidateNotFound:
             print(
                 f"Memory candidate not found: {candidate_id}",
@@ -186,11 +192,12 @@ def handle_memory_candidate_reject(
 def handle_memory_candidate_edit(
     args: argparse.Namespace,
 ) -> int:
-    candidate_id = _resolve_candidate_id(args)
+    service = cli_application().memory
+    candidate_id = _resolve_candidate_id(args, service)
     if candidate_id is None:
         return 1
     try:
-        updated = compose_cli_application(args.project_root).memory.candidates.edit(
+        updated = service.edit_candidate(
             candidate_id,
             title=args.title,
             body=args.body,
@@ -214,13 +221,13 @@ def handle_memory_candidate_edit(
 def handle_memory_candidate_merge(
     args: argparse.Namespace,
 ) -> int:
-    candidate_id = _resolve_candidate_id(args)
+    application = cli_application()
+    service = application.memory
+    candidate_id = _resolve_candidate_id(args, service)
     if candidate_id is None:
         return 1
     try:
-        entry = compose_cli_application(
-            args.project_root
-        ).memory.candidates.merge(candidate_id, args.entry_id)
+        entry = service.merge_candidate(candidate_id, args.entry_id)
     except MemoryCandidateNotFound:
         print(
             f"Memory candidate not found: {candidate_id}",
@@ -236,7 +243,12 @@ def handle_memory_candidate_merge(
     except ValueError as exc:
         print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    record_memory_trace(args.project_root, entry, "merge")
+    record_memory_trace(
+        application.trace.recorder,
+        args.project_root,
+        entry,
+        "merge",
+    )
     print(
         f"Merged memory candidate: {candidate_id} -> {entry.id}"
     )

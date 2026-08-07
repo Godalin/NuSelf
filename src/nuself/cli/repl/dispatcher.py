@@ -6,33 +6,32 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from nuself.agent.chat import ThreadState
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.conversation import ConversationState
+from nuself.cli.application import cli_application
 from nuself.cli.daemon_status import format_status, observe_daemon_status
-from nuself.cli.commands.memory.entries import format_memory_preview
-from nuself.cli.commands.output import print_ansi
+from nuself.cli.memory_preview import format_memory_preview
+from nuself.cli.output import print_ansi
 from nuself.cli.repl.commands import (
     handle_interactive_history_command,
     handle_interactive_inbox_command,
     handle_interactive_memory_command,
-    handle_interactive_notify_command,
-    handle_interactive_notify_list_command,
-    handle_interactive_notify_show_command,
-    handle_interactive_notify_subcommand,
+    handle_interactive_inbox_show_command,
+    handle_interactive_inbox_subcommand,
     handle_interactive_persona_command,
     handle_interactive_reason_command,
-    handle_interactive_reason_watch,
     handle_interactive_reflection_command,
-    handle_interactive_reflection_list_command,
     handle_interactive_reflection_show_command,
     handle_interactive_reflection_subcommand,
+    handle_interactive_reflection_run_command,
+    handle_interactive_reflection_status_command,
     handle_interactive_restart_command,
-    handle_interactive_threads_command,
+    handle_interactive_conversations_command,
     handle_interactive_trace_command,
-    handle_interactive_watch_command,
+    handle_interactive_inbox_watch_command,
     handle_interactive_whoami_command,
 )
 from nuself.cli.repl.input import interactive_help
+from nuself.cli.reason_watch import watch_reason_steps
 from nuself.cli.repl.registry import (
     command_names,
     resolve_command,
@@ -42,17 +41,17 @@ from nuself.cli.repl.transcript import (
     auto_save_interactive_transcripts,
     handle_interactive_export_command,
 )
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
 from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.tui.render import render_log_event
 
-InteractiveCommandResult = tuple[str, str]
-ReplCommandHandler = Callable[
+type InteractiveCommandResult = tuple[str, str]
+type ReplCommandHandler = Callable[
     [str, "ReplCommandContext"],
     InteractiveCommandResult,
 ]
-ReplCommandRegistry = HandlerRegistry[
+type ReplCommandRegistry = HandlerRegistry[
     str,
     [str, "ReplCommandContext"],
     InteractiveCommandResult,
@@ -63,7 +62,7 @@ ReplCommandRegistry = HandlerRegistry[
 class ReplCommandContext:
     command: str
     project_root: Path | None
-    current_thread_id: str
+    current_conversation_id: str
     session: InteractiveSession
 
 
@@ -73,22 +72,18 @@ class ReplCommandDispatcher:
     def __init__(self) -> None:
         self._registry = _build_repl_command_registry()
 
-    @property
-    def registered_commands(self) -> tuple[str, ...]:
-        return self._registry.registered_keys
-
     def handle(
         self,
         command: str,
         project_root: Path | None,
-        current_thread_id: str,
+        current_conversation_id: str,
         session: InteractiveSession,
     ) -> InteractiveCommandResult:
         resolved = resolve_command(command)
         context = ReplCommandContext(
             command=command,
             project_root=project_root,
-            current_thread_id=current_thread_id,
+            current_conversation_id=current_conversation_id,
             session=session,
         )
         if resolved is None:
@@ -107,12 +102,13 @@ def _build_repl_command_registry() -> ReplCommandRegistry:
         ("history", _handle_history),
         ("whoami", _handle_whoami),
         ("inbox", _handle_inbox),
+        ("reflection", _handle_reflection),
         ("help", _handle_help),
         ("retry", _handle_retry),
         ("dev", _handle_dev),
         ("export", _handle_export),
         ("mem", _handle_memory),
-        ("thread", _handle_thread),
+        ("conversation", _handle_conversation),
         ("reason", _handle_reason),
         ("trace", _handle_trace),
         ("persona", _handle_persona),
@@ -134,7 +130,7 @@ def _unknown_command(
 ) -> InteractiveCommandResult:
     print()
     print(interactive_help(context.command))
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _reject_nonempty_body(
@@ -157,7 +153,7 @@ def _handle_quit(
         context.project_root,
         context.session,
     )
-    return ("exit", context.current_thread_id)
+    return ("exit", context.current_conversation_id)
 
 
 def _handle_retry(
@@ -170,9 +166,9 @@ def _handle_retry(
     if context.session.retry_offer is None:
         print()
         print("No retryable chat turn is available.")
-        return ("", context.current_thread_id)
+        return ("", context.current_conversation_id)
     context.session.retry_requested = True
-    return ("retry", context.current_thread_id)
+    return ("retry", context.current_conversation_id)
 
 
 def _handle_history(
@@ -186,10 +182,10 @@ def _handle_history(
     print_ansi(
         handle_interactive_history_command(
             context.project_root,
-            context.current_thread_id,
+            context.current_conversation_id,
         )
     )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_whoami(
@@ -201,7 +197,7 @@ def _handle_whoami(
         return rejected
     print()
     print_ansi(handle_interactive_whoami_command(context.project_root))
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_inbox(
@@ -213,7 +209,7 @@ def _handle_inbox(
         context.command,
         context.project_root,
     )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_help(
@@ -225,7 +221,7 @@ def _handle_help(
         return rejected
     print()
     print(interactive_help())
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_dev(
@@ -233,7 +229,7 @@ def _handle_dev(
     context: ReplCommandContext,
 ) -> InteractiveCommandResult:
     _handle_dev_command(body, context.project_root)
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_export(
@@ -248,11 +244,11 @@ def _handle_export(
         handle_interactive_export_command(
             canonical_command,
             context.project_root,
-            context.current_thread_id,
+            context.current_conversation_id,
             context.session,
         )
     )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_memory(
@@ -269,17 +265,17 @@ def _handle_memory(
                 context.project_root,
             )
         )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
-def _handle_thread(
+def _handle_conversation(
     body: str,
     context: ReplCommandContext,
 ) -> InteractiveCommandResult:
-    return _handle_thread_switch(
+    return _handle_conversation_switch(
         body,
         context.project_root,
-        context.current_thread_id,
+        context.current_conversation_id,
     )
 
 
@@ -290,7 +286,7 @@ def _handle_reason(
     print()
     if body == "watch" or body.startswith("watch "):
         thread_ref = body.removeprefix("watch").strip()
-        handle_interactive_reason_watch(
+        watch_reason_steps(
             context.project_root,
             thread_ref=thread_ref or None,
         )
@@ -301,7 +297,7 @@ def _handle_reason(
                 context.project_root,
             )
         )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_trace(
@@ -315,7 +311,7 @@ def _handle_trace(
             context.project_root,
         )
     )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_persona(
@@ -329,7 +325,7 @@ def _handle_persona(
             context.project_root,
         )
     )
-    return ("", context.current_thread_id)
+    return ("", context.current_conversation_id)
 
 
 def _handle_restart(
@@ -341,17 +337,17 @@ def _handle_restart(
         return rejected
     print()
     print_ansi(handle_interactive_restart_command(context.project_root))
-    return ("redraw_header", context.current_thread_id)
+    return ("redraw_header", context.current_conversation_id)
 
 
 def _handle_rename(
     body: str,
     context: ReplCommandContext,
 ) -> InteractiveCommandResult:
-    return _handle_thread_rename(
+    return _handle_conversation_rename(
         body,
         context.project_root,
-        context.current_thread_id,
+        context.current_conversation_id,
     )
 
 
@@ -359,10 +355,10 @@ def _handle_branch(
     body: str,
     context: ReplCommandContext,
 ) -> InteractiveCommandResult:
-    return _handle_thread_branch(
+    return _handle_conversation_branch(
         body,
         context.project_root,
-        context.current_thread_id,
+        context.current_conversation_id,
     )
 
 
@@ -373,9 +369,9 @@ def _handle_archive(
     rejected = _reject_nonempty_body(body, context)
     if rejected is not None:
         return rejected
-    return _handle_thread_archive(
+    return _handle_conversation_archive(
         context.project_root,
-        context.current_thread_id,
+        context.current_conversation_id,
     )
 
 
@@ -383,10 +379,10 @@ def _handle_unarchive(
     body: str,
     context: ReplCommandContext,
 ) -> InteractiveCommandResult:
-    return _handle_thread_unarchive(
+    return _handle_conversation_unarchive(
         body,
         context.project_root,
-        context.current_thread_id,
+        context.current_conversation_id,
     )
 
 
@@ -397,8 +393,8 @@ def _handle_archived(
     rejected = _reject_nonempty_body(body, context)
     if rejected is not None:
         return rejected
-    _print_archived_threads(context.project_root)
-    return ("", context.current_thread_id)
+    _print_archived_conversations(context.project_root)
+    return ("", context.current_conversation_id)
 
 
 def _handle_delete(
@@ -408,9 +404,9 @@ def _handle_delete(
     rejected = _reject_nonempty_body(body, context)
     if rejected is not None:
         return rejected
-    return _handle_thread_delete(
+    return _handle_conversation_delete(
         context.project_root,
-        context.current_thread_id,
+        context.current_conversation_id,
     )
 
 
@@ -422,56 +418,56 @@ def _handle_inbox_command(
     print()
     if body == "":
         print_ansi(handle_interactive_inbox_command(project_root))
-    elif body == "reflection":
-        print_ansi(handle_interactive_reflection_command(project_root))
-    elif body.startswith("reflection "):
-        parts = body.removeprefix("reflection ").split(maxsplit=1)
-        if parts[0] == "list":
-            print_ansi(handle_interactive_reflection_list_command(project_root))
-        elif parts[0] == "show" and len(parts) == 2:
+    elif body == "list":
+        print_ansi(handle_interactive_inbox_command(project_root, include_all=True))
+    elif body == "watch":
+        handle_interactive_inbox_watch_command(project_root)
+    elif (parts := body.split(maxsplit=1))[0] == "show" and len(parts) == 2:
+        print_ansi(handle_interactive_inbox_show_command(project_root, parts[1]))
+    elif len(parts) == 2:
+        print_ansi(handle_interactive_inbox_subcommand(project_root, parts[0], parts[1]))
+    else:
+        print(interactive_help(original_command))
+
+
+def _handle_reflection(
+    body: str,
+    context: ReplCommandContext,
+) -> InteractiveCommandResult:
+    print()
+    if body == "":
+        print_ansi(handle_interactive_reflection_command(context.project_root))
+    elif body == "list":
+        print_ansi(
+            handle_interactive_reflection_command(
+                context.project_root,
+                include_all=True,
+            )
+        )
+    elif body == "run":
+        print_ansi(handle_interactive_reflection_run_command(context.project_root))
+    elif body == "status":
+        print_ansi(handle_interactive_reflection_status_command(context.project_root))
+    else:
+        parts = body.split(maxsplit=1)
+        if parts[0] == "show" and len(parts) == 2:
             print_ansi(
                 handle_interactive_reflection_show_command(
-                    project_root,
+                    context.project_root,
                     parts[1],
                 )
             )
         elif len(parts) == 2:
             print_ansi(
                 handle_interactive_reflection_subcommand(
-                    project_root,
+                    context.project_root,
                     parts[0],
                     parts[1],
                 )
             )
         else:
-            print(interactive_help(":inbox reflection"))
-    elif body == "notify":
-        print_ansi(handle_interactive_notify_command(project_root))
-    elif body.startswith("notify "):
-        parts = body.removeprefix("notify ").split(maxsplit=1)
-        if parts[0] == "list":
-            print_ansi(handle_interactive_notify_list_command(project_root))
-        elif parts[0] == "show" and len(parts) == 2:
-            print_ansi(
-                handle_interactive_notify_show_command(
-                    project_root,
-                    parts[1],
-                )
-            )
-        elif parts[0] == "watch":
-            handle_interactive_watch_command(project_root)
-        elif len(parts) == 2:
-            print_ansi(
-                handle_interactive_notify_subcommand(
-                    project_root,
-                    parts[0],
-                    parts[1],
-                )
-            )
-        else:
-            print(interactive_help(":inbox notify"))
-    else:
-        print(interactive_help(original_command))
+            print(interactive_help(":reflection"))
+    return ("", context.current_conversation_id)
 
 
 def _handle_dev_command(body: str, project_root: Path | None) -> None:
@@ -491,45 +487,45 @@ def _handle_dev_command(body: str, project_root: Path | None) -> None:
         print(interactive_help(":dev"))
 
 
-def _handle_thread_switch(
-    thread_id: str,
+def _handle_conversation_switch(
+    conversation_id: str,
     project_root: Path | None,
-    current_thread_id: str,
+    current_conversation_id: str,
 ) -> InteractiveCommandResult:
     print()
-    if thread_id == "":
-        print_ansi(handle_interactive_threads_command(project_root))
-        return ("", current_thread_id)
-    store = compose_cli_thread_store(project_root)
-    if thread_id not in store.list():
-        store.save(ThreadState.empty(thread_id))
-    print(f"Switched to thread: {thread_id}")
-    return ("redraw_header", thread_id)
+    if conversation_id == "":
+        print_ansi(handle_interactive_conversations_command(project_root))
+        return ("", current_conversation_id)
+    store = cli_application().conversations
+    if conversation_id not in store.list():
+        store.save(ConversationState.empty(conversation_id))
+    print(f"Switched to conversation: {conversation_id}")
+    return ("redraw_header", conversation_id)
 
 
-def _handle_thread_rename(
+def _handle_conversation_rename(
     new_id: str,
     project_root: Path | None,
-    current_thread_id: str,
+    current_conversation_id: str,
 ) -> InteractiveCommandResult:
     print()
     if new_id == "":
         print(interactive_help(":rename"))
     else:
         try:
-            compose_cli_thread_store(project_root).rename(
-                current_thread_id, new_id
+            cli_application().conversations.rename(
+                current_conversation_id, new_id
             )
-            print(f"Renamed thread to: {new_id}")
+            print(f"Renamed conversation to: {new_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
-    return ("redraw_header", new_id or current_thread_id)
+    return ("redraw_header", new_id or current_conversation_id)
 
 
-def _handle_thread_branch(
+def _handle_conversation_branch(
     body: str,
     project_root: Path | None,
-    current_thread_id: str,
+    current_conversation_id: str,
 ) -> InteractiveCommandResult:
     print()
     parts = body.split()
@@ -540,68 +536,68 @@ def _handle_thread_branch(
             index = int(parts[1])
         except ValueError:
             print(f"Invalid index: {parts[1]}")
-            return ("", current_thread_id)
+            return ("", current_conversation_id)
     if new_id == "":
         print(interactive_help(":branch"))
     else:
         try:
-            compose_cli_thread_store(project_root).branch(
-                current_thread_id, new_id, index
+            cli_application().conversations.branch(
+                current_conversation_id, new_id, index
             )
-            print(f"Branched to thread: {new_id}")
+            print(f"Branched to conversation: {new_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
-    return ("redraw_header", new_id or current_thread_id)
+    return ("redraw_header", new_id or current_conversation_id)
 
 
-def _handle_thread_archive(
+def _handle_conversation_archive(
     project_root: Path | None,
-    current_thread_id: str,
+    current_conversation_id: str,
 ) -> InteractiveCommandResult:
     print()
     try:
-        compose_cli_thread_store(project_root).archive(current_thread_id)
-        print(f"Archived thread: {current_thread_id}")
+        cli_application().conversations.archive(current_conversation_id)
+        print(f"Archived conversation: {current_conversation_id}")
     except ValueError as exc:
         print(f"Error: {diagnostic_exception_message(exc)}")
     return ("redraw_header", "default")
 
 
-def _handle_thread_unarchive(
-    thread_id: str,
+def _handle_conversation_unarchive(
+    conversation_id: str,
     project_root: Path | None,
-    current_thread_id: str,
+    current_conversation_id: str,
 ) -> InteractiveCommandResult:
     print()
-    if thread_id == "":
+    if conversation_id == "":
         print(interactive_help(":unarchive"))
     else:
         try:
-            compose_cli_thread_store(project_root).unarchive(thread_id)
-            print(f"Unarchived thread: {thread_id}")
+            cli_application().conversations.unarchive(conversation_id)
+            print(f"Unarchived conversation: {conversation_id}")
         except ValueError as exc:
             print(f"Error: {diagnostic_exception_message(exc)}")
-    return ("", current_thread_id)
+    return ("", current_conversation_id)
 
 
-def _print_archived_threads(project_root: Path | None) -> None:
+def _print_archived_conversations(project_root: Path | None) -> None:
     print()
-    ids = compose_cli_thread_store(project_root).list_archived()
+    ids = cli_application().conversations.list_archived()
     if not ids:
-        print("No archived threads.")
+        print("No archived conversations.")
     else:
-        for thread_id in ids:
-            print(thread_id)
+        for conversation_id in ids:
+            print(conversation_id)
 
 
-def _handle_thread_delete(
+def _handle_conversation_delete(
     project_root: Path | None,
-    current_thread_id: str,
+    current_conversation_id: str,
 ) -> InteractiveCommandResult:
     print()
     try:
-        compose_cli_thread_store(project_root).delete(current_thread_id)
-        print(f"Deleted thread: {current_thread_id}")
+        cli_application().conversations.delete(current_conversation_id)
+        print(f"Deleted conversation: {current_conversation_id}")
     except ValueError as exc:
         print(f"Error: {diagnostic_exception_message(exc)}")
     return ("redraw_header", "default")

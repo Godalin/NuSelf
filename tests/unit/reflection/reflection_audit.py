@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 
 from nuself.reflection import audit
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
@@ -15,7 +15,7 @@ from nuself.runtime.audit_definitions import (
 def test_reflection_audit_registry_owns_complete_taxonomy() -> None:
     assert {
         definition.event
-        for definition in audit.REFLECTION_AUDIT_REGISTRY.definitions
+        for definition in audit.REFLECTION_AUDIT.registry.definitions
     } == {
         "schedule_blocked",
         "cycle_started",
@@ -74,7 +74,7 @@ def test_reflection_audit_definitions_accept_canonical_payloads(
     event: str,
     metadata: dict[str, object],
 ) -> None:
-    definition = audit.REFLECTION_AUDIT_REGISTRY.resolve(
+    definition = audit.REFLECTION_AUDIT.registry.resolve(
         "reflection",
         event,
     )
@@ -95,13 +95,13 @@ def test_reflection_audit_definitions_accept_canonical_payloads(
     "event",
     [
         definition.event
-        for definition in audit.REFLECTION_AUDIT_REGISTRY.definitions
+        for definition in audit.REFLECTION_AUDIT.registry.definitions
     ],
 )
 def test_reflection_audit_definitions_reject_unknown_metadata(
     event: str,
 ) -> None:
-    definition = audit.REFLECTION_AUDIT_REGISTRY.resolve(
+    definition = audit.REFLECTION_AUDIT.registry.resolve(
         "reflection",
         event,
     )
@@ -129,10 +129,13 @@ def test_reflection_audit_rejects_unknown_event_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.audit.catalog.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_reflection_audit(
+        audit.REFLECTION_AUDIT.write(
             cast(audit.ReflectionAuditEvent, "cycle_compeleted"),
             "invalid",
             project_root=tmp_path,
@@ -151,10 +154,13 @@ def test_reflection_audit_rejects_invalid_metadata_before_sink(
         nonlocal sink_calls
         sink_calls += 1
 
-    monkeypatch.setattr(audit, "write_observed_log_event", unexpected_sink)
+    monkeypatch.setattr(
+        "nuself.runtime.audit.catalog.write_observed_log_event",
+        unexpected_sink,
+    )
 
     with pytest.raises(AuditSchemaError, match="score"):
-        audit.write_reflection_audit(
+        audit.REFLECTION_AUDIT.write(
             "cycle_filtered",
             "invalid",
             project_root=tmp_path,

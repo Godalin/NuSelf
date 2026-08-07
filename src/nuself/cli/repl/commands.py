@@ -2,54 +2,38 @@
 
 from __future__ import annotations
 
-import argparse
-import sys
 from pathlib import Path
 
-from nuself.application import (
-    compose_profile_repository,
-    compose_trace_services,
-)
-from nuself.application.reflection import compose_reflection_repository
-from nuself.cli.composition import compose_cli_thread_store
-from nuself.agent.chat.audit import report_chat_failure
+from nuself.agent.chat.audit import CHAT_AUDIT
 from nuself.cli.daemon_lifecycle import (
-    format_start_failure,
-    format_stop_failure,
     restart_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status
-from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi
-from nuself.cli.commands.persona import (
-    handle_persona_create,
-    handle_persona_delete,
-    handle_persona_disable,
-    handle_persona_enable,
+from nuself.cli.application import cli_application
+from nuself.cli.output import print_ansi
+from nuself.cli.persona_management import (
+    create_persona,
+    delete_personas,
+    list_persona_prompts,
     resolve_persona_id,
+    set_persona_enabled,
 )
-from nuself.config import runtime_paths
 from nuself.daemon import lifecycle
+from nuself.runtime.handles import VisibleHandleError, resolve_visible_handle
 from nuself.memory.repository import (
     MemoryCandidateNotFound,
     MemoryEntryNotFound,
 )
-from nuself.memory.source_repository import (
+from nuself.source.repository import (
     SourceDocumentNotFound,
 )
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 from nuself.reason.errors import ReasonError, ReasonNotFound
-from nuself.application.reason import compose_reason_service
-from nuself.reason.service import ReasonAdvancerProtocol, ReasonService
-from nuself.reflection.repository import (
-    ReflectionEntryNotFound,
-    ReflectionRepository,
-)
+from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
     diagnostic_exception_message,
 )
-from nuself.storage import get_default_backend
 from nuself.trace.repository import TraceNotFound
 from nuself.tui.memory import (
     render_candidate_detail,
@@ -67,108 +51,93 @@ from nuself.tui.trace import render_trace_detail, render_trace_row
 theme = TerminalTheme()
 
 
-def _reflection_repository(
-    project_root: Path | None,
-) -> ReflectionRepository:
-    return compose_reflection_repository(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
-
-
-def _reason_service(
-    project_root: Path | None,
-    *,
-    advancer: ReasonAdvancerProtocol | None = None,
-) -> ReasonService:
-    return compose_reason_service(
-        compose_cli_application(project_root),
-        advancer=advancer,
-    )
-
-
-def indent_lines(lines: list[str], prefix: str) -> list[str]:
-    return [f"{prefix}{line}" if line else "" for line in lines]
-
-
-def handle_interactive_memory_search(query: str, project_root: Path | None) -> str:
-    entries = compose_cli_application(project_root).memory.entries.search(query)
-    if not entries:
-        return "No matching memory entries."
-    return "\n".join(render_memory_entry_row(entry) for entry in entries)
-
-
 def handle_interactive_memory_command(command: str, project_root: Path | None) -> str:
     if command == "why":
         return "No memory-context trace is available for the last answer yet."
     if command.startswith("search "):
         query = command.removeprefix("search ").strip()
-        return handle_interactive_memory_search(query, project_root)
+        entries = cli_application().memory.search_entries(query)
+        if not entries:
+            return "No matching memory entries."
+        return "\n".join(
+            render_memory_entry_row(entry) for entry in entries
+        )
+    application = cli_application()
+    memory = application.memory
     if command.startswith("show "):
         entry_id = command.removeprefix("show ").strip()
-        if entry_id.isdigit():
-            entries = compose_cli_application(project_root).memory.entries.list()
-            index = int(entry_id)
-            if 0 <= index < len(entries):
-                entry_id = entries[index].id
         try:
-            entry = compose_cli_application(project_root).memory.entries.get(entry_id)
+            entry_id = resolve_visible_handle(
+                entry_id,
+                memory.list_entries(),
+                label="memory",
+                get_id=lambda entry: entry.id,
+            )
+        except VisibleHandleError as exc:
+            return diagnostic_exception_message(exc)
+        try:
+            entry = memory.get_entry(entry_id)
         except MemoryEntryNotFound:
             return f"Memory entry not found: {entry_id}"
         return render_memory_entry_detail(entry)
     if command == "review":
-        candidates = compose_cli_application(project_root).memory.candidates.list()
+        candidates = application.memory.list_candidates()
         if not candidates:
             return "No memory candidates."
         return "\n".join(render_candidate_row(candidate, index=index) for index, candidate in enumerate(candidates))
     if command.startswith("review "):
         candidate_id = command.removeprefix("review ").strip()
-        if candidate_id.isdigit():
-            candidates = compose_cli_application(project_root).memory.candidates.list()
-            index = int(candidate_id)
-            if 0 <= index < len(candidates):
-                candidate_id = candidates[index].id
         try:
-            candidate = compose_cli_application(project_root).memory.candidates.get(candidate_id)
+            candidate_id = resolve_visible_handle(
+                candidate_id,
+                application.memory.list_candidates(),
+                label="memory candidate",
+                get_id=lambda candidate: candidate.id,
+            )
+        except VisibleHandleError as exc:
+            return diagnostic_exception_message(exc)
+        try:
+            candidate = application.memory.get_candidate(candidate_id)
         except MemoryCandidateNotFound:
             return f"Memory candidate not found: {candidate_id}"
         return render_candidate_detail(candidate)
     if command.startswith("profile "):
         query = command.removeprefix("profile ").strip()
-        items = compose_profile_repository(
-            runtime_paths(project_root),
-            get_default_backend(project_root),
-        ).search(query)
+        items = application.profiles.search_items(query)
         if not items:
             return "No matching profile items."
         return "\n".join(render_profile_row(item) for item in items)
     if command == "sources":
-        repo = compose_cli_application(project_root).memory.sources
-        documents = repo.list_documents()
+        service = cli_application().sources
+        documents = service.list()
         if not documents:
             return "No source documents."
         return "\n".join(
-            render_source_row(document, index=index, chunk_count=len(repo.list_chunks(document.id)))
+            render_source_row(document, index=index, chunk_count=len(service.chunks(document.id)))
             for index, document in enumerate(documents)
         )
     if command.startswith("source "):
         source_id = command.removeprefix("source ").strip()
-        repo = compose_cli_application(project_root).memory.sources
-        if source_id.isdigit():
-            documents = repo.list_documents()
-            index = int(source_id)
-            if 0 <= index < len(documents):
-                source_id = documents[index].id
+        service = cli_application().sources
         try:
-            document = repo.get_document(source_id)
+            source_id = resolve_visible_handle(
+                source_id,
+                service.list(),
+                label="source document",
+                get_id=lambda document: document.id,
+            )
+        except VisibleHandleError as exc:
+            return diagnostic_exception_message(exc)
+        try:
+            document = service.get(source_id)
         except SourceDocumentNotFound:
             return f"Source document not found: {source_id}"
-        return render_source_detail(document, chunk_count=len(repo.list_chunks(document.id)))
+        return render_source_detail(document, chunk_count=len(service.chunks(document.id)))
     return interactive_memory_help(command)
 
 
 def handle_interactive_reason_command(command: str, project_root: Path | None) -> str:
-    service = _reason_service(project_root)
+    service = cli_application().reason
     if command == "":
         return interactive_reason_help()
     if command == "list":
@@ -177,11 +146,11 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
             return "No reason threads."
         return "\n".join(render_reason_row(thread, index=index) for index, thread in enumerate(threads))
     if command.startswith("show "):
-        thread_id = command.removeprefix("show ").strip()
+        thread_ref = command.removeprefix("show ").strip()
         try:
-            thread = service.show_thread(thread_id)
+            thread = service.show_thread(thread_ref)
         except ReasonNotFound:
-            return f"Reason thread not found: {thread_id}"
+            return f"Reason thread not found: {thread_ref}"
         steps = service.list_steps(thread.id)
         return render_reason_detail(thread, steps)
     if command.startswith("start "):
@@ -192,50 +161,57 @@ def handle_interactive_reason_command(command: str, project_root: Path | None) -
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Started reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("advance "):
-        thread_id = command.removeprefix("advance ").strip()
-        from nuself.application.reason import compose_reason_advancer
+        thread_ref = command.removeprefix("advance ").strip()
+        from nuself.reason.composition import compose_reason_advancer
 
+        application = cli_application()
         advancer = compose_reason_advancer(
-            compose_cli_application(project_root)
+            application.paths,
+            application.reason,
+            application.personas,
+            application.trace.recorder,
+            application.config,
         )
-        service = _reason_service(project_root, advancer=advancer)
         try:
-            thread = service.advance_thread(thread_id)
+            thread = service.advance_thread(
+                thread_ref,
+                advancer=advancer,
+            )
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Advanced reason thread: {thread.id}\n{render_reason_detail(thread, service.list_steps(thread.id))}"
     if command.startswith("pause "):
-        thread_id = command.removeprefix("pause ").strip()
+        thread_ref = command.removeprefix("pause ").strip()
         try:
-            thread = service.pause_thread(thread_id)
+            thread = service.pause_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Paused reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resume "):
-        thread_id = command.removeprefix("resume ").strip()
+        thread_ref = command.removeprefix("resume ").strip()
         try:
-            thread = service.resume_thread(thread_id)
+            thread = service.resume_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resumed reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("resolve "):
-        thread_id = command.removeprefix("resolve ").strip()
+        thread_ref = command.removeprefix("resolve ").strip()
         try:
-            thread = service.resolve_thread(thread_id)
+            thread = service.resolve_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Resolved reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("archive "):
-        thread_id = command.removeprefix("archive ").strip()
+        thread_ref = command.removeprefix("archive ").strip()
         try:
-            thread = service.archive_thread(thread_id)
+            thread = service.archive_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Archived reason thread: {thread.id}\n{render_reason_detail(thread)}"
     if command.startswith("delete "):
-        thread_id = command.removeprefix("delete ").strip()
+        thread_ref = command.removeprefix("delete ").strip()
         try:
-            tid = service.delete_thread(thread_id)
+            tid = service.delete_thread(thread_ref)
         except ReasonError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Deleted reason thread: {tid}"
@@ -265,70 +241,8 @@ def interactive_reason_help(command: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def handle_interactive_reason_watch(project_root: Path | None, interval: int = 2, thread_ref: str | None = None) -> None:
-    """Watch for new reasoning steps and print them.
-
-    If *thread_ref* is given (id or index), watch only that thread.
-    """
-    import time
-
-    from nuself.tui.reason import render_reason_detail, render_step_watch_entry
-
-    service = _reason_service(project_root)
-    threads = service.list_threads(status="all")
-    if thread_ref is not None:
-        try:
-            thread = service.show_thread(thread_ref)
-        except ReasonNotFound:
-            print(f"Reason thread not found: {thread_ref}", file=sys.stderr)
-            return
-        threads = [thread]
-        print_ansi(render_reason_detail(thread))
-        for step in service.list_steps(thread.id):
-            print_ansi(render_step_watch_entry(step))
-    else:
-        for index, thread in enumerate(threads):
-            print_ansi(render_reason_detail(thread))
-            print_ansi(theme.muted(f"(index: {index})"))
-            for step in service.list_steps(thread.id):
-                print_ansi(render_step_watch_entry(step))
-    print()
-    print("Watching for new reasoning steps. Press Ctrl+C to stop.")
-
-    # Track step count per thread for polling.
-    counts: dict[str, int] = {}
-    for thread in threads:
-        counts[thread.id] = len(service.list_steps(thread.id))
-
-    try:
-        while True:
-            time.sleep(interval)
-            for thread in threads:
-                steps = service.list_steps(thread.id)
-                if len(steps) > counts.get(thread.id, 0):
-                    for step in steps[counts[thread.id]:]:
-                        print_ansi(render_step_watch_entry(step))
-                    counts[thread.id] = len(steps)
-    except KeyboardInterrupt:
-        print("\nStopped watching.")
-
-
-def handle_reason_watch(args: argparse.Namespace) -> int:
-    """Run the one-shot argparse adapter for the interactive watch loop."""
-
-    handle_interactive_reason_watch(
-        args.project_root,
-        interval=getattr(args, "interval", 5),
-        thread_ref=getattr(args, "thread_id", None) or None,
-    )
-    return 0
-
-
 def handle_interactive_trace_command(command: str, project_root: Path | None) -> str:
-    service = compose_trace_services(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    ).query
+    service = cli_application().trace.query
     if command in {"", "list"}:
         traces = service.list_traces()
         if not traces:
@@ -367,9 +281,9 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
     try:
         from nuself.tui.persona import render_persona_detail, render_persona_row
 
-        repo = compose_cli_application(project_root).persona_prompts
+        repo = cli_application().personas
         if command in {"", "list"}:
-            prompts = repo.list()
+            prompts = list_persona_prompts(project_root)
             if not prompts:
                 return f"{theme.tag('[persona]', 'persona')} {theme.muted('No custom personas yet')}"
             blocks: list[str] = [f"{theme.tag('[persona]', 'persona')} Custom personas (dynamic):"]
@@ -378,8 +292,7 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             return "\n".join(blocks)
         if command.startswith("show "):
             persona_id = command.removeprefix("show ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root)
-            resolved = resolve_persona_id(args)
+            resolved = resolve_persona_id(project_root, persona_id)
             if resolved is None:
                 return f"{theme.tag('[persona]', 'persona')} {theme.error('Not found')}: {persona_id}"
             prompt = repo.get(resolved)
@@ -388,18 +301,23 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             return render_persona_detail(prompt)
         if command.startswith("delete "):
             persona_id = command.removeprefix("delete ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
-            handle_persona_delete(args)
+            delete_personas(project_root, persona_id)
             return ""
         if command.startswith("disable "):
             persona_id = command.removeprefix("disable ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
-            handle_persona_disable(args)
+            set_persona_enabled(
+                project_root,
+                persona_id,
+                enabled=False,
+            )
             return ""
         if command.startswith("enable "):
             persona_id = command.removeprefix("enable ").strip()
-            args = argparse.Namespace(persona_id=persona_id, project_root=project_root, yes=False)
-            handle_persona_enable(args)
+            set_persona_enabled(
+                project_root,
+                persona_id,
+                enabled=True,
+            )
             return ""
         if command.startswith("create "):
             rest = command.removeprefix("create ").strip()
@@ -407,13 +325,12 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
             if len(parts) < 2:
                 return f"{theme.tag('[persona]', 'persona')} {theme.error('Usage')}: :persona create <name> <prompt>"
             name, prompt_text = parts
-            args = argparse.Namespace(name=name, prompt=prompt_text, project_root=project_root)
-            handle_persona_create(args)
+            create_persona(project_root, name, prompt_text)
             return ""
         return interactive_persona_help(command)
     except Exception as exc:
         action = command.split(maxsplit=1)[0] if command else "list"
-        report_persona_failure(
+        PERSONA_AUDIT.failure(
             exc,
             event="interactive_command_failed",
             project_root=project_root,
@@ -426,14 +343,16 @@ def handle_interactive_persona_command(command: str, project_root: Path | None) 
 
 
 def handle_interactive_restart_command(project_root: Path | None) -> str:
+    scope = cli_application().paths.scope
     try:
-        result = restart_daemon_observed(project_root)
-    except lifecycle.DaemonStopError as exc:
-        return f"Failed to restart daemon: {format_stop_failure(exc)}"
-    except lifecycle.DaemonStartError as exc:
-        return f"Failed to restart daemon: {format_start_failure(exc)}"
+        result = restart_daemon_observed(scope)
+    except (lifecycle.DaemonStopError, lifecycle.DaemonStartError) as exc:
+        return (
+            "Failed to restart daemon: "
+            f"{diagnostic_exception_message(exc)}"
+        )
     return (
-        f"Restarted daemon: {format_status(result.status)} "
+        f"Restarted daemon: {format_status(result.start.status)} "
         f"stop={result.stop.outcome} start={result.start.outcome}"
     )
 
@@ -494,23 +413,25 @@ def interactive_memory_help(command: str | None = None) -> str:
     return "\n".join(lines)
 
 
-def handle_interactive_history_command(project_root: Path | None, thread_id: str) -> str:
+def handle_interactive_history_command(project_root: Path | None, conversation_id: str) -> str:
     try:
-        state = compose_cli_thread_store(project_root).load(thread_id)
+        state = cli_application().conversations.load(
+            conversation_id
+        )
     except Exception as exc:
-        report_chat_failure(
+        CHAT_AUDIT.failure(
             exc,
             event="interactive_history_load_failed",
             project_root=project_root,
-            metadata={"thread_id": thread_id},
+            metadata={"conversation_id": conversation_id},
         )
         return (
-            f"Unable to load thread history for '{thread_id}': "
+            f"Unable to load conversation history for '{conversation_id}': "
             f"{diagnostic_exception_chain(exc)}"
         )
     if not state.messages:
-        return "No messages in this thread."
-    lines = [f"Recent messages in '{thread_id}':"]
+        return "No messages in this conversation."
+    lines = [f"Recent messages in '{conversation_id}':"]
     for msg in state.messages[-10:]:
         prefix = ">" if msg.role == "user" else "<"
         content = msg.content[:120]
@@ -521,11 +442,7 @@ def handle_interactive_history_command(project_root: Path | None, thread_id: str
 
 
 def handle_interactive_whoami_command(project_root: Path | None) -> str:
-    repo = compose_profile_repository(
-        runtime_paths(project_root),
-        get_default_backend(project_root),
-    )
-    items = repo.list()
+    items = cli_application().profiles.list_items()
     if not items:
         return "No profile items yet."
     lines = ["Core profile:"]
@@ -536,167 +453,192 @@ def handle_interactive_whoami_command(project_root: Path | None) -> str:
     return "\n".join(lines)
 
 
-def handle_interactive_reflection_command(project_root: Path | None) -> str:
+def handle_interactive_reflection_command(
+    project_root: Path | None,
+    *,
+    include_all: bool = False,
+) -> str:
     from nuself.tui.render import render_reflection_entry_summary
 
-    entries = _reflection_repository(project_root).list(status="pending")
+    entries = cli_application().reflection.list_entries(
+        status=None if include_all else "pending"
+    )
     if not entries:
-        return "No pending reflection ideas."
-    lines = ["Pending reflection ideas:"]
-    for idx, entry in enumerate(entries):
-        lines.extend(indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
-    return "\n".join(lines)
-
-
-def handle_interactive_inbox_command(project_root: Path | None) -> str:
-    sections = [
-        handle_interactive_reflection_command(project_root),
-        handle_interactive_notify_command(project_root),
+        return (
+            "No reflection ideas."
+            if include_all
+            else "No pending reflection ideas."
+        )
+    lines = [
+        "All reflection ideas:"
+        if include_all
+        else "Pending reflection ideas:"
     ]
-    return "\n\n".join(sections)
-
-
-def handle_interactive_reflection_list_command(project_root: Path | None) -> str:
-    from nuself.tui.render import render_reflection_entry_summary
-
-    entries = _reflection_repository(project_root).list()
-    if not entries:
-        return "No reflection ideas."
-    lines = ["All reflection ideas:"]
     for idx, entry in enumerate(entries):
-        lines.extend(indent_lines(render_reflection_entry_summary(entry, index=idx).splitlines(), "  "))
+        lines.extend(
+            f"  {line}" if line else ""
+            for line in render_reflection_entry_summary(
+                entry,
+                index=idx,
+            ).splitlines()
+        )
     return "\n".join(lines)
+
+
+def handle_interactive_inbox_command(
+    project_root: Path | None,
+    *,
+    include_all: bool = False,
+) -> str:
+    del project_root
+    from nuself.tui.render import render_inbox_summary
+
+    inbox = cli_application().inbox
+    items = inbox.list() if include_all else inbox.list(status="pending")
+    if not items:
+        return "No Inbox items." if include_all else "Inbox is empty."
+    return "\n".join(
+        ["All Inbox items:" if include_all else "Pending Inbox items:"]
+        + [f"  {render_inbox_summary(item, index=index)}" for index, item in enumerate(items)]
+    )
 
 
 def handle_interactive_reflection_show_command(project_root: Path | None, entry_id: str) -> str:
     from nuself.tui.render import render_reflection_entry_detail
 
     try:
-        entry = _reflection_repository(project_root).get(entry_id)
-    except ReflectionEntryNotFound:
-        return f"Reflection entry not found: {entry_id}"
+        entry = cli_application().reflection.show_entry(entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        return diagnostic_exception_message(exc)
     return render_reflection_entry_detail(entry)
 
 
 def handle_interactive_reflection_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    repo = _reflection_repository(project_root)
+    service = cli_application().reflection
     try:
-        repo.get(entry_id)
-    except ReflectionEntryNotFound:
-        return f"Reflection entry not found: {entry_id}"
+        service.show_entry(entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        return diagnostic_exception_message(exc)
     if subcmd == "dismiss":
-        repo.dismiss(entry_id)
-        return f"Dismissed: {entry_id}"
+        entry = service.dismiss_entry(entry_id)
+        return f"Dismissed: {entry.id}"
     if subcmd == "archive":
-        repo.archive(entry_id)
-        return f"Archived: {entry_id}"
+        entry = service.archive_entry(entry_id)
+        return f"Archived: {entry.id}"
     if subcmd == "promote":
-        from nuself.application.reflection import compose_reflection_service
-
         try:
-            thread = compose_reflection_service(
-                compose_cli_application(project_root)
-            ).promote_to_reason(entry_id)
+            thread = service.promote_to_reason(entry_id)
         except RuntimeError as exc:
             return f"Error: {diagnostic_exception_message(exc)}"
         return f"Promoted reflection to reason thread: {thread.id}\n{render_reason_detail(thread)}"
-    return f"Unknown :inbox reflection subcommand: {subcmd}"
+    return f"Unknown :reflection subcommand: {subcmd}"
 
 
-def handle_interactive_notify_command(project_root: Path | None) -> str:
-    from nuself.tui.render import render_outbox_summary
+def handle_interactive_reflection_run_command(project_root: Path | None) -> str:
+    del project_root
+    from nuself.cli.commands.reflections import reflection_scheduler
 
-    entries = compose_cli_application(project_root).notifications.list(
-        status="pending"
+    scheduler = reflection_scheduler()
+    status = scheduler.schedule_status()
+    if status.blocked_by == "state_corrupt":
+        return "Reflection cannot run: schedule state is corrupt."
+    return (
+        "Reflection cycle published one entry."
+        if scheduler.reflect(force=True)
+        else "Reflection cycle completed without a new entry."
     )
-    if not entries:
-        return "No pending notifications."
-    lines = ["Pending notifications:"]
-    for index, entry in enumerate(entries):
-        lines.append("  " + render_outbox_summary(entry, index=index))
-    return "\n".join(lines)
 
 
-def handle_interactive_notify_list_command(project_root: Path | None) -> str:
-    from nuself.tui.render import render_outbox_summary
+def handle_interactive_reflection_status_command(project_root: Path | None) -> str:
+    del project_root
+    from nuself.cli.commands.reflections import reflection_scheduler
 
-    entries = compose_cli_application(project_root).notifications.list()
-    if not entries:
-        return "No notifications."
-    lines = ["All notifications:"]
-    for index, entry in enumerate(entries):
-        lines.append("  " + render_outbox_summary(entry, index=index))
-    return "\n".join(lines)
+    status = reflection_scheduler().schedule_status()
+    return "\n".join(
+        (
+            f"ready: {str(status.ready).lower()}",
+            f"blocked_by: {status.blocked_by or '-'}",
+            f"last_run_at: {status.last_run_at.isoformat() if status.last_run_at else '-'}",
+            f"daily_count: {status.daily_count}",
+        )
+    )
 
 
-def handle_interactive_notify_show_command(project_root: Path | None, entry_id: str) -> str:
-    from nuself.notification import OutboxEntryNotFound
-    from nuself.tui.render import render_outbox_detail
+def handle_interactive_inbox_show_command(project_root: Path | None, item_id: str) -> str:
+    del project_root
+    from nuself.inbox.service import InboxItemNotFound
+    from nuself.tui.render import render_inbox_detail
 
     try:
-        entry = compose_cli_application(project_root).notifications.get(
-            entry_id
-        )
-    except OutboxEntryNotFound:
-        return f"Outbox entry not found: {entry_id}"
-    return render_outbox_detail(entry)
+        item = cli_application().inbox.get(item_id)
+    except InboxItemNotFound:
+        return f"Inbox item not found: {item_id}"
+    if item.status == "pending":
+        item = cli_application().inbox.mark_read(item.id)
+    return render_inbox_detail(item)
 
 
-def handle_interactive_notify_subcommand(project_root: Path | None, subcmd: str, entry_id: str) -> str:
-    from nuself.notification import (
-        OutboxEntryNotFound,
-        deliver_entry_once,
-    )
-    from nuself.notification.composition import (
-        build_notification_adapters,
-    )
-
-    application = compose_cli_application(project_root)
-    outbox = application.notifications
+def handle_interactive_inbox_subcommand(
+    project_root: Path | None, subcmd: str, item_id: str
+) -> str:
+    del project_root
+    application = cli_application()
     try:
-        outbox.get(entry_id)
-    except OutboxEntryNotFound:
-        return f"Outbox entry not found: {entry_id}"
-    if subcmd == "send":
-        updated = deliver_entry_once(
-            outbox,
-            entry_id,
-            build_notification_adapters(application.paths),
-        )
-        if updated.status == "sent":
-            return f"Sent: {entry_id}"
-        return f"Failed to send: {entry_id}"
+        item = application.inbox.get(item_id)
+    except KeyError:
+        return f"Inbox item not found: {item_id}"
+    if subcmd == "read":
+        application.inbox.mark_read(item.id)
+        return f"Read: {item.id}"
     if subcmd == "dismiss":
-        outbox.dismiss(entry_id)
-        return f"Dismissed: {entry_id}"
-    return f"Unknown :inbox notify subcommand: {subcmd}"
+        application.inbox.dismiss(item.id)
+        return f"Dismissed: {item.id}"
+    if subcmd == "resolve":
+        application.inbox.resolve(item.id)
+        return f"Resolved: {item.id}"
+    if subcmd == "send":
+        from nuself.delivery.composition import build_delivery_adapters
+        from nuself.delivery.loop import DeliveryLoop
+
+        record = application.deliveries.request(item.id, context=item.context)
+        final = DeliveryLoop(
+            application.inbox,
+            application.deliveries,
+            build_delivery_adapters(
+                application.paths,
+                email_config=application.config.email,
+                macos_config=application.config.macos_notification,
+            ),
+        ).deliver(record.id)
+        return f"Sent: {item.id}" if final.status == "sent" else f"Failed to send: {item.id}"
+    return f"Unknown :inbox subcommand: {subcmd}"
 
 
-def handle_interactive_watch_command(project_root: Path | None) -> None:
+def handle_interactive_inbox_watch_command(project_root: Path | None) -> None:
     import time
 
-    from nuself.tui.render import render_outbox_summary
+    from nuself.tui.render import render_inbox_summary
 
-    outbox = compose_cli_application(project_root).notifications
+    inbox = cli_application().inbox
     seen: set[str] = set()
-    for entry in outbox.list():
+    for entry in inbox.list():
         seen.add(entry.id)
 
-    print("Watching outbox. Press Ctrl+C to stop.")
+    print("Watching Inbox. Press Ctrl+C to stop.")
     try:
         while True:
             time.sleep(2)
-            for entry in outbox.list():
+            for entry in inbox.list(status="pending"):
                 if entry.id not in seen:
                     seen.add(entry.id)
-                    print_ansi(render_outbox_summary(entry))
+                    print_ansi(render_inbox_summary(entry))
     except KeyboardInterrupt:
         print("\nStopped watching.")
 
 
-def handle_interactive_threads_command(project_root: Path | None) -> str:
-    store = compose_cli_thread_store(project_root)
+def handle_interactive_conversations_command(project_root: Path | None) -> str:
+    store = cli_application().conversations
     ids = store.list()
     if not ids:
-        return "No active threads."
-    return "Active threads:\n" + "\n".join(f"  {tid}" for tid in ids)
+        return "No active conversations."
+    return "Active conversations:\n" + "\n".join(f"  {tid}" for tid in ids)

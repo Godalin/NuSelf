@@ -22,16 +22,17 @@ NuSelf 仍在激进开发中。v0.3 系列建立了运行时、存储、Agent �
 
 ## 主要能力
 
-- 具有记忆上下文的一次性和 daemon-backed 对话
+- 具有记忆上下文的一次性和 daemon-backed 对话，并支持交互批准持久记忆写入及只读本地/UTC 时间查询
 - 持久、可恢复、可分支的对话线程
 - 支持审核、搜索、关系和符号图视图的长期记忆
-- 导入 Markdown 与纯文本，并提取带来源的 profile 信息
+- 独立的 Markdown 与纯文本外部知识库
 - 长期推理线程和可追踪的思考来源
-- 后台记忆整理与主动反思
-- 支持日志、邮件和 macOS 的持久通知 outbox
+- 通过独立 API 连接的会话历史、记忆观察与顶级反思控制
+- 统一 Inbox，并通过独立的日志、邮件和 macOS 适配器投递完整反思正文
 - 本地 SQLite authority、迁移工具和可移植 thought pack
 - 瞬时重试及有序 OpenAI-compatible / Anthropic 端点切换
 - 自动隐藏凭据的结构化诊断
+- 每次调用独立绑定的类型化 Tool effect（审批、观察与审计）及通用暂停运输；单一有界 daemon 调度器支持可恢复的维护唤醒和资源 lane 串行化
 
 ## 快速开始
 
@@ -76,7 +77,8 @@ llm:
     timeout_seconds: 60
 ```
 
-Anthropic Messages 端点需要加入 `anthropic: true`。NuSelf 不会根据 URL 或模型名猜测协议。
+Anthropic Messages 端点需要加入 `anthropic: true`。NuSelf 不会根据 URL 或模型名猜测协议；
+运行时只接受当前配置 schema，启动前请显式迁移已经废弃的 v0.2.5 字段。
 
 查看经过凭据脱敏的实际配置：
 
@@ -115,12 +117,12 @@ uv run nuself chat --message "你了解这个项目的哪些内容？"
 
 ## 常用流程
 
-### 恢复对话线程
+### 恢复对话
 
 ```bash
-uv run nuself thread list
-uv run nuself thread open default
-uv run nuself thread branch default alternative
+uv run nuself conversation list
+uv run nuself conversation open default
+uv run nuself conversation branch default alternative
 ```
 
 ### 搜索与整理记忆
@@ -134,8 +136,8 @@ uv run nuself memory update
 ### 导入个人笔记
 
 ```bash
-uv run nuself memory source ingest ~/notes.md --tag notes
-uv run nuself memory source list
+uv run nuself source ingest ~/notes.md --tag notes
+uv run nuself source list
 ```
 
 ### 延续长期问题
@@ -166,8 +168,8 @@ uv run nuself data export threads --format json
 ```
 
 `data check` 会无修改地找出无效记录，并为每条记录给出准确的 `edit`
-或需确认的 `delete` 命令。一次性旧格式迁移位于 `scripts/`，不进入安装后的
-运行时。通用编辑会校验完整记录、显示 diff、要求确认，
+或需确认的 `delete` 命令。一次性旧格式迁移仅位于 `scripts/`，安装后的 CLI
+不携带迁移逻辑。通用编辑会校验完整记录、显示 diff、要求确认，
 并拒绝覆盖并发修改。内部运行状态默认隐藏，只有显式使用 `--internal`
 才能查看。
 
@@ -179,7 +181,7 @@ authority 数据库。升级仍须显式执行且支持反向迁移，详见
 
 ## 隐私与存储
 
-个人状态默认位于 `~/.nuself`。`--local` 使用 `./.nuself`，`--workspace PATH` 使用 `PATH/.nuself`；每次选择都是隔离的状态 authority。工作区配置继承用户默认值，但数据库和运行状态绝不合并。每个 authority 严格只允许一个 NuSelf daemon 操作系统进程；各调度器是该进程内部受管的线程。
+个人状态默认位于 `~/.nuself`。`--local` 使用 `./.nuself`，`--workspace PATH` 使用 `PATH/.nuself`；每次选择都是隔离的状态 authority。工作区配置继承用户默认值，但数据库和运行状态绝不合并。每个 authority 严格只允许一个 NuSelf daemon 操作系统进程；一个有界调度器统一协调聊天和后台任务。
 
 交互聊天会用简洁的 `Attention:` 区块提示关键状态：当前 authority
 没有可用模型、本地工作区 authority 尚未被选择、持久化记录无法解码，
@@ -195,6 +197,7 @@ local-first 不等于模型离线：配置远程模型后，一次调用所需�
 - 默认测试和 CI 不读取项目私人数据。
 - 可选的真实 API 测试只发送固定合成提示。
 - 配置诊断会隐藏凭据。
+- 工具活动日志默认包含结构化参数和结果；显式精简的工具只记录操作与状态。
 - thought pack 和 JSON export 是显式迁移工具；仍应独立备份所选 authority。
 
 更多说明见[记忆指南](docs/memory.md)和[存储规范](docs/spec/storage-v2.md)。
@@ -203,7 +206,7 @@ local-first 不等于模型离线：配置远程模型后，一次调用所需�
 
 - NuSelf 仍是早期 CLI-first 系统，不是成熟的桌面应用。
 - 模型质量和工具能力取决于提供方与具体模型。
-- 后台记忆整理、反思和通知投递需要 daemon。
+- 后台记忆整理、反思和通知投递需要 daemon；聊天回复不会等待记忆整理完成。
 - macOS 通知仅适用于对应平台；邮件需要显式 SMTP 配置。
 - 当前不支持 Windows。
 - 工作区必须显式选择；NuSelf 不会自动向父目录发现工作区。

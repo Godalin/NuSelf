@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nuself.agent.chat.thread import ThreadMessage, ThreadState
-from nuself.config import ConfigSystem
+from nuself.conversation import CompletedTurn, ConversationMessage, ConversationState
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
-ConversationNodeName = Literal[
+type ConversationNodeName = Literal[
     "prepare_context",
     "respond",
     "state_update",
     "compression",
 ]
-EpistemicStatus = Literal[
+type EpistemicStatus = Literal[
     "grounded", "inferred", "uncertain", "unsupported"
 ]
 
@@ -59,92 +58,75 @@ class ChatAgentSettings:
     summary_trigger_messages: int
     summary_target_chars: int
 
-    @classmethod
-    def from_project(
-        cls, project_root: Path | None = None
-    ) -> ChatAgentSettings:
-        config = ConfigSystem.load(project_root=project_root)
-        return cls(
-            recent_messages=config.chat.context.recent_messages,
-            summary_trigger_messages=(
-                config.chat.context.summary_trigger_messages
-            ),
-            summary_target_chars=config.chat.context.summary_target_chars,
-        )
-
-
 @dataclass(frozen=True)
 class ChatResult:
     """Result returned by one chat turn."""
 
     answer: str
-    thread_id: str
+    conversation_id: str
     evidence_references: tuple[str, ...] = ()
     confidence: float | None = None
     epistemic_status: str = "inferred"
     trace_id: str | None = None
+    completed_turn: CompletedTurn | None = None
 
-    @property
-    def reply(self) -> str:
-        return self.answer
+    def require_completed_turn(self) -> CompletedTurn:
+        """Return the committed turn required by post-response projections."""
 
-    def to_payload(self) -> dict[str, object]:
-        payload: dict[str, object] = {
-            "answer": self.answer,
-            "reply": self.answer,
-            "thread_id": self.thread_id,
-            "evidence_references": list(self.evidence_references),
-            "epistemic_status": self.epistemic_status,
-        }
-        if self.confidence is not None:
-            payload["confidence"] = self.confidence
-        if self.trace_id is not None:
-            payload["trace_id"] = self.trace_id
-        return payload
+        if self.completed_turn is None:
+            raise RuntimeError(
+                "conversation result is missing its committed turn"
+            )
+        return self.completed_turn
 
 
 @dataclass(frozen=True)
 class ConversationTurnState:
-    """Typed state passed between conversation runtime nodes."""
+    """Typed state passed between conversation pipeline stages."""
 
-    thread_id: str
-    persisted_state: ThreadState
+    conversation_id: str
+    persisted_state: ConversationState
     user_message: str
     turn_id: str | None = None
-    memory_context: str = ""
-    base_messages: tuple[ThreadMessage, ...] = ()
-    active_messages: tuple[ThreadMessage, ...] = ()
+    effect_resolution: ToolEffectResolution | None = None
+    base_messages: tuple[ConversationMessage, ...] = ()
+    active_messages: tuple[ConversationMessage, ...] = ()
     final_response: ChatStructuredOutput | None = None
-    saved_messages: tuple[ThreadMessage, ...] = ()
-    updated_thread_state: ThreadState | None = None
+    saved_messages: tuple[ConversationMessage, ...] = ()
+    updated_conversation_state: ConversationState | None = None
     node_trace: tuple[ConversationNodeName, ...] = ()
+    stage_durations_ms: tuple[tuple[str, int], ...] = ()
+    recent_message_count: int = 0
+    prompt_message_count: int = 0
 
     @classmethod
     def start(
         cls,
-        state: ThreadState,
+        state: ConversationState,
         message: str,
-        thread_id: str,
+        conversation_id: str,
         *,
         turn_id: str | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> ConversationTurnState:
         return cls(
-            thread_id=thread_id,
+            conversation_id=conversation_id,
             persisted_state=state,
             user_message=message,
             turn_id=turn_id,
+            effect_resolution=effect_resolution,
         )
 
 
 @dataclass(frozen=True)
 class ConversationNodeResult:
-    """Result from one graph-ready conversation runtime node."""
+    """Result from one conversation pipeline stage."""
 
     state: ConversationTurnState
 
 
 class ConversationGraphRuntimeError(RuntimeError):
-    """Raised when the conversation graph cannot complete a turn."""
+    """Raised when the conversation pipeline cannot complete a turn."""
 
     def __init__(
         self,

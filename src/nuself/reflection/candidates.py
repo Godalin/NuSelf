@@ -12,13 +12,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.clock import utc_now_iso
-from nuself.config import ConfigSystem, ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate, IdeaCandidateType
-from nuself.memory.repository import MemoryEntryRepository
-from nuself.memory.source_repository import SourceRepository
-from nuself.profile.repository import ProfileItemRepository
-from nuself.reflection.audit import report_reflection_failure, write_reflection_audit
+from nuself.runtime.clock import utc_now_iso
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.conversation import ConversationHistoryExcerpt
+from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
+from nuself.memory.service import MemoryService
+from nuself.source.service import SourceService
+from nuself.profile.service import ProfileService
+from nuself.reflection.audit import REFLECTION_AUDIT
 
 
 class CandidateItemOutput(BaseModel):
@@ -39,14 +40,13 @@ class CandidateListOutput(BaseModel):
     candidates: list[CandidateItemOutput] = Field(max_length=3)
 
 
-class ThreadContextProvider(Protocol):
-    """Provide recent conversation context without exposing chat storage."""
-
-    def recent_context(
+class ConversationHistoryReader(Protocol):
+    def recent(
         self,
-        max_threads: int,
-        max_messages: int,
-    ) -> str: ...
+        *,
+        limit: int = 5,
+        messages_per_conversation: int = 10,
+    ) -> tuple[ConversationHistoryExcerpt, ...]: ...
 
 
 class IdeaCandidateGenerator:
@@ -56,31 +56,31 @@ class IdeaCandidateGenerator:
         self,
         project_root: Path,
         *,
-        config: ReflectionSettings,
-        memory_repository: MemoryEntryRepository,
-        source_repository: SourceRepository,
-        profile_repository: ProfileItemRepository,
-        thread_context: ThreadContextProvider,
+        memory_service: MemoryService,
+        source_service: SourceService,
+        profile_service: ProfileService,
+        conversation_history: ConversationHistoryReader,
+        language_preference: str,
         agent: StructuredAgent[CandidateListOutput] | None = None,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
-        self._memory_repository = memory_repository
-        self._source_repository = source_repository
-        self._profile_repository = profile_repository
-        self._thread_context = thread_context
+        self._memory_service = memory_service
+        self._source_service = source_service
+        self._profile_service = profile_service
+        self._conversation_history = conversation_history
         self._agent = agent or default_structured_agent(
             CandidateListOutput,
             project_root=project_root,
             component="reflection",
+            endpoints=langchain_models,
         )
-        self._language_preference = ConfigSystem.load(
-            project_root=project_root
-        ).chat.language_preference
+        self._language_preference = language_preference
 
     def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]:
         context = self._collect_context()
         if context.is_empty():
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "candidate_generation_skipped",
                 "no context available for idea generation",
                 project_root=self._project_root,
@@ -90,7 +90,7 @@ class IdeaCandidateGenerator:
         try:
             output = self._agent.invoke(self._messages(context))
         except AgentError as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="candidate_generation_failed",
                 message=f"failed to generate candidates: {type(exc).__name__}",
@@ -101,7 +101,7 @@ class IdeaCandidateGenerator:
         try:
             candidates = self._convert(output, max_candidates)
         except ValueError as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="candidate_generation_failed",
                 message=f"failed to generate candidates: {type(exc).__name__}",
@@ -110,7 +110,7 @@ class IdeaCandidateGenerator:
             )
             return []
         if not candidates:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "cycle_no_candidates",
                 "reflection cycle generated no candidates",
                 project_root=self._project_root,
@@ -120,18 +120,18 @@ class IdeaCandidateGenerator:
 
     def _collect_context(self) -> _ThinkingContext:
         return _ThinkingContext(
-            threads=self._thread_context.recent_context(5, 10),
+            conversations=_render_history(self._conversation_history.recent()),
             memories="\n".join(
                 f"- [{entry.type}] {entry.title}: {entry.body[:120]}"
-                for entry in self._memory_repository.list()[-8:]
+                for entry in self._memory_service.list_entries()[-8:]
             ),
             profile="\n".join(
                 f"- [{item.type}] {item.title}: {item.body[:120]}"
-                for item in self._profile_repository.list()[:10]
+                for item in self._profile_service.list_items()[:10]
             ),
             sources="\n".join(
                 f"- {document.title or document.id}"
-                for document in self._source_repository.list_documents()[-5:]
+                for document in self._source_service.list()[-5:]
             ),
         )
 
@@ -169,7 +169,6 @@ class IdeaCandidateGenerator:
                 urgency=item.urgency,
                 interruption_cost=item.interruption_cost,
                 evidence_refs=(),
-                suggested_thread_id=None,
                 source_summary="llm-generated",
                 created_at=utc_now_iso(),
             )
@@ -179,21 +178,34 @@ class IdeaCandidateGenerator:
 
 @dataclass(frozen=True)
 class _ThinkingContext:
-    threads: str
+    conversations: str
     memories: str
     profile: str
     sources: str
 
     def is_empty(self) -> bool:
-        return not any((self.threads, self.memories, self.profile, self.sources))
+        return not any(
+            (self.conversations, self.memories, self.profile, self.sources)
+        )
 
     def to_prompt(self) -> str:
         named = (
             ("Memory entries", self.memories),
-            ("Recent conversations", self.threads),
+            ("Recent conversations", self.conversations),
             ("Personal profile", self.profile),
             ("Source documents", self.sources),
         )
         return "\n\n".join(
             f"## {title}\n{body}" for title, body in named if body
         )
+
+
+def _render_history(excerpts: tuple[ConversationHistoryExcerpt, ...]) -> str:
+    lines: list[str] = []
+    for excerpt in excerpts:
+        lines.append(f"Conversation {excerpt.id}:")
+        lines.extend(
+            f"  {message.role}: {message.content[:120]}"
+            for message in excerpt.messages
+        )
+    return "\n".join(lines)

@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
+import os
 from pathlib import Path
 import stat
-import warnings
 
 import pytest
 from pydantic import ValidationError
 
-from nuself.config import (
+from nuself.config.settings import (
     ConfigSystem,
     EmailConfig,
     EmailSmtpConfig,
-    LegacyEmailConfigurationMigrationError,
     LlmEndpointConfig,
     SystemConfig,
     runtime_paths,
 )
+from nuself.config.scope import scope_from_authority_root
+
+
+def _load_config(authority_root: Path) -> SystemConfig:
+    return ConfigSystem.load_scope(scope_from_authority_root(authority_root))
 
 
 def test_runtime_paths_are_under_authority_root(tmp_path: Path) -> None:
@@ -55,8 +59,8 @@ def test_flat_config_redacts_every_endpoint_key_without_aggregate_values(
         encoding="utf-8",
     )
 
-    config = ConfigSystem.load(config_path, tmp_path)
-    flat = ConfigSystem().as_flat_dict(config)
+    config = _load_config(tmp_path)
+    flat = ConfigSystem.as_flat_dict(config)
     rendered = repr(flat)
 
     assert secret_one not in rendered
@@ -83,7 +87,7 @@ def test_smtp_password_is_absent_from_flat_projection_and_repr() -> None:
         )
     )
 
-    flat = ConfigSystem().as_flat_dict(config)
+    flat = ConfigSystem.as_flat_dict(config)
 
     assert flat["email.smtp.password"] == "***"
     assert secret not in repr(flat)
@@ -118,7 +122,7 @@ def test_validation_error_hides_secret_input(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValidationError) as captured:
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
     assert secret not in str(captured.value)
 
@@ -139,7 +143,7 @@ def test_invalid_or_unknown_configuration_fails_explicitly(
     config_path.write_text(content, encoding="utf-8")
 
     with pytest.raises((ValueError, ValidationError)):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
 
 @pytest.mark.parametrize("non_finite", [".inf", "-.inf", ".nan"])
@@ -166,53 +170,22 @@ def test_non_finite_timeouts_are_rejected_before_runtime_clients(
     )
 
     with pytest.raises(ValidationError):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)
 
 
-def test_complete_official_v025_config_loads_through_narrow_migration(
+def test_retired_v025_config_field_is_rejected(
     tmp_path: Path,
 ) -> None:
-    fixture = (
-        Path(__file__).resolve().parents[3]
-        / "tests"
-        / "fixtures"
-        / "config"
-        / "v0.2.5.yaml"
-    )
     (tmp_path / "config.yaml").write_text(
-        fixture.read_text(encoding="utf-8"),
+        "experimental:\n  langmem_adapter: false\n",
         encoding="utf-8",
     )
 
-    with pytest.warns(
-        RuntimeWarning,
-        match="deprecated_v025_langmem_adapter",
-    ):
-        config = ConfigSystem.load(project_root=tmp_path)
-
-    assert len(config.llm.endpoints) == 1
-    assert config.llm.endpoints[0].base_url == "https://api.openai.com/v1"
-    assert config.llm.endpoints[0].timeout_seconds == 60
-    assert config.chat.context.recent_messages == 12
-    assert config.chat.context.summary_trigger_messages == 18
-    assert config.daemon.memory_curator.interval_seconds == 300
-    assert config.daemon.reflection_scheduler.check_interval_seconds == 600
-    assert config.daemon.notification_delivery.interval_seconds == 30
-    assert config.reflection.scheduler.interval_seconds == 3600
-    assert config.reflection.gate.relevance_threshold == 0.5
-    assert config.reflection.gate.persona_discussion_threshold == 0.7
-    assert config.reflection.moderator.max_discussion_rounds == 10
-    assert config.email.enabled is False
-    assert config.email.to_address == ""
-    assert config.experimental.vector_index is False
-
-    with warnings.catch_warnings(record=True) as repeated:
-        warnings.simplefilter("always")
-        assert ConfigSystem.load(project_root=tmp_path) is config
-    assert repeated == []
+    with pytest.raises(ValidationError, match="langmem_adapter"):
+        _load_config(tmp_path)
 
 
-def test_enabled_legacy_email_raises_typed_safe_migration_error(
+def test_enabled_email_ignores_legacy_file_and_uses_current_validation(
     tmp_path: Path,
 ) -> None:
     authority = tmp_path
@@ -239,16 +212,12 @@ def test_enabled_legacy_email_raises_typed_safe_migration_error(
         encoding="utf-8",
     )
 
-    with pytest.raises(
-        LegacyEmailConfigurationMigrationError,
-        match="no longer reads private/email.toml",
-    ) as captured:
-        ConfigSystem.load(project_root=tmp_path)
+    with pytest.raises(ValidationError) as captured:
+        _load_config(tmp_path)
 
     message = str(captured.value)
     assert legacy_secret not in message
-    assert "email.to_address" in message
-    assert "email.smtp.username" in message
+    assert "to_address" in message
 
 
 def test_config_read_hardens_authority_root_and_file(
@@ -260,10 +229,40 @@ def test_config_read_hardens_authority_root_and_file(
     config_path.write_text("email:\n  enabled: false\n", encoding="utf-8")
     config_path.chmod(0o644)
 
-    ConfigSystem.load(project_root=tmp_path)
+    _load_config(tmp_path)
 
     assert stat.S_IMODE(authority.stat().st_mode) == 0o700
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+
+
+def test_config_reload_does_not_trust_reused_file_metadata(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "chat:\n  language_preference: en\n",
+        encoding="utf-8",
+    )
+    original_stat = config_path.stat()
+
+    assert (
+        _load_config(tmp_path).chat.language_preference
+        == "en"
+    )
+
+    config_path.write_text(
+        "chat:\n  language_preference: fr\n",
+        encoding="utf-8",
+    )
+    os.utime(
+        config_path,
+        ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+    )
+
+    assert (
+        _load_config(tmp_path).chat.language_preference
+        == "fr"
+    )
 
 
 def test_config_read_rejects_symlink(tmp_path: Path) -> None:
@@ -273,4 +272,4 @@ def test_config_read_rejects_symlink(tmp_path: Path) -> None:
     config_path.symlink_to(target)
 
     with pytest.raises(OSError, match="regular file"):
-        ConfigSystem.load(project_root=tmp_path)
+        _load_config(tmp_path)

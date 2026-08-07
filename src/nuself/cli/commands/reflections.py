@@ -3,23 +3,15 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
-from nuself.application.reflection import (
-    compose_reflection_repository,
-    compose_reflection_service,
-)
-from nuself.cli.composition import compose_cli_application
-from nuself.cli.commands.output import print_ansi, resolve_handle
-from nuself.config import runtime_paths
-from nuself.reflection.organizer import ReflectionOrganizer
-from nuself.reflection.repository import (
-    ReflectionEntryNotFound,
-    ReflectionRepository,
-)
+from nuself.cli.application import cli_application
+from nuself.agent.endpoint import configured_langchain_chat_models
+from nuself.reflection.composition import compose_reflection_scheduler
+from nuself.reflection.scheduler import ReflectionScheduler
+from nuself.cli.output import print_ansi, print_json_lines
+from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import get_default_backend
 from nuself.tui.reason import render_reason_detail
 from nuself.tui.render import (
     render_reflection_entry_detail,
@@ -27,29 +19,8 @@ from nuself.tui.render import (
 )
 
 
-def _print_json(*entities: object) -> None:
-    for entity in entities:
-        print(json.dumps(entity, sort_keys=True, ensure_ascii=True))
-
-
-def _repository(args: argparse.Namespace) -> ReflectionRepository:
-    return compose_reflection_repository(
-        runtime_paths(args.project_root),
-        get_default_backend(args.project_root),
-    )
-
-
-def _resolve_entry_id(args: argparse.Namespace) -> str | None:
-    return resolve_handle(
-        args.entry_id,
-        _repository(args).list(),
-        label="reflection",
-        get_id=lambda entry: entry.id,
-    )
-
-
 def handle_reflection_list(args: argparse.Namespace) -> int:
-    entries = _repository(args).list(
+    entries = cli_application().reflection.list_entries(
         status=args.status
     )
     if not entries:
@@ -59,7 +30,7 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
         print(f"No reflection entries{filter_msg}.")
         return 0
     if args.as_json:
-        _print_json(*(entry.to_wire() for entry in entries))
+        print_json_lines(*(entry.to_wire() for entry in entries))
         return 0
     for index, entry in enumerate(entries):
         print_ansi(render_reflection_entry_summary(entry, index=index))
@@ -67,16 +38,13 @@ def handle_reflection_list(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_show(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
-    if entry_id is None:
-        return 1
     try:
-        entry = _repository(args).get(entry_id)
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
+        entry = cli_application().reflection.show_entry(args.entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
     if args.as_json:
-        _print_json(entry.to_wire())
+        print_json_lines(entry.to_wire())
         return 0
     print_ansi(render_reflection_entry_detail(entry))
     return 0
@@ -85,39 +53,30 @@ def handle_reflection_show(args: argparse.Namespace) -> int:
 def _change_status(
     args: argparse.Namespace, *, action: str, past_tense: str
 ) -> int:
-    entry_id = _resolve_entry_id(args)
-    if entry_id is None:
-        return 1
-    repository = _repository(args)
     try:
-        getattr(repository, action)(entry_id)
-    except ReflectionEntryNotFound:
-        print(f"Reflection entry not found: {entry_id}", file=sys.stderr)
+        entry = getattr(cli_application().reflection, action)(args.entry_id)
+    except (ReflectionEntryNotFound, ValueError) as exc:
+        print(diagnostic_exception_message(exc), file=sys.stderr)
         return 1
-    print(f"{past_tense}: {entry_id}")
+    print(f"{past_tense}: {entry.id}")
     return 0
 
 
 def handle_reflection_dismiss(args: argparse.Namespace) -> int:
     return _change_status(
-        args, action="dismiss", past_tense="Dismissed"
+        args, action="dismiss_entry", past_tense="Dismissed"
     )
 
 
 def handle_reflection_archive(args: argparse.Namespace) -> int:
     return _change_status(
-        args, action="archive", past_tense="Archived"
+        args, action="archive_entry", past_tense="Archived"
     )
 
 
 def handle_reflection_promote(args: argparse.Namespace) -> int:
-    entry_id = _resolve_entry_id(args)
-    if entry_id is None:
-        return 1
     try:
-        thread = compose_reflection_service(
-            compose_cli_application(args.project_root)
-        ).promote_to_reason(entry_id)
+        thread = cli_application().reflection.promote_to_reason(args.entry_id)
     except (ReflectionEntryNotFound, ValueError, RuntimeError) as exc:
         print(
             f"Error: {diagnostic_exception_message(exc)}",
@@ -130,13 +89,57 @@ def handle_reflection_promote(args: argparse.Namespace) -> int:
 
 
 def handle_reflection_organize(args: argparse.Namespace) -> int:
-    result = ReflectionOrganizer(
-        args.project_root,
-        repository=_repository(args),
-    ).organize_pending()
+    result = cli_application().reflection.organize_pending()
     print(
         "Organized reflections: "
         f"merged_groups={result.merged_groups} "
         f"archived_entries={result.archived_entries}"
     )
     return 0
+
+
+def reflection_scheduler() -> ReflectionScheduler:
+    application = cli_application()
+    return compose_reflection_scheduler(
+        application.paths,
+        application.memory,
+        application.profiles,
+        application.sources,
+        application.conversation_history,
+        application.reflection,
+        application.inbox,
+        application.deliveries,
+        application.trace.recorder,
+        config=application.config.reflection,
+        language_preference=application.config.chat.language_preference,
+        langchain_models=configured_langchain_chat_models(
+            application.paths.authority_root,
+            config=application.config,
+        ),
+    )
+
+
+def handle_reflection_run(args: argparse.Namespace) -> int:
+    del args
+    scheduler = reflection_scheduler()
+    status = scheduler.schedule_status()
+    if status.blocked_by == "state_corrupt":
+        print("Reflection cannot run: schedule state is corrupt.", file=sys.stderr)
+        return 1
+    published = scheduler.reflect(force=True)
+    print(
+        "Reflection cycle published one entry."
+        if published
+        else "Reflection cycle completed without a new entry."
+    )
+    return 0
+
+
+def handle_reflection_status(args: argparse.Namespace) -> int:
+    del args
+    status = reflection_scheduler().schedule_status()
+    print(f"ready: {str(status.ready).lower()}")
+    print(f"blocked_by: {status.blocked_by or '-'}")
+    print(f"last_run_at: {status.last_run_at.isoformat() if status.last_run_at else '-'}")
+    print(f"daily_count: {status.daily_count}")
+    return 1 if status.blocked_by == "state_corrupt" else 0

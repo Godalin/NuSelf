@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import cast
 
-from nuself.logs import LogComponent, LogEvent
-from nuself.reason.domain import ReasoningStep, ReasoningThread, TrackedItem
+from nuself.runtime.audit.types import LogComponent
+from nuself.log.record import LogEvent
+from nuself.reason.model import ReasoningStep, ReasoningThread, TrackedItem
 from nuself.tui.render import (
     TerminalTheme,
     format_display_timestamp,
@@ -103,26 +104,6 @@ def render_reason_detail(
                 )
             )
     return "\n".join(lines)
-
-
-def render_reason_step_detail(
-    step: ReasoningStep,
-    *,
-    index: int | None = None,
-    color: bool | None = None,
-    full: bool = True,
-    include_tool_logs: bool = True,
-) -> str:
-    theme = TerminalTheme(color=color)
-    step_prefix = f"[{index}] " if index is not None else ""
-    return _render_step_body(
-        step,
-        theme,
-        indent=0,
-        full=full,
-        step_prefix=step_prefix,
-        include_tool_logs=include_tool_logs,
-    )
 
 
 def render_step_watch_entry(step: ReasoningStep, *, color: bool | None = None) -> str:

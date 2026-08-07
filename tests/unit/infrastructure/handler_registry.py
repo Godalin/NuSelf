@@ -22,8 +22,6 @@ def test_handler_registry_dispatches_registered_handler() -> None:
     registry.seal()
 
     assert registry.dispatch("add", 2, 3) == 5
-    assert registry.registered_keys == ("add",)
-    assert registry.sealed
 
 
 def test_handler_registry_decorator_returns_original_handler() -> None:
@@ -90,7 +88,6 @@ def test_handler_registry_rejects_incomplete_closed_catalog_before_seal(
 
     assert captured.value.missing == frozenset({"missing"})
     assert captured.value.extra == frozenset()
-    assert not registry.sealed
     with pytest.raises(HandlerRegistryUnsealedError):
         registry.dispatch("present", "value")
 
@@ -111,7 +108,6 @@ def test_handler_registry_rejects_extra_closed_catalog_handler() -> None:
     assert captured.value.extra == frozenset({"extra"})
     assert "missing=[]" in str(captured.value)
     assert "extra=[\"'extra'\"]" in str(captured.value)
-    assert not registry.sealed
 
 
 def test_handler_registry_revalidates_coverage_after_seal() -> None:
@@ -132,8 +128,6 @@ def test_handler_registry_rejects_non_callable_handler() -> None:
 
     with pytest.raises(TypeError, match="handler must be callable"):
         registry.register("echo", None)  # type: ignore[arg-type]
-
-    assert registry.registered_keys == ()
 
 
 def test_handler_registry_rejects_non_callable_middleware() -> None:
@@ -214,7 +208,7 @@ def test_handler_middleware_wraps_in_registration_order() -> None:
 def test_handler_registry_compiles_middleware_only_when_sealed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nuself.runtime import handlers
+    import nuself.runtime.handlers as handlers
 
     registry: HandlerRegistry[str, [str], str] = HandlerRegistry()
 

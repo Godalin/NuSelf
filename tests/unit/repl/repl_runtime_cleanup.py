@@ -6,15 +6,16 @@ from typing import Protocol
 
 import pytest
 
-from nuself.cli.repl import runtime
-from nuself.cli.repl.runtime import (
+from nuself.cli.repl import loop
+from nuself.cli.repl.loop import (
     InteractiveLifecycleError,
     ReplCallbacks,
     run_interactive_loop,
 )
 from nuself.cli.repl.session import InteractiveSession
 from nuself.cli.repl.types import InteractiveChatResult
-from nuself.logs import read_log_events
+from nuself.log.reader import read_log_events
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 
 class FakeInteractiveInput:
@@ -38,7 +39,7 @@ def _install_input(
         return reader
 
     monkeypatch.setattr(
-        runtime,
+        loop,
         "InteractiveInput",
         input_factory,
     )
@@ -60,23 +61,23 @@ def _callbacks(
     def default_command(
         command: str,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
         session: InteractiveSession,
     ) -> tuple[str, str]:
         del command, project_root, session
-        return "exit", thread_id
+        return "exit", conversation_id
 
     def send_turn(
         send_message: Callable[
-            [str, str, str | None],
+            [str, str, str | None, ToolEffectResolution | None],
             InteractiveChatResult,
         ],
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
         message: str,
         session: InteractiveSession,
     ) -> int:
-        del send_message, project_root, thread_id, message, session
+        del send_message, project_root, conversation_id, message, session
         return 0
 
     return ReplCallbacks(
@@ -84,7 +85,7 @@ def _callbacks(
         send_turn=send_turn,
         auto_save=auto_save,
         run_curator=run_curator,
-        show_session_header=lambda project_root, thread_id: None,
+        show_session_header=lambda project_root, conversation_id: None,
         show_startup_notices=show_startup_notices or (
             lambda project_root: None
         ),
@@ -94,10 +95,11 @@ def _callbacks(
 
 def _unused_send(
     message: str,
-    thread_id: str,
+    conversation_id: str,
     turn_id: str | None,
+    effect_resolution: ToolEffectResolution | None,
 ) -> InteractiveChatResult:
-    del message, thread_id, turn_id
+    del message, conversation_id, turn_id, effect_resolution
     raise AssertionError("send callback must not run")
 
 
@@ -212,10 +214,10 @@ def test_cleanup_failure_retains_main_loop_control_as_cause(
     def fail_command(
         command: str,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
         session: InteractiveSession,
     ) -> tuple[str, str]:
-        del command, project_root, thread_id, session
+        del command, project_root, conversation_id, session
         raise primary
 
     def fail_save(
@@ -268,10 +270,10 @@ def test_primary_control_is_reraised_unchanged_when_cleanup_succeeds(
     def fail_command(
         command: str,
         project_root: Path | None,
-        thread_id: str,
+        conversation_id: str,
         session: InteractiveSession,
     ) -> tuple[str, str]:
-        del command, project_root, thread_id, session
+        del command, project_root, conversation_id, session
         raise primary
 
     class CommandInput:

@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from pathlib import Path
-from typing import Literal, TypeVar
+from collections.abc import Mapping
+from typing import Literal
 
-from nuself.logs import LogEvent
-from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata as _require_exact,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.observability import (
-    report_observed_failure,
-    run_observed_best_effort,
-    write_observed_log_event,
-)
+from nuself.runtime.audit.catalog import AuditCatalog
 
-ReasonAuditEvent = Literal[
+type ReasonAuditEvent = Literal[
     "proposal_created",
     "thread_started",
     "thread_status_changed",
@@ -60,26 +53,6 @@ ReasonAuditEvent = Literal[
     "export_reconciliation_skip",
     "export_queue_reconciled",
 ]
-ReasonFailureEvent = Literal[
-    "trace_recording_failed",
-    "scheduler_advance_failed",
-    "llm_failover_suppressed_after_tool_call",
-    "advance_failed",
-    "completion_load_failed",
-    "reason_output_section_plan_fallback",
-    "reason_output_chunk_failed",
-    "reason_output_pdf_failed",
-    "export_job_enqueue_failed",
-    "export_worker_get_error",
-    "export_job_manifest_invalid",
-    "export_job_progress_invalid",
-    "export_job_state_persist_failed",
-    "export_job_failed",
-    "export_retry_schedule_failed",
-    "export_retry_callback_failed",
-    "export_reconciliation_skip",
-]
-
 _OUTPUT_MODES = frozenset({"outline", "narrative", "report", "summary"})
 _REASON_STATUSES = frozenset({"active", "paused", "resolved", "archived"})
 _STEP_KINDS = frozenset(
@@ -96,26 +69,6 @@ _STEP_KINDS = frozenset(
 _TERMINAL_STATUSES = frozenset(
     {"continue", "suggest_resolved", "suggest_paused"}
 )
-_DAEMON_EVENTS = frozenset(
-    {
-        "export_job_enqueue_failed",
-        "export_job_enqueued",
-        "export_queue_drained",
-        "export_worker_get_error",
-        "export_job_dequeued",
-        "export_job_manifest_invalid",
-        "export_job_progress_invalid",
-        "export_job_composition_started",
-        "export_job_state_persist_failed",
-        "export_job_failed",
-        "export_job_retry",
-        "export_retry_schedule_failed",
-        "export_retry_callback_failed",
-        "export_reconciliation_skip",
-        "export_queue_reconciled",
-    }
-)
-
 _MESSAGES: dict[ReasonAuditEvent, str] = {
     "proposal_created": "Reason thread proposal created",
     "thread_started": "Reason thread started",
@@ -167,22 +120,6 @@ _MESSAGES: dict[ReasonAuditEvent, str] = {
     "export_reconciliation_skip": "Reason export reconciliation skipped job",
     "export_queue_reconciled": "Reason export queue reconciled",
 }
-
-T = TypeVar("T")
-
-
-def _require_exact(
-    metadata: Mapping[str, object],
-    expected: frozenset[str],
-) -> None:
-    fields = set(metadata)
-    if fields != set(expected):
-        raise AuditSchemaError(
-            "audit metadata fields differ "
-            f"(missing={sorted(expected - fields)!r}, "
-            f"extra={sorted(fields - expected)!r})"
-        )
-
 
 def _string(metadata: Mapping[str, object], field: str) -> str:
     value = metadata[field]
@@ -379,16 +316,6 @@ def _output_mode(metadata: Mapping[str, object]) -> None:
     _enum(metadata, "mode", _OUTPUT_MODES)
 
 
-def _completed_chunk(metadata: Mapping[str, object]) -> None:
-    _require_exact(
-        metadata,
-        frozenset({"thread_id", "job_id", "chunk_index"}),
-    )
-    _string(metadata, "thread_id")
-    _string(metadata, "job_id")
-    _integer(metadata, "chunk_index")
-
-
 def _composed(metadata: Mapping[str, object]) -> None:
     _require_exact(
         metadata,
@@ -435,7 +362,7 @@ def _reconciled(metadata: Mapping[str, object]) -> None:
     _integer(metadata, "replayed_jobs")
 
 
-def _build_registry() -> AuditDefinitionRegistry:
+def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition(
             "reasoning", "proposal_created", "info", None,
@@ -521,7 +448,7 @@ def _build_registry() -> AuditDefinitionRegistry:
         AuditEventDefinition(
             "reasoning", "reason_output_chunk_completed", "info", "ok",
             duration_policy="required",
-            metadata_validator=_completed_chunk,
+            metadata_validator=_chunk_identity,
         ),
         AuditEventDefinition(
             "reasoning", "reason_output_composed", "info", "completed",
@@ -609,116 +536,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             metadata_validator=_reconciled,
         ),
     )
-    registry = AuditDefinitionRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
+    return definitions
 
 
-REASON_AUDIT_REGISTRY = _build_registry()
-
-
-def _component(event: ReasonAuditEvent) -> Literal["daemon", "reasoning"]:
-    return "daemon" if event in _DAEMON_EVENTS else "reasoning"
-
-
-def write_reason_audit(
-    event: ReasonAuditEvent,
-    *,
-    project_root: Path | None,
-    error: str | None = None,
-    duration_ms: int | None = None,
-    metadata: dict[str, object] | None = None,
-) -> LogEvent | None:
-    """Validate and project one auxiliary Reason-owned audit."""
-
-    definition = REASON_AUDIT_REGISTRY.resolve(_component(event), event)
-    event_metadata = metadata or {}
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        duration_ms=duration_ms,
-        metadata=event_metadata,
-    )
-    return write_observed_log_event(
-        definition.component,
-        definition.event,
-        _MESSAGES[event],
-        project_root=project_root,
-        level=definition.level,
-        status=definition.status,
-        error=error,
-        duration_ms=duration_ms,
-        metadata=dict(event_metadata),
-    )
-
-
-def report_reason_failure(
-    exc: BaseException,
-    *,
-    event: ReasonFailureEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Validate and report one caught Reason-owned failure."""
-
-    definition = REASON_AUDIT_REGISTRY.resolve(_component(event), event)
-    event_metadata = metadata or {}
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error=diagnostic_exception_chain(exc),
-        metadata=event_metadata,
-    )
-    report_observed_failure(
-        exc,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        level=definition.level,
-        status=status,
-        metadata=dict(event_metadata),
-    )
-
-
-def run_reason_observed(
-    operation: Callable[[], T],
-    *,
-    event: ReasonFailureEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-    errors: tuple[type[Exception], ...] = (Exception,),
-) -> T | None:
-    """Run one auxiliary Reason effect under a registered failure schema."""
-
-    definition = REASON_AUDIT_REGISTRY.resolve(_component(event), event)
-    event_metadata = metadata or {}
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError(
-            f"{definition.component}/{definition.event} failure requires status"
-        )
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error="caught failure",
-        metadata=event_metadata,
-    )
-    return run_observed_best_effort(
-        operation,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-        errors=errors,
-        level=definition.level,
-        status=status,
-    )
+REASON_AUDIT = AuditCatalog[ReasonAuditEvent](_definitions(), _MESSAGES)

@@ -8,23 +8,22 @@ from typing import cast
 
 from langchain_core.tools import BaseTool
 
-from nuself.agent.tools.common import structured_tool_factory
-from nuself.store import ScopedWorkspace
-
-
-def build_workspace_tools(
-    workspace: ScopedWorkspace,
-) -> tuple[BaseTool, ...]:
-    """Build tools for a concrete thread-scoped workspace."""
-    return build_workspace_tools_from_provider(lambda: workspace)
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import component, mutating, observed, readonly, tool
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.storage.workspace import ScopedWorkspace
 
 
 def build_workspace_tools_from_provider(
     workspace_provider: Callable[[], ScopedWorkspace],
+    *,
+    executor: FeatureExecutor,
 ) -> tuple[BaseTool, ...]:
     """Build workspace tools that resolve the active workspace lazily."""
-    tool_from_function = structured_tool_factory()
-
+    @tool(name="workspace_put", description="Store a JSON value under the given key in the thread's workspace.")
+    @component("workspace")
+    @mutating
+    @observed
     def put(
         key: str,
         value: str,
@@ -44,6 +43,10 @@ def build_workspace_tools_from_provider(
         )
         return f"Stored {key}"
 
+    @tool(name="workspace_get", description="Retrieve the JSON value stored under the given key.")
+    @component("workspace")
+    @readonly
+    @observed
     def get(
         key: str,
         sub_namespace: str | None = None,
@@ -57,6 +60,10 @@ def build_workspace_tools_from_provider(
             return f"Key {key} not found"
         return json.dumps(result, ensure_ascii=True)
 
+    @tool(name="workspace_search", description="Search items in the thread's workspace. Returns a JSON list.")
+    @component("workspace")
+    @readonly
+    @observed
     def search(
         query: str | None = None,
         filter_json: str | None = None,
@@ -80,6 +87,10 @@ def build_workspace_tools_from_provider(
         )
         return json.dumps(results, ensure_ascii=True)
 
+    @tool(name="workspace_delete", description="Delete an item from the thread's workspace.")
+    @component("workspace")
+    @mutating
+    @observed
     def delete(
         key: str,
         sub_namespace: str | None = None,
@@ -92,28 +103,8 @@ def build_workspace_tools_from_provider(
         return f"Deleted {key}"
 
     return (
-        tool_from_function(
-            put,
-            name="workspace_put",
-            description=put.__doc__ or "",
-            metadata={"service_component": "workspace"},
-        ),
-        tool_from_function(
-            get,
-            name="workspace_get",
-            description=get.__doc__ or "",
-            metadata={"service_component": "workspace"},
-        ),
-        tool_from_function(
-            search,
-            name="workspace_search",
-            description=search.__doc__ or "",
-            metadata={"service_component": "workspace"},
-        ),
-        tool_from_function(
-            delete,
-            name="workspace_delete",
-            description=delete.__doc__ or "",
-            metadata={"service_component": "workspace"},
-        ),
+        materialize_tool(put, executor=executor),
+        materialize_tool(get, executor=executor),
+        materialize_tool(search, executor=executor),
+        materialize_tool(delete, executor=executor),
     )

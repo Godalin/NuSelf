@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 
 from nuself.daemon.transport_audit import (
-    DAEMON_TRANSPORT_AUDIT_REGISTRY,
+    DAEMON_TRANSPORT_AUDIT,
     report_daemon_transport_failure,
 )
-from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.log.reader import read_log_events
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,
@@ -15,9 +15,9 @@ from nuself.runtime.audit_definitions import (
 
 
 def test_daemon_transport_registry_is_complete_and_sealed() -> None:
-    assert len(DAEMON_TRANSPORT_AUDIT_REGISTRY.definitions) == 4
+    assert len(DAEMON_TRANSPORT_AUDIT.registry.definitions) == 4
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        DAEMON_TRANSPORT_AUDIT_REGISTRY.register(
+        DAEMON_TRANSPORT_AUDIT.registry.register(
             AuditEventDefinition(
                 component="daemon",
                 event="transport_extra",
@@ -28,7 +28,7 @@ def test_daemon_transport_registry_is_complete_and_sealed() -> None:
 
 
 def test_response_delivery_contract_is_exact() -> None:
-    definition = DAEMON_TRANSPORT_AUDIT_REGISTRY.resolve(
+    definition = DAEMON_TRANSPORT_AUDIT.registry.resolve(
         "daemon",
         "response_delivery_failed",
     )

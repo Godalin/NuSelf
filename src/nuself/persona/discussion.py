@@ -5,18 +5,20 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Literal, TypeAlias
+from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import ConfigSystem, ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate
+from nuself.config.settings import ReflectionSettings
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.reflection.model import IdeaCandidate
 from nuself.persona.definition import (
     BUILTIN_PERSONAS,
     MODERATOR_PERSONA,
+    NonBlankText,
     PersonaContribution,
     PersonaDefinition,
     PersonaInput,
@@ -27,13 +29,9 @@ from nuself.persona.graph import (
     AgentBackedSynthesizerNode,
     PersonaGraphDriver,
 )
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 
-DiscussionTraceSink = Callable[[str], None]
-NonBlankText: TypeAlias = Annotated[
-    str,
-    StringConstraints(strip_whitespace=True, min_length=1),
-]
+type DiscussionTraceSink = Callable[[str], None]
 
 
 class PersonaScoreOutput(BaseModel):
@@ -89,6 +87,8 @@ class PersonaDiscussionAgents:
 
 def default_persona_discussion_agents(
     project_root: Path | None = None,
+    *,
+    endpoints: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> PersonaDiscussionAgents:
     """Build all typed discussion decision agents."""
     return PersonaDiscussionAgents(
@@ -96,16 +96,19 @@ def default_persona_discussion_agents(
             PersonaScoreOutput,
             project_root=project_root,
             component="persona",
+            endpoints=endpoints,
         ),
         selection=default_structured_agent(
             PersonaSelectionOutput,
             project_root=project_root,
             component="persona",
+            endpoints=endpoints,
         ),
         moderator=default_structured_agent(
             ModeratorJudgmentOutput,
             project_root=project_root,
             component="persona",
+            endpoints=endpoints,
         ),
     )
 
@@ -165,7 +168,7 @@ class AgentBackedScoringPersonaNode:
         try:
             output = self._agent.invoke(messages)
         except AgentError as exc:
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_degraded",
                 project_root=self._project_root,
@@ -393,7 +396,7 @@ class ProactivePersonaDiscussion:
             output = self._agents.selection.invoke(messages)
             selected_ids = output.selected_persona_ids
         except AgentError as exc:
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_degraded",
                 project_root=self._project_root,
@@ -508,7 +511,7 @@ class ProactivePersonaDiscussion:
         try:
             return self._agents.moderator.invoke(messages)
         except AgentError as exc:
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_discussion_degraded",
                 project_root=self._project_root,
@@ -539,29 +542,25 @@ class SharedPersonaDiscussionService:
 
     def __init__(
         self,
-        project_root: Path | None = None,
+        project_root: Path,
         *,
-        config: ReflectionSettings | None = None,
-        discussion: ProactivePersonaDiscussion | None = None,
+        config: ReflectionSettings,
         agents: PersonaDiscussionAgents | None = None,
         synthesis_agent: StructuredAgent[PersonaSynthesisOutput] | None = None,
-        language_preference: str | None = None,
+        language_preference: str,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
-        if discussion is not None:
-            self._discussion = discussion
-            return
-        system_config = ConfigSystem.load(project_root=project_root)
-        if config is None:
-            config = system_config.reflection
-        if language_preference is None:
-            language_preference = system_config.chat.language_preference
         if agents is None:
-            agents = default_persona_discussion_agents(project_root)
+            agents = default_persona_discussion_agents(
+                project_root,
+                endpoints=langchain_models,
+            )
         if synthesis_agent is None:
             synthesis_agent = default_structured_agent(
                 PersonaSynthesisOutput,
                 project_root=project_root,
                 component="persona",
+                endpoints=langchain_models,
             )
         self._discussion = ProactivePersonaDiscussion(
             config=config,

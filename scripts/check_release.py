@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from nuself.release_gate import check_release, check_release_git
+from scripts.release import check_release, check_release_git
 
 
 def main() -> int:

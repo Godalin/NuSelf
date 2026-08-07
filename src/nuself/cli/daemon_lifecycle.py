@@ -5,24 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+from nuself.config.settings import runtime_paths
 from nuself.daemon import lifecycle
 from nuself.daemon.audit import write_lifecycle_audit
 from nuself.runtime.diagnostics import (
     diagnostic_exception_chain,
-    diagnostic_exception_message,
 )
-
-
-def format_start_failure(error: lifecycle.DaemonStartError) -> str:
-    """Render one safe daemon-start failure across CLI surfaces."""
-
-    return diagnostic_exception_message(error)
-
-
-def format_stop_failure(error: lifecycle.DaemonStopError) -> str:
-    """Render one safe daemon-stop failure across CLI surfaces."""
-
-    return diagnostic_exception_message(error)
+from nuself.config.scope import NuSelfScope
 
 
 def write_start_failure_audit(
@@ -67,27 +56,14 @@ def _write_stop_failure_audit(
             "phase": error.status.phase,
             "pid": error.status.pid,
             "socket": str(error.status.socket_path),
-            "owner_active": error.owner_active,
+            "owner_active": error.status.owner_active,
             **({"stage": stage} if stage is not None else {}),
         },
     )
 
 
-def _start_result_metadata(
-    result: lifecycle.DaemonStartResult,
-) -> dict[str, object]:
-    return {
-        "outcome": result.outcome,
-        "changed": result.changed,
-        "from_phase": result.before.phase,
-        "to_phase": result.status.phase,
-        "pid": result.status.pid,
-        "socket": str(result.status.socket_path),
-    }
-
-
-def _stop_result_metadata(
-    result: lifecycle.DaemonStopResult,
+def _transition_result_metadata(
+    result: lifecycle.DaemonStartResult | lifecycle.DaemonStopResult,
 ) -> dict[str, object]:
     return {
         "outcome": result.outcome,
@@ -100,94 +76,97 @@ def _stop_result_metadata(
 
 
 def start_daemon_observed(
-    project_root: Path | None,
+    authority: NuSelfScope | Path | None,
     *,
     initial_status: lifecycle.DaemonStatus | None = None,
 ) -> lifecycle.DaemonStartResult:
     """Run one daemon start with shared lifecycle projections."""
 
+    paths = runtime_paths(authority)
     write_lifecycle_audit(
         "start_requested",
-        project_root=project_root,
+        project_root=paths.authority_root,
     )
     try:
         if initial_status is None:
-            result = lifecycle.start(project_root)
+            result = lifecycle.start(paths.scope)
         else:
             result = lifecycle.start(
-                project_root,
+                paths.scope,
                 initial_status=initial_status,
             )
     except lifecycle.DaemonStartError as exc:
         write_start_failure_audit(
             exc,
             operation="start",
-            project_root=project_root,
+            project_root=paths.authority_root,
         )
         raise
     write_lifecycle_audit(
         "start_completed",
-        project_root=project_root,
-        metadata=_start_result_metadata(result),
+        project_root=paths.authority_root,
+        metadata=_transition_result_metadata(result),
     )
     return result
 
 
 def stop_daemon_observed(
-    project_root: Path | None,
+    authority: NuSelfScope | Path | None,
 ) -> lifecycle.DaemonStopResult:
     """Run one daemon stop with shared lifecycle projections."""
 
+    paths = runtime_paths(authority)
     write_lifecycle_audit(
         "stop_requested",
-        project_root=project_root,
+        project_root=paths.authority_root,
     )
     try:
-        result = lifecycle.stop(project_root)
+        result = lifecycle.stop(paths.authority_root)
     except lifecycle.DaemonStopError as exc:
         _write_stop_failure_audit(
             exc,
             operation="stop",
-            project_root=project_root,
+            project_root=paths.authority_root,
         )
         raise
     write_lifecycle_audit(
         "stop_completed",
-        project_root=project_root,
-        metadata=_stop_result_metadata(result),
+        project_root=paths.authority_root,
+        metadata=_transition_result_metadata(result),
     )
     return result
 
 
 def restart_daemon_observed(
-    project_root: Path | None,
+    authority: NuSelfScope | Path | None,
 ) -> lifecycle.DaemonRestartResult:
     """Run one ordered restart and project its combined outcome."""
 
+    paths = runtime_paths(authority)
     write_lifecycle_audit(
         "restart_requested",
-        project_root=project_root,
+        project_root=paths.authority_root,
     )
     try:
-        stop_result = lifecycle.stop(project_root)
+        stop_result = lifecycle.stop(paths.authority_root)
     except lifecycle.DaemonStopError as exc:
         _write_stop_failure_audit(
             exc,
             operation="restart",
-            project_root=project_root,
+            project_root=paths.authority_root,
             stage="stop",
         )
         raise
     try:
         start_result = lifecycle.start(
-            project_root,
+            paths.scope,
             initial_status=stop_result.status,
         )
     except lifecycle.DaemonStartError as exc:
         write_start_failure_audit(
             exc,
             operation="restart",
-            project_root=project_root,
+            project_root=paths.authority_root,
             stage="start",
         )
         raise
@@ -197,7 +176,7 @@ def restart_daemon_observed(
     )
     write_lifecycle_audit(
         "restart_completed",
-        project_root=project_root,
+        project_root=paths.authority_root,
         metadata={
             "stop_outcome": result.stop.outcome,
             "stop_changed": result.stop.changed,
@@ -207,8 +186,8 @@ def restart_daemon_observed(
             "start_changed": result.start.changed,
             "start_from_phase": result.start.before.phase,
             "start_to_phase": result.start.status.phase,
-            "pid": result.status.pid,
-            "socket": str(result.status.socket_path),
+            "pid": result.start.status.pid,
+            "socket": str(result.start.status.socket_path),
         },
     )
     return result

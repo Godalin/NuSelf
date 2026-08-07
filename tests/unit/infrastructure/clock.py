@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from nuself.clock import utc_now, utc_now_iso
+from nuself.runtime.clock import utc_now, utc_now_iso
 
 
 def test_utc_now_returns_aware_utc_datetime() -> None:

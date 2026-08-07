@@ -28,25 +28,33 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
         ("quit", "exit"),
         ("  :q         exit", "  :quit      exit", "  :exit      exit"),
     ),
-    ReplCommand("history", help_lines=("  :history   show recent thread messages",)),
+    ReplCommand("history", help_lines=("  :history   show recent conversation messages",)),
     ReplCommand("whoami", help_lines=("  :whoami    show core profile",)),
     ReplCommand(
         "inbox",
         ("i",),
         (
-            "  :inbox, :i                    list pending reflections and notifications",
-            "  :inbox reflection             list pending reflection ideas",
-            "  :inbox reflection list        list reflection ideas",
-            "  :inbox reflection show <id>   show one reflection idea",
-            "  :inbox reflection dismiss <id> dismiss a reflection idea",
-            "  :inbox reflection archive <id> archive a reflection idea",
-            "  :inbox reflection promote <id> promote a reflection into reason",
-            "  :inbox notify                 list pending notifications",
-            "  :inbox notify list            list all notifications",
-            "  :inbox notify show <id>       show one notification",
-            "  :inbox notify send <id>       send a notification",
-            "  :inbox notify dismiss <id>    dismiss a notification",
-            "  :inbox notify watch           watch outbox for new entries",
+            "  :inbox, :i                    list pending Inbox items",
+            "  :inbox list                   list all Inbox items",
+            "  :inbox show <id>              show one Inbox item",
+            "  :inbox read <id>              mark one item read",
+            "  :inbox send <id>              deliver one item now",
+            "  :inbox dismiss <id>           dismiss one item",
+            "  :inbox resolve <id>           resolve one item",
+            "  :inbox watch                  watch for new items",
+        ),
+    ),
+    ReplCommand(
+        "reflection",
+        help_lines=(
+            "  :reflection                  list pending reflection ideas",
+            "  :reflection list             list all reflection ideas",
+            "  :reflection run              run one reflection cycle now",
+            "  :reflection status           show scheduling status",
+            "  :reflection show <id>        show one reflection idea",
+            "  :reflection dismiss <id>     dismiss one reflection idea",
+            "  :reflection archive <id>     archive one reflection idea",
+            "  :reflection promote <id>     promote one reflection into reason",
         ),
     ),
     ReplCommand("help", help_lines=("  :help      show this help",)),
@@ -57,7 +65,7 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ReplCommand(
         "dev",
         help_lines=(
-            "  :dev status                   show daemon and thread status",
+            "  :dev status                   show daemon and conversation status",
             "  :dev logs                     show recent activity logs",
         ),
     ),
@@ -84,11 +92,11 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
         ),
     ),
     ReplCommand(
-        "thread",
-        ("t",),
+        "conversation",
+        ("c",),
         (
-            "  :thread, :t               list active threads",
-            "  :thread <id>, :t <id>     switch to or create a thread",
+            "  :conversation, :c               list active conversations",
+            "  :conversation <id>, :c <id>     switch to or create a conversation",
         ),
     ),
     ReplCommand("reason", help_lines=("  :reason                   long-run reasoning commands",)),
@@ -102,12 +110,12 @@ REPL_COMMANDS: tuple[ReplCommand, ...] = (
     ),
     ReplCommand("persona", ("p",), ("  :persona, :p             list/manage custom personas",)),
     ReplCommand("restart", ("r",), ("  :restart, :r              restart daemon and reconnect",)),
-    ReplCommand("rename", help_lines=("  :rename <new-id>          rename the current thread",)),
-    ReplCommand("branch", help_lines=("  :branch <new-id> [index]  branch current thread at index",)),
-    ReplCommand("archive", help_lines=("  :archive                  archive the current thread",)),
-    ReplCommand("unarchive", help_lines=("  :unarchive <id>           restore an archived thread",)),
-    ReplCommand("archived", help_lines=("  :archived                 list archived threads",)),
-    ReplCommand("delete", help_lines=("  :delete                   delete the current thread",)),
+    ReplCommand("rename", help_lines=("  :rename <new-id>          rename the current conversation",)),
+    ReplCommand("branch", help_lines=("  :branch <new-id> [index]  branch current conversation at index",)),
+    ReplCommand("archive", help_lines=("  :archive                  archive the current conversation",)),
+    ReplCommand("unarchive", help_lines=("  :unarchive <id>           restore an archived conversation",)),
+    ReplCommand("archived", help_lines=("  :archived                 list archived conversations",)),
+    ReplCommand("delete", help_lines=("  :delete                   delete the current conversation",)),
 )
 
 
@@ -159,10 +167,6 @@ def command_body(text: str, name: str) -> str | None:
         if text.startswith(prefix):
             return text[len(prefix) :].strip()
     return None
-
-
-def command_matches(text: str, name: str) -> bool:
-    return command_body(text, name) == ""
 
 
 def resolve_command(text: str) -> ResolvedReplCommand | None:

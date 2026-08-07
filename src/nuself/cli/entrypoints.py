@@ -9,21 +9,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from nuself.agent.chat import ThreadState, ThreadStore
-from nuself.cli.composition import compose_cli_thread_store
+from nuself.conversation import ConversationService, ConversationState
+from nuself.cli.application import cli_application
 from nuself.cli.daemon_lifecycle import (
-    format_start_failure,
     start_daemon_observed,
 )
 from nuself.cli.daemon_status import format_status, observe_daemon_status
 from nuself.cli.exit_codes import CliExitCode
 from nuself.cli.repl.types import InteractiveChatResult
+from nuself.runtime.feature.protocol import ToolEffectResolution
 from nuself.daemon import lifecycle
-from nuself.notification.deep_link import DeepLink
+from nuself.inbox.link import DeepLink
 from nuself.runtime.diagnostics import diagnostic_exception_message
 
-InteractiveSender = Callable[
-    [str, str, str | None],
+type InteractiveSender = Callable[
+    [str, str, str | None, ToolEffectResolution | None],
     InteractiveChatResult,
 ]
 
@@ -33,7 +33,7 @@ class SendChat(Protocol):
         self,
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
     ) -> int: ...
 
 
@@ -42,9 +42,10 @@ class SendInteractiveChat(Protocol):
         self,
         message: str,
         project_root: Path | None,
-        thread_id: str = "default",
+        conversation_id: str = "default",
         *,
         turn_id: str | None = None,
+        effect_resolution: ToolEffectResolution | None = None,
     ) -> InteractiveChatResult: ...
 
 
@@ -54,7 +55,7 @@ class RunInteractive(Protocol):
         send_message: InteractiveSender,
         project_root: Path | None,
         *,
-        initial_thread_id: str = "default",
+        initial_conversation_id: str = "default",
         daemon_activity: bool = False,
     ) -> int: ...
 
@@ -71,8 +72,8 @@ class EntrypointCallbacks:
 
 
 @dataclass(frozen=True)
-class _OpenTarget:
-    thread_id: str
+class _ConversationOpenTarget:
+    conversation_id: str
     message: str | None
 
 
@@ -83,7 +84,7 @@ class EntrypointController:
         self._callbacks = callbacks
 
     def handle_default(self, args: argparse.Namespace) -> int:
-        result = self._status_or_report(args.project_root)
+        result = observe_daemon_status(args.project_root)
         if result is None:
             return CliExitCode.TEMPORARY_FAILURE
         if result.running:
@@ -93,12 +94,13 @@ class EntrypointController:
             print("Starting NuSelf daemon...")
             try:
                 transition = start_daemon_observed(
-                    args.project_root,
+                    args.scope,
                     initial_status=result,
                 )
             except lifecycle.DaemonStartError as exc:
                 print(
-                    f"Failed to start daemon: {format_start_failure(exc)}",
+                    "Failed to start daemon: "
+                    f"{diagnostic_exception_message(exc)}",
                     file=sys.stderr,
                 )
                 return CliExitCode.FAILURE
@@ -112,7 +114,7 @@ class EntrypointController:
         return self._run_daemon_interactive(args.project_root)
 
     def handle_chat(self, args: argparse.Namespace) -> int:
-        daemon_status = self._status_or_report(args.project_root)
+        daemon_status = observe_daemon_status(args.project_root)
         if daemon_status is None:
             return CliExitCode.TEMPORARY_FAILURE
         if daemon_status.running:
@@ -140,7 +142,7 @@ class EntrypointController:
         return self._run_one_shot_interactive(args.project_root)
 
     def handle_attach(self, args: argparse.Namespace) -> int:
-        daemon_status = self._status_or_report(args.project_root)
+        daemon_status = observe_daemon_status(args.project_root)
         if daemon_status is None:
             return CliExitCode.TEMPORARY_FAILURE
         if not daemon_status.running:
@@ -161,12 +163,12 @@ class EntrypointController:
         return self._run_daemon_interactive(args.project_root)
 
     def handle_open(self, args: argparse.Namespace) -> int:
-        store = compose_cli_thread_store(args.project_root)
-        target = self._prepare_open_thread(args, store)
+        store = cli_application().conversations
+        target = self._prepare_open_conversation(args, store)
         if target is None:
             return CliExitCode.FAILURE
 
-        daemon_status = self._status_or_report(args.project_root)
+        daemon_status = observe_daemon_status(args.project_root)
         if daemon_status is None:
             return CliExitCode.TEMPORARY_FAILURE
         if daemon_status.running:
@@ -174,13 +176,13 @@ class EntrypointController:
                 result = self._callbacks.send_daemon_chat(
                     target.message,
                     args.project_root,
-                    target.thread_id,
+                    target.conversation_id,
                 )
                 if result != CliExitCode.SUCCESS:
                     return result
             return self._run_daemon_interactive(
                 args.project_root,
-                initial_thread_id=target.thread_id,
+                initial_conversation_id=target.conversation_id,
             )
         if daemon_status.phase != "stopped":
             print(
@@ -192,27 +194,21 @@ class EntrypointController:
             result = self._callbacks.send_one_shot_chat(
                 target.message,
                 args.project_root,
-                target.thread_id,
+                target.conversation_id,
             )
             if result != CliExitCode.SUCCESS:
                 return result
         return self._run_one_shot_interactive(
             args.project_root,
-            initial_thread_id=target.thread_id,
+            initial_conversation_id=target.conversation_id,
         )
 
-    @staticmethod
-    def _status_or_report(
-        project_root: Path | None,
-    ) -> lifecycle.DaemonStatus | None:
-        return observe_daemon_status(project_root)
-
-    def _prepare_open_thread(
+    def _prepare_open_conversation(
         self,
         args: argparse.Namespace,
-        store: ThreadStore,
-    ) -> _OpenTarget | None:
-        thread_id: str | None = args.thread_id
+        store: ConversationService,
+    ) -> _ConversationOpenTarget | None:
+        conversation_id: str | None = args.conversation_id
         message: str | None = args.message
         if args.deep_link is not None:
             try:
@@ -224,46 +220,47 @@ class EntrypointController:
                     file=sys.stderr,
                 )
                 return None
-            if link.action == "new_thread":
-                thread_id = link.title or "new-thread"
-                store.save(ThreadState.empty(thread_id))
-                print(f"Created thread: {thread_id}")
+            if link.action == "new_conversation":
+                conversation_id = link.title or "new-conversation"
+                store.save(ConversationState.empty(conversation_id))
+                print(f"Created conversation: {conversation_id}")
                 if message is None and link.message is not None:
                     message = link.message
             else:
-                thread_id = link.thread_id
+                conversation_id = link.conversation_id
                 if message is None and link.message is not None:
                     message = link.message
 
-        if thread_id is None:
-            print("Thread ID or --deep-link is required.", file=sys.stderr)
+        if conversation_id is None:
+            print("Conversation ID or --deep-link is required.", file=sys.stderr)
             return None
-        if thread_id not in store.list():
+        if conversation_id not in store.list():
             if args.create:
-                store.save(ThreadState.empty(thread_id))
-                print(f"Created thread: {thread_id}")
+                store.save(ConversationState.empty(conversation_id))
+                print(f"Created conversation: {conversation_id}")
             else:
-                print(f"Thread not found: {thread_id}", file=sys.stderr)
+                print(f"Conversation not found: {conversation_id}", file=sys.stderr)
                 return None
-        return _OpenTarget(thread_id=thread_id, message=message)
+        return _ConversationOpenTarget(conversation_id=conversation_id, message=message)
 
     def _run_daemon_interactive(
         self,
         project_root: Path | None,
         *,
-        initial_thread_id: str = "default",
+        initial_conversation_id: str = "default",
     ) -> int:
         return self._callbacks.run_interactive(
-            lambda message, thread_id, turn_id: (
+            lambda message, conversation_id, turn_id, effect_resolution: (
                 self._callbacks.send_daemon_chat_interactive(
                     message,
                     project_root,
-                    thread_id,
+                    conversation_id,
                     turn_id=turn_id,
+                    effect_resolution=effect_resolution,
                 )
             ),
             project_root,
-            initial_thread_id=initial_thread_id,
+            initial_conversation_id=initial_conversation_id,
             daemon_activity=True,
         )
 
@@ -271,17 +268,18 @@ class EntrypointController:
         self,
         project_root: Path | None,
         *,
-        initial_thread_id: str = "default",
+        initial_conversation_id: str = "default",
     ) -> int:
         return self._callbacks.run_interactive(
-            lambda message, thread_id, turn_id: (
+            lambda message, conversation_id, turn_id, effect_resolution: (
                 self._callbacks.send_one_shot_chat_interactive(
                     message,
                     project_root,
-                    thread_id,
+                    conversation_id,
                     turn_id=turn_id,
+                    effect_resolution=effect_resolution,
                 )
             ),
             project_root,
-            initial_thread_id=initial_thread_id,
+            initial_conversation_id=initial_conversation_id,
         )

@@ -5,24 +5,23 @@ from pathlib import Path
 
 import pytest
 
-from nuself.logs import (
-    read_log_events,
+from nuself.log.reader import read_log_events
+from nuself.log.store import (
     runtime_event_log_sink,
     write_runtime_event,
 )
-from nuself.runtime import (
+from nuself.runtime.event.definition import (
     DuplicateEventDefinitionError,
     EventDefinitionRegistry,
     EventDefinitionRegistrySealedError,
     EventDefinitionRegistryUnsealedError,
-    EventDeliveryError,
-    EventPublisher,
-    RuntimeLogEventPayload,
-    RuntimeEnvelope,
     RuntimeEventDefinition,
     UnknownEventDefinitionError,
     build_event_definition_registry,
 )
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventDeliveryError, EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
 
 
 def test_event_publisher_delivers_matching_projections_in_order() -> None:

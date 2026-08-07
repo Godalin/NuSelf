@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from pathlib import Path
 from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
-from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.domain.memory import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
-from nuself.profile.contracts import ProfileRepositoryPort
+from nuself.agent.structured import StructuredAgent
+from nuself.memory.model import MemoryEntryType, MemoryTypeRegistry, default_memory_type_registry
+from nuself.profile.contracts import ProfileQueryService
 
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
 
@@ -46,18 +45,13 @@ class MemoryIntakeAgent:
 
     def __init__(
         self,
-        project_root: Path | None = None,
         *,
-        agent: StructuredAgent[IntakeResultOutput] | None = None,
-        profile_repository: ProfileRepositoryPort,
+        agent: StructuredAgent[IntakeResultOutput],
+        profile_repository: ProfileQueryService,
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._profile_repository = profile_repository
-        self._agent = agent or default_structured_agent(
-            IntakeResultOutput,
-            project_root=project_root,
-            component="memory",
-        )
+        self._agent = agent
         self._registry = registry or default_memory_type_registry()
 
     def infer(

@@ -9,8 +9,8 @@ import os
 import sys
 from typing import cast
 
-from nuself.logs import LogEvent
-from nuself.notification import OutboxEntry
+from nuself.log.record import LogEvent
+from nuself.inbox.model import InboxItem
 from nuself.reflection.repository import ReflectionEntry
 import re
 
@@ -50,6 +50,8 @@ def render_log_event(event: LogEvent, *, color: bool | None = None) -> str:
         return _render_discussion_log_event(event, color=color)
     if event.event == "service_tool_called" and event.metadata:
         return _render_service_tool_called(event, color=color)
+    if event.event == "tool.activity" and _has_structured_tool_io(event):
+        return _render_service_tool_called(event, color=color)
 
     theme = TerminalTheme(color=color)
     tag = _render_log_tags(event, theme)
@@ -84,8 +86,8 @@ def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -
         result = legacy_result
         error = legacy_error if legacy_error is not None else error
     extra: dict[str, object] = {}
-    if event.thread_id:
-        extra["thread"] = event.thread_id
+    if event.conversation_id:
+        extra["conversation"] = event.conversation_id
     if event.turn_id:
         extra["turn"] = event.turn_id
     if event.metadata:
@@ -93,6 +95,7 @@ def _render_service_tool_called(event: LogEvent, *, color: bool | None = None) -
         if isinstance(raw_tool, str):
             extra["tool"] = raw_tool
     return render_tool_call(
+        event=event.event,
         component=event.component,
         service=service or event.component,
         args=args,
@@ -269,6 +272,7 @@ def render_approval_prompt(
 
 def render_tool_call(
     *,
+    event: str = "service_tool_called",
     component: str,
     service: str,
     args: object,
@@ -288,7 +292,7 @@ def render_tool_call(
     theme = TerminalTheme(color=color)
     comp_tag = theme.tag(f"[{component}]", component)
     srv_tag = theme.tag(f"[{service}]", service)
-    header_parts: list[str] = [f"{comp_tag} {srv_tag} service_tool_called"]
+    header_parts: list[str] = [f"{comp_tag} {srv_tag} {event}"]
     remaining_fields = dict(extra_fields or {})
     tool_name = remaining_fields.pop("tool", None)
     if tool_name is not None:
@@ -420,8 +424,8 @@ def _render_log_fields(event: LogEvent, theme: TerminalTheme, *, include_status:
         fields.append(theme.muted(_format_log_field("status", event.status)))
     if event.duration_ms is not None:
         fields.append(theme.muted(_format_log_field("duration_ms", event.duration_ms)))
-    if event.thread_id:
-        fields.append(theme.muted(_format_log_field("thread", event.thread_id)))
+    if event.conversation_id:
+        fields.append(theme.muted(_format_log_field("conversation", event.conversation_id)))
     if event.request_id:
         fields.append(theme.muted(_format_log_field("request", event.request_id)))
     if event.turn_id:
@@ -577,7 +581,7 @@ def _is_timestamp_field(key: str) -> bool:
     return key in {"created", "created_at", "updated_at", "reviewed_at", "sent_at", "connected", "exported", "last_advanced_at"}
 
 
-def render_session_header(*, daemon_status: str, thread_id: str) -> str:
+def render_session_header(*, daemon_status: str, conversation_id: str) -> str:
     """Render a compact REPL session header."""
 
     theme = TerminalTheme()
@@ -586,7 +590,7 @@ def render_session_header(*, daemon_status: str, thread_id: str) -> str:
         f"{tag} session",
         [
             render_key_value_field("status", daemon_status),
-            render_key_value_field("thread", thread_id),
+            render_key_value_field("conversation", conversation_id),
         ],
     )
 
@@ -621,7 +625,8 @@ _COLORS_256: dict[str, str] = {
     "persona": "35",
     "reasoning": "95",
     "selves": "95",
-    "outbox": "36",
+    "delivery": "36",
+    "inbox": "35",
     "trace": "96",
     "reflection": "33",
     "workspace": "38;5;208",
@@ -635,7 +640,8 @@ _COLORS_BASIC: dict[str, str] = {
     "persona": "35",
     "reasoning": "35",
     "selves": "35",
-    "outbox": "36",
+    "delivery": "36",
+    "inbox": "35",
     "trace": "36",
     "reflection": "33",
     "workspace": "33",
@@ -668,8 +674,8 @@ def _status_color(status: str) -> str:
     return "0"
 
 
-def render_outbox_summary(entry: OutboxEntry, *, index: int | None = None, color: bool | None = None) -> str:
-    """Render one outbox entry as a compact terminal line."""
+def render_inbox_summary(entry: InboxItem, *, index: int | None = None, color: bool | None = None) -> str:
+    """Render one Inbox item as a compact terminal line."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     created = format_display_timestamp(entry.created_at) if entry.created_at else "-"
@@ -679,26 +685,25 @@ def render_outbox_summary(entry: OutboxEntry, *, index: int | None = None, color
         _render_key_value_fields(
             [
                 ("created", created),
-                ("attempts", entry.attempts),
+                ("kind", entry.kind),
                 ("link", entry.deep_link is not None),
             ]
         ),
     )
 
 
-def render_outbox_detail(entry: OutboxEntry, *, color: bool | None = None) -> str:
-    """Render one outbox entry as a multi-line detail view."""
+def render_inbox_detail(entry: InboxItem, *, color: bool | None = None) -> str:
+    """Render one Inbox item as a multi-line detail view."""
     theme = TerminalTheme(color=color)
     status_tag = theme.paint(f"[{entry.status}]", _status_color(entry.status))
     fields = _render_key_value_fields(
         [
             ("idempotency_key", entry.idempotency_key),
-            ("attempts", entry.attempts),
+            ("kind", entry.kind),
+            ("source_id", entry.source_id),
             ("created_at", entry.created_at),
         ]
     )
-    if entry.sent_at is not None:
-        fields.append(render_key_value_field("sent_at", entry.sent_at))
     if entry.deep_link is not None:
         fields.append(render_key_value_field("deep_link", entry.deep_link))
     return render_record_block(
@@ -823,16 +828,6 @@ def _color_persona_trace_tag(tag: str, speaker: str, theme: TerminalTheme) -> st
     if speaker.endswith("_self") or speaker in {"host", "synthesis"}:
         return theme.paint(padded, _persona_color(speaker))
     return padded
-
-
-def render_host_decision(event: LogEvent, *, color: bool | None = None) -> list[str]:
-    """Render a structured host discussion decision event for REPL display."""
-    theme = TerminalTheme(color=color)
-    header = theme.tag("[host decision]", "persona")
-    lines = [_render_log_header(header, event.event, event, theme, inline_status=False)]
-    lines.extend(_render_status_body(event, theme))
-    lines.extend(render_record_body(event.message))
-    return lines
 
 
 # ---------------------------------------------------------------------------

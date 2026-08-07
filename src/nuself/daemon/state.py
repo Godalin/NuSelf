@@ -1,273 +1,376 @@
-"""Daemon subsystem and worker-target composition."""
+"""Daemon application state and unified task composition."""
 
 from __future__ import annotations
 
 import threading
-from pathlib import Path
+from dataclasses import dataclass, replace
+from uuid import uuid4
 
-from nuself.application.chat import compose_conversation_runtime
-from nuself.application.curator import compose_memory_curator
-from nuself.application.runtime import (
-    ApplicationRuntime,
-    current_application_runtime,
-    open_application_runtime,
-)
-from nuself.application.reflection import compose_reflection_scheduler
-from nuself.application.reason import (
-    compose_reason_advancer,
-    compose_reason_service,
-)
-from nuself.config import ConfigSystem
+from nuself.agent.chat.composition import ChatResult, compose_conversation_runtime
+from nuself.application.projection import publish_chat_observation
+from nuself.application.composition import ApplicationGraph
+from nuself.reflection.composition import compose_reflection_scheduler
+from nuself.reason.composition import compose_reason_advancer
+from nuself.agent.text import LangChainTextAgent
+from nuself.agent.effect import GraphToolEffectPort
 from nuself.daemon.activity import ActivityBroker
-from nuself.daemon.reason_export import (
-    ReasonExportWorker,
+from nuself.reason.export import (
+    ReasonExportService,
     build_reason_export_section_planner,
 )
-from nuself.daemon.types import WorkerHealth
-from nuself.daemon.workers import DaemonWorkerSupervisor
-from nuself.logs import runtime_event_log_sink
-from nuself.notification import (
-    NotificationDeliveryLoop,
+from nuself.daemon.scheduler import (
+    DaemonScheduler,
+    DaemonSchedulerCapacityError,
+    DaemonSchedulerStoppedError,
+    DaemonTask,
 )
-from nuself.notification.composition import build_notification_adapters
-from nuself.reason import ReasonScheduler
-from nuself.runtime.events import EventPublisher
-from nuself.workspace import PrivateWorkspaceStore
+from nuself.daemon.tasks import (
+    DAEMON_TASK_KINDS,
+    DaemonTaskKind,
+    daemon_task,
+)
+from nuself.log.store import runtime_event_log_sink
+from nuself.agent.endpoint import configured_langchain_chat_models
+from nuself.delivery.loop import DeliveryLoop
+from nuself.delivery.composition import build_delivery_adapters
+from nuself.reason.scheduler import ReasonScheduler
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.observability import publish_observed_event
+from nuself.runtime.job.message import JobMessage
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequired,
+    ToolEffectResolution,
+)
+
+
+@dataclass(frozen=True)
+class _ChatTaskPayload:
+    message: str
+    conversation_id: str
+    turn_id: str | None
+    effect_resolution: ToolEffectResolution | None
+
+
+class DaemonUnavailableError(RuntimeError):
+    """The daemon cannot safely admit work-plane requests."""
 
 
 class DaemonState:
-    """Own request-facing services and concrete daemon worker targets."""
+    """Own request-facing services and the unified daemon scheduler."""
 
     def __init__(
         self,
-        project_root: Path,
-        *,
-        application_runtime: ApplicationRuntime | None = None,
+        application: ApplicationGraph,
     ) -> None:
-        self.project_root = project_root
-        self.application_runtime = (
-            application_runtime
-            or current_application_runtime()
-            or open_application_runtime(project_root)
-        )
-        paths = self.application_runtime.paths
+        paths = application.paths
+        self.authority_root = paths.authority_root
         self.authority_id = paths.scope.authority_id
-        self.application = self.application_runtime.application
         self.shutdown_requested = threading.Event()
         self.activity_broker = ActivityBroker()
         self.event_publisher = EventPublisher()
         self.event_publisher.attach_projection(
-            runtime_event_log_sink(project_root)
+            runtime_event_log_sink(
+                self.authority_root,
+                projection=self.activity_broker.publish,
+            )
         )
-        self._worker_supervisor = DaemonWorkerSupervisor(
-            project_root,
-            self.shutdown_requested,
-            self.event_publisher,
+        config = application.config
+        langchain_models = configured_langchain_chat_models(
+            self.authority_root,
+            config=config,
         )
-        self.reason_export_worker = ReasonExportWorker(
-            project_root,
-            self.shutdown_requested,
-            self._worker_supervisor,
-            reason_service=compose_reason_service(self.application),
-            workspace_store=PrivateWorkspaceStore(
-                paths,
-                scope="reason",
+        self.reason_export_service = ReasonExportService(
+            self.authority_root,
+            reason_service=application.reason,
+            task_sink=self._schedule_reason_export,
+            language_preference=config.chat.language_preference,
+            text_agent=LangChainTextAgent(
+                endpoints=langchain_models,
+                project_root=self.authority_root,
+                component="reasoning",
             ),
         )
         self.conversation_runtime = compose_conversation_runtime(
-            self.application,
-            job_sink=self.reason_export_worker.enqueue,
+            paths,
+            config,
+            application.conversations,
+            application.memory,
+            application.sources,
+            application.reflection,
+            application.reason,
+            application.trace,
+            application.personas,
+            job_sink=self.reason_export_service.enqueue,
             section_planner=build_reason_export_section_planner(
-                project_root
+                self.authority_root,
+                language_preference=config.chat.language_preference,
+                langchain_models=langchain_models,
             ),
             event_publisher=self.event_publisher,
+            langchain_models=langchain_models,
+            effect_port=GraphToolEffectPort(),
         )
 
-        config = ConfigSystem.load(project_root=project_root)
-        self.memory_curator = compose_memory_curator(self.application)
-        self.memory_curator_interval_seconds: float = (
-            config.daemon.memory_curator.interval_seconds
+        self.memory_curator = application.memory_workflows.curator(
+            application.trace.recorder,
+            config,
+            langchain_models=langchain_models,
         )
         self.reflection_scheduler = compose_reflection_scheduler(
             paths,
-            self.application.backend,
+            application.memory,
+            application.profiles,
+            application.sources,
+            application.conversation_history,
+            application.reflection,
+            application.inbox,
+            application.deliveries,
+            application.trace.recorder,
             config=config.reflection,
-            repository=self.application.reflection,
-            outbox=self.application.notifications,
-            trace_recorder=self.application.trace.recorder,
-            memory_repository=self.application.memory.entries,
-            source_repository=self.application.memory.sources,
-            profile_repository=self.application.memory.profile,
+            language_preference=config.chat.language_preference,
+            langchain_models=langchain_models,
         )
-        self.reflection_check_interval_seconds: float = (
-            config.daemon.reflection_scheduler.check_interval_seconds
-        )
-
-        self.notification_delivery_loop = NotificationDeliveryLoop(
-            self.application.notifications,
-            build_notification_adapters(
+        self.delivery_loop = DeliveryLoop(
+            application.inbox,
+            application.deliveries,
+            build_delivery_adapters(
                 paths,
-                config=config,
+                email_config=config.email,
+                macos_config=config.macos_notification,
             ),
         )
-        self.notification_delivery_interval_seconds: float = (
-            config.daemon.notification_delivery.interval_seconds
+        reason_interval = config.daemon.reason_scheduler.interval_seconds
+        self.reason_scheduler = ReasonScheduler(
+            self.authority_root,
+            advancer=compose_reason_advancer(
+                paths,
+                application.reason,
+                application.personas,
+                application.trace.recorder,
+                config,
+                readonly_tools=self.conversation_runtime.readonly_tools(),
+                langchain_models=langchain_models,
+            ),
+            interval_seconds=reason_interval,
+            service=application.reason,
+        )
+        self._memory_workflows = application.memory_workflows
+        memory_interval = config.daemon.memory_curator.interval_seconds
+        self._periodic_tasks: tuple[tuple[DaemonTaskKind, float], ...] = (
+            ("memory.scan", memory_interval),
+            ("conversation.scan", memory_interval),
+            (
+                "reflection.check",
+                config.daemon.reflection_scheduler.check_interval_seconds,
+            ),
+            ("reason.check", reason_interval),
+            (
+                "delivery.run",
+                config.daemon.delivery.interval_seconds,
+            ),
+        )
+        handlers = {
+            "memory.scan": self._scan_memory_observations,
+            "memory.curate": self._curate_memory_observation,
+            "conversation.scan": self._scan_conversations,
+            "chat.turn": self._run_chat_task,
+            "conversation.compress": self._compress_conversation,
+            "reflection.check": self._check_reflection,
+            "reason.check": self._check_reasons,
+            "delivery.run": self._run_delivery,
+            "reason.export": self._run_reason_export,
+        }
+        if set(handlers) != set(DAEMON_TASK_KINDS):
+            raise RuntimeError("daemon task catalog and handlers differ")
+        self.scheduler = DaemonScheduler(
+            handlers,
+            event_publisher=self.event_publisher,
+            project_root=self.authority_root,
         )
 
-        self.reason_scheduler: ReasonScheduler | None = None
-        self.reason_scheduler_interval_seconds = (
-            config.daemon.reason_scheduler.interval_seconds
-        )
-        self._reason_scheduler_start_lock = threading.Lock()
-        self._export_worker_start_lock = threading.Lock()
-        self._register_workers()
+    def start_background_tasks(self) -> None:
+        """Start one scheduler and admit all recurring responsibilities."""
 
-    def worker_health(self) -> tuple[WorkerHealth, ...]:
-        """Return a stable snapshot of daemon worker health."""
-
-        return self._worker_supervisor.health()
-
-    def require_background_workers_ready(self) -> None:
-        """Require all registered workers to remain alive before readiness."""
-
-        self._worker_supervisor.require_all_running()
-
-    def start_background_memory_curator(self) -> None:
-        self._worker_supervisor.start("memory_curator")
-
-    def stop_background_memory_curator(self) -> None:
-        self._worker_supervisor.join("memory_curator")
-
-    def start_background_reflection_scheduler(self) -> None:
-        self._worker_supervisor.start("reflection_scheduler")
-
-    def stop_background_reflection_scheduler(self) -> None:
-        self._worker_supervisor.join("reflection_scheduler")
-
-    def start_background_reason_scheduler(self) -> None:
-        with self._reason_scheduler_start_lock:
-            if (
-                self._worker_supervisor.snapshot(
-                    "reason_scheduler"
-                ).state
-                != "new"
-            ):
-                return
-            capabilities = (
-                self.conversation_runtime.capability_snapshot()
+        self.reason_export_service.recover()
+        self.scheduler.start()
+        for kind, interval in self._periodic_tasks:
+            self.scheduler.submit(
+                daemon_task(kind, f"periodic:{kind}", f"schedule:{kind}"),
+                delay_seconds=interval,
+                interval_seconds=interval,
             )
-            self.reason_scheduler = ReasonScheduler(
-                self.project_root,
-                advancer=compose_reason_advancer(
-                    self.application,
-                    readonly_tools=capabilities.readonly_tools,
-                    langchain_models=capabilities.endpoints,
+
+    def _request_memory_curation(self, observation_id: str) -> None:
+        """Admit one coalesced curator task for a durable observation."""
+
+        self._submit_followup(
+            daemon_task(
+                "memory.curate",
+                f"memory.curate:{observation_id}",
+                f"memory-observation:{observation_id}",
+                payload=observation_id,
+            )
+        )
+
+    def run_chat(
+        self,
+        message: str,
+        *,
+        conversation_id: str,
+        turn_id: str | None,
+        effect_resolution: ToolEffectResolution | None = None,
+    ) -> ChatResult:
+        """Run chat through its conversation resource lane in a live daemon."""
+
+        snapshot = self.scheduler.snapshot()
+        if not snapshot.running:
+            raise DaemonUnavailableError("daemon scheduler is unavailable")
+        identity = (
+            f"chat.turn:{conversation_id}:{turn_id}"
+            if turn_id is not None
+            else f"chat.turn:{conversation_id}:{uuid4().hex}"
+        )
+        completion = self.scheduler.submit(
+            daemon_task(
+                "chat.turn",
+                identity,
+                f"conversation:{conversation_id}",
+                payload=_ChatTaskPayload(
+                    message,
+                    conversation_id,
+                    turn_id,
+                    effect_resolution,
                 ),
-                interval_seconds=self.reason_scheduler_interval_seconds,
-                repository=self.application.reason,
-                service=compose_reason_service(self.application),
+                priority=10,
             )
-            self._worker_supervisor.start("reason_scheduler")
+        )
+        result = completion.result()
+        if isinstance(result, ToolEffectRequired):
+            raise result
+        if not isinstance(result, ChatResult):
+            raise TypeError("chat task returned an invalid result")
+        return result
 
-    def stop_background_reason_scheduler(self) -> None:
-        self._worker_supervisor.join("reason_scheduler")
+    def _scan_memory_observations(self, _task: DaemonTask) -> None:
+        for observation in self._memory_workflows.pending_observations():
+            self._request_memory_curation(observation.id)
 
-    def start_background_export_worker(self) -> None:
-        with self._export_worker_start_lock:
-            if (
-                self._worker_supervisor.snapshot("export_worker").state
-                != "new"
-            ):
-                return
-            self.reason_export_worker.prepare()
-            self._worker_supervisor.start("export_worker")
-
-    def stop_background_export_worker(self) -> None:
-        self.reason_export_worker.stop()
-        self._worker_supervisor.join("export_worker")
-
-    def start_background_notification_delivery(self) -> None:
-        self._worker_supervisor.start("notification_delivery")
-
-    def stop_background_notification_delivery(self) -> None:
-        self._worker_supervisor.join("notification_delivery")
-
-    def _register_workers(self) -> None:
-        for name, thread_name, target in (
-            (
-                "memory_curator",
-                "nuself-memory-curator",
-                self._run_background_memory_curator,
-            ),
-            (
-                "reflection_scheduler",
-                "nuself-reflection-scheduler",
-                self._run_background_reflection_scheduler,
-            ),
-            (
-                "reason_scheduler",
-                "nuself-reason-scheduler",
-                self._run_background_reason_scheduler,
-            ),
-            (
-                "export_worker",
-                "nuself-export-worker",
-                self.reason_export_worker.run,
-            ),
-            (
-                "notification_delivery",
-                "nuself-notification-delivery",
-                self._run_background_notification_delivery,
-            ),
+    def _scan_conversations(self, _task: DaemonTask) -> None:
+        for conversation_id in (
+            self.conversation_runtime.conversations_requiring_compression()
         ):
-            self._worker_supervisor.register(
-                name,
-                thread_name=thread_name,
-                target=target,
+            self._request_conversation_compression(conversation_id)
+
+    def _curate_memory_observation(self, task: DaemonTask) -> None:
+        observation_id = task.payload
+        if not isinstance(observation_id, str):
+            raise TypeError("memory curator task requires an observation ID")
+        self.memory_curator.run_once(observation_id)
+
+    def _run_chat_task(
+        self,
+        task: DaemonTask,
+    ) -> ChatResult | ToolEffectRequired:
+        payload = task.payload
+        if not isinstance(payload, _ChatTaskPayload):
+            raise TypeError("chat task requires a typed payload")
+        try:
+            result = self.conversation_runtime.respond(
+                payload.message,
+                conversation_id=payload.conversation_id,
+                turn_id=payload.turn_id,
+                effect_resolution=payload.effect_resolution,
             )
-        self._worker_supervisor.seal()
+        except ToolEffectRequired as exc:
+            return exc
+        observation = publish_chat_observation(
+            self._memory_workflows,
+            turn=result.require_completed_turn(),
+            source_trace_id=result.trace_id,
+        )
+        self._request_memory_curation(observation.id)
+        self._request_conversation_compression(result.conversation_id)
+        return result
 
-    def _run_background_memory_curator(self) -> None:
-        self._worker_supervisor.run_scheduled(
-            "memory_curator",
-            self.memory_curator.run_once,
-            interval_seconds=self.memory_curator_interval_seconds,
-            error_event="memory_curator_error",
-            error_message="memory curator iteration failed",
+    def _request_conversation_compression(
+        self,
+        conversation_id: str,
+    ) -> None:
+        self._submit_followup(
+            daemon_task(
+                "conversation.compress",
+                f"conversation.compress:{conversation_id}",
+                f"conversation:{conversation_id}",
+                payload=conversation_id,
+                priority=120,
+            )
         )
 
-    def _run_background_reflection_scheduler(self) -> None:
-        def run_once() -> None:
-            if self.reflection_scheduler.should_reflect():
-                self.reflection_scheduler.reflect()
+    def _submit_followup(self, task: DaemonTask) -> None:
+        try:
+            self.scheduler.submit(task)
+        except (
+            DaemonSchedulerCapacityError,
+            DaemonSchedulerStoppedError,
+        ) as exc:
+            publish_observed_event(
+                self.event_publisher,
+                name="task.deferred",
+                producer="daemon",
+                payload=RuntimeLogEventPayload(
+                    message="durable daemon follow-up deferred",
+                    level="warning",
+                    status="deferred",
+                    metadata={
+                        "task_kind": task.kind,
+                        "resource": task.resource,
+                        "error_type": type(exc).__name__,
+                    },
+                ).to_mapping(),
+                project_root=self.authority_root,
+                failure_component="daemon",
+            )
 
-        self._worker_supervisor.run_scheduled(
-            "reflection_scheduler",
-            run_once,
-            interval_seconds=self.reflection_check_interval_seconds,
-            error_event="reflection_scheduler_error",
-            error_message="reflection scheduler iteration failed",
+    def _compress_conversation(self, task: DaemonTask) -> None:
+        conversation_id = task.payload
+        if not isinstance(conversation_id, str):
+            raise TypeError("compression task requires a conversation ID")
+        self.conversation_runtime.compress_conversation(conversation_id)
+
+    def _check_reflection(self, _task: DaemonTask) -> None:
+        self.reflection_scheduler.reflect()
+
+    def _check_reasons(self, _task: DaemonTask) -> None:
+        self.reason_scheduler.run_once()
+
+    def _run_delivery(self, _task: DaemonTask) -> None:
+        self.delivery_loop.run_once()
+
+    def _schedule_reason_export(
+        self,
+        message: JobMessage,
+        delay_seconds: float,
+    ) -> None:
+        attempt = message.payload.get("attempt", 0)
+        self.scheduler.submit(
+            daemon_task(
+                "reason.export",
+                f"reason.export:{message.job_id}:{message.resource_id}:{attempt}",
+                f"reason:{message.resource_id}",
+                payload=message,
+                priority=50,
+                context=replace(
+                    message.envelope.context,
+                    reason_id=message.resource_id,
+                    job_id=message.job_id,
+                ),
+            ),
+            delay_seconds=delay_seconds,
         )
 
-    def _run_background_reason_scheduler(self) -> None:
-        def run_once() -> None:
-            if self.reason_scheduler is None:
-                raise RuntimeError("reason scheduler was not initialized")
-            self.reason_scheduler.run_once()
-
-        self._worker_supervisor.run_scheduled(
-            "reason_scheduler",
-            run_once,
-            interval_seconds=self.reason_scheduler_interval_seconds,
-            error_event="reason_scheduler_error",
-            error_message="reason scheduler iteration failed",
-        )
-
-    def _run_background_notification_delivery(self) -> None:
-        self._worker_supervisor.run_scheduled(
-            "notification_delivery",
-            self.notification_delivery_loop.run_once,
-            interval_seconds=self.notification_delivery_interval_seconds,
-            error_event="notification_delivery_error",
-            error_message="notification delivery iteration failed",
-        )
+    def _run_reason_export(self, task: DaemonTask) -> None:
+        message = task.payload
+        if not isinstance(message, JobMessage):
+            raise TypeError("reason export task requires a JobMessage")
+        self.reason_export_service.process(message)

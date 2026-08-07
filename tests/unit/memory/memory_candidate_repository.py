@@ -13,8 +13,8 @@ from typing import cast
 
 import pytest
 
-from nuself.config import runtime_paths
-from nuself.domain.memory import (
+from nuself.config.settings import runtime_paths
+from nuself.memory.model import (
     MemoryCandidate,
     MemoryEntry,
     MemoryEntryType,
@@ -26,11 +26,10 @@ from nuself.memory.repository import (
     MemoryEntryRepository,
 )
 from nuself.profile.repository import ProfileItemRepository
-from nuself.storage import (
-    AtomicDeleteDurabilityError,
+from nuself.storage.atomic import (
     AtomicWriteDurabilityError,
-    get_default_backend,
 )
+from tests.backend import owned_backend
 
 
 def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_path: Path) -> None:
@@ -44,7 +43,7 @@ def test_memory_candidate_repository_crud_and_accept_with_temporal_fields(tmp_pa
             source_refs=["thread:default:4-6"],
             evidence=[
                 MemoryEvidence(
-                    source_type="thread",
+                    source_type="observation",
                     source_ref="thread:default:4-6",
                     summary="User asked for realistic temporal memory.",
                     observed_at="2026-05-07",
@@ -143,7 +142,7 @@ def test_memory_candidate_repository_merges_into_existing_entry(tmp_path: Path) 
             title="Memory timing model",
             body="Memory should preserve real-world timing so changes in thought remain visible.",
             source_refs=["thread:default:4-6"],
-            evidence=[MemoryEvidence(source_type="thread", source_ref="thread:default:4-6", summary="Follow-up")],
+            evidence=[MemoryEvidence(source_type="observation", source_ref="thread:default:4-6", summary="Follow-up")],
             observed_at="2026-05-07",
             relations={"related_to": [existing.id]},
         )
@@ -176,7 +175,7 @@ def test_memory_candidate_repository_accepts_profile_fact_into_profile_repositor
     )
 
     accepted = repo.accept(candidate.id)
-    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path))
+    profile_repo = ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     profile_item = profile_repo.list()[0]
 
     assert profile_item.title == "Prefers concise output"
@@ -214,7 +213,7 @@ def test_accept_create_rolls_back_target_when_candidate_commit_fails(
     assert captured.value is operation_error
     assert repo.get(candidate.id).review_state == "pending"
     assert memory_entry_repository(tmp_path).list() == []
-    assert ProfileItemRepository(runtime_paths(tmp_path), backend=get_default_backend(tmp_path)).list() == []
+    assert ProfileItemRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path)).list() == []
 
 
 def test_accept_create_rolls_back_when_review_promotion_fails(
@@ -650,22 +649,19 @@ def test_delete_rolls_back_target_when_delete_fails(
         )
     )
     original_delete = entry_repo.delete
-    durability_error = AtomicDeleteDurabilityError(
-        tmp_path / "entry.json",
-        sync_error=OSError("directory sync failed"),
-    )
+    delete_error = OSError("delete failed")
 
     def delete_then_fail_once(entry_id: str) -> None:
         original_delete(entry_id)
         monkeypatch.setattr(entry_repo, "delete", original_delete)
-        raise durability_error
+        raise delete_error
 
     monkeypatch.setattr(entry_repo, "delete", delete_then_fail_once)
 
-    with pytest.raises(AtomicDeleteDurabilityError) as captured:
+    with pytest.raises(OSError) as captured:
         repo.accept(candidate.id)
 
-    assert captured.value is durability_error
+    assert captured.value is delete_error
     assert entry_repo.get(original.id) == original
     assert repo.get(candidate.id).review_state == "pending"
 
@@ -763,7 +759,7 @@ def test_memory_candidate_to_memory_object_round_trip() -> None:
         tags=["tag1"],
         source_refs=["ref1"],
         confidence=0.8,
-        evidence=[MemoryEvidence(source_type="thread", source_ref="t:1", summary="s")],
+        evidence=[MemoryEvidence(source_type="observation", source_ref="t:1", summary="s")],
     )
     obj = candidate.to_memory_object()
 

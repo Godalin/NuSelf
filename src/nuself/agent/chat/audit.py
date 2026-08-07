@@ -2,24 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from pathlib import Path
-from typing import Literal, TypeVar, cast
+from collections.abc import Mapping
+from typing import Literal, cast
 
-from nuself.logs import LogEvent
-from nuself.runtime.audit_definitions import (
-    AuditDefinitionRegistry,
+from nuself.runtime.audit.definition import (
     AuditEventDefinition,
     AuditSchemaError,
+    require_exact_metadata as _exact,
 )
-from nuself.runtime.diagnostics import diagnostic_exception_chain
-from nuself.runtime.observability import (
-    report_observed_failure,
-    run_observed_best_effort,
-    write_observed_log_event,
-)
+from nuself.runtime.audit.catalog import AuditCatalog
 
-ChatAuditEvent = Literal[
+type ChatAuditEvent = Literal[
     "daemon_chat_completed",
     "daemon_chat_failed",
     "one_shot_chat_completed",
@@ -39,19 +32,6 @@ ChatAuditEvent = Literal[
     "interactive_send_failed",
     "interactive_cleanup_failed",
 ]
-
-T = TypeVar("T")
-
-
-def _exact(metadata: Mapping[str, object], expected: frozenset[str]) -> None:
-    fields = set(metadata)
-    if fields != set(expected):
-        raise AuditSchemaError(
-            "audit metadata fields differ "
-            f"(missing={sorted(expected - fields)!r}, "
-            f"extra={sorted(fields - expected)!r})"
-        )
-
 
 def _string(metadata: Mapping[str, object], field: str) -> str:
     value = metadata[field]
@@ -90,16 +70,16 @@ def _final_response(metadata: Mapping[str, object]) -> None:
     _string(metadata, "epistemic_status")
 
 
-def _thread(metadata: Mapping[str, object]) -> None:
-    _exact(metadata, frozenset({"thread_id"}))
-    _string(metadata, "thread_id")
+def _conversation(metadata: Mapping[str, object]) -> None:
+    _exact(metadata, frozenset({"conversation_id"}))
+    _string(metadata, "conversation_id")
 
 
 def _completion(metadata: Mapping[str, object]) -> None:
     _exact(metadata, frozenset({"completion"}))
     if _string(metadata, "completion") not in {
-        "threads",
-        "archived_threads",
+        "conversations",
+        "archived_conversations",
     }:
         raise AuditSchemaError("audit metadata 'completion' is invalid")
 
@@ -168,7 +148,7 @@ def _cleanup(metadata: Mapping[str, object]) -> None:
     _bool(metadata, "primary_failed")
 
 
-def _build_registry() -> AuditDefinitionRegistry:
+def _definitions() -> tuple[AuditEventDefinition, ...]:
     definitions = (
         AuditEventDefinition("chat", "daemon_chat_completed", "info", "ok"),
         AuditEventDefinition(
@@ -206,7 +186,7 @@ def _build_registry() -> AuditDefinitionRegistry:
         ),
         AuditEventDefinition(
             "chat", "interactive_history_load_failed", "error", "error",
-            error_policy="required", metadata_validator=_thread,
+            error_policy="required", metadata_validator=_conversation,
         ),
         AuditEventDefinition(
             "chat", "interactive_history_write_failed", "warning", "degraded",
@@ -235,13 +215,7 @@ def _build_registry() -> AuditDefinitionRegistry:
             error_policy="required", metadata_validator=_cleanup,
         ),
     )
-    registry = AuditDefinitionRegistry()
-    for definition in definitions:
-        registry.register(definition)
-    return registry.seal()
-
-
-CHAT_AUDIT_REGISTRY = _build_registry()
+    return definitions
 
 _MESSAGES: dict[ChatAuditEvent, str] = {
     "daemon_chat_completed": "daemon chat request completed",
@@ -267,92 +241,4 @@ _MESSAGES: dict[ChatAuditEvent, str] = {
 }
 
 
-def write_chat_audit(
-    event: ChatAuditEvent,
-    *,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-    thread_id: str | None = None,
-    request_id: str | None = None,
-) -> LogEvent | None:
-    definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
-    event_metadata = metadata or {}
-    definition.validate(
-        level=definition.level,
-        status=definition.status,
-        error=None,
-        metadata=event_metadata,
-    )
-    return write_observed_log_event(
-        definition.component,
-        definition.event,
-        _MESSAGES[event],
-        project_root=project_root,
-        level=definition.level,
-        status=definition.status,
-        metadata=dict(event_metadata),
-        thread_id=thread_id,
-        request_id=request_id,
-    )
-
-
-def report_chat_failure(
-    exc: Exception,
-    *,
-    event: ChatAuditEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
-    event_metadata = metadata or {}
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError("Chat failure audit requires status")
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error=diagnostic_exception_chain(exc),
-        metadata=event_metadata,
-    )
-    report_observed_failure(
-        exc,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-        level=definition.level,
-        status=status,
-    )
-
-
-def run_chat_observed(
-    operation: Callable[[], T],
-    *,
-    event: ChatAuditEvent,
-    project_root: Path | None,
-    metadata: dict[str, object] | None = None,
-    errors: tuple[type[Exception], ...] = (Exception,),
-) -> T | None:
-    definition = CHAT_AUDIT_REGISTRY.resolve("chat", event)
-    event_metadata = metadata or {}
-    status = definition.status
-    if status is None:
-        raise AuditSchemaError("Chat failure audit requires status")
-    definition.validate(
-        level=definition.level,
-        status=status,
-        error="caught failure",
-        metadata=event_metadata,
-    )
-    return run_observed_best_effort(
-        operation,
-        component=definition.component,
-        event=definition.event,
-        message=_MESSAGES[event],
-        project_root=project_root,
-        metadata=dict(event_metadata),
-        errors=errors,
-        level=definition.level,
-        status=status,
-    )
+CHAT_AUDIT = AuditCatalog[ChatAuditEvent](_definitions(), _MESSAGES)

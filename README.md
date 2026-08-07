@@ -4,7 +4,7 @@
 
 NuSelf is a local-first AI mirror for deep personal discussion. It combines
 resumable chat, private memory, long-running reasoning, proactive reflection,
-and controlled notifications in a user-owned authority or an explicitly
+and controlled Inbox delivery in a user-owned authority or an explicitly
 selected workspace.
 
 NuSelf is CLI-first and designed for people who want to inspect and own their
@@ -30,16 +30,18 @@ locks and Unix-domain sockets.
 
 ## Features
 
-- Memory-aware one-shot and daemon-backed chat
-- Persisted, resumable, branchable conversation threads
+- Memory-aware chat with approved durable writes and local/UTC time access
+- Persisted, resumable, branchable conversations
 - Durable memory with review, search, relations, and symbolic graph views
-- Markdown and plain-text source ingestion with cited profile extraction
+- Independent Markdown and plain-text external knowledge library
 - Long-run reasoning threads and traceable thought provenance
-- Background memory curation and proactive reflection
-- Durable notification outbox with log, email, and macOS adapters
+- API-separated conversation history, memory observations, and top-level reflection controls
+- Unified Inbox with log, email, and macOS delivery of complete reflection text
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
 - Structured diagnostics with credential redaction
+- Invocation-bound typed Tool effects (approval, observation, and audit) with generic suspension transport, plus one bounded daemon scheduler with
+  recoverable maintenance wake-ups and resource-lane serialization
 
 ## Quick Start
 
@@ -85,8 +87,8 @@ llm:
     timeout_seconds: 60
 ```
 
-For an Anthropic Messages endpoint, add `anthropic: true`. NuSelf does not
-guess provider protocol from a URL or model name.
+For an Anthropic Messages endpoint, add `anthropic: true`. NuSelf does not guess
+provider protocol; the runtime accepts only the current schema, so migrate obsolete v0.2.5 fields before startup.
 
 Inspect the effective, credential-redacted configuration:
 
@@ -95,7 +97,7 @@ uv run nuself dev config
 ```
 
 See the [configuration guide](docs/configuration.md) for failover, chat
-context, reflection, daemon, and notification settings.
+context, reflection, daemon, Inbox, and delivery settings.
 
 ### 3. Start chatting
 
@@ -106,7 +108,7 @@ uv run nuself
 ```
 
 Opening another interactive client remains responsive while the daemon is
-still completing a turn; startup reads the last committed thread snapshot.
+still completing a turn; startup reads the last committed conversation snapshot.
 Ctrl-C cancels an in-flight turn only after its request transport is closed;
 Ctrl-D exits through transcript, curator, and storage cleanup.
 
@@ -127,12 +129,12 @@ than pretending to produce a model-backed answer.
 
 ## Common Workflows
 
-### Resume a thread
+### Resume a conversation
 
 ```bash
-uv run nuself thread list
-uv run nuself thread open default
-uv run nuself thread branch default alternative
+uv run nuself conversation list
+uv run nuself conversation open default
+uv run nuself conversation branch default alternative
 ```
 
 ### Search and curate memory
@@ -146,8 +148,8 @@ uv run nuself memory update
 ### Import personal notes
 
 ```bash
-uv run nuself memory source ingest ~/notes.md --tag notes
-uv run nuself memory source list
+uv run nuself source ingest ~/notes.md --tag notes
+uv run nuself source list
 ```
 
 ### Continue a long-running question
@@ -179,7 +181,7 @@ uv run nuself data export threads --format json
 
 `data check` finds invalid records without changing them and prints the exact
 `edit` or confirmed `delete` command for each one. One-time legacy migrations
-live under `scripts/`, outside the installed runtime. Generic editing validates
+live under `scripts/`; the installed CLI carries none. Generic editing validates
 full records and rejects concurrent overwrites.
 
 Schema v5 keeps domain records and namespaced workspace state in one compact
@@ -196,8 +198,8 @@ Personal state defaults to `~/.nuself`. Use `--local` for `./.nuself` or
 `--workspace PATH` for `PATH/.nuself`; each selection is an isolated state
 authority. Workspace configuration inherits user defaults, but databases and
 runtime state are never merged. Each authority permits exactly one NuSelf
-daemon operating-system process; its schedulers run as owned threads inside
-that process.
+daemon operating-system process; one bounded scheduler inside it coordinates
+chat and background tasks.
 
 Interactive chat shows a concise `Attention:` block when the selected
 authority has no usable model, a local workspace authority was not selected,
@@ -216,8 +218,8 @@ Important boundaries:
 - Default tests and CI do not read private project data.
 - Opt-in live API tests use fixed synthetic prompts.
 - Diagnostic configuration output redacts credentials.
-- Thought packs and JSON exports are explicit portability tools; keep separate
-  backups of the selected authority.
+- Observed tool activity logs include structured arguments and results by default; explicitly compact tools record only operation and status.
+- Thought packs and JSON exports are explicit portability tools; keep separate backups of the selected authority.
 
 See the [memory guide](docs/memory.md) and
 [storage specification](docs/spec/storage-v2.md) for details.
@@ -226,7 +228,7 @@ See the [memory guide](docs/memory.md) and
 
 - NuSelf is an early CLI-first system, not a polished desktop application.
 - Model quality and tool support vary by provider and selected model.
-- Background curation, reflection, and delivery require the daemon.
+- Background curation, reflection, and delivery require the daemon; chat replies do not wait for memory curation.
 - macOS notifications are platform-specific; email requires explicit SMTP
   configuration.
 - Windows is unsupported.
@@ -243,8 +245,6 @@ See the [memory guide](docs/memory.md) and
 - [Test suite](tests/README.md)
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
-- [Current development goal](docs/current-goal.md)
-- [TODOs](docs/TODOs.md)
 
 Behavioral contracts belong in `docs/spec/`; completed release history belongs
 in `CHANGELOG.md`. This README intentionally stays a concise project entry point.

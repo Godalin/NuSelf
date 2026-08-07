@@ -1,8 +1,33 @@
-"""Tool-composition decorators for NuSelf.
+"""Public spelling for inert, orthogonal feature declarations."""
 
-Approval is a synchronous callable wrapper. Deferred approval does not retain
-Python callables in process-global state.
-"""
-from .approval import approval_required
+from nuself.runtime.feature.policy import (
+    CompactPolicy,
+    FeaturePolicyConflictError,
+    FeatureSpec,
+    audited,
+    component,
+    compact,
+    effect,
+    feature_spec,
+    mutating,
+    observed,
+    readonly,
+    requires_confirmation,
+    tool,
+)
 
-__all__ = ["approval_required"]
+__all__ = [
+    "CompactPolicy",
+    "FeaturePolicyConflictError",
+    "FeatureSpec",
+    "audited",
+    "component",
+    "compact",
+    "effect",
+    "feature_spec",
+    "mutating",
+    "observed",
+    "readonly",
+    "requires_confirmation",
+    "tool",
+]

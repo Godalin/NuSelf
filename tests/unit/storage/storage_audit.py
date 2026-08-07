@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from nuself.logs import read_log_events
-from nuself.runtime.audit_definitions import (
+from nuself.log.reader import read_log_events
+from nuself.runtime.audit.definition import (
     AuditDefinitionRegistrySealedError,
     AuditEventDefinition,
     AuditSchemaError,
@@ -12,17 +12,17 @@ from nuself.runtime.cleanup import (
     CleanupFailure,
     cleanup_failure_records,
 )
-from nuself.storage_audit import (
-    STORAGE_OPERATIONS_AUDIT_REGISTRY,
+from nuself.storage.audit import (
+    STORAGE_OPERATIONS_AUDIT,
     report_backend_close_failure,
     report_cli_cleanup_failure,
 )
 
 
 def test_storage_operations_registry_is_complete_and_sealed() -> None:
-    assert len(STORAGE_OPERATIONS_AUDIT_REGISTRY.definitions) == 2
+    assert len(STORAGE_OPERATIONS_AUDIT.registry.definitions) == 2
     with pytest.raises(AuditDefinitionRegistrySealedError):
-        STORAGE_OPERATIONS_AUDIT_REGISTRY.register(
+        STORAGE_OPERATIONS_AUDIT.registry.register(
             AuditEventDefinition(
                 component="storage",
                 event="storage_extra",
@@ -56,7 +56,7 @@ def test_cleanup_failure_records_preserve_safe_ordered_chains() -> None:
     ]
 
 
-def test_backend_close_projection_is_fixed(tmp_path: Path) -> None:
+def test_application_backend_close_projection_is_fixed(tmp_path: Path) -> None:
     report_backend_close_failure(
         OSError("close failed"),
         project_root=tmp_path,
@@ -67,7 +67,7 @@ def test_backend_close_projection_is_fixed(tmp_path: Path) -> None:
         project_root=tmp_path,
         component="storage",
     )
-    assert event.message == "Default storage backend could not be closed"
+    assert event.message == "Application storage backend could not be closed"
     assert event.level == "warning"
     assert event.status == "degraded"
     assert event.metadata == {"backend_type": "SqliteStorageBackend"}

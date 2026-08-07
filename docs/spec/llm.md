@@ -254,7 +254,8 @@ class AgentBackedActivationPolicy:
 - `ConversationGraphRuntime` instantiates `AgentBackedActivationPolicy` instead.
 - `run_personas_node` reads `state.persona_activation.should_escalate` directly; no second policy call.
 - Tests use deterministic typed agents.
-- `render_host_decision` no longer displays `matched_markers`; it uses `escalation_reason` from log metadata.
+- Host-decision events use the shared `render_log_event` path; it renders
+  `escalation_reason` metadata without a parallel host-only renderer.
 
 ## P2: Persona Discussion Scoring
 

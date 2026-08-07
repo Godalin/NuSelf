@@ -13,12 +13,14 @@ This directory contains the authoritative behavioral specifications for NuSelf. 
 | [`agent-tools.md`](agent-tools.md) | Agent-facing tool contracts, approval boundaries, and capability groups |
 | [`llm.md`](llm.md) | Model invocation, structured output, endpoint failover, and framework boundaries |
 | [`memory.md`](memory.md) | Memory intake, curation, optimization, query, type system, symbolic graph |
+| [`source.md`](source.md) | External document ingestion, retrieval, connectors, and Source tools |
 | [`reflection.md`](reflection.md) | Reflection scheduler event taxonomy, pipeline flow, discussion outcomes |
 | [`reason.md`](reason.md) | Long-run reasoning threads for sustained work on explicit topics |
 | [`reason-output.md`](reason-output.md) | Reason-scoped long-form export and output composition |
 | [`workspace.md`](workspace.md) | Isolated private scratch storage for agent-facing services |
 | [`trace.md`](trace.md) | TODO thought provenance records for tracing how important thoughts were derived |
-| [`notification.md`](notification.md) | Outbox state machine, delivery pipeline, adapters, deep links |
+| [`inbox.md`](inbox.md) | Generic user-attention items, lifecycle, publishers, and commands |
+| [`delivery.md`](delivery.md) | External presentation records, delivery pipeline, and adapters |
 | [`persona/`](persona/) | Persona subsystem — builtin personas (`static.md`), competitive discussion (`discussion.md`), dynamic prompts (`dynamic.md`), and management (`management.md`) |
 | [`presentation.md`](presentation.md) | Final user-facing answer presentation stage and retry boundary |
 | [`errors.md`](errors.md) | Error classes, retry policy, exception-chain preservation |

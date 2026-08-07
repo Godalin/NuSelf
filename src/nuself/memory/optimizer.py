@@ -4,23 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
-from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import RuntimePaths
-from nuself.clock import utc_now_iso
-from nuself.domain.memory import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
-from nuself.memory.audit import write_optimizer_audit
+from nuself.agent.structured import StructuredAgent
+from nuself.config.settings import RuntimePaths
+from nuself.runtime.clock import utc_now_iso
+from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryEntryType, MemoryEvidence, MemoryObject, MemoryTypeRegistry, default_memory_type_registry
+from nuself.memory.audit import MEMORY_AUDIT
 from nuself.memory.repository import MemoryCandidateRepository, MemoryEntryNotFound, MemoryEntryRepository
 from nuself.memory.text import looks_like_raw_transcript
 from nuself.profile.contracts import ProfileRepositoryPort
 
-MemoryOptimizeActionType: TypeAlias = Literal["update", "delete", "ignore"]
-OptimizeDecisionStatus: TypeAlias = Literal["ready", "deferred"]
+type MemoryOptimizeActionType = Literal["update", "delete", "ignore"]
+type OptimizeDecisionStatus = Literal["ready", "deferred"]
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ class MemoryOptimizer:
         self,
         paths: RuntimePaths,
         *,
-        agent: StructuredAgent[OptimizeActionsOutput] | None = None,
+        agent: StructuredAgent[OptimizeActionsOutput],
         settings: MemoryOptimizerSettings | None = None,
         repository: MemoryEntryRepository,
         candidate_repository: MemoryCandidateRepository,
@@ -113,11 +113,7 @@ class MemoryOptimizer:
         registry: MemoryTypeRegistry | None = None,
     ) -> None:
         self._paths = paths
-        self._agent = agent or default_structured_agent(
-            OptimizeActionsOutput,
-            project_root=paths.project_root,
-            component="memory",
-        )
+        self._agent = agent
         self._settings = settings or MemoryOptimizerSettings()
         self._repository = repository
         self._profile_repository = profile_repository
@@ -137,10 +133,10 @@ class MemoryOptimizer:
 
         decision = self._decide_actions(entries)
         if decision.status == "deferred":
-            write_optimizer_audit(
+            MEMORY_AUDIT.write(
                 "optimizer_deferred",
                 "Memory optimizer deferred",
-                project_root=self._paths.project_root,
+                project_root=self._paths.authority_root,
                 metadata={"reviewed": 0},
             )
             return MemoryOptimizerResult(
@@ -168,10 +164,10 @@ class MemoryOptimizer:
                     ignored += 1
             else:
                 ignored += 1
-        write_optimizer_audit(
+        MEMORY_AUDIT.write(
             "optimizer_completed",
             "Memory optimizer completed",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "reviewed": len(entries),
                 "updated": updated,
@@ -286,10 +282,10 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        write_optimizer_audit(
+        MEMORY_AUDIT.write(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "action": "update",
                 "candidate_id": candidate.id,
@@ -324,10 +320,10 @@ class MemoryOptimizer:
             relations=existing.relations,
         )
         self._candidate_repository.save(candidate)
-        write_optimizer_audit(
+        MEMORY_AUDIT.write(
             "optimizer_candidate_staged",
             "Memory optimizer staged a candidate",
-            project_root=self._paths.project_root,
+            project_root=self._paths.authority_root,
             metadata={
                 "action": "delete",
                 "candidate_id": candidate.id,
@@ -384,7 +380,7 @@ def _optimize_action_from_item(
     if item.action == "update" and (
         not title
         or not body
-        or _looks_like_raw_transcript(body)
+        or looks_like_raw_transcript(body)
     ):
         raise ValueError("optimizer update requires a summary title and body")
     memory_type = _optional_memory_type(item.type, allowed_types=allowed_types)
@@ -406,5 +402,3 @@ def _optional_memory_type(value: str | None, *, allowed_types: tuple[str, ...]) 
     if value in allowed_types:
         return cast(MemoryEntryType, value)
     raise ValueError(f"unsupported memory type: {value}")
-def _looks_like_raw_transcript(text: str) -> bool:
-    return looks_like_raw_transcript(text)

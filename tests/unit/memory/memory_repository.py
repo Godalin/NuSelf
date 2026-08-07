@@ -13,7 +13,7 @@ from typing import cast
 
 import pytest
 
-from nuself.domain.memory import (
+from nuself.memory.model import (
     MemoryEntry,
     MemoryObject,
     MemoryValidationError,
@@ -22,8 +22,8 @@ from nuself.domain.memory import (
 )
 from nuself.memory.repository import MemoryEntryNotFound, MemoryEntryRepository, MemoryRelationFilters
 from nuself.memory.repository import MemorySearchFilters, MemoryStats, memory_stats
-from nuself.logs import read_log_events
-from nuself.storage import auto_backend
+from nuself.log.reader import read_log_events
+from nuself.storage.authority import auto_backend
 
 
 def test_memory_repository_crud(tmp_path: Path) -> None:
@@ -153,8 +153,6 @@ def test_memory_repository_search_graph_supports_depth(tmp_path: Path) -> None:
     # Chain a -> b -> c via related_to
     repo.save(MemoryEntry(type="belief", title="Start node", body="Beginning.", id=a.id, relations={"related_to": [b.id]}))
     repo.save(MemoryEntry(type="belief", title="Middle node", body="Connected.", id=b.id, relations={"related_to": [c.id]}))
-    repo.reindex()
-
     depth0 = repo.search_graph("Start", depth=0)
     depth1 = repo.search_graph("Start", depth=1)
     depth2 = repo.search_graph("Start", depth=2)
@@ -171,8 +169,6 @@ def test_memory_repository_find_path(tmp_path: Path) -> None:
     c = repo.save(MemoryEntry(type="belief", title="C", body="Node C."))
     repo.save(MemoryEntry(type="belief", title="A", body="Node A.", id=a.id, relations={"related_to": [b.id]}))
     repo.save(MemoryEntry(type="belief", title="B", body="Node B.", id=b.id, relations={"related_to": [c.id]}))
-    repo.reindex()
-
     path_ac = repo.find_path(a.id, c.id)
     path_ca = repo.find_path(c.id, a.id)
     path_none = repo.find_path(a.id, "nonexistent")
@@ -193,8 +189,6 @@ def test_memory_repository_transitive_closure(tmp_path: Path) -> None:
     repo.save(MemoryEntry(type="goal", title="A", body="Goal A.", id=a.id, relations={"depends_on": [b.id]}))
     repo.save(MemoryEntry(type="goal", title="B", body="Goal B.", id=b.id, relations={"depends_on": [c.id]}))
     repo.save(MemoryEntry(type="goal", title="C", body="Goal C.", id=c.id, relations={"depends_on": [d.id]}))
-    repo.reindex()
-
     closure_a = repo.transitive_closure(a.id, "depends_on")
     closure_c = repo.transitive_closure(c.id, "depends_on")
 
@@ -426,7 +420,7 @@ def test_repository_rejects_invalid_descriptor_payload(tmp_path: Path) -> None:
 
 
 def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
-    from nuself.domain.memory import MemoryEntryType
+    from nuself.memory.model import MemoryEntryType
     repo = memory_entry_repository(tmp_path)
     entry = repo.save(MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact."))
 
@@ -435,7 +429,7 @@ def test_repository_quarantines_unknown_draft_type(tmp_path: Path) -> None:
 
 
 def test_repository_rejects_unknown_non_draft_type(tmp_path: Path) -> None:
-    from nuself.domain.memory import MemoryEntryType
+    from nuself.memory.model import MemoryEntryType
     repo = memory_entry_repository(tmp_path)
     invalid = MemoryEntry(type=cast(MemoryEntryType, "truly_unknown_type"), title="Concise style", body="Keep summaries compact.", review_state="reviewed")
 

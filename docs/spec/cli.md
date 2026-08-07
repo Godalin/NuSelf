@@ -44,7 +44,8 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 | `chat`       | `34` (blue)    |
 | `memory`     | `32` (green)   |
 | `persona`    | `35` (magenta) |
-| `outbox`     | `36` (cyan)    |
+| `inbox`      | `35` (magenta) |
+| `delivery`   | `36` (cyan)    |
 | `reflection` | `33` (yellow)  |
 
 **Semantic status colors:**
@@ -65,7 +66,7 @@ Controlled by `TerminalTheme`. Default ON when `sys.stdout.isatty()` and `NO_COL
 - Key/value fields may colorize values for scanability when color is enabled. Stable IDs, paths, and tags should be muted; status and object type values may use subsystem-specific colors. No-color output must remain plain `key=value` text.
 - Commands that accept an object handle resolve a compact numeric argument as the visible 0-based index from the corresponding default list view; nonnumeric arguments are stable IDs. JSON output keeps stable IDs and does not need visible indexes.
 - Commands that explicitly support batch index selections accept a compact expression with comma-separated indexes and inclusive ranges, e.g. `1,3-5,9`. Whitespace inside the expression is invalid. The compact expression itself implies index lookup. Stable IDs that carry subsystem prefixes such as `mem_` do not conflict with this grammar.
-- CLI-visible handle parsing is shared infrastructure. Command handlers, repositories, and services that accept visible indexes must use `nuself.handles` rather than duplicating index/range parsing locally.
+- CLI-visible handle parsing is shared infrastructure. Command handlers, repositories, and services that accept visible indexes must use the public parse/resolve operations in `nuself.runtime.handles` rather than duplicating index/range parsing locally; syntax classifiers remain private implementation details.
 
 ## Detail View Contract
 
@@ -109,6 +110,8 @@ Logs, `memory list/show`, `reflection list/show`, `notify list/show`, and REPL v
 - Single-item `show` prints one JSON object.
 - Disables color automatically.
 - Uses `sort_keys=True, ensure_ascii=True`.
+- Command adapters use the shared `cli.output` JSONL printer rather than
+  defining domain-specific serialization wrappers.
 
 ## Generic Data Commands
 
@@ -147,8 +150,8 @@ returns immediately.
 ### Interactive Attention Notices
 
 Interactive chat projects important hidden runtime conditions into concise
-notices. This projection is distinct from both the external notification
-outbox and the chronological activity log:
+notices. This projection is distinct from both Inbox/Delivery state and the
+chronological activity log:
 
 - public CLI startup rejects an unusable model configuration before entering
   the REPL. Embedded interactive loops may still project that condition;
@@ -176,7 +179,7 @@ outbox and the chronological activity log:
   complete identity remain visible. Historical logs are preserved; repair
   changes the active projection rather than deleting evidence;
 - a notice does not switch authority, repair data, change the chat result, or
-  enter the external notification outbox;
+  create an Inbox item or Delivery request;
 - failure to inspect optional notice sources must not prevent the REPL from
   starting. Invalid selected configuration is itself rendered as an actionable
   notice.
@@ -198,6 +201,10 @@ with `nuself data edit <collection> <record-id>`, which validates the complete
 edited record before committing, or removable with the existing confirmed
 `nuself data delete` command. Collections without a declared generic validator
 remain read-only and cannot claim a meaningful generic repair contract.
+The administration validation API is command-shaped: success returns no
+decoded domain object, while invalid input raises the owning domain error. Raw
+administration callers must not use validation as a back door to obtain memory
+or conversation model instances.
 
 One-time legacy-record migrations are not installed CLI behavior. They live in
 the repository `scripts/` directory, default to dry-run, require an explicit
@@ -241,6 +248,11 @@ interactive input state.
   identities as chat persistence. Rename and branch acquire source and
   destination locks in deterministic lexical order; archive, unarchive, and
   delete hold the active thread lock for their complete mutation. Lifecycle
+  state changes only through those explicit operations; chat state update and
+  compression preserve the existing archived flag.
+  Internal pending-turn markers remain attached when a thread is renamed or
+  archived, are not copied into a new branch, and disappear only with a
+  successful matching assistant commit or deletion of the whole thread.
   operations re-check source and destination state only after acquiring every
   required lock. Lock files are stable coordination inodes and are never
   removed by rename, archive, or delete.
@@ -257,8 +269,8 @@ interactive input state.
   causes a concurrent-state failure instead of being overwritten. This lock
   order prevents LangGraph worker threads and daemon background workers from
   deadlocking behind a transaction owned by the request thread.
-- Persisted ThreadState decoding is fail-closed. Every `messages` member must
-  be an object accepted by the exact ThreadMessage decoder; malformed members
+- Persisted ConversationState decoding is fail-closed. Every `messages` member must
+  be an object accepted by the exact `ConversationMessage` decoder; malformed members
   invalidate the complete thread instead of being filtered. Message indexes
   are non-boolean, non-negative integers and must satisfy
   `next_message_index == message_start_index + len(messages)`. A legacy record
@@ -266,6 +278,9 @@ interactive input state.
   inconsistent value is corruption and is never repaired during decoding.
 - Every exit path runs transcript auto-save and exit memory curation exactly
   once, in that order. EOF does not perform an additional inline save.
+- Exit curation receives only the selected authority root and processes pending
+  memory observations; it does not receive or depend on session conversation
+  IDs.
 - Both cleanup steps are attempted even if the first fails. Cleanup failures
   are never converted into a successful exit code.
 - Ctrl-C while editing an idle prompt discards only that input and keeps the
@@ -322,9 +337,11 @@ alias string sets.
 - The session header is printed once at startup, once after every completed
   non-command turn (including a failed turn returning to the prompt), and once
   after commands whose dispatcher result is `redraw_header`. Other commands do
-  not print it. All three paths use the same presenter and status provider:
+  not print it. All three paths use the same injected REPL callback. The
+  composition root queries the current daemon status for each invocation and
+  delegates the terminal effect to shared CLI presentation:
   ```
-  [daemon] session status=<running|one-shot> thread=<id>
+  [daemon] session status=<running|one-shot> conversation=<id>
   ```
 - NuSelf assistant replies printed to an interactive terminal are rendered as Markdown.
 - Terminal assistant replies are streamed with a small typewriter effect so the reply appears progressively. The plain stored transcript remains unchanged.
@@ -334,13 +351,13 @@ alias string sets.
 
 During each chat turn, before printing the assistant reply, the REPL polls for new log events as they are written and prints only interactive activity logs using `render_log_event()`. It does not wait for the final assistant reply before showing current-turn progress logs. Live REPL activity must be scoped to the current top-level `turn_id`; timestamp order alone is not enough to decide that a log belongs to the visible turn.
 
-Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, notification, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs` and subsystem commands.
+Interactive activity logs are user-relevant events from the current chat path: direct chat service/tool calls, approval prompts for gated tool execution, persona/self discussion progress, and chat/daemon failure or failover events. Background subsystem logs from reason, reflection, memory, trace, Inbox, Delivery, or other autonomous services must not appear in the live REPL output only because they were written while a chat turn was waiting. They remain available through `nuself dev logs` and subsystem commands.
 
 The interactive session captures the current chat path's `chat`, `daemon`, and
 `persona` activity plus approval prompts for transcript export. `:export all`
 includes every such captured event, including low-level ones that live output
 and the default shareable export omit; it does not turn reason, reflection,
-memory, trace, notification, or other concurrent background audit records into
+memory, trace, Inbox, Delivery, or other concurrent background audit records into
 chat-transcript activity.
 
 When attached to the daemon, the REPL opens a turn-scoped activity
@@ -374,9 +391,10 @@ transcript audit blocks. The final `persona_discussion` record contains stable
 ids, outcome booleans, and counts only.
 
 The live-chat send call is a continuation of the interactive turn, not an
-independent worker. `OwnedCall` owns its one-shot thread; the target captures
-the creating RuntimeContext before start and restores the thread's prior
-context after completion or failure. Long-lived daemon workers follow their
+independent worker. `OwnedCall` owns its one-shot thread and captures the
+creating Python context before start, carrying both the application authority
+and RuntimeContext without CLI-specific wrappers. Completion or failure cannot
+alter the initiating thread's context. Long-lived daemon workers follow their
 separate runtime ownership contract and never inherit CLI context.
 
 An unexpected callback `Exception` becomes a non-retryable failed interactive
@@ -435,9 +453,11 @@ Top-level commands:
 | `nuself chat`   | Explicit chat entry                                       |
 | `nuself attach` | Attach to a running daemon                                |
 | `nuself daemon` | Background process lifecycle                              |
-| `nuself thread` | Conversation thread management                            |
-| `nuself memory` | Memory, sources, profile, review queue, graph             |
-| `nuself inbox`  | User-facing proactive items: reflection and notifications |
+| `nuself conversation` | Persistent conversation management                    |
+| `nuself memory` | Personal memory, profile, review queue, graph              |
+| `nuself source` | Imported external knowledge                                |
+| `nuself reflection` | Generate and manage proactive reflections             |
+| `nuself inbox`  | Durable user-attention items from proactive domains          |
 | `nuself reason` | Long-run reasoning threads                                |
 | `nuself trace`  | Thought provenance records                                |
 | `nuself dev`    | Diagnostics, logs, config, health, eval, status           |
@@ -446,16 +466,14 @@ Breaking moves:
 
 | Removed path                  | New path                                      |
 | ----------------------------- | --------------------------------------------- |
-| `nuself source ...`           | `nuself memory source ...`                    |
-| `nuself reflection ...`       | `nuself inbox reflection ...`                 |
-| `nuself notify ...`           | `nuself inbox notify ...`                     |
+| `nuself notify ...`           | removed; use `nuself inbox ...`               |
 | `nuself logs ...`             | `nuself dev logs ...`                         |
 | `nuself status`               | `nuself dev status` or `nuself daemon status` |
 | `nuself health`               | `nuself dev health`                           |
 | `nuself config`               | `nuself dev config`                           |
 | `nuself eval`                 | `nuself dev eval`                             |
 | `nuself memory candidate ...` | `nuself memory review ...`                    |
-| `nuself thread create ...`    | `nuself thread new ...`                       |
+| `nuself conversation create ...` | `nuself conversation new ...`             |
 
 Top-level help should group commands as:
 
@@ -464,30 +482,49 @@ Top-level help should group commands as:
 - System: `daemon`, `dev`
 
 Top-level help and command group help must show one-line descriptions for each listed command. Multi-layer groups must
-do the same at every level, including `memory review`, `memory source`, `memory profile`, `memory graph`,
-`inbox reflection`, and `inbox notify`, so users can choose commands without already knowing the subsystem vocabulary.
+do the same at every level, including `memory review`, `memory profile`,
+`memory graph`, `source`, `reflection`, and `inbox`, so users can choose
+commands without already knowing the subsystem vocabulary.
 
 REPL commands mirror the same model:
 
 | Command                 | Purpose                      |
 | ----------------------- | ---------------------------- |
-| `:inbox`, `:i`          | List pending proactive items |
-| `:inbox reflection ...` | Reflection commands          |
-| `:inbox notify ...`     | Notification commands        |
+| `:inbox`, `:i`          | Generic Inbox commands       |
+| `:reflection`           | Reflection commands          |
 | `:mem`, `:m`            | Memory preview               |
-| `:thread`, `:t`         | Thread switching/listing     |
+| `:conversation`, `:c`   | Conversation switching/listing |
 | `:reason`               | Long-run reasoning commands  |
 | `:trace`                | Thought provenance commands  |
 | `:dev status`           | Session/system status        |
 | `:restart`, `:r`        | Restart daemon and reconnect |
 | `:export`, `:e`         | Transcript export            |
 
+Interactive Inbox rendering is parameterized by pending versus all items.
+Reflection and Reason remain authoritative for their source records; Inbox
+owns only attention state and source references.
+REPL command-local formatting and one-branch queries stay at their owning
+branch rather than being exposed as single-use command APIs.
+
 ## Command Group Reference
 
 ### Reflection
 
 ```
-nuself inbox reflection list [--status pending|dismissed|archived] [--json]
+nuself reflection run
+nuself reflection status
+```
+
+- `run` explicitly executes one cycle now. Manual intent bypasses quiet-hour,
+  interval, cooldown, and daily-cap scheduling gates, but malformed persisted
+  schedule state still fails closed. It reports whether a new entry was
+  published or the candidate/relevance pipeline produced no entry.
+- `status` reports readiness, the current scheduling block reason, last cycle
+  timestamp, and current daily count without running the model pipeline.
+- Background daemon cycles continue to respect every scheduling gate.
+
+```
+nuself reflection list [--status pending|dismissed|archived] [--json]
 ```
 
 - **Default view**: All reflection entries.
@@ -497,14 +534,14 @@ nuself inbox reflection list [--status pending|dismissed|archived] [--json]
 - **Empty**: `No reflection entries.`
 
 ```
-nuself inbox reflection show <id_or_index> [--json]
+nuself reflection show <id_or_index> [--json]
 ```
 
 - Indexes into the same filtered list used by `reflection list`.
 - **Detail view**: One record header containing ID, status, candidate metadata, deep link, and timestamps; body text starts on the next indented line; discussion trace uses the indented discussion trace block.
 
 ```
-nuself inbox reflection promote <id_or_index>
+nuself reflection promote <id_or_index>
 ```
 
 - Creates a reason thread from the selected reflection without dismissing or archiving the reflection.
@@ -520,20 +557,22 @@ nuself dev logs [--component <c>] [--tail N] [--json] [--no-color]
 - **Purpose**: Raw audit trail. No semantic filtering.
 - **Output**: `[component] event status=... duration_ms=... thread=... request=... error=...`, with body text on following indented lines when present.
 
-### Notifications
+### Inbox
 
 ```
-nuself inbox notify list [--status <state>]
+nuself inbox list [--status <pending|read|dismissed|resolved>]
 ```
 
-- **Output**: `<id> [<status>] <title> created=... attempts=... link=<true|false>`
-- `--status` filters at the outbox level.
+- **Output**: `<id> [<status>] <title> created=... kind=... link=<true|false>`
+- `--status` filters user-attention state.
 
 ```
-nuself inbox notify show <id>
+nuself inbox show <id>
 ```
 
-- **Output**: One record header with ID, status, title, delivery metadata, and deep link; body text starts on the next indented line.
+- **Output**: One record header with ID, status, kind, source ID, title, and
+  deep link; body text starts on the next indented line. Showing a pending item
+  marks it read.
 
 ### Daemon
 
@@ -565,19 +604,19 @@ nuself daemon start | stop | restart | status | health | list
 
 All memory subcommands follow the same list/detail/empty/error contracts.
 
-- **Help**: `nuself memory -h` and nested group help (`memory review -h`, `memory source -h`, `memory profile -h`,
+- **Help**: `nuself memory -h` and nested group help (`memory review -h`, `memory profile -h`,
   `memory graph -h`) list every subcommand with a one-line purpose, following the shared command help contract.
 - **List**: `[memory] [<N>] state=<state> type=<type> id=<id> tags=[...] confidence=...`, followed by indented title/body text. `<N>` is a 0-based visible index.
 - **Preview**: `memory preview` and REPL `:mem` show memory entries with the same record-block style as `memory list`, but without visible indexes. It is for reading context, not as the authoritative handle source for object operations.
 - **Detail**: Same record-block style as list, with full title/body plus tags, temporal metadata, and evidence rendered as indented body sections.
-- `memory show/edit/delete`, `memory review show/accept/reject/edit/merge`, `memory source show/delete/chunks/extract`, and `memory profile show/delete` accept either a stable ID or the 0-based index from their corresponding list command.
+- `memory show/edit/delete`, `memory review show/accept/reject/edit/merge`, `memory profile show/delete`, and `source show/delete/chunks` accept either a stable ID or the 0-based index from their corresponding list command.
 - `memory delete`, `memory review accept`, and `memory review reject` also accept compact batch selections, such as `nuself memory delete 0-43` or `nuself memory review accept 1,3-5,9`.
-- `memory plan show <thread>` prints payload-safe curator recovery metadata and
+- `memory plan show <observation>` prints payload-safe curator recovery metadata and
   returns non-zero for a missing or corrupt plan.
-- `memory plan discard <thread> --force` deletes only that thread's curator
-  plan. It never advances or rewinds the cursor and requires the explicit
+- `memory plan discard <observation> --force` deletes only that observation's curator
+  plan. It never changes observation status and requires the explicit
   `--force` acknowledgement because the source may be modeled again.
-  If that thread is currently being curated, it returns non-zero immediately
+  If that observation is currently being curated, it returns non-zero immediately
   and does not wait or delete the plan.
 
 ## Discussion Trace Contract
@@ -593,12 +632,11 @@ Discussion traces rendered by `render_discussion_trace()` must:
 
 ## Approval And Event Boundaries
 
-User confirmation is a synchronous request boundary, not a post-turn log
-consumer. Approval-gated agent tools prompt through the interactive tool
-wrapper before executing a durable or destructive action. A declined request
-does not execute the action. The interactive activity stream presents
-`approval_prompted`; `approval_decided` is durable audit state and is not
-replayed as a prompt or command.
+User confirmation is a synchronous typed port, not a post-turn log consumer.
+Approval-gated agent tools request the active frontend before executing a
+durable or destructive action. A declined request does not execute the action.
+Request and decision activity use the shared `chat/tool.activity` runtime event;
+events are presentation and audit projections, never executable commands.
 
 `proposal_created` and similar structured log entries are append-only audit
 records. The CLI may render them as activity, but it must never replay a log
@@ -609,3 +647,26 @@ Ephemeral in-process activity may use `EventPublisher`. Cross-process commands
 must use the daemon request protocol or a durable typed job contract. One-shot
 mode cannot perform an interactive approval unless its invoked tool wrapper has
 an input channel capable of obtaining that approval.
+
+Daemon-backed Chat uses a typed Tool-effect checkpoint/resume exchange. When a
+Tool emits a suspending `ToolEffectRequest`, LangGraph interrupts after the
+model has produced the Tool call and before the service function runs. The
+uncommitted graph checkpoint retains that exact Tool name, arguments, and call
+id; the daemon returns the complete discriminated effect request as a typed
+success payload without retrying the model.
+
+The active CLI/REPL frontend must present the challenge on the thread that owns
+terminal input, outside any background activity-polling call. Approval effects
+have no deadline: the frontend waits until the user approves, declines, or
+explicitly interrupts input. It then resumes the same conversation and
+`turn_id` with a `ToolEffectResolution` bound to the exact request. The daemon
+accepts a resolution only for the checkpointed effect request and resumes that
+checkpoint rather than rebuilding the turn or asking the model to generate
+another Tool call. CLI routing is by the effect discriminant, not by Tool or
+domain name; logs remain non-executable projections.
+
+Approval executes the checkpointed call at most once. Decline injects a normal
+no-write Tool result so the Agent can respond naturally. Neither path appends a
+second user message, and only the completed turn is committed. Missing approval
+infrastructure is not represented as a user decline, and activity events remain
+non-executable projections.

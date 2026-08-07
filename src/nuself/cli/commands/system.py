@@ -5,16 +5,12 @@ from __future__ import annotations
 import argparse
 import sys
 
-from nuself.cli.composition import compose_cli_thread_store
-from nuself.cli.commands.output import print_ansi
-from nuself.cli.composition import compose_cli_application
+from nuself.cli.output import print_ansi
+from nuself.cli.application import cli_application
 from nuself.cli.daemon_status import observe_daemon_status
-from nuself.config import ConfigSystem, runtime_paths
-from nuself.logs import (
-    LOG_COMPONENTS,
-    LogComponent,
-    read_log_events,
-)
+from nuself.config.settings import runtime_paths
+from nuself.log.reader import read_log_events
+from nuself.runtime.audit.types import LOG_COMPONENTS, LogComponent
 from nuself.tui.render import render_log_event, render_log_event_json
 
 
@@ -22,15 +18,14 @@ def handle_status(args: argparse.Namespace) -> int:
     daemon = observe_daemon_status(args.project_root)
     if daemon is None:
         return 1
-    threads = compose_cli_thread_store(args.project_root).list()
+    application = cli_application()
+    conversations = application.conversations.list()
     pending = len(
-        compose_cli_application(args.project_root).notifications.list(
-            status="pending"
-        )
+        application.inbox.list(status="pending")
     )
     print(f"daemon: {daemon.phase} pid={daemon.pid or '-'}")
-    print(f"threads: {len(threads)}")
-    print(f"pending notifications: {pending}")
+    print(f"conversations: {len(conversations)}")
+    print(f"pending Inbox items: {pending}")
     return 0
 
 
@@ -41,48 +36,18 @@ def handle_health(args: argparse.Namespace) -> int:
         issues.append(
             f"authority root missing: {paths.authority_root}"
         )
-    status_unavailable = False
     daemon = observe_daemon_status(args.project_root)
-    if daemon is None:
-        status_unavailable = True
-    else:
-        if not daemon.running:
-            issues.append(f"daemon is not ready: {daemon.phase}")
+    if daemon is not None and not daemon.running:
+        issues.append(f"daemon is not ready: {daemon.phase}")
     if issues:
         print("Health issues:")
         for issue in issues:
             print(f"  - {issue}")
         return 1
-    if status_unavailable:
+    if daemon is None:
         return 1
     print("All checks passed.")
     return 0
-
-
-def handle_config(args: argparse.Namespace) -> int:
-    paths = runtime_paths(args.project_root)
-    config_path = paths.authority_root / "config.yaml"
-    print(f"authority_root: {paths.authority_root}")
-    print(f"socket_path: {paths.socket_path}")
-    print(f"config_path: {config_path}")
-    state = (
-        "found"
-        if config_path.exists()
-        else "not found (using defaults)"
-    )
-    print(f"config_file: {state}")
-    print("daemon_reload: restart required after configuration changes")
-    effective = ConfigSystem.load(
-        config_path, args.project_root
-    )
-    print("config_effective:")
-    for key, value in sorted(
-        ConfigSystem().as_flat_dict(effective).items()
-    ):
-        print(f"  {key}: {value}")
-    return 0
-
-
 def _component(value: object) -> LogComponent | None:
     if value in LOG_COMPONENTS:
         return value

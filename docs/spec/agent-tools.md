@@ -8,11 +8,122 @@ Enable the chat agent to perform user-facing actions *during conversation*, turn
 
 ### LangChain Tool Boundary
 
-Chat tools are registered as LangChain tools, following the current LangChain Python tool interface. Tool definitions must be `BaseTool` / `StructuredTool` objects, usually built from typed Python functions via `StructuredTool.from_function(...)` or an equivalent LangChain-supported decorator/factory.
+Chat tools are registered as LangChain tools, following the current LangChain
+Python tool interface. Tool definitions become `BaseTool` / `StructuredTool`
+objects at that boundary. NuSelf feature functions use orthogonal declarative
+decorators and one adapter materializes them through the official LangChain
+tool API; the decorators are metadata, not a parallel dispatch protocol.
 
 NuSelf must not keep a parallel chat-tool protocol, class hierarchy, or registry. Service modules may expose normal Python APIs, but anything visible to the chat runtime must enter through the LangChain tool boundary.
 
 Tools are **stateless callables** at the LangChain boundary. They receive structured primitive arguments and return a string result that is injected back into the conversation context.
+
+### Orthogonal Tool Policies
+
+A feature function composes one-purpose decorators:
+
+```python
+@tool
+@component("memory")
+@mutating
+@requires_confirmation(action="archive", resource="memory")
+@observed
+@compact
+@audited("memory_archived")
+def archive_memory(entry_id: str) -> str: ...
+```
+
+Each decorator adds one immutable policy and returns a normal callable.
+Decorators never read terminal input, render output, write logs, open storage,
+dispatch work, or translate results. Composition rejects conflicts such as
+simultaneous `readonly` and `mutating` policies.
+
+The initial dimensions are Tool identity, component, execution classification,
+structured effects, and presentation. `readonly` / `mutating` classifies the
+service call; it is not itself an effect. Confirmation is an interaction effect,
+observation and domain audit are projection effects, and compact output is a
+presentation policy. Retry, idempotency, timeout, and capability may be added
+independently when their execution contracts exist; they must not enlarge one
+catch-all decorator.
+
+Every effect decorator appends one frozen `FeatureEffect` declaration to the
+ToolSpec's effect collection. `FeatureEffect` is an application-owned ABC whose
+only runtime responsibility is `bind(environment)`. Binding creates a fresh,
+invocation-scoped `BoundFeatureEffect`; declarations never contain publisher,
+frontend, storage, LangGraph, or mutable execution state. Runtime capabilities
+remain narrow Protocols collected in an explicit `EffectEnvironment`.
+
+`FeatureSpec` does not enumerate concrete effects and the executor has no
+central effect union or handler registry. Declaration-specific cardinality and
+validation belong to the declaration hierarchy rather than a growing central
+validator. Decorator order cannot change execution semantics. Bound effects
+declare stable before, success, and failure priorities. Execution proceeds as:
+
+1. interaction gates may return a typed suspension before the service call;
+2. lifecycle projections observe start without becoming execution authority;
+3. the service function executes exactly once;
+4. success or failure projections observe the authoritative outcome.
+
+Interaction gates run before observation start. On success, a declared domain
+audit precedes observation completion; on service failure, observation failure
+runs and a success-only audit does not. Suspension is not a service failure.
+The service callable executes exactly once and bound state cannot leak between
+invocations.
+
+A suspending effect is transported as a concrete subclass of the generic
+`ToolEffectRequest` ABC and answered by a concrete `ToolEffectResolution`
+subclass exactly bound to that request. Approval supplies one request/resolution
+pair; the generic bases do not expose approval fields such as `approved`,
+`risk`, `approver`, or `input_kind`.
+LangGraph maps the request to `interrupt()` and resumes it with the resolution.
+The generic Tool effect protocol, not an approval-specific ContextVar, carries
+the decision across execution layers.
+
+One LangChain adapter reads the composed specification and produces the
+framework tool. `FeatureExecutor` binds and interprets declarations.
+Interaction effects use an injected Tool effect port; terminal, daemon, test,
+and future web
+frontends provide different adapters without changing feature functions.
+The environment supplies the event producer; generic runtime code never
+hard-codes Chat. Observation publishes safe lifecycle and outcome events. Audit
+writes durable records through an injected sink. Observed tool outcomes include
+safe component, operation, status, duration, execution classification, and
+error type by default; arbitrary arguments, results, and raw errors are not
+logged. `@compact` is independent presentation metadata and neither enables nor
+suppresses observation.
+For an `@observed` function, the shared executor publishes
+`feature.started` followed by exactly one of `feature.completed` or
+`feature.failed`. Payloads contain component, operation, and status only; the
+failure payload may contain the exception type but never arguments, results,
+or the raw exception message. Functions without `@observed` publish none of
+these lifecycle events. Event publication remains secondary to execution.
+
+`ToolCaptureMiddleware` is not an observation or persistence authority. It
+tracks only invocation-local execution facts required for duplicate suppression
+and model retry/failover safety. Tracking uses the Tool's declared execution
+classification rather than inferring mutation from a name or missing tag.
+Suspension is not captured as a failed Tool execution.
+
+The runtime feature codec owns wire encoding and decoding for concrete
+interaction request/resolution pairs. Daemon payloads call that codec and do
+not inspect approval fields. LangGraph supervision validates only generic Tool
+effect bases. Terminal adapters are explicit exhaustive typed dispatch points
+and fail fast for unsupported request classes.
+
+Agent continuations are ephemeral and keyed by the exact conversation and turn
+context. A matching resolution takes ownership of its saved continuation
+before resume. Another suspension returns the updated continuation to the
+registry; completion, failure, or cancellation removes it. A mismatched
+resolution leaves the expected continuation intact and is challenged again.
+After process restart no in-memory continuation exists, so a supplied
+resolution fails closed and cannot authorize a fresh Tool invocation. The
+durable unfinished-turn marker remains recovery evidence rather than authority
+to reconstruct or replay a possibly effectful agent run.
+
+An approval decorator that calls `input()`, imports terminal rendering, writes
+audit records, or JSON-wraps the domain result is forbidden. Type-checking
+shims around `StructuredTool.from_function()` are not an application
+abstraction and must not remain as feature factories.
 
 Subagents that are visible to the chat supervisor use the same boundary. A subagent is exposed as a tool whose implementation may run an internal LangGraph or LangChain agent and then return a compact result to the supervisor.
 
@@ -84,23 +195,53 @@ service boundary rather than emulate a model protocol.
 
 ### Tool Registry
 
-`ConversationGraphRuntime` owns a `dict[str, BaseTool]` registry. Adding a tool requires three steps:
+`ConversationToolRuntime` owns the final `dict[str, BaseTool]` collection.
+Adding a tool requires three local steps:
 
-1. Implement a small typed Python function that closes over the relevant service.
-2. Wrap it as a LangChain `StructuredTool`.
-3. Register it in `ConversationGraphRuntime.__init__`.
+1. implement a typed function in the owning subsystem tool module;
+2. apply orthogonal policy decorators;
+3. include `materialize_tool(...)` in that module's returned tuple.
 
-Cross-subsystem reuse does not read this registry or configured endpoints
-through private runtime fields. `ConversationGraphRuntime` exposes an
-immutable capability snapshot containing the endpoint tuple and only tools
-tagged `readonly`. The snapshot copies collection membership at call time, so
-later registry mutation cannot alter an already-issued snapshot; endpoint and
-tool objects themselves are shared by identity.
+The top-level conversation runtime does not register individual tool names.
+`build_langchain_chat_tools(...)` only concatenates subsystem tuples using one
+resolved `ToolResources` snapshot. `ConversationToolRuntime` is the sole owner
+of the materialized tool-name catalog; `ConversationGraphRuntime` must not
+mirror the same dictionary.
 
-Daemon reason-scheduler composition consumes this public snapshot. It must not
+Cross-subsystem reuse does not read this registry through private runtime
+fields. `ConversationGraphRuntime.readonly_tools()` returns only tools tagged
+`readonly` and copies collection membership at call time, so later registry
+mutation cannot alter an already-issued tuple; tool objects themselves are
+shared by identity. Configured endpoints remain owned by application/daemon
+composition, which already supplies the same tuple to chat and Reason.
+
+`ToolResources` contains unresolved service and provider capabilities only; it
+must not contain a pre-materialized `BaseTool` tuple. The central Chat tool
+composition passes its one caller-owned `FeatureExecutor` to every domain Tool
+builder, including Persona and Selves. A domain builder must not silently
+construct a separate executor, because that would drop the runtime's approval,
+event, and audit ports. Reason likewise creates one executor for its workspace
+and thread-scoped Persona tools and injects it into both builders.
+
+Every feature callable materialized for LangChain returns `str`. Domain DTOs
+are converted at the Tool adapter boundary; confirmation rejection therefore
+also returns a normal string without a generic result cast.
+
+Daemon reason-scheduler composition consumes this public tuple. It must not
 use `getattr` against `_tools` or `_langchain_models`, silently treat missing
 private fields as empty capabilities, or repeat tag filtering outside the
 conversation runtime.
+
+### Complexity Budget
+
+Production conversation composition passes immutable `ConversationResources`
+and nested `ToolResources` snapshots rather than forwarding repositories and
+services through a long constructor chain. Each snapshot follows one ownership
+boundary, owns no lifecycle, and performs no dispatch; it only makes
+already-resolved authority explicit.
+`ConversationGraphRuntime` has at most seven direct constructor inputs and
+`ConversationToolRuntime` at most four. Adding a feature must not add a
+pass-through manager, facade, or another event bus.
 
 The snapshot-to-scheduler-to-advancer tool pipeline is typed as LangChain
 `BaseTool` throughout. Reason workspace and persona tool builders also return
@@ -142,6 +283,14 @@ skills/
 ```
 
 Each skill file starts with YAML frontmatter containing `name`, `description`, and `allowed-tools`, followed by Markdown instructions. `allowed-tools` names the exact LangChain tools the skill may call. A skill may omit `allowed-tools` only when it is intentionally advisory and does not call tools.
+
+At runtime, a skill's callable tools are exactly the ordered intersection of
+its `allowed-tools` declaration and the tools composed for that runtime. An
+empty intersection makes a tool-calling skill unavailable. An intentionally
+empty `allowed-tools` declaration remains an available advisory skill with no
+callable tools. The loader must not fall back to every tool sharing a component
+label, because that would hide declaration drift and silently widen the
+skill's authority.
 
 Current chat runtime loads these Markdown files through the `load_skill` tool. Skill prose must stay file-backed rather than moving back into hard-coded prompt strings.
 
@@ -226,7 +375,7 @@ No-model behavior is a deterministic local response policy, not a second
 guidance plus the last user message and is converted directly into
 `ChatStructuredOutput`.
 
-`nuself.llm` owns LangChain endpoint construction, endpoint preference state,
+`nuself.agent.endpoint` owns LangChain endpoint construction, endpoint preference state,
 error redaction, and availability classification. It must not expose a raw
 text-completion protocol, a default model selector, or a private text failover
 adapter. Generated text and structured behavior belong behind the shared agent
@@ -235,7 +384,7 @@ capabilities.
 Chat response services and evaluation fixtures exchange framework-native
 LangChain `BaseMessage` values. NuSelf must not
 define a parallel prompt-message DTO or convert framework messages through a
-NuSelf-only wire shape before model invocation. Persisted `ThreadMessage`
+NuSelf-only wire shape before model invocation. Persisted `ConversationMessage`
 remains a storage model and is converted to framework messages at the runtime
 boundary.
 
@@ -259,20 +408,36 @@ Projection failure remains secondary, but the authoritative agent error is not
 allowed to erase evidence that a tool already ran. Public tool-log snapshots
 retain the existing `metadata.result` / `metadata.error` wire contract.
 
-`ConversationGraphRuntime` runs a small LangGraph workflow with four nodes:
+`ConversationGraphRuntime` runs one synchronous reply pipeline with three
+stages:
 
-1. **prepare_context** — assemble durable context (memory, thread state, skills)
+1. **prepare_context** — assemble durable context (memory, conversation state, skills)
 2. **respond** — delegate to `create_agent` with LangChain-native tool calling and structured output
-3. **state_update** — persist messages and update thread state
-4. **compression** — summarize when the message window grows past the trigger threshold
+3. **state_update** — atomically persist the completed turn
+
+The respond stage calls the injected `ConversationResponseService.complete()`
+and `finalize()` operations directly. Runtime pass-through methods are not
+separate pipeline stages or extension hooks.
+
+Conversation compression is a scheduler-owned maintenance task, not part of
+reply delivery. The completed turn commits before the result becomes visible.
+Surfaces that require a committed turn for follow-up projection use the typed
+result's single `require_completed_turn()` invariant. CLI and daemon adapters
+do not independently reinterpret a missing committed turn; projection and
+curation policy remain outside the result value.
+The daemon then admits `conversation.compress:<conversation_id>` on the same
+`conversation:<conversation_id>` resource used by chat, so compression cannot
+overlap another turn. A subsequent turn may use the still-valid uncompressed
+window if compression has not run; it never waits for compression merely to
+start. Direct mode performs the same maintenance after presenting the reply.
 
 The `nuself.agent.chat` package composes focused collaborators rather than
-implementing every node directly:
+implementing every stage directly:
 
 - `ConversationContextPreparer` owns durable-context retrieval and prompt-window
   message filtering for **prepare_context**.
-- `ConversationStateManager` owns message-state persistence and bounded
-  summarization for **state_update** and **compression**.
+- `ConversationStateManager` owns message-state construction and bounded
+  summarization; the conversation store owns atomic persistence.
 - Model-backed compression uses an optional shared `TextAgent` with LangChain
   system and human messages. `ConversationStateManager` does not depend on
   `ChatLLM`, construct a model, or call `complete()`.
@@ -288,16 +453,35 @@ implementing every node directly:
 - `ConversationToolRuntime` owns tool registration, service-skill loading,
   prompt-facing tool metadata, and service-tool call logging.
 
-`ConversationGraphRuntime` exposes explicit node methods that delegate to these
-collaborators. They are testable graph seams, not compatibility adapters. The
-runtime remains responsible for graph wiring and turn-level error/trace
-boundaries.
+`ConversationGraphRuntime` exposes explicit stage methods that delegate to these
+collaborators. They are testable pipeline seams, not compatibility adapters.
+The runtime remains responsible for reply-stage sequencing and turn-level
+error boundaries. A chat-turn provenance trace is projected only after the
+conversation store commits the completed reply; trace projection never runs
+inside the conversation update callback or its per-conversation lock.
+
+Every completed reply emits bounded stage timing and context-composition
+metadata: prepare/respond/state-update/commit durations, recent-message count,
+summary presence, memory result/reference count, and final prompt-message
+count. Metadata must contain no prompt, message, summary, memory, tool result,
+or other private payload text. Timing is diagnostic only and never controls
+execution.
+
+## Conversation Identity
+
+A `conversation` is a persistent, branchable, archivable discussion inside one
+authority. A `session` is one transient CLI/client runtime and may open several
+conversations; several sessions may reopen the same conversation. A `turn` is
+one user/assistant interaction inside a conversation. Public CLI, daemon wire,
+runtime correlation, storage records, logs, and traces use `conversation_id`.
+The word `thread` remains valid only for operating-system/Python threads and
+the separately specified reason-domain concept.
 
 The package root is the stable public import boundary. Runtime implementation,
 context preparation, state management, persona orchestration, conversation
 types, and thread persistence live in separate modules beneath it.
 
-Tool calling is delegated to `create_agent` inside the **respond** node.
+Tool calling is delegated to `create_agent` inside the **respond** stage.
 Persona/selves work is not a fixed pre-response stage; it is invoked through the `selves_consult` subagent tool when the main chat agent decides it is useful.
 
 LangChain agent execution must return `structured_response` produced through
@@ -379,8 +563,13 @@ Direct service-status queries, such as asking how many memory/reflection/reason/
 
 | Tool             | Purpose                                                               |
 | ---------------- | --------------------------------------------------------------------- |
-| `memory_search`  | Query durable memory, profiles, and source chunks.                    |
+| `memory_search`  | Query personal durable memory.                                        |
 | `memory_count`   | Count durable memory entries with optional type/tag filters.          |
+| `memory_create`  | Create a draft durable memory after explicit user approval.           |
+| `runtime_time`   | Read current local-timezone and UTC timestamps.                        |
+| `source_search`  | Search external document chunks on demand.                            |
+| `source_get`     | Read a selected external document or chunk.                           |
+| `source_list`    | List available external documents.                                    |
 | `selves_consult` | Invoke the internal multi-persona subagent for perspective synthesis. |
 
 Tool names must start with the owning subsystem name. This keeps agent-visible tool calls readable in logs and avoids generic names such as `search_*`, `list_*`, or `show_*` becoming ambiguous as more subsystems are exposed.
@@ -393,12 +582,23 @@ mutate tool metadata after construction. Adding or renaming a tool therefore
 changes one authoritative definition rather than requiring a second catalog to
 remain synchronized.
 
-The public `nuself.agent.tools` package is a composition boundary, not a
-monolithic implementation module. Memory, reflection, reason, trace, selves,
-and workspace tool definitions live in subsystem-focused modules. The public
-package composes those builders with persona tools and re-exports supported
-entry points. Subsystem builders receive their service dependencies explicitly
-and do not construct unrelated repositories or services.
+The `nuself.agent.tools` package root is an import-light namespace, not a
+public facade or monolithic implementation module. Memory, reflection, reason,
+trace, selves, and workspace tool definitions live in subsystem-focused
+modules; Chat-only aggregation lives in `agent.tools.composition`. Consumers
+import the owning builder or composition module directly. Subsystem builders
+receive their service dependencies explicitly and do not construct unrelated
+repositories or services.
+
+#### `runtime_time`
+
+- **Args**: none.
+- **Behavior**: Reads the injected runtime clock once and renders the same
+  instant in the host's current local timezone and UTC.
+- **Returns**: ISO-8601 local and UTC timestamps including timezone offsets.
+- **When to use**: When the user asks for the current date/time or when an
+  answer depends materially on what “now”, “today”, or a relative date means.
+- **Effect**: Read-only; no approval is required.
 
 Tools that emit durable operational logs, such as export flows and other long-running side effects, should include a `log` tag in addition to their behavioral tag(s) so log-oriented tooling can classify them consistently.
 
@@ -460,8 +660,28 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 
 | Tool                       | Purpose                                                                                                |
 | -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `memory_create`            | Create a new draft memory only after explicit frontend approval.                                       |
 | `memory_archive`           | Change a memory entry's review state to `archived`. Archived entries are excluded from default search. |
 | `memory_update_importance` | Adjust the importance score (0.0-1.0) of a memory entry.                                               |
+
+#### `memory_create`
+
+- **Args**: `title: str`, `body: str`,
+  `memory_type: MemoryEntryType = "belief"`, `tags: list[str] | None = None`,
+  `importance: float = 0.5`.
+- **Behavior**: Requests approval through the runtime's injected
+  `ApprovalPort`. Only an affirmative decision constructs and saves one
+  `MemoryEntry` through `MemoryService`, always initially using
+  `review_state="draft"`.
+- **Returns after approval**: A confirmation containing the created entry id,
+  title, and resulting review state.
+- **Returns after rejection**: `"Action was not approved; no changes were
+  made."` The adapter returns this as the normal LangChain Tool result, so the
+  Chat Agent receives it in its tool loop and can tell the user that nothing
+  was saved.
+- **When to use**: When information stated in the current conversation is
+  plausibly useful as durable personal context. Tool availability is not
+  permission: every proposed write still goes through frontend approval.
 
 #### `memory_archive`
 
@@ -469,7 +689,7 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 - **Behavior**: Loads the memory entry, sets `review_state="archived"`, and saves it back.
 - **Returns**: Confirmation with entry title, or error if not found.
 - **Error boundary**: Only `MemoryEntryNotFound` is rendered as a missing-entry
-  result. Repository, decoding, persistence, reindexing, invariant, and
+  result. Repository, decoding, persistence, invariant, and
   programming failures propagate to the shared tool middleware and are
   recorded as failed tool outcomes.
 - **When to use**: When the user indicates a memory is outdated, no longer relevant, or should be hidden from active context.
@@ -480,7 +700,7 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 - **Behavior**: Updates the entry's importance score and saves it back.
 - **Returns**: Confirmation with new importance value, or error if not found.
 - **Error boundary**: Only `MemoryEntryNotFound` is rendered as a missing-entry
-  result. Repository, decoding, persistence, reindexing, invariant, and
+  result. Repository, decoding, persistence, invariant, and
   programming failures propagate to the shared tool middleware and are
   recorded as failed tool outcomes.
 - **When to use**: When the user emphasizes or downplays the significance of a memory during conversation.
@@ -517,19 +737,13 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 #### `reason_propose`
 
 - **Args**: `topic: str`, `working_summary: str`, `active_items: list[dict]`, `mandates: list[str]`
-- **Behavior**: Proposes a reasoning thread through the approval-decorator path. The decorated tool emits the proposal record, awaits approval, and then creates the reasoning thread.
-- **Returns**: The composed tool returns a structured JSON string to chat agents. On approval it includes the original result and approver metadata, for example:
-
-```
-{"approved": true, "component": "reasoning", "approver": "<user>", "result": "<thread_id>"}
-```
-
-On cancellation it returns:
-
-```
-{"approved": false, "component": "reasoning", "result": null}
-```
-- **When to use**: When the user wants NuSelf to start a reason thread. The agent must provide initial tracked items and mandates, even if either list is empty. The tool wrapper handles the confirmation prompt.
+- **Behavior**: Requests confirmation through the injected approval port and
+  creates the reasoning thread only after an affirmative decision.
+- **Returns**: The thread id. Confirmation policy does not wrap or change the
+  domain result.
+- **When to use**: When the user wants NuSelf to start a reason thread. The
+  agent must provide initial tracked items and mandates, even if either list is
+  empty.
 - **Evidence**: The tool does not accept arbitrary `evidence_refs`; durable evidence refs must be added through explicit service paths.
 
 ### New: Trace Awareness Tools (Read-Only)
@@ -563,84 +777,18 @@ The detailed tool catalog above should be read as grouped capability blocks, not
 
 | Family                         | Typical tools                                                                                                                                                                                     | Decorator need       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Read-only discovery            | `memory_search`, `memory_count`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
-| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_archive`, `memory_update_importance`                                                                                                          | sometimes `approval` |
+| Read-only discovery            | `runtime_time`, `memory_search`, `memory_count`, `source_search`, `source_get`, `source_list`, `reflection_list_pending`, `reflection_count`, `reason_list_active`, `reason_count`, `reason_show`, `trace_search`, `trace_count`, `trace_show`, `trace_related` | none                 |
+| Durable mutation               | `reflection_dismiss`, `reflection_archive`, `memory_create`, `memory_archive`, `memory_update_importance`                                                                                         | sometimes `approval` |
 | Approval-gated proposal/export | `reason_propose`, `reason_export`                                                                                                                                                                 | `approval`           |
 
-Approval-gated tools return structured JSON that records whether the user approved the action and, if approved, the underlying result payload.
 | Internal synthesis      | `selves_consult`                                                                                                                                                                                  | `log` only                   |
 
 This grouping is the preferred order for future code organization and for any registry builder that wants to assemble tools by capability instead of by file location.
 
-### Tool Composition Contract
-
-Tool definitions should stay as plain Python functions first, then be assembled into `StructuredTool` instances through a small composition pipeline. The preferred order is:
-
-1. define the underlying function
-2. apply one or more decorators from the shared tool-decorator model
-3. pass the composed callable into `StructuredTool.from_function(...)`
-
-### Decorator Categories
-
-Tool decorators are categorized by intent so the agent builder can combine them without hard-coding control flow into the graph runtime.
-
-Standard categories:
-
-- `approval` — gates user-confirmed or otherwise durable actions. It may return a pending result, request confirmation, or resume the original callable after approval.
-
-Future categories may exist, such as rate limiting, metrics, caching, or tracing, but they must follow the same composable decorator contract.
-
-Completed tool execution is captured once by framework middleware and projected
-through the shared `service_tool_called` outcome contract. It is not a
-decorator category. Approval decorators are intended for tools that change
-durable state or trigger expensive, user-visible actions; read-only tools
-remain undecorated. Approval decorators accept a declared `LogComponent`, not
-an arbitrary string.
-
-The current approval decorator is a synchronous request boundary. It owns the
-wrapped callable only through normal decorator composition, prompts and decides
-within the same invocation, and never places the callable or its arguments in a
-process-global pending registry. Decline returns without executing the callable;
-approval executes it exactly once in that invocation. A future deferred
-approval flow would require a durable typed request/job contract with explicit
-project, identity, expiry, and idempotency semantics; retaining arbitrary
-Python callables is not such a contract.
-
-The prompt interaction, approval decision, wrapped callable, original callable
-exception, and structured approval result are primary effects.
-`approval_prompted` and `approval_decided` are secondary observations and use
-one sealed shared approval-audit contract. `approval_prompted` has fixed
-message/status policy and exact `tool`/`summary` metadata.
-`approval_decided` has fixed message/status policy and exact `tool`,
-`approved`, nullable `approver`, and `input_kind` metadata. `input_kind` is one
-of `affirmative`, `declined`, or `eof`; EOF is recorded as a negative decision
-without pretending that a user explicitly rejected the action.
-
-The decision record is written before an approved callable executes or a
-declined call returns. The middleware-owned tool outcome records subsequent
-execution success or failure:
-
-- prompt rendering and stdout failures propagate unchanged rather than being
-  represented as a user decline;
-- stdin EOF means no affirmative approval was received and therefore follows
-  the safe-default decline path and records `input_kind="eof"`;
-- unexpected input failures propagate unchanged; they are not user decisions;
-- every render, output, EOF, input-failure, and explicit-decline path leaves
-  the wrapped callable unexecuted;
-
-- audit persistence failure never skips the prompt, changes a decline, replaces
-  an approved result, or masks the wrapped callable's exception;
-- invalid event names, missing or extra fields, wrong types, and invalid
-  `input_kind` values are programming errors rejected before the best-effort
-  sink;
-- each failed audit write emits a structured degraded diagnostic containing
-  the failed event and tool name;
-- if that diagnostic cannot be persisted, a `RuntimeWarning` is emitted while
-  the primary approval flow continues;
-- neither an audit failure nor its diagnostic triggers a prompt, callable, or
-  audit retry.
-
-Reasoning thread creation is the first migration target for this pattern. The old post-turn confirmation flow remains documented below for compatibility, but the implementation goal is to move approval into the tool composition layer so the agent lifecycle does not depend on a separate after-turn replay step.
+The orthogonal tool-policy contract near the start of this specification is
+authoritative for composition, confirmation, observation, and audit. Feature
+functions keep their natural result schema; adapters own presentation of
+approval decisions.
 
 ### Behavioral Guidelines for Reason Awareness (Prompt-Level)
 
@@ -692,7 +840,14 @@ The system prompt should include:
 
 The memory skill lives in `src/nuself/agent/skills/memory.md` and must include this behavioral contract:
 
-> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `{tool:search}` before answering unless the answer is fully present in the current visible conversation or already provided in `Relevant memory context`. Do not say you lack memory tools when `{tool:search}` is listed. If you do not call `{tool:search}`, do not claim that no memory exists."
+> "Durable memory is not ambient context. If the user asks about past preferences, decisions, recurring patterns, previous discussions, stored memories, or what NuSelf remembers, use `{tool:search}` before answering unless the answer is fully present in the current visible conversation. Do not say you lack memory tools when `{tool:search}` is listed. If you do not call `{tool:search}`, do not claim that no memory exists."
+
+### Source Skill
+
+The Source skill must state that external documents are not personal Memory and
+are never ambient context. It directs the Agent to call `{tool:search}` only for
+questions that may benefit from imported material, retry one distinct broader
+query after an empty result, and use `{tool:get}` for a selected full record.
 
 ### Reflection Skill
 

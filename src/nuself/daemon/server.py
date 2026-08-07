@@ -7,7 +7,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
-from nuself.config import (
+from nuself.config.settings import (
     RuntimePaths,
     ensure_runtime_dirs,
     runtime_paths,
@@ -28,7 +28,8 @@ from nuself.daemon.socket_server import (
 from nuself.daemon.state import DaemonState
 from nuself.runtime.cleanup import CleanupFailure, run_cleanup_steps
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import write_text_atomic
+from nuself.config.scope import NuSelfScope, resolve_scope
+from nuself.storage.atomic import write_text_atomic
 
 
 class DaemonLifecycleError(RuntimeError):
@@ -82,10 +83,10 @@ def _finish_daemon_lifecycle(
         raise primary_error.with_traceback(primary_error.__traceback__)
 
 
-def run_daemon(project_root: Path | None = None) -> int:
+def run_daemon(authority: NuSelfScope | Path | None = None) -> int:
     """Run the local daemon until a shutdown request is received."""
 
-    paths = runtime_paths(project_root)
+    paths = runtime_paths(authority)
     ensure_runtime_dirs(paths)
     instance_lock = DaemonInstanceLock(paths.daemon_lock_path)
     try:
@@ -93,47 +94,43 @@ def run_daemon(project_root: Path | None = None) -> int:
     except DaemonInstanceLockContended as exc:
         write_lifecycle_audit(
             "instance_lock_contended",
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             error=diagnostic_exception_message(exc),
         )
         return 1
-    result = 0
     primary_error: BaseException | None = None
     try:
-        result = _run_owned_daemon(paths)
+        _run_owned_daemon(paths)
     except BaseException as exc:
         primary_error = exc
     cleanup_failures = run_cleanup_steps(
         (("instance_lock.release", instance_lock.release),)
     )
     _finish_daemon_lifecycle(
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
         primary_error=primary_error,
         cleanup_failures=cleanup_failures,
     )
-    return result
+    return 0
 
 
-def _run_owned_daemon(paths: RuntimePaths) -> int:
+def _run_owned_daemon(paths: RuntimePaths) -> None:
     """Run the daemon while the caller holds project instance ownership."""
 
     state: DaemonState | None = None
-    from nuself.application.runtime import (
+    from nuself.application.lifecycle import (
         open_application_runtime,
         use_application_runtime,
     )
 
-    application_runtime = open_application_runtime(paths.project_root)
+    application_runtime = open_application_runtime(paths.scope)
     signal_owner: DaemonSignalOwner | None = None
     ready = False
     primary_error: BaseException | None = None
     try:
         _reconcile_stale_runtime_metadata(paths)
         with use_application_runtime(application_runtime):
-            state = DaemonState(
-                paths.project_root,
-                application_runtime=application_runtime,
-            )
+            state = DaemonState(application_runtime.application)
         signal_owner = DaemonSignalOwner(state.shutdown_requested)
         signal_owner.install()
 
@@ -143,15 +140,16 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
             state,
         ) as server:
             write_text_atomic(paths.pid_path, f"{os.getpid()}\n")
-            state.start_background_memory_curator()
-            state.start_background_reflection_scheduler()
-            state.start_background_reason_scheduler()
-            state.start_background_export_worker()
-            state.start_background_notification_delivery()
-            state.require_background_workers_ready()
+            state.start_background_tasks()
+            if state.shutdown_requested.is_set():
+                raise RuntimeError(
+                    "daemon shutdown was requested before readiness"
+                )
+            if not state.scheduler.snapshot().running:
+                raise RuntimeError("daemon scheduler is not running")
             write_lifecycle_audit(
                 "started",
-                project_root=paths.project_root,
+                project_root=paths.authority_root,
             )
             ready = True
             server.timeout = 0.2
@@ -165,26 +163,7 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
         cleanup_steps.extend(
             (
                 ("shutdown.signal", state.shutdown_requested.set),
-                (
-                    "worker.memory_curator.stop",
-                    state.stop_background_memory_curator,
-                ),
-                (
-                    "worker.reflection_scheduler.stop",
-                    state.stop_background_reflection_scheduler,
-                ),
-                (
-                    "worker.reason_scheduler.stop",
-                    state.stop_background_reason_scheduler,
-                ),
-                (
-                    "worker.export_worker.stop",
-                    state.stop_background_export_worker,
-                ),
-                (
-                    "worker.notification_delivery.stop",
-                    state.stop_background_notification_delivery,
-                ),
+                ("scheduler.stop", state.scheduler.shutdown),
             )
         )
     if signal_owner is not None:
@@ -205,14 +184,13 @@ def _run_owned_daemon(paths: RuntimePaths) -> int:
     if ready and not cleanup_failures:
         write_lifecycle_audit(
             "stopped",
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
         )
     _finish_daemon_lifecycle(
-        project_root=paths.project_root,
+        project_root=paths.authority_root,
         primary_error=primary_error,
         cleanup_failures=cleanup_failures,
     )
-    return 0
 
 
 def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:
@@ -245,16 +223,26 @@ def _reconcile_stale_runtime_metadata(paths: RuntimePaths) -> None:
     if any(recovered.values()):
         write_lifecycle_audit(
             "runtime_metadata_recovered",
-            project_root=paths.project_root,
+            project_root=paths.authority_root,
             metadata=recovered,
         )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m nuself.daemon.server")
-    parser.add_argument("--project-root", type=Path, default=None)
+    parser.add_argument("--user-root", type=Path, default=None)
+    parser.add_argument("--workspace-root", type=Path, default=None)
     args = parser.parse_args(argv)
-    return run_daemon(args.project_root)
+    if args.user_root is None:
+        if args.workspace_root is not None:
+            parser.error("--workspace-root requires --user-root")
+        scope = resolve_scope()
+    else:
+        scope = resolve_scope(
+            workspace=args.workspace_root,
+            environ={"NUSELF_HOME": str(args.user_root)},
+        )
+    return run_daemon(scope)
 
 
 if __name__ == "__main__":

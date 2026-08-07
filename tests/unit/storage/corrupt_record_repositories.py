@@ -2,20 +2,21 @@ from pathlib import Path
 
 import pytest
 
-from nuself.config import runtime_paths
-from nuself.logs import LogComponent, read_log_events
-from notification_fixtures import notification_outbox
+from nuself.config.settings import runtime_paths
+from nuself.log.reader import read_log_events
+from nuself.runtime.audit.types import LogComponent
+from inbox_fixtures import inbox_service
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.reason.repository import ReasonRepository
 from nuself.reflection.repository import ReflectionRepository
-from nuself.storage import auto_backend
+from nuself.storage.authority import auto_backend
 from nuself.trace.repository import TraceRepository
 
 CASES: tuple[tuple[str, LogComponent], ...] = (
     ("persona_prompts", "persona"),
     ("reason_threads", "reasoning"),
     ("reflection_entries", "reflection"),
-    ("notification_outbox", "outbox"),
+    ("inbox_items", "inbox"),
     ("trace_nodes", "reasoning"),
     ("trace_edges", "reasoning"),
 )
@@ -48,8 +49,8 @@ def test_repository_lists_report_corrupt_records(
             runtime_paths(tmp_path),
             backend=backend,
         ).list()
-    elif collection == "notification_outbox":
-        result = notification_outbox(tmp_path, backend=backend).list()
+    elif collection == "inbox_items":
+        result = inbox_service(tmp_path, backend=backend).list()
     elif collection == "trace_nodes":
         result = TraceRepository(
             runtime_paths(tmp_path),

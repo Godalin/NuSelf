@@ -3,35 +3,41 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
-from nuself.clock import utc_now_iso
-from nuself.reason.audit import run_reason_observed, write_reason_audit
-from nuself.reason.domain import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
+from nuself.runtime.clock import utc_now_iso
+from nuself.reason.audit import REASON_AUDIT
+from nuself.reason.model import ReasoningStep, ReasoningThread, ReasonPriority, ReasonStatus, TerminalStatus
 from nuself.reason.errors import (
     ReasonAdvanceError,
     ReasonPromptError,
     ReasonTransitionError,
 )
-from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
-from nuself.store import ScopedWorkspace, SqliteStore
 from nuself.trace.service import TraceRecorder
-from nuself.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
+from nuself.storage.workspace import PrivateWorkspacePaths, PrivateWorkspaceStore
+from nuself.inbox.model import InboxItem
+from nuself.inbox.service import InboxService
 
 _MAX_EVIDENCE_REFS = 20
+
+
+def _step_requires_attention(step: ReasoningStep) -> bool:
+    """Keep internal no-op advancement out of the user's Inbox."""
+
+    return step.kind != "no_change" and bool(
+        step.summary.strip()
+        or step.new_findings_data
+        or step.new_pending_data
+        or step.terminal_status
+    )
 
 
 class ReasonAdvancerProtocol(Protocol):
     def advance(self, thread: ReasoningThread) -> ReasoningStep | None:
         """Generate one reasoning step for a thread."""
-
-
-def _pick_working_summary(step: ReasoningStep | None, thread: ReasoningThread) -> str:
-    if step is not None and step.summary:
-        return step.summary
-    return thread.working_summary
 
 
 def _merge_str_lists(
@@ -72,22 +78,15 @@ class ReasonService:
         repository: ReasonRepository,
         workspace_store: PrivateWorkspaceStore,
         trace_recorder: TraceRecorder,
-        advancer: ReasonAdvancerProtocol | None = None,
-        prompt_generator: Callable[..., str] | None = None,
+        prompt_generator: Callable[..., str],
+        inbox: InboxService,
     ) -> None:
         self._repository = repository
         self._project_root = project_root
         self._workspace_store = workspace_store
-        self._trace_recorder: TraceRecorder | None = trace_recorder
-        self._workspace_cache: dict[str, ScopedWorkspace] = {}
-        self._advancer = advancer
-        self._prompt_generator = prompt_generator or generate_reasoning_prompt
-
-    @property
-    def repository(self) -> ReasonRepository:
-        """Return the repository supplied by the composition root."""
-
-        return self._repository
+        self._trace_recorder = trace_recorder
+        self._prompt_generator = prompt_generator
+        self._inbox = inbox
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -101,22 +100,14 @@ class ReasonService:
         return self._repository.list_steps(thread_id)
 
     def workspace_paths(self, thread_id: str) -> PrivateWorkspacePaths:
-        self._repository.get_thread(thread_id)
+        """Resolve Reason-owned artifacts for one thread."""
+
         return self._workspace_store.paths(thread_id)
 
-    def workspace(self, thread_id: str) -> ScopedWorkspace:
-        """Return a thread-scoped workspace for the given thread."""
-        cached = self._workspace_cache.get(thread_id)
-        if cached is not None:
-            return cached
-        ws = self._workspace_store.ensure(thread_id)
-        store = SqliteStore(ws.database)
-        w = ScopedWorkspace(
-            store,
-            ("workspace", "reason", thread_id),
-        )
-        self._workspace_cache[thread_id] = w
-        return w
+    def list_workspace_owners(self) -> list[str]:
+        """List thread workspaces for export recovery."""
+
+        return self._workspace_store.list_owners()
 
     # ── Write ──────────────────────────────────────────────────────
 
@@ -136,7 +127,6 @@ class ReasonService:
             topic,
             mandates=mandates,
             active_items=tuple(active_items),
-            project_root=self._project_root,
         ).strip()
         if not reasoning_prompt:
             raise ReasonPromptError(
@@ -154,28 +144,26 @@ class ReasonService:
             reasoning_prompt=reasoning_prompt,
         )
         saved = self._repository.save_thread(thread)
-        workspace = self._workspace_store.ensure(thread.id)
-        if self._trace_recorder is not None:
-            recorder = self._trace_recorder
-            run_reason_observed(
-                lambda: recorder.record_reason_thread_created(
-                    thread=saved,
-                    source_trace_ids=list(source_trace_ids),
-                    metadata={
-                        "workspace": str(workspace.root),
-                        "mandates": list(thread.mandates_data),
-                    },
-                ),
-                event="trace_recording_failed",
-                project_root=self._project_root,
+        workspace = self._workspace_store.paths(thread.id)
+        REASON_AUDIT.observe(
+            lambda: self._trace_recorder.record_reason_thread_created(
+                thread=saved,
+                source_trace_ids=list(source_trace_ids),
                 metadata={
-                    "operation": "start_thread",
-                    "thread_id": saved.id,
-                    "step_id": None,
+                    "workspace": str(workspace.root),
+                    "mandates": list(thread.mandates_data),
                 },
-            )
+            ),
+            event="trace_recording_failed",
+            project_root=self._project_root,
+            metadata={
+                "operation": "start_thread",
+                "thread_id": saved.id,
+                "step_id": None,
+            },
+        )
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "thread_started",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
@@ -187,6 +175,7 @@ class ReasonService:
         id_or_index: str,
         *,
         step: ReasoningStep | None = None,
+        advancer: ReasonAdvancerProtocol | None = None,
     ) -> ReasoningThread:
         thread = self._repository.resolve_thread(id_or_index)
 
@@ -196,16 +185,14 @@ class ReasonService:
                 f"'{thread.status}', expected 'active'"
             )
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "advance_started",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
         )
 
-        if step is not None:
-            pass
-        elif self._advancer is not None:
-            generated = self._advancer.advance(thread)
+        if step is None and advancer is not None:
+            generated = advancer.advance(thread)
             if generated is not None:
                 step = generated
             else:
@@ -213,7 +200,7 @@ class ReasonService:
                     f"Cannot advance thread {thread.id}: advancer did not "
                     "produce a structured step"
                 )
-        else:
+        elif step is None:
             raise ReasonAdvanceError(
                 f"Cannot advance thread {thread.id}: no reason advancer configured"
             )
@@ -225,54 +212,75 @@ class ReasonService:
             id=thread.id,
             topic=thread.topic,
             status=final_status,
-            working_summary=_pick_working_summary(step, thread),
-            evidence_refs=_merge_str_lists(thread.evidence_refs, step.evidence_refs if step else [], max_items=_MAX_EVIDENCE_REFS),
+            working_summary=step.summary or thread.working_summary,
+            evidence_refs=_merge_str_lists(
+                thread.evidence_refs,
+                step.evidence_refs,
+                max_items=_MAX_EVIDENCE_REFS,
+            ),
             priority=thread.priority,
             last_advanced_at=now,
             next_review_after=thread.next_review_after,
             skip_next_advance_until=thread.skip_next_advance_until,
             created_at=thread.created_at,
             updated_at=now,
-            active_items_data=_merge_tracked_items(thread.active_items_data, step.new_findings_data if step else (), step.retired_findings_data if step else ()),
-            pending_items_data=_merge_tracked_items(thread.pending_items_data, step.new_pending_data if step else (), ()),
-            next_steps_data=step.next_steps_data if step and step.next_steps_data else thread.next_steps_data,
+            active_items_data=_merge_tracked_items(
+                thread.active_items_data,
+                step.new_findings_data,
+                step.retired_findings_data,
+            ),
+            pending_items_data=_merge_tracked_items(
+                thread.pending_items_data,
+                step.new_pending_data,
+                (),
+            ),
+            next_steps_data=step.next_steps_data or thread.next_steps_data,
             mandates_data=thread.mandates_data,
             reasoning_prompt=thread.reasoning_prompt,
         )
         with self._repository.batch_write():
             self._repository.save_step(step)
             self._repository.save_thread(updated)
-        if self._trace_recorder is not None:
-            recorder = self._trace_recorder
-            run_reason_observed(
-                lambda: recorder.record_reason_step(
-                    thread=updated,
-                    step=step,
-                ),
-                event="trace_recording_failed",
-                project_root=self._project_root,
-                metadata={
-                    "operation": "advance_thread",
-                    "thread_id": updated.id,
-                    "step_id": step.id,
-                },
+        if _step_requires_attention(step):
+            self._inbox.add(
+                InboxItem(
+                    id=f"inbox-reason-step-{step.id}",
+                    kind="reason_step",
+                    source_id=step.id,
+                    title=f"Reason update: {updated.topic}",
+                    body=step.summary,
+                    idempotency_key=f"reason-step-{step.id}",
+                )
             )
+        REASON_AUDIT.observe(
+            lambda: self._trace_recorder.record_reason_step(
+                thread=updated,
+                step=step,
+            ),
+            event="trace_recording_failed",
+            project_root=self._project_root,
+            metadata={
+                "operation": "advance_thread",
+                "thread_id": updated.id,
+                "step_id": step.id,
+            },
+        )
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "advance_completed",
             project_root=self._project_root,
             metadata={
                 "thread_id": thread.id,
                 "step_id": step.id,
                 "step_kind": step.kind,
-                "new_findings": len(step.new_findings_data) if step else 0,
-                "new_pending": len(step.new_pending_data) if step else 0,
-                "retired_findings": len(step.retired_findings_data) if step else 0,
-                "next_steps": len(step.next_steps_data) if step else 0,
+                "new_findings": len(step.new_findings_data),
+                "new_pending": len(step.new_pending_data),
+                "retired_findings": len(step.retired_findings_data),
+                "next_steps": len(step.next_steps_data),
             },
         )
         if final_status != thread.status:
-            write_reason_audit(
+            REASON_AUDIT.write(
                 "terminal_recommendation_applied",
                 project_root=self._project_root,
                 metadata={
@@ -286,20 +294,16 @@ class ReasonService:
         return updated
 
     def pause_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "paused")
+        return self._transition(id_or_index, "paused")
 
     def resume_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "active")
+        return self._transition(id_or_index, "active")
 
     def resolve_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "resolved")
+        return self._transition(id_or_index, "resolved")
 
     def archive_thread(self, id_or_index: str) -> ReasoningThread:
-        thread = self._repository.resolve_thread(id_or_index)
-        return self._transition(thread, "archived")
+        return self._transition(id_or_index, "archived")
 
     def delete_thread(self, id_or_index: str) -> str:
         thread = self._repository.resolve_thread(id_or_index)
@@ -310,16 +314,33 @@ class ReasonService:
             shutil.rmtree(ws.root)
 
         self._repository.delete_thread(thread.id)
-        write_reason_audit(
+        REASON_AUDIT.write(
             "thread_deleted",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
         )
         return thread.id
 
+    def defer_advancement(
+        self,
+        id_or_index: str,
+        *,
+        until: str,
+    ) -> ReasoningThread:
+        """Persist the next scheduler-eligible time for one thread."""
+
+        thread = self._repository.resolve_thread(id_or_index)
+        updated = replace(thread, skip_next_advance_until=until)
+        return self._repository.save_thread(updated)
+
     # ── Internal ───────────────────────────────────────────────────
 
-    def _transition(self, thread: ReasoningThread, new_status: ReasonStatus) -> ReasoningThread:
+    def _transition(
+        self,
+        id_or_index: str,
+        new_status: ReasonStatus,
+    ) -> ReasoningThread:
+        thread = self._repository.resolve_thread(id_or_index)
         allowed: dict[ReasonStatus, tuple[ReasonStatus, ...]] = {
             "active": ("paused", "resolved", "archived"),
             "paused": ("active", "resolved", "archived"),
@@ -335,7 +356,7 @@ class ReasonService:
         updated = thread.with_status(new_status)
         self._repository.save_thread(updated)
 
-        write_reason_audit(
+        REASON_AUDIT.write(
             "thread_status_changed",
             project_root=self._project_root,
             metadata={"thread_id": thread.id, "from_status": thread.status, "to_status": new_status},

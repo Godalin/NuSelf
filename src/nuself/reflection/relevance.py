@@ -10,16 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from nuself.agent.errors import AgentError
 from nuself.agent.structured import StructuredAgent, default_structured_agent
-from nuself.config import ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate, RelevanceScore
-from nuself.reflection.audit import report_reflection_failure, write_reflection_audit
-from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.reflection.schedule_state import (
-    ReflectionScheduleStateError,
-    read_reflection_schedule_state,
-)
+from nuself.config.settings import ReflectionSettings
+from nuself.reflection.model import IdeaCandidate, RelevanceScore
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.reflection.audit import REFLECTION_AUDIT
+from nuself.reflection.repository import ReflectionEntry
+from nuself.reflection.service import ReflectionService
+from nuself.reflection.schedule_state import ReflectionScheduleStateError
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.storage import StorageCollection
 
 
 class RelevanceScoreOutput(BaseModel):
@@ -43,17 +41,17 @@ class LLMRelevanceGate:
         config: ReflectionSettings,
         agent: StructuredAgent[RelevanceScoreOutput] | None = None,
         *,
-        schedule_collection: StorageCollection,
-        repository: ReflectionRepository,
+        service: ReflectionService,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
     ) -> None:
         self._project_root = project_root
         self._config = config
-        self._schedule_collection = schedule_collection
-        self._repository = repository
+        self._service = service
         self._agent = agent or default_structured_agent(
             RelevanceScoreOutput,
             project_root=project_root,
             component="reflection",
+            endpoints=langchain_models,
         )
 
     def score(self, candidate: IdeaCandidate) -> RelevanceScore:
@@ -62,7 +60,7 @@ class LLMRelevanceGate:
             output = self._agent.invoke(
                 self._messages(
                     candidate,
-                    self._repository.list()[:3],
+                    self._service.list_entries()[:3],
                     cooldown_ok,
                 )
             )
@@ -88,7 +86,7 @@ class LLMRelevanceGate:
         cooldown_ok: bool,
         error: AgentError | ValueError,
     ) -> RelevanceScore:
-        write_reflection_audit(
+        REFLECTION_AUDIT.write(
             "relevance_gate_fallback",
             "Relevance agent failed, using fallback: "
             f"{diagnostic_exception_message(error)}",
@@ -105,14 +103,11 @@ class LLMRelevanceGate:
             reasons=("llm_fallback",),
         )
 
-    def passes(self, candidate: IdeaCandidate) -> bool:
-        return self.score(candidate).passes
-
     def _cooldown_ok(self) -> bool:
         try:
-            state = read_reflection_schedule_state(self._schedule_collection)
+            state = self._service.schedule_state()
         except ReflectionScheduleStateError as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="schedule_state_corrupt",
                 message=(

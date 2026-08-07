@@ -9,27 +9,162 @@ from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
 )
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 
-from nuself.agent.middleware import ToolOutcome
 from nuself.agent.errors import AgentInvalidOutputError, AgentProtocolError
 from nuself.agent.chat.response import (
     ConversationResponseSynthesizer,
     _LangChainChatSupervisor,
     _structured_output_from_state,  # pyright: ignore[reportPrivateUsage]
 )
-from nuself.agent.chat.thread import ThreadState
+from nuself.conversation import ConversationState
 from nuself.agent.chat.types import (
     ChatStructuredOutput,
     ConversationTurnState,
 )
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LLMSettings,
     LangChainLLMEndpoint,
 )
+from nuself.agent.tools.decorated import materialize_tool
+from nuself.decorators import (
+    component,
+    mutating,
+    requires_confirmation,
+    tool,
+)
+from nuself.runtime.context import runtime_context
+from nuself.runtime.feature.execution import FeatureExecutor
+from nuself.agent.effect import GraphToolEffectPort
+from nuself.runtime.feature.approval import (
+    ApprovalEffectDecision,
+    ApprovalEffectResolution,
+)
+from nuself.runtime.feature.protocol import (
+    ToolEffectRequired,
+)
+from nuself.runtime.event.payload import RuntimeLogEventPayload
+from nuself.runtime.event.publisher import EventPublisher
+from nuself.runtime.messages import RuntimeEnvelope
 
 
-def _ignore_tool_outcome(_outcome: ToolOutcome) -> None:
-    return None
+class _ToolCallingFakeChatModel(GenericFakeChatModel):
+    def bind_tools(self, *args: Any, **kwargs: Any) -> Any:
+        del args, kwargs
+        return self
+
+
+@pytest.mark.parametrize("approved", [True, False])
+def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
+    approved: bool,
+) -> None:
+    mutations: list[str] = []
+    events = EventPublisher()
+    captured: list[RuntimeEnvelope] = []
+    events.attach_projection(captured.append)
+
+    @tool(name="memory_create", description="Create one memory.")
+    @component("memory")
+    @mutating
+    @requires_confirmation(
+        action="create",
+        resource="memory",
+        summary=lambda _args, kwargs: f"Create {kwargs['title']}",
+    )
+    def create_memory(title: str) -> str:
+        mutations.append(title)
+        return f"created {title}"
+
+    framework_tool = materialize_tool(
+        create_memory,
+        executor=FeatureExecutor(
+            producer="chat",
+            effects=GraphToolEffectPort(),
+            events=events,
+        ),
+    )
+    model = _ToolCallingFakeChatModel(
+        messages=iter(
+            [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "memory_create",
+                            "args": {"title": "exact"},
+                            "id": "memory-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "ChatStructuredOutput",
+                            "args": {
+                                "answer": "done",
+                                "evidence_references": [],
+                                "confidence": 1.0,
+                                "epistemic_status": "grounded",
+                            },
+                            "id": "response-call",
+                            "type": "tool_call",
+                        }
+                    ],
+                ),
+            ]
+        )
+    )
+    endpoint = LangChainLLMEndpoint(
+        index=0,
+        settings=LLMSettings(
+            base_url="https://example.invalid",
+            api_key="test",
+            model="test-model",
+        ),
+        model=model,
+    )
+    synthesizer = ConversationResponseSynthesizer(
+        project_root=None,
+        langchain_models=(endpoint,),
+        tools=(framework_tool,),
+    )
+    prompt: list[BaseMessage] = [HumanMessage(content="remember this")]
+
+    with runtime_context(
+        conversation_id="default",
+        turn_id="turn-checkpoint",
+    ):
+        with pytest.raises(ToolEffectRequired) as paused:
+            synthesizer.complete(prompt)
+        request = paused.value.request
+        decision = (
+            ApprovalEffectDecision(
+                True,
+                approver="tester",
+                input_kind="affirmative",
+            )
+            if approved
+            else ApprovalEffectDecision(False, input_kind="declined")
+        )
+        result = synthesizer.complete(
+            prompt,
+            effect_resolution=ApprovalEffectResolution(request, decision),
+        )
+
+    assert result.answer == "done"
+    assert mutations == (["exact"] if approved else [])
+    payloads = [
+        RuntimeLogEventPayload.from_mapping(event.payload)
+        for event in captured
+    ]
+    assert [
+        payload.metadata["frontend_event"]
+        for payload in payloads
+        if payload.metadata is not None
+        and "frontend_event" in payload.metadata
+    ] == ["approval_requested", "approval_decided"]
 
 
 def test_structured_output_state_is_authoritative() -> None:
@@ -159,7 +294,6 @@ def test_endpoint_state_failure_retries_then_reports_configured_failure(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -207,7 +341,6 @@ def test_protocol_failure_retries_same_endpoint_without_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -260,7 +393,7 @@ def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
         fail_endpoint,
     )
     monkeypatch.setattr(
-        "nuself.agent.chat.response.report_chat_failure",
+        "nuself.agent.chat.response.CHAT_AUDIT.failure",
         capture_diagnostic,
     )
     endpoint = LangChainLLMEndpoint(
@@ -276,7 +409,6 @@ def test_pre_tool_implementation_errors_propagate_without_retry_or_fallback(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     with pytest.raises(type(error)) as caught:
@@ -326,7 +458,6 @@ def test_availability_failure_uses_shared_endpoint_failover(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete(
@@ -385,7 +516,7 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         property(has_mutating_tool_outcomes),
     )
     monkeypatch.setattr(
-        "nuself.agent.chat.response.report_chat_failure",
+        "nuself.agent.chat.response.CHAT_AUDIT.failure",
         report_failure,
     )
 
@@ -405,7 +536,6 @@ def test_tool_outcome_suppresses_retry_before_failure_policy(
         project_root=tmp_path,
         langchain_models=endpoints,
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     if uses_fallback:
@@ -468,7 +598,6 @@ def test_readonly_tool_outcome_allows_transient_retry(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     result = synthesizer.complete([HumanMessage(content="remember")])
@@ -523,7 +652,6 @@ def test_diagnostic_failure_preserves_retry_and_local_fallback(
         project_root=tmp_path,
         langchain_models=(endpoint,),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
 
     with pytest.warns(RuntimeWarning) as captured:
@@ -567,10 +695,9 @@ def test_finalize_log_failure_cannot_replace_accepted_response(
         project_root=tmp_path,
         langchain_models=(),
         tools=(),
-        log_tool_outcome=_ignore_tool_outcome,
     )
     state = ConversationTurnState.start(
-        ThreadState.empty("thread-1"),
+        ConversationState.empty("thread-1"),
         "hello",
         "thread-1",
     )

@@ -1,27 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
-
 import pytest
 
-from nuself.config import runtime_paths
-from nuself.domain.memory import MemoryEvidence
-from nuself.domain.profile import ProfileItem
+from nuself.config.settings import runtime_paths
+from nuself.memory.model import MemoryEvidence
+from nuself.profile.model import ProfileItem
 from nuself.profile.repository import (
     ProfileItemNotFound,
     ProfileItemRepository,
     ProfileSearchFilters,
-    ProfileStats,
-    profile_stats,
 )
-from nuself.storage import get_default_backend
+from tests.backend import owned_backend
 
 
 def _repository(root: Path) -> ProfileItemRepository:
     return ProfileItemRepository(
         runtime_paths(root),
-        backend=get_default_backend(root),
+        backend=owned_backend(root),
     )
 
 
@@ -107,11 +103,6 @@ def test_profile_repository_delete_missing_raises(tmp_path: Path) -> None:
     except ProfileItemNotFound:
         return
     raise AssertionError("expected ProfileItemNotFound")
-
-
-def test_profile_repository_reindex_on_empty_repo(tmp_path: Path) -> None:
-    repo = _repository(tmp_path)
-    repo.reindex()
 
 
 def test_profile_repository_search_no_matches_returns_empty(tmp_path: Path) -> None:
@@ -211,23 +202,3 @@ def test_profile_item_with_updates_importance(tmp_path: Path) -> None:
 
     loaded = repo.get(original.id)
     assert loaded.importance == 0.95
-
-
-def test_profile_stats_detaches_and_freezes_mapping_inputs(
-    tmp_path: Path,
-) -> None:
-    counts = {"profile_fact": 1}
-    snapshot = ProfileStats(items_total=1, items_by_type=counts)
-
-    counts["preference"] = 1
-
-    assert snapshot.items_by_type == {"profile_fact": 1}
-    with pytest.raises(TypeError):
-        cast(dict[str, int], snapshot.items_by_type)["goal"] = 1
-
-    repo = _repository(tmp_path)
-    repo.save(
-        ProfileItem(type="profile_fact", title="Style", body="Concise.")
-    )
-    produced = profile_stats(_repository(tmp_path))
-    assert produced.items_by_type == {"profile_fact": 1}

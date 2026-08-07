@@ -6,11 +6,11 @@ from typing import cast
 import pytest
 
 from nuself.reason import audit
-from nuself.runtime.audit_definitions import (
+from nuself.runtime.audit.definition import (
     AuditSchemaError,
     UnknownAuditDefinitionError,
 )
-from nuself.runtime.audit_types import LogComponent
+from nuself.runtime.audit.types import LogComponent
 
 _CANONICAL: tuple[
     tuple[str, str, dict[str, object], int | None],
@@ -259,7 +259,7 @@ _CANONICAL: tuple[
 def test_reason_audit_registry_owns_complete_taxonomy() -> None:
     assert {
         (definition.component, definition.event)
-        for definition in audit.REASON_AUDIT_REGISTRY.definitions
+        for definition in audit.REASON_AUDIT.registry.definitions
     } == {
         (component, event)
         for component, event, _, _ in _CANONICAL
@@ -276,7 +276,7 @@ def test_reason_audit_definitions_accept_canonical_payloads(
     metadata: dict[str, object],
     duration_ms: int | None,
 ) -> None:
-    definition = audit.REASON_AUDIT_REGISTRY.resolve(
+    definition = audit.REASON_AUDIT.registry.resolve(
         cast(LogComponent, component),
         event,
     )
@@ -304,7 +304,7 @@ def test_reason_audit_definitions_reject_unknown_metadata(
     metadata: dict[str, object],
     duration_ms: int | None,
 ) -> None:
-    definition = audit.REASON_AUDIT_REGISTRY.resolve(
+    definition = audit.REASON_AUDIT.registry.resolve(
         cast(LogComponent, component),
         event,
     )
@@ -334,13 +334,12 @@ def test_reason_audit_rejects_unknown_event_before_sink(
         sink_calls += 1
 
     monkeypatch.setattr(
-        audit,
-        "write_observed_log_event",
+        "nuself.runtime.audit.catalog.write_observed_log_event",
         unexpected_sink,
     )
 
     with pytest.raises(UnknownAuditDefinitionError):
-        audit.write_reason_audit(
+        audit.REASON_AUDIT.write(
             cast(audit.ReasonAuditEvent, "reason_output_done"),
             project_root=tmp_path,
         )
@@ -361,13 +360,12 @@ def test_reason_completion_observer_uses_fixed_projection(
         calls.append((operation, kwargs))
 
     monkeypatch.setattr(
-        audit,
-        "run_observed_best_effort",
+        "nuself.runtime.audit.catalog.run_observed_best_effort",
         run_observed,
     )
     operation = lambda: ["reason-1"]
 
-    result = audit.run_reason_observed(
+    result = audit.REASON_AUDIT.observe(
         operation,
         event="completion_load_failed",
         project_root=tmp_path,

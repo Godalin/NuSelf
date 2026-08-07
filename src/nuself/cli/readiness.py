@@ -10,7 +10,7 @@ from typing import cast
 import yaml
 
 from nuself.cli.exit_codes import CliExitCode
-from nuself.scope import NuSelfScope, resolve_runtime_paths
+from nuself.config.scope import NuSelfScope, resolve_runtime_paths
 
 
 class AuthorityRequirement(str, Enum):

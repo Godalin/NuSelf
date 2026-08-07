@@ -6,7 +6,7 @@ from fcntl import LOCK_EX, LOCK_NB, LOCK_UN, flock
 from pathlib import Path
 from typing import IO, Literal
 
-from nuself.private_fs import ensure_private_file
+from nuself.storage.filesystem import ensure_private_file
 
 
 class DaemonInstanceLockContended(RuntimeError):
@@ -37,10 +37,6 @@ class DaemonInstanceLock:
     def __init__(self, path: Path) -> None:
         self.path = path
         self._handle: IO[str] | None = None
-
-    @property
-    def acquired(self) -> bool:
-        return self._handle is not None
 
     def acquire(self) -> None:
         if self._handle is not None:

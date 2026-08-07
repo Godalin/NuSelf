@@ -13,9 +13,8 @@ from nuself.agent.failover import is_recoverable_agent_failure
 from nuself.agent.structured import (
     LangChainStructuredAgent,
     StructuredAgent,
-    default_structured_agent,
 )
-from nuself.llm import (
+from nuself.agent.endpoint import (
     LangChainLLMEndpoint,
 )
 from nuself.persona.definition import (
@@ -33,7 +32,7 @@ from nuself.persona.definition import (
     PersonaTurnState,
 )
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.persona.audit import report_persona_failure
+from nuself.persona.audit import PERSONA_AUDIT
 
 class PersonaGraphState(TypedDict):
     """LangGraph state wrapper for a persona turn."""
@@ -135,29 +134,6 @@ def persona_graph_agents(
     )
 
 
-def default_persona_graph_agents(
-    project_root: Path | None = None,
-) -> PersonaGraphAgents:
-    """Compose persona graph agents from configured endpoints."""
-    return PersonaGraphAgents(
-        activation=default_structured_agent(
-            PersonaActivationOutput,
-            project_root=project_root,
-            component="persona",
-        ),
-        contribution=default_structured_agent(
-            PersonaContributionOutput,
-            project_root=project_root,
-            component="persona",
-        ),
-        synthesis=default_structured_agent(
-            PersonaSynthesisOutput,
-            project_root=project_root,
-            component="persona",
-        ),
-    )
-
-
 class AgentBackedPersonaNode:
     """Typed-agent node that generates distinct persona perspectives."""
 
@@ -208,7 +184,7 @@ class AgentBackedPersonaNode:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_completion_failed",
                 project_root=self._project_root,
@@ -265,7 +241,7 @@ class AgentBackedSynthesizerNode:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_completion_failed",
                 project_root=self._project_root,
@@ -301,7 +277,7 @@ class AgentBackedActivationPolicy:
         except Exception as exc:
             if not is_recoverable_agent_failure(exc):
                 raise
-            report_persona_failure(
+            PERSONA_AUDIT.failure(
                 exc,
                 event="persona_activation_failed",
                 project_root=self._project_root,

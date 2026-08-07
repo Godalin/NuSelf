@@ -4,16 +4,36 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import contextmanager
-from contextvars import ContextVar, Token
+from contextvars import Context, ContextVar, Token, copy_context
 from dataclasses import dataclass
+from math import isfinite
 import threading
-from typing import Generator, Generic, TypeVar, cast
+from typing import Generator, cast
 
-from nuself.runtime.validation import validate_timeout
-
-ResultT = TypeVar("ResultT")
 _MISSING = object()
-CancelCallback = Callable[[], None]
+type CancelCallback = Callable[[], None]
+
+
+def validate_timeout(
+    value: float | None,
+    *,
+    field_name: str,
+    allow_none: bool,
+) -> float | None:
+    """Return one finite non-negative execution timeout."""
+
+    if value is None:
+        if allow_none:
+            return None
+        raise ValueError(f"{field_name} must be finite and non-negative")
+    if (
+        isinstance(value, bool)
+        or type(value) not in {int, float}
+        or not isfinite(value)
+        or value < 0
+    ):
+        raise ValueError(f"{field_name} must be finite and non-negative")
+    return float(value)
 
 
 class CancellationCleanupError(RuntimeError):
@@ -103,7 +123,7 @@ def use_cancellation(
 
 
 @dataclass(frozen=True, init=False)
-class CallOutcome(Generic[ResultT]):
+class CallOutcome[ResultT]:
     """Exactly one value or escaping control/error object."""
 
     value: ResultT | None
@@ -125,7 +145,7 @@ class CallOutcome(Generic[ResultT]):
         object.__setattr__(self, "error", error)
 
 
-class OwnedCall(Generic[ResultT]):
+class OwnedCall[ResultT]:
     """Own one result-producing thread from start through completion."""
 
     def __init__(
@@ -139,6 +159,7 @@ class OwnedCall(Generic[ResultT]):
             raise TypeError("owned call target must be callable")
         self._name = name
         self._target = target
+        self._context: Context = copy_context()
         self._cancellation = cancellation or CancellationToken()
         self._lock = threading.Lock()
         self._done = threading.Event()
@@ -152,7 +173,7 @@ class OwnedCall(Generic[ResultT]):
             if self._thread is not None:
                 return False
             thread = threading.Thread(
-                target=self._run,
+                target=self._run_in_context,
                 name=self._name,
                 daemon=False,
             )
@@ -202,6 +223,9 @@ class OwnedCall(Generic[ResultT]):
         with self._lock:
             self._outcome = outcome
         self._done.set()
+
+    def _run_in_context(self) -> None:
+        self._context.run(self._run)
 
 
 def _validate_timeout(timeout: float | None) -> None:

@@ -3,38 +3,89 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
-from nuself.config import ReflectionSettings
-from nuself.domain.proactive import IdeaCandidate, RelevanceScore
-from nuself.notification import NotificationOutbox, OutboxEntry
-from nuself.notification.deep_link import DeepLink
+from nuself.config.settings import ReflectionSettings
+from nuself.reflection.model import IdeaCandidate, RelevanceScore
+from nuself.inbox.link import DeepLink
+from nuself.inbox.model import InboxItem
+from nuself.runtime.context import RuntimeContext
 from nuself.reflection.audit import (
-    report_reflection_failure,
-    write_reflection_audit,
+    REFLECTION_AUDIT,
 )
-from nuself.reflection.candidates import (
-    CandidateListOutput as CandidateListOutput,
-    IdeaCandidateGenerator,
-)
-from nuself.reflection.organizer import ReflectionOrganizer
-from nuself.reflection.repository import ReflectionEntry, ReflectionRepository
-from nuself.reflection.relevance import (
-    LLMRelevanceGate,
-    RelevanceScoreOutput as RelevanceScoreOutput,
-)
-from nuself.persona import PersonaCompetitionResult, SharedPersonaDiscussionService
-from nuself.persona.audit import write_persona_audit
+from nuself.reflection.repository import ReflectionEntry
+from nuself.reflection.service import ReflectionService
 from nuself.reflection.schedule_state import (
     REFLECTION_SCHEDULE_STATE_VERSION,
     ReflectionScheduleState,
     ReflectionScheduleStateError,
-    read_reflection_schedule_state,
 )
-from nuself.storage import StorageCollection
-from nuself.trace.service import TraceRecorder
 
-_read_schedule_collection = read_reflection_schedule_state
+
+class CandidateGenerator(Protocol):
+    def generate(self, max_candidates: int = 3) -> list[IdeaCandidate]: ...
+
+
+class RelevanceGate(Protocol):
+    def score(self, candidate: IdeaCandidate) -> RelevanceScore: ...
+
+
+class PendingReflectionOrganizer(Protocol):
+    def organize_pending(self) -> object: ...
+
+
+class ReflectionPublisher(Protocol):
+    def add(self, item: InboxItem) -> InboxItem: ...
+
+
+class DeliveryRequester(Protocol):
+    def request(self, item_id: str, *, context: RuntimeContext) -> object: ...
+
+
+class ReflectionDiscussionResult(Protocol):
+    @property
+    def approved(self) -> bool: ...
+
+    @property
+    def revised_title(self) -> str: ...
+
+    @property
+    def revised_body(self) -> str: ...
+
+    @property
+    def discussion_trace(self) -> tuple[str, ...]: ...
+
+
+class ReflectionDiscussion(Protocol):
+    def discuss(self, candidate: IdeaCandidate) -> ReflectionDiscussionResult: ...
+
+
+class ReflectionTraceRecorder(Protocol):
+    def record_reflection_created(
+        self,
+        *,
+        reflection_id: str,
+        title: str,
+        body: str,
+        candidate_type: str,
+        composite_score: float,
+        discussion_approved: bool | None,
+        conversation_id: str | None = None,
+        decision_points: list[str] | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> object: ...
+
+
+@dataclass(frozen=True)
+class ReflectionScheduleStatus:
+    """User-facing snapshot of deterministic Reflection scheduling gates."""
+
+    ready: bool
+    blocked_by: str | None
+    last_run_at: datetime | None
+    daily_count: int
 
 
 class ReflectionScheduler:
@@ -45,38 +96,57 @@ class ReflectionScheduler:
         project_root: Path,
         config: ReflectionSettings,
         *,
-        schedule_collection: StorageCollection,
-        repository: ReflectionRepository,
-        outbox: NotificationOutbox,
-        trace_recorder: TraceRecorder,
-        candidate_generator: IdeaCandidateGenerator,
-        relevance_gate: LLMRelevanceGate,
-        organizer: ReflectionOrganizer,
+        service: ReflectionService,
+        inbox: ReflectionPublisher,
+        deliveries: DeliveryRequester,
+        trace_recorder: ReflectionTraceRecorder,
+        candidate_generator: CandidateGenerator,
+        relevance_gate: RelevanceGate,
+        organizer: PendingReflectionOrganizer,
+        discussion: ReflectionDiscussion,
     ) -> None:
         self._project_root = project_root
         self._config = config
-        self._schedule_collection = schedule_collection
-        self._reflection_repo = repository
-        self._outbox = outbox
+        self._reflection_service = service
+        self._inbox = inbox
+        self._deliveries = deliveries
         self._trace_recorder = trace_recorder
         self._candidate_generator = candidate_generator
         self._relevance_gate = relevance_gate
         self._organizer = organizer
+        self._discussion = discussion
     def should_reflect(self, now: datetime | None = None) -> bool:
         """Return whether deterministic scheduling gates allow a reflection cycle."""
         if now is None:
             now = datetime.now(UTC)
         return self._schedule_block_reason(now) is None
 
-    def reflect(self, now: datetime | None = None) -> bool:
+    def schedule_status(self, now: datetime | None = None) -> ReflectionScheduleStatus:
+        """Inspect scheduling gates without invoking the candidate pipeline."""
+
+        if now is None:
+            now = datetime.now(UTC)
+        block_reason = self._schedule_block_reason(now)
+        try:
+            state = self._reflection_service.schedule_state()
+        except ReflectionScheduleStateError:
+            state = None
+        return ReflectionScheduleStatus(
+            ready=block_reason is None,
+            blocked_by=block_reason,
+            last_run_at=state.timestamp if state is not None else None,
+            daily_count=self._reflection_count_today(now, state),
+        )
+
+    def reflect(self, now: datetime | None = None, *, force: bool = False) -> bool:
         """Run one reflection cycle if conditions pass."""
         
         if now is None:
             now = datetime.now(UTC)
         
         block_reason = self._schedule_block_reason(now)
-        if block_reason is not None:
-            write_reflection_audit(
+        if block_reason is not None and (not force or block_reason == "state_corrupt"):
+            REFLECTION_AUDIT.write(
                 "schedule_blocked",
                 "reflection cycle skipped by schedule limits",
                 project_root=self._project_root,
@@ -84,7 +154,7 @@ class ReflectionScheduler:
             )
             return False
         
-        write_reflection_audit(
+        REFLECTION_AUDIT.write(
             "cycle_started",
             "reflection cycle triggered",
             project_root=self._project_root,
@@ -99,7 +169,7 @@ class ReflectionScheduler:
         best = candidates[0]
         score = self._relevance_gate.score(best)
         if not score.passes:
-            write_reflection_audit(
+            REFLECTION_AUDIT.write(
                 "cycle_filtered",
                 f"best candidate filtered by relevance gate: {best.title}",
                 project_root=self._project_root,
@@ -113,15 +183,11 @@ class ReflectionScheduler:
         discussion_approved: bool | None = None
         discussion_trace: tuple[str, ...] = ()
         if score.composite >= self._config.gate.persona_discussion_threshold:
-            result = SharedPersonaDiscussionService(
-                project_root=self._project_root,
-                config=self._config,
-            ).discuss(best)
-            self._write_discussion_log(best, score, result, now)
+            result = self._discussion.discuss(best)
             discussion_approved = result.approved
             discussion_trace = result.discussion_trace
             if not result.approved:
-                write_reflection_audit(
+                REFLECTION_AUDIT.write(
                     "cycle_discussion_rejected",
                     f"persona discussion rejected candidate: {best.title}",
                     project_root=self._project_root,
@@ -136,7 +202,7 @@ class ReflectionScheduler:
             discussion_approved=discussion_approved,
             discussion_trace=discussion_trace,
         )
-        self._reflection_repo.add(entry)
+        self._reflection_service.save_generated_entry(entry)
         try:
             decision_points: list[str] = [
                 f"Relevance gate passed: composite={score.composite:.2f} threshold={self._config.gate.relevance_threshold}",
@@ -161,11 +227,10 @@ class ReflectionScheduler:
                 candidate_type=entry.candidate_type,
                 composite_score=entry.composite_score,
                 discussion_approved=entry.discussion_approved,
-                thread_id="reflections",
                 decision_points=decision_points,
             )
         except Exception as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="trace_recording_failed",
                 message="Failed to record trace for persisted reflection",
@@ -175,11 +240,9 @@ class ReflectionScheduler:
         self._organize_pending_reflections()
         self._write_last_reflection(now, title=title, body=body)
 
-        if self._config.auto_notify:
-            intent = self._candidate_to_notify_entry(entry)
-            self._outbox.add(intent)
+        self._publish_inbox(entry, deliver=self._config.auto_notify)
 
-        write_reflection_audit(
+        REFLECTION_AUDIT.write(
             "cycle_completed",
             f"reflection cycle published: {title}",
             project_root=self._project_root,
@@ -192,7 +255,7 @@ class ReflectionScheduler:
         try:
             self._organizer.organize_pending()
         except Exception as exc:
-            report_reflection_failure(
+            REFLECTION_AUDIT.failure(
                 exc,
                 event="organizer_failed",
                 message="Reflection organizer failed",
@@ -215,7 +278,7 @@ class ReflectionScheduler:
         if self._in_quiet_hours(now):
             return "quiet_hours"
         try:
-            state = _read_schedule_collection(self._schedule_collection)
+            state = self._reflection_service.schedule_state()
         except ReflectionScheduleStateError as exc:
             self._report_schedule_state_corrupt(exc)
             return "state_corrupt"
@@ -276,12 +339,8 @@ class ReflectionScheduler:
             return state.daily_count
         return 0
 
-    def _read_last_reflection(self) -> datetime | None:
-        state = _read_schedule_collection(self._schedule_collection)
-        return state.timestamp if state is not None else None
-
     def _write_last_reflection(self, now: datetime, title: str | None = None, body: str | None = None) -> None:
-        current = _read_schedule_collection(self._schedule_collection)
+        current = self._reflection_service.schedule_state()
         count = self._reflection_count_today(now, current) + 1
         state = ReflectionScheduleState(
             schema_version=REFLECTION_SCHEDULE_STATE_VERSION,
@@ -291,13 +350,13 @@ class ReflectionScheduler:
             title=title,
             body=body,
         )
-        self._schedule_collection.put("reflection", state.to_record())
+        self._reflection_service.save_schedule_state(state)
 
     def _report_schedule_state_corrupt(
         self,
         exc: ReflectionScheduleStateError,
     ) -> None:
-        report_reflection_failure(
+        REFLECTION_AUDIT.failure(
             exc,
             event="schedule_state_corrupt",
             message="Reflection schedule state is invalid; scheduling is blocked",
@@ -316,8 +375,11 @@ class ReflectionScheduler:
         discussion_trace: tuple[str, ...] = (),
     ) -> ReflectionEntry:
 
-        thread_id = candidate.suggested_thread_id or "reflections"
-        deep_link = DeepLink(action="open_thread", thread_id=thread_id).to_url()
+        deep_link = DeepLink.for_new_conversation(
+            title=candidate.title,
+            message=candidate.body,
+            candidate_id=candidate.id,
+        ).to_url()
         return ReflectionEntry(
             id=f"reflection-{candidate.id}",
             title=title if title is not None else candidate.title,
@@ -336,37 +398,15 @@ class ReflectionScheduler:
             reviewed_at=None,
         )
 
-    def _candidate_to_notify_entry(self, entry: ReflectionEntry) -> OutboxEntry:
-        return OutboxEntry(
-            id=f"notify-{entry.id}",
+    def _publish_inbox(self, entry: ReflectionEntry, *, deliver: bool) -> None:
+        item = self._inbox.add(InboxItem(
+            id=f"inbox-{entry.id}",
+            kind="reflection",
+            source_id=entry.id,
             title=f"New reflection: {entry.title}",
-            body=f"A new reflection idea is available. View it with: nuself reflection show {entry.id}",
-            status="pending",
-            idempotency_key=f"notify-{entry.id}",
+            body=entry.body,
+            idempotency_key=f"reflection-{entry.id}",
             deep_link=entry.deep_link,
-        )
-
-    def _write_discussion_log(
-        self,
-        candidate: IdeaCandidate,
-        score: RelevanceScore,
-        result: object,
-        now: datetime,
-    ) -> None:
-
-        if not isinstance(result, PersonaCompetitionResult):
-            return
-        del score, now
-        write_persona_audit(
-            "persona_discussion",
-            project_root=self._project_root,
-            metadata={
-                "candidate_id": candidate.id,
-                "approved": result.approved,
-                "winner_count": len(result.winner_persona_ids),
-                "emergent_count": len(result.emergent_persona_ids),
-                "blocking_veto_count": len(result.blocking_vetos),
-                "score_count": len(result.scores),
-                "discussion_steps": len(result.discussion_trace),
-            },
-        )
+        ))
+        if deliver:
+            self._deliveries.request(item.id, context=item.context)
