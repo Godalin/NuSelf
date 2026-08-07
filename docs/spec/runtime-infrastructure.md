@@ -769,6 +769,13 @@ infrastructure. Application composition creates a private publisher with an
 audit subscriber for a standalone surface; `DaemonState` injects its existing
 publisher for daemon execution.
 
+The scheduler's `chat.turn` handler returns a closed typed outcome:
+`ChatCompleted` contains the domain result and `ChatSuspended` contains the
+generic Tool effect request. An executor suspension exception is caught inside
+the task handler and converted immediately; scheduler completions and
+`DaemonRequestState.run_chat` do not treat an exception instance as ordinary
+successful result data.
+
 - A new logical turn publishes `chat/turn.started` immediately before pipeline
   execution.
 - `chat/turn.completed` is published only after `ConversationStore.update()` has

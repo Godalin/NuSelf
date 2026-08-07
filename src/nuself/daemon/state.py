@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, replace
 from uuid import uuid4
 
-from nuself.agent.chat.composition import ChatResult, compose_conversation_runtime
+from nuself.agent.chat.composition import compose_conversation_runtime
 from nuself.application.projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.reflection.composition import compose_reflection_scheduler
@@ -14,6 +14,7 @@ from nuself.reason.composition import compose_reason_advancer
 from nuself.agent.text import LangChainTextAgent
 from nuself.agent.effect import GraphToolEffectPort
 from nuself.daemon.activity import ActivityBroker
+from nuself.daemon.outcome import ChatCompleted, ChatOutcome, ChatSuspended
 from nuself.reason.export import (
     ReasonExportService,
     build_reason_export_section_planner,
@@ -220,7 +221,7 @@ class DaemonState:
         conversation_id: str,
         turn_id: str | None,
         effect_resolution: ToolEffectResolution | None = None,
-    ) -> ChatResult:
+    ) -> ChatOutcome:
         """Run chat through its conversation resource lane in a live daemon."""
 
         snapshot = self.scheduler.snapshot()
@@ -246,9 +247,7 @@ class DaemonState:
             )
         )
         result = completion.result()
-        if isinstance(result, ToolEffectRequired):
-            raise result
-        if not isinstance(result, ChatResult):
+        if not isinstance(result, (ChatCompleted, ChatSuspended)):
             raise TypeError("chat task returned an invalid result")
         return result
 
@@ -271,7 +270,7 @@ class DaemonState:
     def _run_chat_task(
         self,
         task: DaemonTask,
-    ) -> ChatResult | ToolEffectRequired:
+    ) -> ChatOutcome:
         payload = task.payload
         if not isinstance(payload, _ChatTaskPayload):
             raise TypeError("chat task requires a typed payload")
@@ -283,7 +282,7 @@ class DaemonState:
                 effect_resolution=payload.effect_resolution,
             )
         except ToolEffectRequired as exc:
-            return exc
+            return ChatSuspended(exc.request)
         observation = publish_chat_observation(
             self._memory_workflows,
             turn=result.require_completed_turn(),
@@ -291,7 +290,7 @@ class DaemonState:
         )
         self._request_memory_curation(observation.id)
         self._request_conversation_compression(result.conversation_id)
-        return result
+        return ChatCompleted(result)
 
     def _request_conversation_compression(
         self,

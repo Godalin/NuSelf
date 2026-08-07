@@ -13,6 +13,9 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Feature audit ports now declare an explicit non-raising best-effort
   projection contract; concrete adapters own observable persistence-failure
   reporting instead of effects silently swallowing sink errors.
+- Daemon Chat scheduling now carries completed and suspended states as a closed
+  typed outcome instead of returning exception objects as successful future
+  values.
 
 ### Fixed
 

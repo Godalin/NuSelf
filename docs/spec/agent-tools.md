@@ -116,6 +116,13 @@ not inspect approval fields. LangGraph supervision validates only generic Tool
 effect bases. Terminal adapters are explicit exhaustive typed dispatch points
 and fail fast for unsupported request classes.
 
+`ToolEffectRequired` is an executor-to-supervisor control signal only. A daemon
+Chat task catches it at that boundary and returns a typed `ChatSuspended`
+outcome; scheduler futures and request-state APIs never carry exception objects
+as successful data. The daemon request adapter exhaustively maps
+`ChatCompleted` to a Chat response and `ChatSuspended` to the generic Tool
+effect payload.
+
 Agent continuations are ephemeral and keyed by the exact conversation and turn
 context. A matching resolution takes ownership of its saved continuation
 before resume. Another suspension returns the updated continuation to the

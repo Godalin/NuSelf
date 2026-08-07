@@ -16,6 +16,7 @@ from nuself.agent.chat.types import (
 from nuself.conversation import ConversationMessage, ConversationState
 from conversation_fixtures import ConversationStore
 from nuself.daemon.protocol import DaemonRequest
+from nuself.daemon.outcome import ChatCompleted
 from nuself.daemon.request_handlers import handle_request
 from nuself.daemon.state import DaemonState as _DaemonState
 from daemon_fixtures import DaemonStateOwner
@@ -486,7 +487,8 @@ def test_committed_chat_survives_followup_admission_failure(
         turn_id="turn-followup-deferred",
     )
 
-    assert result.answer == "stubbed: hello"
+    assert isinstance(result, ChatCompleted)
+    assert result.result.answer == "stubbed: hello"
     assert len(ConversationStore(tmp_path).load("default").messages) == 2
     observations = state._memory_workflows  # pyright: ignore[reportPrivateUsage]
     assert len(observations.pending_observations()) == 1

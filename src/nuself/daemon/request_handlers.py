@@ -8,11 +8,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from nuself.agent.chat.types import ChatResult
 from nuself.daemon.activity import (
     ActivityBroker,
     ActivitySubscriptionNotFound,
 )
+from nuself.daemon.outcome import ChatOutcome, ChatSuspended
 from nuself.daemon.payloads import (
     DaemonIdentityPayload,
     ActivityEventsResponsePayload,
@@ -42,10 +42,7 @@ from nuself.log.store import project_log_events
 from nuself.runtime.handlers import HandlerRegistry
 from nuself.runtime.context import runtime_context
 from nuself.runtime.diagnostics import diagnostic_exception_message
-from nuself.runtime.feature.protocol import (
-    ToolEffectRequired,
-    ToolEffectResolution,
-)
+from nuself.runtime.feature.protocol import ToolEffectResolution
 
 class DaemonRequestPayloadError(ProtocolError):
     """A direct request-specific payload codec rejected its input."""
@@ -65,7 +62,7 @@ class DaemonRequestState(Protocol):
         conversation_id: str,
         turn_id: str | None,
         effect_resolution: ToolEffectResolution | None,
-    ) -> ChatResult: ...
+    ) -> ChatOutcome: ...
 
 
 type DaemonRequestRegistry = HandlerRegistry[
@@ -175,19 +172,11 @@ def _handle_chat(
         turn_id=chat_request.turn_id,
     ):
         try:
-            result = state.run_chat(
+            outcome = state.run_chat(
                 chat_request.message,
                 conversation_id=chat_request.conversation_id,
                 turn_id=chat_request.turn_id,
                 effect_resolution=chat_request.effect_resolution,
-            )
-        except ToolEffectRequired as exc:
-            return DaemonResponse.ok(
-                request,
-                ChatToolEffectPayload(
-                    conversation_id=chat_request.conversation_id,
-                    request=exc.request,
-                ).to_wire(),
             )
         except RuntimeError as exc:
             report_daemon_request_failure(
@@ -201,6 +190,15 @@ def _handle_chat(
                 exc,
                 include_chain=True,
             )
+    if isinstance(outcome, ChatSuspended):
+        return DaemonResponse.ok(
+            request,
+            ChatToolEffectPayload(
+                conversation_id=chat_request.conversation_id,
+                request=outcome.request,
+            ).to_wire(),
+        )
+    result = outcome.result
     duration_ms = int((time.monotonic() - started_at) * 1000)
     payload = ChatResponsePayload(
         answer=result.answer,
