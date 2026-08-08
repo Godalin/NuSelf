@@ -400,6 +400,11 @@ when they enforce adapter-specific authority or capability rules.
 adapters may borrow domain-facing capabilities from it, but raw
 `StorageBackend`, `StorageCollection`, and repository construction remain
 inside application composition, storage administration, and migrations.
+Its frozen annotated field set is an executable architecture contract. Adding
+or changing a field requires an intentional update to the exact structural
+gate and the governing boundary rationale in the same PR. The graph defines no
+lookup, registration, dynamic attribute, forwarding, or lifecycle methods;
+those behaviors would turn a finite composition result into a service locator.
 Stable authority-scoped query and user-intent services are composed once in
 the graph alongside their repositories. Chat, daemon, CLI, and cross-domain
 services borrow those instances rather than reconstructing services and their

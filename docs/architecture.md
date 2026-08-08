@@ -197,11 +197,27 @@ effects, and presentation. Frozen `FeatureEffect` declarations bind against an
 explicit runtime environment to fresh `BoundFeatureEffect` implementations for
 each invocation; `FeatureExecutor` owns lifecycle ordering without a central
 effect union or handler registry. Approval is a suspending interaction
-effect; observation and audit are projection effects; read/write is an
+effect; observation and audit are projection effects. Observation owns one
+`tool.activity` lifecycle vocabulary rather than duplicating terminal outcomes
+under parallel event names. Audit dispatches to an explicitly non-raising
+projection adapter, which owns observable sink-failure reporting; read/write is an
 execution classification rather than another control path. LangGraph, daemon,
 and frontend adapters transport generic Tool effect requests and resolutions
 without moving behavior into domain functions. Domain functions remain
 directly testable service-boundary callables.
+
+Framework middleware captures one immutable `ToolOutcome` only after a real
+Tool execution. An injected log projection—not middleware or the observation
+effect—owns the canonical `service_tool_called` schema containing detached
+arguments and exactly one result or error. The same projection reaches durable
+logs and request-scoped live activity; daemon composition injects the activity
+broker explicitly because Tool execution may occur beyond the request thread's
+`ContextVar` boundary. Projection failure remains secondary to the Tool
+outcome.
+
+The log boundary separates durable persistence, identity-preserving activity
+delivery, and surface-owned visibility/rendering. Daemon transports structured
+`LogEvent` values; it never produces TUI text on behalf of a frontend.
 
 Major domains are:
 

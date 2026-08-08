@@ -1740,7 +1740,7 @@ def test_reason_propose_creates_conversation_when_proposal_audit_is_unavailable(
     assert events[-1].event == "thread_started"
 
 
-def test_reason_export_tool_requires_confirmation_before_queueing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reason_export_tool_is_confirmation_gated_before_queueing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from nuself.reason.output import ReasonOutputService
     from nuself.reason.repository import ReasonRepository
     from reason_fixtures import ReasonService

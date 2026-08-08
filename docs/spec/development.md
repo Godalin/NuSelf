@@ -73,10 +73,11 @@
   development branch; they do not bypass it to target `main`.
 - Release PRs promote the active minor development branch into `main`. The
   merged release commit is tagged only after it is present on `main`.
-- CI runs for pushes to `main` and every `dev/**` development branch. Pull
-  requests targeting either `main` or `dev/**` run the same validation matrix,
-  so ordinary development is verified before and after integration rather than
-  only when promoted to the stable branch.
+- CI runs once for pushes to `main`. Pull requests targeting either `main` or
+  `dev/**` run the same validation matrix. Development integration therefore
+  receives the PR merge-ref gate without scheduling a duplicate push matrix
+  for the same feature commit; the stable branch is independently verified
+  after release integration.
 - Repository-owned workflows use maintained GitHub-hosted action generations
   that run on the current Node action runtime. CI and release must not retain an
   action major that GitHub reports as runtime-deprecated.

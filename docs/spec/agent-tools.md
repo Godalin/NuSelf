@@ -26,7 +26,7 @@ A feature function composes one-purpose decorators:
 @tool
 @component("memory")
 @mutating
-@requires_confirmation(action="archive", resource="memory")
+@confirmed(action="archive", resource="memory")
 @observed
 @compact
 @audited("memory_archived")
@@ -85,15 +85,27 @@ Interaction effects use an injected Tool effect port; terminal, daemon, test,
 and future web
 frontends provide different adapters without changing feature functions.
 The environment supplies the event producer; generic runtime code never
-hard-codes Chat. Observation publishes safe lifecycle and outcome events. Audit
-writes durable records through an injected sink. Observed tool outcomes include
+hard-codes Chat. Observation publishes one safe lifecycle event vocabulary. Audit
+writes durable records through an injected best-effort projection. The
+projection port is explicitly non-raising: its adapter owns persistence-failure
+reporting through the shared observability boundary, while the effect owns only
+record construction and dispatch. The effect must not hide adapter failures in
+a local `try/except/pass` block. Observed tool outcomes include
 safe component, operation, status, duration, execution classification, and
 error type by default; arbitrary arguments, results, and raw errors are not
 logged. `@compact` is independent presentation metadata and neither enables nor
 suppresses observation.
-For an `@observed` function, the shared executor publishes
-`feature.started` followed by exactly one of `feature.completed` or
-`feature.failed`. Payloads contain component, operation, and status only; the
+
+The public approval declaration is spelled `@confirmed(...)`: it states that
+execution is confirmation-gated without implying that decoration performs the
+interaction. Internal request, resolution, codec, and effect types retain the
+precise `Approval*` vocabulary.
+
+For an `@observed` function, the shared executor publishes `tool.activity`
+with `status="started"` followed by exactly one `tool.activity` with
+`status="completed"` or `status="failed"`. The terminal activity is the outcome
+observation; no parallel `feature.*` event is emitted. Payloads contain safe
+component, operation, execution classification, status, and duration only; the
 failure payload may contain the exception type but never arguments, results,
 or the raw exception message. Functions without `@observed` publish none of
 these lifecycle events. Event publication remains secondary to execution.
@@ -109,6 +121,13 @@ interaction request/resolution pairs. Daemon payloads call that codec and do
 not inspect approval fields. LangGraph supervision validates only generic Tool
 effect bases. Terminal adapters are explicit exhaustive typed dispatch points
 and fail fast for unsupported request classes.
+
+`ToolEffectRequired` is an executor-to-supervisor control signal only. A daemon
+Chat task catches it at that boundary and returns a typed `ChatSuspended`
+outcome; scheduler futures and request-state APIs never carry exception objects
+as successful data. The daemon request adapter exhaustively maps
+`ChatCompleted` to a Chat response and `ChatSuspended` to the generic Tool
+effect payload.
 
 Agent continuations are ephemeral and keyed by the exact conversation and turn
 context. A matching resolution takes ownership of its saved continuation
@@ -505,16 +524,19 @@ Arguments that cannot cross the JSON tool boundary bypass duplicate
 suppression; middleware still delegates them to LangChain's handler so caching
 does not introduce a second validation protocol or suppress execution.
 
-The shared tool middleware owns its cache, capture sink, tool-log callback, and
-tool-log failure reporter for its complete lifetime. These constructor-bound
-effects are not replaced between invocations. A caller that needs different
-per-invocation effects creates another middleware instance; a reused agent
-must instead serialize access to any shared mutable capture state.
+The shared tool middleware owns its cache, capture sink, and injected Tool
+outcome projection port for its complete lifetime. These constructor-bound
+collaborators are not replaced between invocations. Middleware captures the
+framework call but does not own the `service_tool_called` event schema or its
+persistence: the projection adapter owns those meanings. A caller that needs
+different per-invocation collaborators creates another middleware instance; a
+reused agent must instead serialize access to any shared mutable capture state.
 
 Middleware constructs exactly one immutable `ToolOutcome` for each executed
 tool whose arguments can cross the strict JSON boundary. The same object is
-passed to the tool-log callback and appended to the capture sink; logging does
-not reconstruct a parallel `name/args/result/error` message. `ToolOutcome`
+passed to the projection port and appended to the capture sink; neither
+middleware nor callers reconstruct a parallel `name/args/result/error`
+message. `ToolOutcome`
 requires exactly one of result or error and freezes its JSON-safe argument
 mapping before either consumer sees it. Non-JSON arguments still execute; an
 outcome-construction failure follows the same secondary log-failure reporter
@@ -522,13 +544,22 @@ and cannot replace the tool result or exception.
 
 Tool-log projection is a secondary observation effect:
 
+- Composition may inject an explicit activity sink alongside durable log
+  persistence. This is required when Tool execution can move to a scheduler
+  worker thread: live delivery must not depend on a request-thread
+  `ContextVar` crossing that boundary.
+- The projection writes the canonical event once, then forwards that exact
+  `LogEvent` to the live sink. The live sink must not reconstruct or persist a
+  second event.
+
 - failure after a successful tool execution cannot replace its `ToolMessage`
   or `Command`;
 - failure while reporting a tool exception cannot replace that original
   exception;
-- the composition root provides a failure reporter backed by shared structured
-  observability;
-- if no reporter is configured, or the reporter itself fails, middleware emits
+- the composition root injects a non-raising projection adapter whose capture
+  failure method is backed by shared structured observability;
+- if no projection adapter is configured, or its reporter itself fails,
+  middleware emits
   a registered `RuntimeWarning` without changing the primary tool outcome;
 - captured tool-error text and fallback warnings use the shared safe diagnostic
   formatter. The original tool exception is re-raised unchanged, while its

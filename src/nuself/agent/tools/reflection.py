@@ -6,11 +6,11 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import (
+    confirmed,
     component,
     mutating,
     observed,
     readonly,
-    requires_confirmation,
     tool,
 )
 from nuself.runtime.handles import VisibleHandleError, parse_visible_index
@@ -85,7 +85,7 @@ def build_reflection_tools(
     )
     @component("reflection")
     @mutating
-    @requires_confirmation(action="dismiss", resource="reflection")
+    @confirmed(action="dismiss", resource="reflection")
     @observed
     def dismiss_reflection_by_numeric_handle(index: int) -> str:
         """Dismiss a pending reflection idea by 0-based list index."""

@@ -194,14 +194,14 @@ def mutating[**P, R](
     return _attach(function, execution="mutating")
 
 
-def requires_confirmation[**P, R](
+def confirmed[**P, R](
     *,
     action: str,
     resource: str,
     risk: ApprovalRisk = "reversible",
     summary: SummaryBuilder | None = None,
 ) -> Callable[[FeatureCallable[P, R]], FeatureCallable[P, R]]:
-    """Declare confirmation without selecting a frontend."""
+    """Declare confirmation gating without selecting a frontend."""
 
     policy = ApprovalEffect(
         action=action,

@@ -342,6 +342,54 @@ def test_application_graph_exposes_services_not_persistence() -> None:
     assert exposed.isdisjoint(forbidden)
 
 
+def test_application_graph_is_a_finite_typed_composition_result() -> None:
+    graph = next(
+        node
+        for node in _tree(_SOURCE_ROOT / "application" / "composition.py").body
+        if isinstance(node, ast.ClassDef) and node.name == "ApplicationGraph"
+    )
+    fields = {
+        node.target.id: node.annotation.id
+        for node in graph.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and isinstance(node.annotation, ast.Name)
+    }
+    assert fields == {
+        "paths": "RuntimePaths",
+        "config": "SystemConfig",
+        "conversations": "ConversationService",
+        "conversation_history": "ConversationHistoryService",
+        "memory": "MemoryService",
+        "profiles": "ProfileService",
+        "memory_workflows": "MemoryWorkflowService",
+        "sources": "SourceService",
+        "inbox": "InboxService",
+        "deliveries": "DeliveryService",
+        "personas": "PersonaService",
+        "reason": "ReasonService",
+        "reflection": "ReflectionService",
+        "trace": "TraceServices",
+        "data": "DataAdminService",
+    }
+    assert not any(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        for node in graph.body
+    )
+    assert any(
+        isinstance(decorator, ast.Call)
+        and isinstance(decorator.func, ast.Name)
+        and decorator.func.id == "dataclass"
+        and any(
+            keyword.arg == "frozen"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True
+            for keyword in decorator.keywords
+        )
+        for decorator in graph.decorator_list
+    )
+
+
 def test_application_graph_names_single_services_by_domain() -> None:
     graph = next(
         node

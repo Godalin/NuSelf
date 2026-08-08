@@ -3,8 +3,8 @@ from typing import cast
 
 import pytest
 
-from nuself.agent.chat.types import ChatResult
 from nuself.daemon import request_handlers
+from nuself.daemon.outcome import ChatSuspended
 from nuself.daemon.protocol import (
     REQUEST_TYPES,
     DaemonRequest,
@@ -30,10 +30,7 @@ from nuself.runtime.handlers import (
 from nuself.runtime.feature.approval import (
     ApprovalEffectRequest,
 )
-from nuself.runtime.feature.protocol import (
-    ToolEffectRequired,
-    ToolEffectResolution,
-)
+from nuself.runtime.feature.protocol import ToolEffectResolution
 from nuself.daemon.payloads import (
     ChatToolEffectPayload,
     decode_chat_payload,
@@ -72,9 +69,9 @@ def test_chat_handler_returns_typed_tool_effect(tmp_path: Path) -> None:
             conversation_id: str,
             turn_id: str | None,
             effect_resolution: ToolEffectResolution | None,
-        ) -> ChatResult:
+        ) -> ChatSuspended:
             del message, conversation_id, turn_id, effect_resolution
-            raise ToolEffectRequired(effect_request)
+            return ChatSuspended(effect_request)
 
     response = handle_request(
         DaemonRequest(

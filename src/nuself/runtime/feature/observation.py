@@ -37,11 +37,9 @@ class _BoundObservationEffect(BoundFeatureEffect):
     def after(self, invocation: FeatureInvocation, result: object) -> None:
         del result
         self._publish(invocation, "completed", None)
-        self._publish_outcome(invocation, "completed", None)
 
     def failed(self, invocation: FeatureInvocation, error: Exception) -> None:
         self._publish(invocation, "failed", error)
-        self._publish_outcome(invocation, "failed", error)
 
     def _publish(
         self,
@@ -55,42 +53,9 @@ class _BoundObservationEffect(BoundFeatureEffect):
         try:
             events.publish(
                 producer=self._environment.producer,
-                name=f"feature.{outcome}",
-                payload=RuntimeLogEventPayload(
-                    message=f"feature {outcome}: {invocation.operation}",
-                    level="error" if error is not None else "info",
-                    status=outcome,
-                    metadata={
-                        "service_component": invocation.component,
-                        "operation": invocation.operation,
-                        "execution": invocation.execution,
-                        "duration_ms": invocation.duration_ms,
-                        **(
-                            {"error_type": type(error).__name__}
-                            if error is not None
-                            else {}
-                        ),
-                    },
-                ).to_mapping(),
-            )
-        except Exception:
-            return
-
-    def _publish_outcome(
-        self,
-        invocation: FeatureInvocation,
-        outcome: str,
-        error: Exception | None,
-    ) -> None:
-        events = self._environment.events
-        if events is None:
-            return
-        try:
-            events.publish(
-                producer=self._environment.producer,
                 name="tool.activity",
                 payload=RuntimeLogEventPayload(
-                    message="Tool outcome observed",
+                    message=f"Tool {outcome}: {invocation.operation}",
                     level="error" if error is not None else "info",
                     status=outcome,
                     metadata={

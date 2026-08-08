@@ -769,6 +769,13 @@ infrastructure. Application composition creates a private publisher with an
 audit subscriber for a standalone surface; `DaemonState` injects its existing
 publisher for daemon execution.
 
+The scheduler's `chat.turn` handler returns a closed typed outcome:
+`ChatCompleted` contains the domain result and `ChatSuspended` contains the
+generic Tool effect request. An executor suspension exception is caught inside
+the task handler and converted immediately; scheduler completions and
+`DaemonRequestState.run_chat` do not treat an exception instance as ordinary
+successful result data.
+
 - A new logical turn publishes `chat/turn.started` immediately before pipeline
   execution.
 - `chat/turn.completed` is published only after `ConversationStore.update()` has
@@ -824,6 +831,17 @@ Subscriptions are bounded, expire when abandoned, and filter by `turn_id`.
 They are display-only: receiving or replaying activity cannot execute a
 command. Direct/one-shot mode may continue using the local incremental cursor;
 daemon-attached REPL mode must not poll component log files for live activity.
+
+Tool outcome projection receives the activity broker as an explicit
+composition dependency. Scheduler workers therefore forward the exact
+persisted `service_tool_called` event without relying on request-thread
+`ContextVar` propagation and without writing a duplicate event.
+
+Activity subscriptions retain a bounded recent identity window and deliver a
+non-legacy `LogEvent.event_id` at most once while it remains in that window.
+Multiple valid projection paths may converge on the broker, but immediately
+repeating the same immutable event identity is not a second activity occurrence
+and must not consume queue capacity or appear twice in a frontend.
 
 Each activity batch carries exact `events` and `dropped_count` fields. The
 count is a non-negative integer recording events evicted from that subscription

@@ -30,7 +30,7 @@ from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import (
     component,
     mutating,
-    requires_confirmation,
+    confirmed,
     tool,
 )
 from nuself.runtime.context import runtime_context
@@ -66,7 +66,7 @@ def test_synthesizer_resumes_exact_tool_call_without_regenerating_it(
     @tool(name="memory_create", description="Create one memory.")
     @component("memory")
     @mutating
-    @requires_confirmation(
+    @confirmed(
         action="create",
         resource="memory",
         summary=lambda _args, kwargs: f"Create {kwargs['title']}",

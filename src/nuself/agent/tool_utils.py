@@ -7,8 +7,10 @@ from collections.abc import Iterable
 from langchain_core.tools import BaseTool
 
 
-def tool_service_component(tool: BaseTool) -> str | None:
+def tool_service_component(tool: BaseTool | None) -> str | None:
     """Return a framework tool's validated service component."""
+    if tool is None:
+        return None
     metadata = tool.metadata or {}
     service_component = metadata.get("service_component")
     return service_component if isinstance(service_component, str) else None

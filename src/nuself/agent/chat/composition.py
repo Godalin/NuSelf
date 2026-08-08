@@ -8,6 +8,7 @@ from nuself.agent.chat.types import (
 )
 from nuself.agent.chat.engine import ConversationGraphRuntime
 from nuself.agent.chat.resources import ConversationResources
+from nuself.agent.outcome import ToolOutcomeProjection
 from nuself.agent.tools.resources import ToolResources
 from nuself.agent.chat.response import (
     BasicConversationResponseService,
@@ -52,6 +53,7 @@ def compose_conversation_runtime(
         ConversationResponseService | BasicConversationResponseService | None
     ) = None,
     effect_port: ToolEffectPort | None = None,
+    tool_outcomes: ToolOutcomeProjection | None = None,
     langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
 ) -> ConversationGraphRuntime:
     """Build chat from one authority graph plus surface-owned adapters."""
@@ -90,6 +92,7 @@ def compose_conversation_runtime(
         conversation_store=conversations,
         reflection_settings=config.reflection,
         language_preference=config.chat.language_preference,
+        tool_outcomes=tool_outcomes,
     )
     publisher = event_publisher
     if publisher is None:

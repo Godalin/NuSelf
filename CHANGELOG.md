@@ -10,7 +10,35 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Shortened the public Tool confirmation declaration from
+  `@requires_confirmation(...)` to `@confirmed(...)`; internal approval effect
+  and protocol names remain unchanged.
+- Separated durable logging, identity-preserving activity delivery, and
+  frontend rendering contracts; Tool outcome composition now names its
+  explicit `activity_sink`, and daemon subscriptions suppress duplicate recent
+  `LogEvent` identities from converging projection paths.
+
+- Feature audit ports now declare an explicit non-raising best-effort
+  projection contract; concrete adapters own observable persistence-failure
+  reporting instead of effects silently swallowing sink errors.
+- Daemon Chat scheduling now carries completed and suspended states as a closed
+  typed outcome instead of returning exception objects as successful future
+  values.
+- `ApplicationGraph` now has an exact executable field contract that prevents
+  unreviewed widening into lookup, forwarding, or lifecycle behavior.
+- Development PR commits now run one CI matrix instead of duplicate push and
+  pull-request matrices; `main` remains independently verified after merge.
+
 ### Fixed
+
+- Restored production `service_tool_called` projection so completed and failed
+  framework Tool executions again expose structured arguments and result/error
+  in live activity and logs without adding payloads to lifecycle observation;
+  daemon composition now delivers those outcomes explicitly across scheduler
+  worker-thread boundaries.
+- Unified observed Tool lifecycle under one `tool.activity` vocabulary, removing
+  duplicate terminal `feature.*` projections while keeping structured Tool I/O
+  in the framework-owned outcome event.
 
 ### Documentation
 

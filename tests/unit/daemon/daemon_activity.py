@@ -57,6 +57,31 @@ def test_activity_broker_filters_turns_and_bounds_queues() -> None:
     assert batch.dropped_count == 1
 
 
+def test_activity_broker_delivers_one_event_identity_once() -> None:
+    broker = ActivityBroker()
+    subscription_id = broker.open("turn-1")
+    event = _event("turn-1", "one occurrence")
+
+    broker.publish(event)
+    broker.publish(event)
+
+    batch = broker.next_events(
+        subscription_id,
+        timeout_seconds=0,
+        limit=10,
+    )
+    assert batch.events == (event,)
+    assert batch.dropped_count == 0
+
+    broker.publish(event)
+    repeated = broker.next_events(
+        subscription_id,
+        timeout_seconds=0,
+        limit=10,
+    )
+    assert repeated.events == ()
+
+
 def test_activity_broker_close_and_expiry() -> None:
     broker = ActivityBroker(subscription_ttl_seconds=0.001)
     subscription_id = broker.open("turn-1")
