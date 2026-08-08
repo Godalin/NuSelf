@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from uuid import uuid4
 
 from nuself.agent.chat.composition import compose_conversation_runtime
+from nuself.application.projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.reason.composition import compose_reason_advancer
@@ -92,7 +93,6 @@ class DaemonState:
                 component="reasoning",
             ),
         )
-        self.chat_completion = application.chat_completion
         self.conversation_runtime = compose_conversation_runtime(
             paths,
             config,
@@ -119,7 +119,7 @@ class DaemonState:
             ),
         )
 
-        self.memory_curator = application.memory_workflows.curator(
+        self.memory_curator = application.memory.curator(
             application.trace.recorder,
             config,
             langchain_models=langchain_models,
@@ -162,7 +162,7 @@ class DaemonState:
             interval_seconds=reason_interval,
             service=application.reason,
         )
-        self._memory_workflows = application.memory_workflows
+        self._memory = application.memory
         memory_interval = config.daemon.memory_curator.interval_seconds
         self._periodic_tasks: tuple[tuple[DaemonTaskKind, float], ...] = (
             ("memory.scan", memory_interval),
@@ -258,7 +258,7 @@ class DaemonState:
         return result
 
     def _scan_memory_observations(self, _task: DaemonTask) -> None:
-        for observation in self._memory_workflows.pending_observations():
+        for observation in self._memory.pending_observations():
             self._request_memory_curation(observation.id)
 
     def _scan_conversations(self, _task: DaemonTask) -> None:
@@ -289,9 +289,14 @@ class DaemonState:
             )
         except ToolEffectRequired as exc:
             return ChatSuspended(exc.request)
-        observation_id = self.chat_completion.complete(result)
-        if observation_id is not None:
-            self._request_memory_curation(observation_id)
+        observation = publish_chat_observation(
+            self._memory,
+            turn=result.require_completed_turn(),
+            source_trace_id=result.trace_id,
+            project_root=self.authority_root,
+        )
+        if observation is not None:
+            self._request_memory_curation(observation.id)
         self._request_conversation_compression(result.conversation_id)
         return ChatCompleted(result)
 

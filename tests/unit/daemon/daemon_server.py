@@ -378,12 +378,12 @@ def test_daemon_chat_delivers_reply_when_observation_projection_degrades(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state = DaemonState(tmp_path)
-    def skip_observation(_result: object) -> None:
+    def skip_observation(*args: object, **kwargs: object) -> None:
+        del args, kwargs
         return None
 
     monkeypatch.setattr(
-        state.chat_completion,
-        "complete",
+        "nuself.daemon.state.publish_chat_observation",
         skip_observation,
     )
     curated: list[str] = []
@@ -452,7 +452,7 @@ def test_memory_curator_periodic_scan_recovers_pending_observations(
     tmp_path: Path,
 ) -> None:
     state = DaemonState(tmp_path)
-    observations = state._memory_workflows  # pyright: ignore[reportPrivateUsage]
+    observations = state._memory  # pyright: ignore[reportPrivateUsage]
     for source_ref in ("test:active", "test:archived"):
         observations.observe(
             MemoryObservation.create(
@@ -520,7 +520,7 @@ def test_committed_chat_survives_followup_admission_failure(
     assert isinstance(result, ChatCompleted)
     assert result.result.answer == "stubbed: hello"
     assert len(ConversationStore(tmp_path).load("default").messages) == 2
-    observations = state._memory_workflows  # pyright: ignore[reportPrivateUsage]
+    observations = state._memory  # pyright: ignore[reportPrivateUsage]
     assert len(observations.pending_observations()) == 1
 
 

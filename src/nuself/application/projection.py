@@ -10,6 +10,7 @@ from nuself.conversation import CompletedTurn
 from nuself.memory.observation import MemoryObservation
 from nuself.memory.repository import MemorySearchFilters
 from nuself.memory.service import MemoryService
+from nuself.memory.audit import MEMORY_AUDIT
 from nuself.persona.audit import PERSONA_AUDIT
 from nuself.persona.definition import BUILTIN_PERSONAS, PersonaDefinition
 
@@ -23,23 +24,32 @@ def publish_chat_observation(
     *,
     turn: CompletedTurn,
     source_trace_id: str | None = None,
-) -> MemoryObservation:
+    project_root: Path | None = None,
+) -> MemoryObservation | None:
     """Project one committed turn into memory's producer-neutral API."""
 
     source_identity = (
         f"{turn.conversation_id}:{turn.start_index}:{turn.end_index}"
     )
     source_ref = f"interaction:{uuid5(NAMESPACE_URL, source_identity).hex}"
-    return observer.observe(
-        MemoryObservation.create(
-            source_ref=source_ref,
-            fragments=(
-                f"user: {turn.user_content}",
-                f"assistant: {turn.assistant_content}",
-            ),
-            source_trace_id=source_trace_id,
+    try:
+        return observer.observe(
+            MemoryObservation.create(
+                source_ref=source_ref,
+                fragments=(
+                    f"user: {turn.user_content}",
+                    f"assistant: {turn.assistant_content}",
+                ),
+                source_trace_id=source_trace_id,
+            )
         )
-    )
+    except Exception as exc:
+        MEMORY_AUDIT.failure(
+            exc,
+            event="post_chat_observation_failed",
+            project_root=project_root,
+        )
+        return None
 
 
 def load_personas_from_memory(

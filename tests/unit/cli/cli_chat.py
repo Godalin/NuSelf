@@ -9,7 +9,6 @@ import pytest
 from nuself.agent.chat.types import ChatResult
 from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 from nuself.cli import chat
-from nuself.cli.application import cli_application
 from nuself.conversation import CompletedTurn
 from nuself.daemon.client import (
     DaemonApplicationError,
@@ -590,12 +589,13 @@ def test_one_shot_delivers_reply_when_observation_projection_degrades(
             )
         ),
     )
-    def skip_observation(_result: ChatResult) -> None:
+    def skip_observation(*args: object, **kwargs: object) -> None:
+        del args, kwargs
         return None
 
     monkeypatch.setattr(
-        cli_application().chat_completion,
-        "complete",
+        chat,
+        "publish_chat_observation",
         skip_observation,
     )
     curated: list[str] = []

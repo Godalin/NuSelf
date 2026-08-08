@@ -17,11 +17,11 @@ from nuself.memory.optimizer import (
 
 def handle_memory_update(args: argparse.Namespace) -> int:
     application = cli_application()
-    curator = application.memory_workflows.curator(
+    curator = application.memory.curator(
         application.trace.recorder,
         application.config,
     )
-    pending = application.memory_workflows.pending_observations()
+    pending = application.memory.pending_observations()
     for observation in pending:
         curator.run_once(observation.id)
     print(f"Memory curator: processed_observations={len(pending)}")
@@ -31,7 +31,7 @@ def handle_memory_update(args: argparse.Namespace) -> int:
 def handle_memory_optimize(args: argparse.Namespace) -> int:
     settings = MemoryOptimizerSettings(memory_limit=args.limit)
     application = cli_application()
-    result = application.memory_workflows.optimizer(
+    result = application.memory.optimizer(
         application.config,
         settings=settings,
     ).run_once()

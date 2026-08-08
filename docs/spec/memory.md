@@ -105,13 +105,18 @@ product consumer.
 Post-chat curation is a secondary effect after the assistant reply has already
 been produced and persisted. Daemon curation failures belong to the worker
 health and observability boundary and cannot alter the completed chat response.
-The application-level Chat completion service owns the one shared projection
+The application-level Chat projection adapter owns the one shared conversion
 from a committed `ChatResult` to Memory's producer-neutral observation API.
 Observation persistence failure emits `post_chat_observation_failed` and
 returns no observation identity; it cannot replace the committed reply. A
 caller requests curation only when an observation identity was returned.
 One-shot CLI still runs that curation locally, while daemon Chat submits it to
 the scheduler. Conversation compression remains independently adapter-owned.
+
+`MemoryService` is the sole authority-scoped public Memory boundary. In
+addition to entry and candidate operations, it owns observation intake/listing,
+curator recovery-plan access, curator construction, and optimizer construction.
+`MemoryWorkflowService` and a separate Chat completion Service do not exist.
 Each requested or discovered observation ID is passed explicitly to
 `MemoryCurator.run_once`. Memory does not accept a conversation store, state,
 message, or identifier.

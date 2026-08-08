@@ -18,13 +18,12 @@ from nuself.memory.repository import (
 )
 from nuself.memory.curator.plan import MemoryCuratorPlanStore
 from nuself.memory.observation import MemoryObservationRepository
-from nuself.memory.observation import MemoryObservation
-from nuself.memory.curator.plan import MemoryCuratorPlan
 from nuself.memory.optimizer import (
     MemoryOptimizer,
     MemoryOptimizerSettings,
     OptimizeActionsOutput,
 )
+from nuself.memory.service import MemoryService
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
@@ -39,58 +38,6 @@ class MemoryRepositories:
     profile: ProfileItemRepository
     observations: MemoryObservationRepository
     curator_plans: MemoryCuratorPlanStore
-
-
-class MemoryWorkflowService:
-    """Memory-owned maintenance and recovery workflow boundary."""
-
-    def __init__(
-        self,
-        paths: RuntimePaths,
-        repositories: MemoryRepositories,
-    ) -> None:
-        self._paths = paths
-        self._repositories = repositories
-
-    def observe(self, observation: MemoryObservation) -> MemoryObservation:
-        return self._repositories.observations.observe(observation)
-
-    def pending_observations(self) -> tuple[MemoryObservation, ...]:
-        return self._repositories.observations.pending()
-
-    def curator_plan(self, observation_id: str) -> MemoryCuratorPlan | None:
-        return self._repositories.curator_plans.get(observation_id)
-
-    def discard_curator_plan(self, observation_id: str) -> None:
-        self._repositories.curator_plans.discard(observation_id)
-
-    def curator(
-        self,
-        trace_recorder: TraceRecorder,
-        config: SystemConfig,
-        *,
-        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
-    ) -> MemoryCurator:
-        return compose_memory_curator(
-            self._paths,
-            self._repositories,
-            trace_recorder,
-            config,
-            langchain_models=langchain_models,
-        )
-
-    def optimizer(
-        self,
-        config: SystemConfig,
-        *,
-        settings: MemoryOptimizerSettings | None = None,
-    ) -> MemoryOptimizer:
-        return compose_memory_optimizer(
-            self._paths,
-            self._repositories,
-            config,
-            settings=settings,
-        )
 
 
 def compose_memory_repositories(
@@ -119,6 +66,44 @@ def compose_memory_repositories(
     )
 
 
+def compose_memory_service(
+    paths: RuntimePaths,
+    repositories: MemoryRepositories,
+) -> MemoryService:
+    """Compose the single public Memory boundary over one authority graph."""
+
+    def curator_factory(
+        trace_recorder: TraceRecorder,
+        config: SystemConfig,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None,
+    ) -> MemoryCurator:
+        return compose_memory_curator(
+            paths,
+            repositories,
+            trace_recorder,
+            config,
+            langchain_models=langchain_models,
+        )
+
+    def optimizer_factory(
+        config: SystemConfig,
+        settings: MemoryOptimizerSettings | None,
+    ) -> MemoryOptimizer:
+        return compose_memory_optimizer(
+            paths,
+            repositories,
+            config,
+            settings=settings,
+        )
+
+    return MemoryService(
+        repositories.entries,
+        repositories.candidates,
+        observation_repository=repositories.observations,
+        curator_plan_store=repositories.curator_plans,
+        curator_factory=curator_factory,
+        optimizer_factory=optimizer_factory,
+    )
 def compose_memory_curator(
     paths: RuntimePaths,
     repositories: MemoryRepositories,

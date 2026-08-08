@@ -10,9 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
-- One-shot and daemon Chat now share one post-commit completion service for
-  durable Memory observation; observation failure is reported as degraded and
-  can no longer replace an already committed assistant reply.
+- `MemoryService` is now the single public boundary for entries, candidates,
+  observations, curator recovery, curation, and optimization; the parallel
+  workflow and Chat-completion services were removed. One-shot and daemon Chat
+  share a projection adapter whose failure cannot replace a committed reply.
 
 - Generic data administration now mutates Memory through `MemoryService`, and
   executable module-boundary checks prevent concrete repositories from being
