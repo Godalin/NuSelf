@@ -16,6 +16,7 @@ type MemoryAuditEvent = Literal[
     "curator_contended",
     "curator_deferred",
     "curator_completed",
+    "memory_formed",
     "candidate_merged",
     "candidate_created",
     "candidate_updated",
@@ -94,6 +95,20 @@ def _curator_completed(metadata: Mapping[str, object]) -> None:
         )
     for field in ("created", "updated", "ignored"):
         _integer(metadata, field)
+
+
+def _memory_formed(metadata: Mapping[str, object]) -> None:
+    _require_exact(metadata, frozenset({
+        "memory_id", "action", "memory_type", "observation_id",
+        "source_ref", "source_trace_id",
+    }))
+    for field in ("memory_id", "memory_type", "observation_id", "source_ref"):
+        _string(metadata, field)
+    if _string(metadata, "action") not in {"create", "update", "merge"}:
+        raise AuditSchemaError("memory formed action is invalid")
+    trace_id = metadata["source_trace_id"]
+    if trace_id is not None and (not isinstance(trace_id, str) or not trace_id):
+        raise AuditSchemaError("source_trace_id must be non-empty or null")
 
 
 def _candidate_created(metadata: Mapping[str, object]) -> None:
@@ -187,6 +202,10 @@ def _definitions() -> tuple[AuditEventDefinition, ...]:
         AuditEventDefinition(
             "memory", "curator_completed", "info", "completed",
             metadata_validator=_curator_completed,
+        ),
+        AuditEventDefinition(
+            "memory", "memory_formed", "info", "created",
+            metadata_validator=_memory_formed,
         ),
         AuditEventDefinition(
             "memory", "candidate_merged", "info", "created",

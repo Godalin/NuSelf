@@ -40,6 +40,7 @@ def record_memory_trace(
             memory_type=entry.type,
             action=action,
             confidence=entry.confidence,
+            source_ref=f"cli:memory:{action}",
         ),
         event="trace_recording_failed",
         project_root=project_root,

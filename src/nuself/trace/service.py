@@ -160,11 +160,14 @@ class TraceRecorder:
         memory_type: str,
         action: str,
         confidence: float,
+        source_ref: str,
         source_trace_id: str | None = None,
         participants: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
-        evidence_refs = [f"trace:{source_trace_id}"] if source_trace_id else []
+        evidence_refs = [source_ref]
+        if source_trace_id:
+            evidence_refs.append(f"trace:{source_trace_id}")
         return self._record(
             kind="memory_update",
             title=title,
