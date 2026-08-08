@@ -123,6 +123,20 @@ def test_package_dependency_matrix() -> None:
     assert violations == []
 
 
+def test_memory_depends_on_trace_service_not_repository() -> None:
+    violations = [
+        str(path.relative_to(_SOURCE_ROOT))
+        for path in _package_files("memory")
+        if _module_matches("nuself.trace.repository", _imports(path))
+    ]
+    assert violations == []
+
+    composition_imports = _from_imports(
+        _SOURCE_ROOT / "memory" / "composition.py"
+    )
+    assert ("nuself.trace.service", "TraceRecorder") in composition_imports
+
+
 def test_domain_packages_do_not_resolve_storage_authority() -> None:
     allowed: set[str] = set()
     forbidden = {
