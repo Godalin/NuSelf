@@ -217,6 +217,37 @@ class ReasoningThread:
 
 
 @dataclass(frozen=True)
+class ReasonOperation:
+    """Durable mapping from one logical creation to its thread result."""
+
+    id: str
+    fingerprint: str
+    thread_id: str
+
+    def __post_init__(self) -> None:
+        for name in ("id", "fingerprint", "thread_id"):
+            if not getattr(self, name).strip():
+                raise ValueError(f"reason operation {name} must not be empty")
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "fingerprint": self.fingerprint,
+            "thread_id": self.thread_id,
+        }
+
+    @classmethod
+    def from_wire(cls, data: dict[str, object]) -> ReasonOperation:
+        if set(data) != {"id", "fingerprint", "thread_id"}:
+            raise ValueError("reason operation fields are invalid")
+        return cls(
+            id=_expect_str(data, "id"),
+            fingerprint=_expect_str(data, "fingerprint"),
+            thread_id=_expect_str(data, "thread_id"),
+        )
+
+
+@dataclass(frozen=True)
 class ReasoningStep:
     id: str = field(default_factory=new_step_id)
     thread_id: str = ""

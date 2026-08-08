@@ -13,9 +13,8 @@ from nuself.decorators import (
     readonly,
     tool,
 )
-from nuself.runtime.handles import VisibleHandleError, parse_visible_index
+from nuself.reflection.repository import ReflectionEntryNotFound
 from nuself.reflection.service import ReflectionService
-from nuself.runtime.diagnostics import diagnostic_exception_message
 from nuself.runtime.feature.execution import FeatureExecutor
 
 
@@ -70,7 +69,7 @@ def build_reflection_tools(
         lines = ["Pending reflection ideas:"]
         for index, entry in enumerate(entries[:limit_int]):
             lines.append(
-                f"[{index}] {entry.title} "
+                f"[{index}] id={entry.id} {entry.title} "
                 f"({entry.candidate_type}, score={entry.composite_score:.2f})"
             )
         return "\n".join(lines)
@@ -80,27 +79,19 @@ def build_reflection_tools(
         description=(
             "Dismiss a pending reflection idea so it will no longer be suggested. "
             "Use when the user explicitly says they are not interested in a topic. "
-            "The 0-based index corresponds to the numbered list from reflection_list_pending."
+            "Pass the stable entry id returned by reflection_list_pending."
         ),
     )
     @component("reflection")
     @mutating
     @confirmed(action="dismiss", resource="reflection")
     @observed
-    def dismiss_reflection_by_numeric_handle(index: int) -> str:
-        """Dismiss a pending reflection idea by 0-based list index."""
+    def dismiss_reflection(entry_id: str) -> str:
+        """Dismiss a pending reflection idea by durable entry id."""
         try:
-            entries = service.list_entries(status="pending")
-            selected = parse_visible_index(
-                str(index),
-                count=len(entries),
-                label="reflection",
-            )
-        except VisibleHandleError as exc:
-            return f"Error: {diagnostic_exception_message(exc)}"
-        except (ValueError, TypeError):
-            return "Error: index must be an integer"
-        entry = entries[selected]
+            entry = service.get_entry(entry_id.strip())
+        except ReflectionEntryNotFound:
+            return f"Error: reflection not found: {entry_id}"
         service.dismiss_entry(entry.id)
         return f'Dismissed "{entry.title}".'
 
@@ -109,26 +100,18 @@ def build_reflection_tools(
         description=(
             "Archive a pending reflection idea after the discussion is complete. "
             "Use when the user has engaged with a reflection idea and the topic feels resolved. "
-            "The 0-based index corresponds to the numbered list shown in the pending reflections context."
+            "Pass the stable entry id returned by reflection_list_pending."
         ),
     )
     @component("reflection")
     @mutating
     @observed
-    def archive_reflection_by_numeric_handle(index: int) -> str:
-        """Archive a pending reflection idea by 0-based list index."""
+    def archive_reflection(entry_id: str) -> str:
+        """Archive a pending reflection idea by durable entry id."""
         try:
-            entries = service.list_entries(status="pending")
-            selected = parse_visible_index(
-                str(index),
-                count=len(entries),
-                label="reflection",
-            )
-        except VisibleHandleError as exc:
-            return f"Error: {diagnostic_exception_message(exc)}"
-        except (ValueError, TypeError):
-            return "Error: index must be an integer"
-        entry = entries[selected]
+            entry = service.get_entry(entry_id.strip())
+        except ReflectionEntryNotFound:
+            return f"Error: reflection not found: {entry_id}"
         service.archive_entry(entry.id)
         return (
             f'Archived "{entry.title}". The discussion has been captured '
@@ -139,11 +122,11 @@ def build_reflection_tools(
         materialize_tool(list_pending_reflections, executor=execution),
         materialize_tool(count_pending_reflections, executor=execution),
         materialize_tool(
-            dismiss_reflection_by_numeric_handle,
+            dismiss_reflection,
             executor=execution,
         ),
         materialize_tool(
-            archive_reflection_by_numeric_handle,
+            archive_reflection,
             executor=execution,
         ),
     )

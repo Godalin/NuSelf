@@ -16,6 +16,7 @@ from nuself.log.reader import read_log_events
 from nuself.reason.model import ReasoningStep
 from nuself.reason.errors import (
     ReasonAdvanceError,
+    ReasonOperationConflict,
     ReasonPromptError,
     ReasonTransitionError,
 )
@@ -220,6 +221,76 @@ def test_start_thread(tmp_path: Path) -> None:
     thread = service.start_thread("What should I do?")
     assert thread.topic == "What should I do?"
     assert thread.status == "active"
+
+
+def test_start_thread_once_replays_original_thread(tmp_path: Path) -> None:
+    prompt_calls = 0
+
+    def prompt(*args: object, **kwargs: object) -> str:
+        nonlocal prompt_calls
+        del args, kwargs
+        prompt_calls += 1
+        return "Stable prompt."
+
+    service = ReasonService(tmp_path, prompt_generator=prompt)
+
+    first = service.start_thread_once(
+        "proposal-1",
+        "What should I do?",
+        working_summary="Keep this stable.",
+    )
+    replay = service.start_thread_once(
+        "proposal-1",
+        "What should I do?",
+        working_summary="Keep this stable.",
+    )
+
+    assert replay == first
+    assert prompt_calls == 1
+    assert service.list_threads() == [first]
+    traces = compose_trace_services(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    ).query.list_traces(kind="reason_thread")
+    assert len(traces) == 1
+
+
+def test_start_thread_once_rejects_conflicting_reuse(tmp_path: Path) -> None:
+    service = _reason_service(project_root=tmp_path)
+    service.start_thread_once("proposal-1", "First topic")
+
+    with pytest.raises(ReasonOperationConflict, match="proposal-1"):
+        service.start_thread_once("proposal-1", "Different topic")
+
+    assert [thread.topic for thread in service.list_threads()] == [
+        "First topic"
+    ]
+
+
+def test_start_thread_once_rolls_back_thread_when_receipt_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nuself.storage.sqlite import SqliteCollection
+
+    original_put = SqliteCollection.put
+
+    def fail_operation_put(
+        collection: SqliteCollection,
+        key: str,
+        value: dict[str, object],
+    ) -> None:
+        if collection._collection_name == "reason_operations":  # pyright: ignore[reportPrivateUsage]
+            raise OSError("operation receipt unavailable")
+        original_put(collection, key, value)
+
+    monkeypatch.setattr(SqliteCollection, "put", fail_operation_put)
+    service = _reason_service(project_root=tmp_path)
+
+    with pytest.raises(OSError, match="operation receipt unavailable"):
+        service.start_thread_once("proposal-1", "Atomic topic")
+
+    assert service.list_threads() == []
 
 
 def test_start_thread_writes_logs_under_project_root(tmp_path: Path) -> None:

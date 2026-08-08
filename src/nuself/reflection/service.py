@@ -42,6 +42,10 @@ class ReflectionService:
     def show_entry(self, id_or_index: str) -> ReflectionEntry:
         return self._resolve_entry(id_or_index)
 
+    def get_entry(self, entry_id: str) -> ReflectionEntry:
+        """Resolve exactly one durable entry identity without index fallback."""
+        return self._repository.get(entry_id)
+
     def dismiss_entry(self, id_or_index: str) -> ReflectionEntry:
         entry = self._resolve_entry(id_or_index)
         return self._repository.save(entry.with_status("dismissed"))

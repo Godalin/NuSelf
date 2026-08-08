@@ -24,3 +24,7 @@ class ReasonAdvanceError(ReasonError):
 
 class ReasonTransitionError(ReasonError):
     """Raised when a requested reason status transition is invalid."""
+
+
+class ReasonOperationConflict(ReasonError):
+    """A durable operation key was reused for different input."""

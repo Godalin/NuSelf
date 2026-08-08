@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
+import hashlib
+import json
 from pathlib import Path
 from typing import Protocol
 
@@ -167,6 +169,96 @@ class ReasonService:
             "thread_started",
             project_root=self._project_root,
             metadata={"thread_id": thread.id},
+        )
+        return saved
+
+    def start_thread_once(
+        self,
+        operation_id: str,
+        topic: str,
+        *,
+        working_summary: str = "",
+        priority: str = "normal",
+        active_items: tuple[dict[str, object], ...] = (),
+        mandates: tuple[str, ...] = (),
+    ) -> ReasoningThread:
+        """Create once for a stable caller-owned operation identity."""
+        key = operation_id.strip()
+        if not key:
+            raise ValueError("operation_id must be a non-empty string")
+        topic_value = topic.strip()
+        summary_value = working_summary.strip()
+        priority_value: ReasonPriority = (
+            "high" if priority == "high" else "normal"
+        )
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {
+                    "topic": topic_value,
+                    "working_summary": summary_value,
+                    "priority": priority_value,
+                    "active_items": active_items,
+                    "mandates": mandates,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        replay = self._repository.replay_thread(
+            operation_id=key,
+            fingerprint=fingerprint,
+        )
+        if replay is not None:
+            return replay
+        reasoning_prompt = self._prompt_generator(
+            topic_value,
+            mandates=mandates,
+            active_items=active_items,
+        ).strip()
+        if not reasoning_prompt:
+            raise ReasonPromptError(
+                "Cannot start reason thread: reasoning prompt generation "
+                "returned empty output"
+            )
+        candidate = ReasoningThread(
+            topic=topic_value,
+            working_summary=summary_value,
+            priority=priority_value,
+            active_items_data=active_items,
+            mandates_data=mandates,
+            reasoning_prompt=reasoning_prompt,
+        )
+        saved, created = self._repository.create_thread_once(
+            candidate,
+            operation_id=key,
+            fingerprint=fingerprint,
+        )
+        if not created:
+            return saved
+        workspace = self._workspace_store.paths(saved.id)
+        REASON_AUDIT.observe(
+            lambda: self._trace_recorder.record_reason_thread_created(
+                thread=saved,
+                source_trace_ids=[],
+                metadata={
+                    "workspace": str(workspace.root),
+                    "mandates": list(saved.mandates_data),
+                    "operation_id": key,
+                },
+            ),
+            event="trace_recording_failed",
+            project_root=self._project_root,
+            metadata={
+                "operation": "start_thread",
+                "thread_id": saved.id,
+                "step_id": None,
+            },
+        )
+        REASON_AUDIT.write(
+            "thread_started",
+            project_root=self._project_root,
+            metadata={"thread_id": saved.id},
         )
         return saved
 

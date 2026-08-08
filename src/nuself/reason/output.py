@@ -5,12 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 import subprocess
 import textwrap
 from pathlib import Path
 from typing import Callable, Sequence, cast
-from uuid import uuid4
 
 from nuself.runtime.clock import utc_now, utc_now_iso
 from nuself.reason.model import ReasoningStep, ReasoningThread, partition_steps
@@ -104,7 +102,10 @@ class ReasonOutputService:
             source_step_ids=tuple(step.id for step in selected),
         )
         paths = self.job_paths(thread.id, job_id)
-        _clear_job_artifacts(paths)
+        if paths.manifest.exists():
+            manifest = self.get_job(thread.id, job_id)
+            self._enqueue_job(manifest, job_sink=job_sink)
+            return manifest
         ensure_private_directory(paths.root)
         manifest = ReasonOutputManifest(
             job_id=job_id,
@@ -146,12 +147,24 @@ class ReasonOutputService:
             },
         )
 
+        self._enqueue_job(manifest, job_sink=job_sink)
+        return manifest
+
+    def _enqueue_job(
+        self,
+        manifest: ReasonOutputManifest,
+        *,
+        job_sink: JobSink,
+    ) -> None:
         job_message = build_reason_job_definition_registry().create(
             name=REASON_OUTPUT_JOB_NAME,
             producer="reasoning",
-            job_id=job_id,
-            resource_id=thread.id,
-            payload={"mode": mode, "output_format": output_format},
+            job_id=manifest.job_id,
+            resource_id=manifest.thread_id,
+            payload={
+                "mode": manifest.mode,
+                "output_format": manifest.output_format,
+            },
         )
         try:
             job_sink(job_message)
@@ -160,18 +173,20 @@ class ReasonOutputService:
                 exc,
                 event="export_job_enqueue_failed",
                 project_root=self._project_root,
-                metadata={"thread_id": thread.id, "job_id": job_id},
+                metadata={
+                    "thread_id": manifest.thread_id,
+                    "job_id": manifest.job_id,
+                },
             )
         else:
             REASON_AUDIT.write(
                 "export_job_enqueued",
                 project_root=self._project_root,
                 metadata={
-                    "thread_id": thread.id,
-                    "job_id": job_id,
+                    "thread_id": manifest.thread_id,
+                    "job_id": manifest.job_id,
                 },
             )
-        return manifest
 
     def compose_with_runner(self, thread_id: str, job_id: str, runner: Callable[..., str]) -> ReasonOutputManifest:
         """Compose the job using an injected runner callable for each segment.
@@ -590,7 +605,6 @@ def _export_job_id(
             "end_index": end_index,
             "segment_size": segment_size,
             "source_step_ids": list(source_step_ids),
-            "nonce": uuid4().hex,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -598,22 +612,6 @@ def _export_job_id(
     ).encode("utf-8")
     digest = hashlib.sha256(payload).hexdigest()[:16]
     return f"reason-output-{digest}"
-
-
-def _clear_job_artifacts(paths: ReasonOutputPaths) -> None:
-    """Remove all job artifact files under the export root.
-
-    The queue is no longer file-based, so there are no queue/processing/
-    failed directories to preserve.
-    """
-    root = paths.root
-    if not root.exists():
-        return
-    for child in root.iterdir():
-        if child.is_dir():
-            shutil.rmtree(child)
-        else:
-            child.unlink(missing_ok=True)
 
 
 def _validate_choice(value: str, allowed: Sequence[str], *, label: str) -> str:
