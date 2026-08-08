@@ -140,6 +140,9 @@ uv run nuself source ingest ~/notes.md --tag notes
 uv run nuself source list
 ```
 
+导入后的 Source 修订不可变：重复内容会复用，内容变化会以新的 Source ID
+追加保存。
+
 ### 延续长期问题
 
 ```bash

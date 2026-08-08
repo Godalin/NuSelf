@@ -74,29 +74,36 @@ def test_load_markdown_source_extracts_metadata_and_chunks(tmp_path: Path) -> No
     assert "First paragraph." in chunks[0].text
 
 
-def test_source_repository_ingests_file_and_replaces_chunks(tmp_path: Path) -> None:
+def test_source_repository_appends_changed_content_as_new_revision(tmp_path: Path) -> None:
     source_path = tmp_path / "note.txt"
     source_path.write_text("Local note title\n\nBody text for ingestion.", encoding="utf-8")
     repo = source_repository(tmp_path)
 
-    result = repo.ingest(source_path, tags=["notes"])
-    document = repo.list()[0]
-    chunks = repo.chunks(document.id)
+    result = repo.importer.ingest(source_path, tags=["notes"])
+    document = repo.query.list()[0]
+    chunks = repo.query.chunks(document.id)
 
     assert result.documents == 1
     assert result.chunks == 1
-    assert repo.get(document.id) == document
+    assert repo.query.get(document.id) == document
     assert document.title == "Local note title"
     assert document.tags == ("notes",)
     assert chunks[0].source_ref == f"source:{document.id}:0"
 
     source_path.write_text("Local note title\n\nUpdated body.", encoding="utf-8")
-    second_result = repo.ingest(source_path)
+    second_result = repo.importer.ingest(source_path)
 
     assert second_result.documents == 1
     assert second_result.chunks == 1
-    assert len(repo.chunks(document.id)) == 1
-    assert repo.chunks(document.id)[0].text == "Local note title\n\nUpdated body."
+    assert second_result.documents == 1
+    assert len(repo.query.list()) == 2
+    assert repo.query.chunks(document.id)[0].text == (
+        "Local note title\n\nBody text for ingestion."
+    )
+    assert any(
+        chunk.text == "Local note title\n\nUpdated body."
+        for chunk in repo.query.chunks()
+    )
 
 
 def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: Path) -> None:
@@ -117,9 +124,9 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     second_path = tmp_path / "other.txt"
     second_path.write_text("Cooking note\n\nUnrelated text.", encoding="utf-8")
     repo = source_repository(tmp_path)
-    repo.ingest(tmp_path)
+    repo.importer.ingest(tmp_path)
 
-    matches = repo.search("stable memory references")
+    matches = repo.query.search("stable memory references")
 
     assert len(matches) == 1
     assert matches[0].document.title == "Memory Architecture"
@@ -128,7 +135,7 @@ def test_source_repository_search_returns_ranked_chunks_with_metadata(tmp_path: 
     assert "tag" in matches[0].reasons
 
 
-def test_source_delete_has_no_memory_or_profile_side_effects(tmp_path: Path) -> None:
+def test_source_reimport_is_idempotent_and_has_no_memory_side_effects(tmp_path: Path) -> None:
     source_path = tmp_path / "profile.md"
     source_path.write_text(
         "\n".join(
@@ -144,8 +151,10 @@ def test_source_delete_has_no_memory_or_profile_side_effects(tmp_path: Path) -> 
         encoding="utf-8",
     )
     repo = source_repository(tmp_path)
-    repo.ingest(source_path)
-    document = repo.list()[0]
-    repo.delete(document.id)
-    assert repo.list() == []
-    assert repo.chunks(document.id) == []
+    first = repo.importer.ingest(source_path)
+    second = repo.importer.ingest(source_path)
+    assert first.documents == 1
+    assert second.documents == 0
+    assert second.unchanged == 1
+    assert len(repo.query.list()) == 1
+    assert len(repo.query.chunks()) == 1

@@ -80,6 +80,9 @@ uv run nuself source ingest .nuself/sources/notes.md --tag notes
 uv run nuself source ingest .nuself/sources/archive --tag archive
 ```
 
+Ingestion is append-only. Unchanged revisions are reused; changed content gets
+a new source ID, and the Source API does not replace or delete prior revisions.
+
 Inspect imported sources and chunks:
 
 ```bash

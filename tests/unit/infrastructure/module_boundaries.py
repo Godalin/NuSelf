@@ -364,6 +364,7 @@ def test_application_graph_is_a_finite_typed_composition_result() -> None:
         "profiles": "ProfileService",
         "memory_workflows": "MemoryWorkflowService",
         "sources": "SourceService",
+        "source_importer": "SourceImporter",
         "inbox": "InboxService",
         "deliveries": "DeliveryService",
         "personas": "PersonaService",

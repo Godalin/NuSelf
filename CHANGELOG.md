@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Source queries are now read-only over immutable imported revisions;
+  append-only ingestion is a separate capability, changed content creates a
+  new revision, and Source no longer exposes replacement or deletion.
+
 - Shortened the public Tool confirmation declaration from
   `@requires_confirmation(...)` to `@confirmed(...)`; internal approval effect
   and protocol names remain unchanged.

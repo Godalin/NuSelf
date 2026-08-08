@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid5, NAMESPACE_URL
 
@@ -13,8 +12,10 @@ type SourceKind = Literal["markdown", "text"]
 type PrivacyLevel = Literal["private", "shareable"]
 
 
-def source_id_for_path(path: Path) -> str:
-    return f"src_{uuid5(NAMESPACE_URL, str(path.resolve())).hex}"
+def source_id_for_revision(identity: str) -> str:
+    """Return one stable ID for immutable normalized source content."""
+
+    return f"src_{uuid5(NAMESPACE_URL, identity).hex}"
 
 
 def chunk_id_for(source_id: str, index: int) -> str:

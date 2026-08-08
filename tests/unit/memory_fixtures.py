@@ -23,8 +23,7 @@ from nuself.memory.curator.contract import (
 )
 from nuself.memory.curator.worker import MemoryCurator as _MemoryCurator
 from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
-from nuself.source.repository import SourceRepository
-from nuself.source.service import SourceService
+from nuself.source.composition import SourceServices, compose_source_services
 from nuself.profile.repository import ProfileItemRepository
 from nuself.storage.contract import StorageBackend
 from tests.backend import owned_backend
@@ -103,10 +102,10 @@ def source_repository(
     backend: StorageBackend | None = None,
     candidate_repository: MemoryCandidateRepository | None = None,
     profile_repository: ProfileItemRepository | None = None,
-) -> SourceService:
+) -> SourceServices:
     del candidate_repository, profile_repository
     paths, selected_backend = _resources(root_or_paths, backend)
-    return SourceService(SourceRepository(paths, backend=selected_backend))
+    return compose_source_services(paths, selected_backend)
 
 
 class MemoryCurator(_MemoryCurator):
