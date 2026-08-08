@@ -223,7 +223,8 @@ Major domains are:
 
 - **Memory and Source** — Memory owns chat-derived observations, authoritative
   personal records, candidates, profile items, relations, and search;
-  independent Source owns imported external documents and chunks.
+  independent Source exposes read-only queries over immutable imported
+  document revisions, with append-only ingestion as a separate capability.
   See [`spec/memory.md`](spec/memory.md) and
   [`spec/storage-v2.md`](spec/storage-v2.md).
 - **Conversation and persona** — context preparation, tool execution, bounded

@@ -145,7 +145,7 @@ uv run nuself memory preview
 uv run nuself memory update
 ```
 
-### Import personal notes
+### Import immutable personal-note revisions
 
 ```bash
 uv run nuself source ingest ~/notes.md --tag notes

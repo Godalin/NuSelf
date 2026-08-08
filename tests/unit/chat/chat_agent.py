@@ -45,7 +45,6 @@ from nuself.log.reader import read_log_events
 from nuself.log.store import runtime_event_log_sink
 from nuself.memory.service import MemoryService
 from nuself.memory.repository import MemoryEntryRepository
-from nuself.source.repository import SourceRepository
 from nuself.runtime.job.message import JobMessage, JobSink
 from nuself.profile.repository import ProfileItemRepository
 from reason_fixtures import ReasonService
@@ -272,7 +271,7 @@ def test_chat_agent_does_not_inject_source_chunks_by_default(tmp_path: Path) -> 
         ),
         encoding="utf-8",
     )
-    source_repository(tmp_path).ingest(source_path)
+    source_repository(tmp_path).importer.ingest(source_path)
     llm = FakeResponseService()
     agent = ConversationGraphRuntime(tmp_path, response_service=llm)
 

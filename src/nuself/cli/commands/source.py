@@ -67,7 +67,7 @@ def handle_source_ingest(
     args: argparse.Namespace,
 ) -> int:
     try:
-        result = cli_application().sources.ingest(
+        result = cli_application().source_importer.ingest(
             args.path,
             tags=list(args.tag),
             privacy=_privacy_arg(args.privacy),
@@ -108,25 +108,6 @@ def handle_source_show(args: argparse.Namespace) -> int:
             chunk_count=len(service.chunks(document.id)),
         )
     )
-    return 0
-
-
-def handle_source_delete(
-    args: argparse.Namespace,
-) -> int:
-    service = cli_application().sources
-    source_id = _resolve_source_id(args, service)
-    if source_id is None:
-        return 1
-    try:
-        service.delete(source_id)
-    except SourceDocumentNotFound:
-        print(
-            f"Source document not found: {source_id}",
-            file=sys.stderr,
-        )
-        return 1
-    print(f"Deleted source document: {source_id}")
     return 0
 
 
@@ -179,9 +160,6 @@ def add_source_parser(subparsers: Any, bindings: CliHandlerBindings) -> None:
     show = commands.add_parser("show", help="Show a source document.")
     show.add_argument("source_id")
     bind(show, handle_source_show)
-    delete = commands.add_parser("delete", help="Delete a source document and its chunks.")
-    delete.add_argument("source_id")
-    bind(delete, handle_source_delete)
     chunks = commands.add_parser("chunks", help="List source chunks.")
     chunks.add_argument("source_id", nargs="?")
     bind(chunks, handle_source_chunks)

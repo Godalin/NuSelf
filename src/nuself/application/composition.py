@@ -28,7 +28,8 @@ from nuself.reflection.composition import compose_reflection_service
 from nuself.reflection.service import ReflectionService
 from nuself.reason.service import ReasonService
 from nuself.storage.contract import StorageBackend
-from nuself.source.composition import compose_source_service
+from nuself.source.composition import compose_source_services
+from nuself.source.importer import SourceImporter
 from nuself.source.service import SourceService
 
 
@@ -44,6 +45,7 @@ class ApplicationGraph:
     profiles: ProfileService
     memory_workflows: MemoryWorkflowService
     sources: SourceService
+    source_importer: SourceImporter
     inbox: InboxService
     deliveries: DeliveryService
     personas: PersonaService
@@ -62,7 +64,7 @@ def compose_application(
     conversation_store = ConversationStore(paths, backend=backend)
     conversations = ConversationService(conversation_store)
     memory = compose_memory_repositories(paths, backend)
-    sources = compose_source_service(paths, backend)
+    source_services = compose_source_services(paths, backend)
     trace = compose_trace_services(paths, backend)
     config = ConfigSystem.load_scope(paths.scope)
     inbox = InboxService(paths, backend)
@@ -88,7 +90,8 @@ def compose_application(
         memory=MemoryService(memory.entries, memory.candidates),
         profiles=ProfileService(memory.profile),
         memory_workflows=MemoryWorkflowService(paths, memory),
-        sources=sources,
+        sources=source_services.query,
+        source_importer=source_services.importer,
         inbox=inbox,
         deliveries=deliveries,
         personas=PersonaService(

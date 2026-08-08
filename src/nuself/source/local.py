@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import cast
 
 from nuself.runtime.clock import utc_now_iso
-from nuself.source.record import PrivacyLevel, SourceChunk, SourceDocument, SourceKind, chunk_id_for, source_id_for_path
+from nuself.source.record import (
+    PrivacyLevel,
+    SourceChunk,
+    SourceDocument,
+    SourceKind,
+    chunk_id_for,
+    source_id_for_revision,
+)
 
 SUPPORTED_SUFFIXES = {".md", ".markdown", ".txt"}
 CHUNK_TARGET_CHARS = 1200
@@ -29,18 +37,38 @@ def load(path: Path, *, tags: list[str] | None = None, privacy: PrivacyLevel = "
     text = source_path.read_text(encoding="utf-8")
     kind: SourceKind = "markdown" if source_path.suffix.casefold() in {".md", ".markdown"} else "text"
     metadata, body = _parse(text, kind)
-    source_id = source_id_for_path(source_path)
     title = metadata.title or _title(body, markdown=kind == "markdown") or source_path.stem
+    effective_privacy = metadata.privacy or privacy
+    effective_tags = _dedupe([*metadata.tags, *(tags or [])])
+    source_id = source_id_for_revision(
+        json.dumps(
+            {
+                "path": str(source_path),
+                "kind": kind,
+                "title": title,
+                "body": body,
+                "origin": metadata.origin,
+                "privacy": effective_privacy,
+                "tags": effective_tags,
+                "source_date": metadata.date,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    now = utc_now_iso()
     document = SourceDocument(
         id=source_id,
         title=title,
         path=str(source_path),
         kind=kind,
         origin=metadata.origin,
-        privacy=metadata.privacy or privacy,
-        tags=_dedupe([*metadata.tags, *(tags or [])]),
+        privacy=effective_privacy,
+        tags=effective_tags,
         source_date=metadata.date,
-        updated_at=utc_now_iso(),
+        created_at=now,
+        updated_at=now,
     )
     return document, _chunks(document, body)
 

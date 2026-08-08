@@ -1,10 +1,28 @@
 """Source service composition."""
 
+from dataclasses import dataclass
+
 from nuself.config.settings import RuntimePaths
+from nuself.source.importer import SourceImporter
 from nuself.source.repository import SourceRepository
 from nuself.source.service import SourceService
 from nuself.storage.contract import StorageBackend
 
 
-def compose_source_service(paths: RuntimePaths, backend: StorageBackend) -> SourceService:
-    return SourceService(SourceRepository(paths, backend=backend))
+@dataclass(frozen=True)
+class SourceServices:
+    """Identity-coupled query and append-only ingestion capabilities."""
+
+    query: SourceService
+    importer: SourceImporter
+
+
+def compose_source_services(
+    paths: RuntimePaths,
+    backend: StorageBackend,
+) -> SourceServices:
+    repository = SourceRepository(paths, backend=backend)
+    return SourceServices(
+        query=SourceService(repository),
+        importer=SourceImporter(repository),
+    )

@@ -219,12 +219,11 @@ repository capability.
 Memory entry persistence accepts the canonical `MemoryEntry` domain object;
 an unused validate-convert-save adapter for `MemoryObject` is not repository
 API. Legacy object-shaped records remain a decoding concern.
-Source ingestion is the public document/chunk write operation. Replacing one
-document's chunks is an internal ingestion step, not an independently exposed
-repository capability that callers may separate from document persistence.
-Writing the document record is likewise internal to ingestion; callers provide
-a source path rather than assembling a partial stored document without its
-chunks.
+Source queries and ingestion are separate public capabilities over one private
+repository. `SourceService` is read-only. `SourceImporter` atomically appends a
+complete immutable document/chunk revision from a source path; callers cannot
+assemble, replace, or delete partial persisted records. Reimporting an unchanged
+revision is idempotent, while changed content receives a new identity.
 
 Memory-owned composition builds the concrete production registry graph from
 supplied paths and storage.
@@ -321,7 +320,7 @@ backend or compose a second repository graph.
 The tool snapshot exposes one `MemoryService`, not the entry repository beside
 a query helper. Search, context packing, count, archive, and importance updates
 are service use cases so tool code cannot bypass domain validation or acquire unrelated
-memory mutations. Curator, source ingestion, projection, repair, and migration
+memory mutations. Curator, Source importing, projection, repair, and migration
 remain domain/infrastructure workflows and may receive the repositories they
 actually coordinate; they are not routed through a universal memory facade.
 Direct and daemon chat use the same application-owned conversation factory.

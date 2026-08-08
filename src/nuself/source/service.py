@@ -3,24 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 import re
 
-from nuself.source import local
-from nuself.source.record import PrivacyLevel, SourceChunk, SourceDocument
+from nuself.source.record import SourceChunk, SourceDocument
 from nuself.source.repository import SourceRepository
 
 DEFAULT_LIMIT = 8
 WORD_RE = re.compile(r"[A-Za-z0-9_\u4e00-\u9fff]+")
-
-
-@dataclass(frozen=True)
-class SourceIngestResult:
-    documents: int
-    chunks: int
-
-    def summary(self) -> str:
-        return f"documents={self.documents} chunks={self.chunks}"
 
 
 @dataclass(frozen=True)
@@ -32,20 +21,10 @@ class SourceMatch:
 
 
 class SourceService:
-    """Ingest and query external knowledge without Memory side effects."""
+    """Read immutable external knowledge without Memory side effects."""
 
     def __init__(self, repository: SourceRepository) -> None:
         self._repository = repository
-
-    def ingest(self, path: Path, *, tags: list[str] | None = None, privacy: PrivacyLevel = "private") -> SourceIngestResult:
-        document_count = 0
-        chunk_count = 0
-        for source_path in local.source_paths(path):
-            document, chunks = local.load(source_path, tags=tags, privacy=privacy)
-            self._repository.replace(document, chunks)
-            document_count += 1
-            chunk_count += len(chunks)
-        return SourceIngestResult(document_count, chunk_count)
 
     def get(self, source_id: str) -> SourceDocument:
         return self._repository.get_document(source_id)
@@ -58,9 +37,6 @@ class SourceService:
 
     def chunks(self, source_id: str | None = None) -> list[SourceChunk]:
         return self._repository.list_chunks(source_id)
-
-    def delete(self, source_id: str) -> None:
-        self._repository.delete_document(source_id)
 
     def search(self, query: str, *, limit: int = DEFAULT_LIMIT) -> list[SourceMatch]:
         tokens = _tokens(query)

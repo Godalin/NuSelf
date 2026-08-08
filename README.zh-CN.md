@@ -133,7 +133,7 @@ uv run nuself memory preview
 uv run nuself memory update
 ```
 
-### 导入个人笔记
+### 导入不可变的个人笔记修订
 
 ```bash
 uv run nuself source ingest ~/notes.md --tag notes

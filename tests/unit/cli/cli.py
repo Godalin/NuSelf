@@ -2837,7 +2837,10 @@ def test_memory_source_ingest_list_show_and_chunks(
     assert list_result == 0
     assert show_result == 0
     assert chunks_result == 0
-    assert "Source ingest: documents=1 chunks=1" in ingest_output
+    assert (
+        "Source ingest: documents=1 chunks=1 unchanged=0"
+        in ingest_output
+    )
     assert "[source] [0]" in list_output
     assert "Source Essay" in list_output
     assert "tags=[mirror, imported]" in list_output
@@ -4371,7 +4374,7 @@ def test_interactive_sources_lists_documents(
     source_path = tmp_path / "notes.txt"
     source_path.write_text("Notes\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest(source_path)
+    repo.importer.ingest(source_path)
 
     monkeypatch.setattr("sys.stdin", _TextInput(":mem sources\n:q\n"))
     monkeypatch.setattr(
@@ -4756,7 +4759,7 @@ def test_memory_source_list_shows_documents(
     source_path = tmp_path / "test.txt"
     source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest(source_path)
+    repo.importer.ingest(source_path)
 
     result = main(["--workspace", str(tmp_path), "source", "list"])
     captured = capsys.readouterr()
@@ -4780,8 +4783,8 @@ def test_memory_source_show_displays_document(
     source_path = tmp_path / "test.txt"
     source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest(source_path)
-    doc = repo.list()[0]
+    repo.importer.ingest(source_path)
+    doc = repo.query.list()[0]
 
     result = main(["--workspace", str(tmp_path), "source", "show", doc.id])
     captured = capsys.readouterr()
@@ -4800,20 +4803,19 @@ def test_memory_source_show_missing_document(
     assert "Source document not found: missing-id" in captured.err
 
 
-def test_memory_source_delete_removes_document(
+def test_memory_source_delete_command_is_not_exposed(
     tmp_path: Path, capsys: CaptureFixture
 ) -> None:
     source_path = tmp_path / "test.txt"
     source_path.write_text("Test Source\n\nSource body.", encoding="utf-8")
     repo = source_repository(_authority(tmp_path))
-    repo.ingest(source_path)
-    doc = repo.list()[0]
+    repo.importer.ingest(source_path)
+    doc = repo.query.list()[0]
 
-    result = main(
-        ["--workspace", str(tmp_path), "source", "delete", doc.id]
-    )
-    assert result == 0
-    assert len(source_repository(_authority(tmp_path)).list()) == 0
+    with pytest.raises(SystemExit) as rejected:
+        main(["--workspace", str(tmp_path), "source", "delete", doc.id])
+    assert rejected.value.code == 2
+    assert len(source_repository(_authority(tmp_path)).query.list()) == 1
 
 
 def test_memory_source_chunks_empty_shows_message(
@@ -5797,7 +5799,6 @@ def test_cli_version_matches_project_metadata(capsys: CaptureFixture) -> None:
         ["source", "ingest", "--help"],
         ["source", "list", "--help"],
         ["source", "show", "--help"],
-        ["source", "delete", "--help"],
         ["source", "chunks", "--help"],
         ["source", "search", "--help"],
     ],

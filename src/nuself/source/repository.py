@@ -20,15 +20,23 @@ class SourceRepository:
     """Persist Source records without depending on another domain."""
 
     def __init__(self, paths: RuntimePaths, *, backend: StorageBackend) -> None:
+        self._backend = backend
         self._documents = backend.collection("source_documents")
         self._chunks = backend.collection("source_chunks")
         self._paths = paths
 
-    def replace(self, document: SourceDocument, chunks: list[SourceChunk]) -> None:
-        self._documents.put(document.id, document.to_wire())
-        self._delete_chunks(document.id)
-        for chunk in chunks:
-            self._chunks.put(chunk.id, chunk.to_wire())
+    def add(self, document: SourceDocument, chunks: list[SourceChunk]) -> bool:
+        """Append one complete immutable revision, or reuse it idempotently."""
+
+        with self._backend.transaction():
+            if self._documents.get(document.id) is not None:
+                return False
+            if any(self._chunks.get(chunk.id) is not None for chunk in chunks):
+                raise ValueError("source chunk identity already exists")
+            self._documents.put(document.id, document.to_wire())
+            for chunk in chunks:
+                self._chunks.put(chunk.id, chunk.to_wire())
+        return True
 
     def get_document(self, source_id: str) -> SourceDocument:
         wire = self._documents.get(source_id)
@@ -41,11 +49,6 @@ class SourceRepository:
         if wire is None:
             raise SourceChunkNotFound(chunk_id)
         return SourceChunk.from_wire(wire)
-
-    def delete_document(self, source_id: str) -> None:
-        document = self.get_document(source_id)
-        self._documents.delete(document.id)
-        self._delete_chunks(source_id)
 
     def list_documents(self) -> list[SourceDocument]:
         items: list[SourceDocument] = []
@@ -68,12 +71,6 @@ class SourceRepository:
             if chunk is not None and (source_id is None or chunk.source_id == source_id):
                 items.append(chunk)
         return sorted(items, key=lambda item: (item.source_id, item.index))
-
-    def _delete_chunks(self, source_id: str) -> None:
-        for wire in self._chunks.list():
-            chunk = self._decode_chunk(wire)
-            if chunk is not None and chunk.source_id == source_id:
-                self._chunks.delete(chunk.id)
 
     def _decode_chunk(self, wire: dict[str, object]) -> SourceChunk | None:
         return decode_observed_record(
