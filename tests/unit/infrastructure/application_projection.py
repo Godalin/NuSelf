@@ -1,33 +1,27 @@
-"""Post-chat application completion contracts."""
+"""Cross-domain application projection contracts."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from nuself.agent.chat.types import ChatResult
-from nuself.application.completion import ChatCompletionService
+from nuself.application.projection import publish_chat_observation
 from nuself.conversation import CompletedTurn
 from nuself.log.reader import read_log_events
 from nuself.memory.observation import MemoryObservation
 
 
-def _result() -> ChatResult:
-    return ChatResult(
-        answer="reply",
+def _turn() -> CompletedTurn:
+    return CompletedTurn(
         conversation_id="default",
-        trace_id="trace-1",
-        completed_turn=CompletedTurn(
-            conversation_id="default",
-            start_index=0,
-            end_index=2,
-            user_content="hello",
-            assistant_content="reply",
-            turn_id="turn-1",
-        ),
+        start_index=0,
+        end_index=2,
+        user_content="hello",
+        assistant_content="reply",
+        turn_id="turn-1",
     )
 
 
-def test_completion_returns_durable_observation_identity(
+def test_chat_projection_returns_durable_observation(
     tmp_path: Path,
 ) -> None:
     class Observer:
@@ -37,16 +31,18 @@ def test_completion_returns_durable_observation_identity(
         ) -> MemoryObservation:
             return observation
 
-    result = ChatCompletionService(
+    result = publish_chat_observation(
         Observer(),
+        turn=_turn(),
+        source_trace_id="trace-1",
         project_root=tmp_path,
-    ).complete(_result())
+    )
 
     assert result is not None
-    assert result.startswith("obs_")
+    assert result.id.startswith("obs_")
 
 
-def test_completion_projection_failure_does_not_replace_reply(
+def test_chat_projection_failure_does_not_replace_reply(
     tmp_path: Path,
 ) -> None:
     class FailingObserver:
@@ -57,10 +53,11 @@ def test_completion_projection_failure_does_not_replace_reply(
             del observation
             raise OSError("observation unavailable")
 
-    result = ChatCompletionService(
+    result = publish_chat_observation(
         FailingObserver(),
+        turn=_turn(),
         project_root=tmp_path,
-    ).complete(_result())
+    )
 
     assert result is None
     event = read_log_events(

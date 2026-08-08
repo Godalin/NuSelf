@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 import re
 
 from nuself.memory.model import MemoryCandidate, MemoryEntry, MemoryTypeRegistry, RelationDescriptor, RelationDescriptorRegistry, ReviewState, default_memory_type_registry
 from nuself.profile.model import ProfileItem
+from nuself.config.settings import SystemConfig
+from nuself.agent.endpoint import LangChainLLMEndpoint
+from nuself.memory.curator.worker import MemoryCurator
+from nuself.memory.curator.plan import MemoryCuratorPlan, MemoryCuratorPlanStore
+from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
+from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
+from nuself.trace.service import TraceRecorder
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -49,7 +56,7 @@ class MemoryMatch:
 
 
 class MemoryService:
-    """Complete user-facing memory query and entry-mutation service."""
+    """Single authority-scoped boundary for all public Memory behavior."""
 
     def __init__(
         self,
@@ -57,11 +64,27 @@ class MemoryService:
         candidate_repository: MemoryCandidateRepository | None = None,
         relation_registry: RelationDescriptorRegistry | None = None,
         registry: MemoryTypeRegistry | None = None,
+        observation_repository: MemoryObservationRepository | None = None,
+        curator_plan_store: MemoryCuratorPlanStore | None = None,
+        curator_factory: Callable[
+            [TraceRecorder, SystemConfig, tuple[LangChainLLMEndpoint, ...] | None],
+            MemoryCurator,
+        ]
+        | None = None,
+        optimizer_factory: Callable[
+            [SystemConfig, MemoryOptimizerSettings | None],
+            MemoryOptimizer,
+        ]
+        | None = None,
     ) -> None:
         self._repository = repository
         self._candidate_repository = candidate_repository
         self._relation_registry = relation_registry or repository.relation_registry
         self._registry = registry or default_memory_type_registry()
+        self._observation_repository = observation_repository
+        self._curator_plan_store = curator_plan_store
+        self._curator_factory = curator_factory
+        self._optimizer_factory = optimizer_factory
 
     def search(self, query: MemoryQuery) -> list[MemoryMatch]:
         tokens = _query_tokens(query.text)
@@ -219,10 +242,63 @@ class MemoryService:
 
         self._candidates().delete(candidate_id)
 
+    def observe(self, observation: MemoryObservation) -> MemoryObservation:
+        """Persist producer-neutral observation input."""
+        return self._observations().observe(observation)
+
+    def pending_observations(self) -> tuple[MemoryObservation, ...]:
+        """List durable observations awaiting curation."""
+        return self._observations().pending()
+
+    def curator_plan(self, observation_id: str) -> MemoryCuratorPlan | None:
+        """Read one durable curator recovery plan."""
+        return self._plans().get(observation_id)
+
+    def discard_curator_plan(self, observation_id: str) -> None:
+        """Discard one completed or abandoned recovery plan."""
+        self._plans().discard(observation_id)
+
+    def curator(
+        self,
+        trace_recorder: TraceRecorder,
+        config: SystemConfig,
+        *,
+        langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
+    ) -> MemoryCurator:
+        """Build one curator over this service's authority graph."""
+        if self._curator_factory is None:
+            raise RuntimeError("memory curation is unavailable")
+        return self._curator_factory(
+            trace_recorder,
+            config,
+            langchain_models,
+        )
+
+    def optimizer(
+        self,
+        config: SystemConfig,
+        *,
+        settings: MemoryOptimizerSettings | None = None,
+    ) -> MemoryOptimizer:
+        """Build one optimizer over this service's authority graph."""
+        if self._optimizer_factory is None:
+            raise RuntimeError("memory optimization is unavailable")
+        return self._optimizer_factory(config, settings)
+
     def _candidates(self) -> MemoryCandidateRepository:
         if self._candidate_repository is None:
             raise RuntimeError("memory candidate operations are unavailable")
         return self._candidate_repository
+
+    def _observations(self) -> MemoryObservationRepository:
+        if self._observation_repository is None:
+            raise RuntimeError("memory observation intake is unavailable")
+        return self._observation_repository
+
+    def _plans(self) -> MemoryCuratorPlanStore:
+        if self._curator_plan_store is None:
+            raise RuntimeError("memory curator plans are unavailable")
+        return self._curator_plan_store
 
     def list_relations(
         self,

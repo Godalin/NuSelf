@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from nuself.agent.chat.composition import compose_conversation_runtime
 from nuself.agent.chat.engine import ConversationGraphRuntime
+from nuself.application.projection import publish_chat_observation
 from nuself.cli.application import cli_application
 from nuself.agent.chat.audit import (
     CHAT_AUDIT,
@@ -202,13 +203,18 @@ def send_one_shot_chat_interactive(
                 turn_id=turn_id,
             )
             application = cli_application()
-            observation_id = application.chat_completion.complete(result)
+            observation = publish_chat_observation(
+                application.memory,
+                turn=result.require_completed_turn(),
+                source_trace_id=result.trace_id,
+                project_root=application.paths.authority_root,
+            )
             CHAT_AUDIT.write(
                 "one_shot_chat_completed",
                 project_root=project_root,
             )
-            if observation_id is not None:
-                run_memory_curator(project_root, observation_id)
+            if observation is not None:
+                run_memory_curator(project_root, observation.id)
             return InteractiveChatResult(
                 code=CliExitCode.SUCCESS,
                 reply=result.answer,
@@ -237,7 +243,7 @@ def run_memory_curator(
 
     try:
         application = cli_application()
-        result = application.memory_workflows.curator(
+        result = application.memory.curator(
             application.trace.recorder,
             application.config,
         ).run_once(observation_id)

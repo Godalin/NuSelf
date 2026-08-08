@@ -15,7 +15,7 @@ from nuself.runtime.diagnostics import diagnostic_exception_message
 
 
 def handle_memory_plan_show(args: argparse.Namespace) -> int:
-    service = cli_application().memory_workflows
+    service = cli_application().memory
     try:
         plan = service.curator_plan(args.observation_id)
     except (MemoryCuratorPlanCorruptError, ValueError) as exc:
@@ -56,7 +56,7 @@ def handle_memory_plan_discard(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    service = cli_application().memory_workflows
+    service = cli_application().memory
     try:
         service.discard_curator_plan(args.observation_id)
     except MemoryCuratorPlanLockContended:

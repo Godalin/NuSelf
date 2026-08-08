@@ -218,7 +218,7 @@ Important boundaries:
 - Default tests and CI do not read private project data.
 - Opt-in live API tests use fixed synthetic prompts.
 - Diagnostic configuration output redacts credentials.
-- Observed tools emit one privacy-safe lifecycle; durable mutations replay safely, and post-chat observation failure cannot replace a committed reply.
+- Memory has one public `MemoryService`; durable Tool mutations replay safely, and post-chat observation failure cannot replace a committed reply.
 - Thought packs and JSON exports are explicit portability tools; keep separate backups of the selected authority.
 
 See the [memory guide](docs/memory.md) and

@@ -36,13 +36,13 @@ def test_application_graph_reuses_one_authority_repository_graph(
     assert graph.inbox._backend is backend
     assert graph.deliveries._store._backend is backend
     assert graph.personas._repository._project_root == paths.authority_root
-    memory = graph.memory_workflows._repositories
-    assert memory.curator_plans._backend is backend
-    assert graph.memory._repository is memory.entries
-    assert graph.data._memories is graph.memory
-    assert graph.chat_completion._observer is graph.memory_workflows
-    assert memory.candidates._entry_repository is memory.entries
-    assert memory.candidates._profile_repository is memory.profile
+    memory = graph.memory
+    assert memory._curator_plan_store is not None
+    assert memory._candidate_repository is not None
+    assert memory._curator_plan_store._backend is backend
+    assert graph.data._memories is memory
+    assert memory._candidate_repository._entry_repository is memory._repository
+    assert memory._candidate_repository._profile_repository is graph.profiles._repository
     assert not hasattr(graph.sources._repository, "_candidate_repository")
     assert not hasattr(graph.sources._repository, "_profile_repository")
     assert not hasattr(graph, "reason_service")
