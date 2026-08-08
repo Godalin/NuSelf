@@ -31,12 +31,8 @@ same change.
   flows through PyPI and Homebrew. Define artifact provenance, upgrade and
   uninstall behavior, platform support, and release automation first.
 
-## Semi-Durable Chat Threads
+## Conversation State
 
-- [ ] Make ConversationStore lifecycle mutations crash-durable across directories.
-  Specify journaling or idempotent recovery for rename/archive/unarchive,
-  durable deletion, directory synchronization, and duplicate old/new names
-  before strengthening the current semi-durable contract.
 - [ ] Remove `ConversationState` constructor index inference for explicit integer
   values. Use a distinct missing sentinel for legacy derivation so internal
   construction rejects inconsistent indexes as strictly as wire decoding.
