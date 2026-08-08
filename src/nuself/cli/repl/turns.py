@@ -154,6 +154,7 @@ def send_interactive_chat_turn(
             print_reply(result.reply)
             if result.after_reply is not None:
                 result.after_reply()
+            print()
         if result.code == 0:
             session.clear_retry()
             return CliExitCode.SUCCESS

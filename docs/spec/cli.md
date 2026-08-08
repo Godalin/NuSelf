@@ -315,7 +315,7 @@ alias string sets.
   actionable notices exist; it must not print a daemon preamble, separate tip
   line, or raw log dump.
 - Commands print one leading blank line before their output and do not add a trailing blank line before the next prompt or session header.
-- Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. The session header follows the reply without extra blank spacer lines.
+- Chat turns print one leading blank line, then activity logs in chronological order, then one blank line and a `NuSelf:` label before the assistant reply. This keeps the final user-facing reply at the end of the turn so users can skip internal process output when they are not interested. After the reply and any owned post-reply callback finish, the REPL prints one blank spacer line before the session/daemon status header.
 - A configured LLM failure that uses deterministic local fallback is still a
   visible assistant result. The reply must distinguish provider/protocol
   exhaustion from missing configuration; neither path may render as an empty

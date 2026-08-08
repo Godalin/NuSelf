@@ -49,6 +49,39 @@ def _print_no_activity(events: list[LogEvent]) -> None:
     assert events == []
 
 
+def test_reply_ends_with_blank_line_before_session_status(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session = InteractiveSession(connected_at=datetime.now(UTC))
+    session.start_index_for(tmp_path, "default")
+
+    def send(
+        _message: str,
+        _conversation_id: str,
+        _turn_id: str | None,
+        _resolution: ToolEffectResolution | None,
+    ) -> InteractiveChatResult:
+        return InteractiveChatResult(code=0, reply="done")
+
+    result = send_interactive_chat_turn(
+        send,
+        tmp_path,
+        "default",
+        "hello",
+        session,
+        daemon_activity=False,
+        max_attempts=1,
+        poll_interval_seconds=0,
+        read_activity_events=_read_no_activity,
+        print_activity_events=_print_no_activity,
+        print_reply=print,
+    )
+
+    assert result == 0
+    assert capsys.readouterr().out.endswith("done\n\n")
+
+
 def test_turn_coordinator_retries_one_stable_context_and_captures_reply(
     tmp_path: Path,
 ) -> None:

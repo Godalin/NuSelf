@@ -583,12 +583,8 @@ def test_interactive_turn_prints_activity_events(
     assert "[chat] one_shot_chat_completed" not in captured.out
     assert "LLM API is not configured yet" in captured.out
     assert (
-        "Last message: hello\n[daemon] session status=one-shot conversation=default"
-        in captured.out
-    )
-    assert (
         "Last message: hello\n\n[daemon] session status=one-shot conversation=default"
-        not in captured.out
+        in captured.out
     )
 
 
@@ -610,11 +606,11 @@ def test_consecutive_interactive_turns_each_end_with_session_header(
         "[daemon] session status=one-shot conversation=default"
     ) == 3
     assert (
-        "Last message: first\n"
+        "Last message: first\n\n"
         "[daemon] session status=one-shot conversation=default"
     ) in captured.out
     assert (
-        "Last message: second\n"
+        "Last message: second\n\n"
         "[daemon] session status=one-shot conversation=default"
     ) in captured.out
 

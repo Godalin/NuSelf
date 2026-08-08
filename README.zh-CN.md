@@ -197,7 +197,7 @@ local-first 不等于模型离线：配置远程模型后，一次调用所需�
 - 默认测试和 CI 不读取项目私人数据。
 - 可选的真实 API 测试只发送固定合成提示。
 - 配置诊断会隐藏凭据。
-- Memory 只暴露一个 `MemoryService`；持久化工具写操作可安全重放，聊天后的观察失败不会替换已提交回复。
+- Memory 只暴露一个 `MemoryService`；聊天后故障不会覆盖已提交回复，交互回复与 daemon 状态之间会留出空行。
 - thought pack 和 JSON export 是显式迁移工具；仍应独立备份所选 authority。
 
 更多说明见[记忆指南](docs/memory.md)和[存储规范](docs/spec/storage-v2.md)。
