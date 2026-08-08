@@ -128,6 +128,14 @@ class IdeaCandidateGenerator:
         conversations = self._conversation_history.recent()
         profiles = self._profile_service.list_items()[:10]
         sources = self._source_service.list()[-5:]
+        evidence_refs = frozenset(
+            (
+                *(f"memory:{entry.id}" for entry in memories),
+                *(f"conversation:{excerpt.id}" for excerpt in conversations),
+                *(f"profile:{item.id}" for item in profiles),
+                *(f"source:{document.id}" for document in sources),
+            )
+        )
         return _ThinkingContext(
             conversations=_render_history(conversations),
             memories="\n".join(
@@ -142,12 +150,7 @@ class IdeaCandidateGenerator:
                 f"- [source:{document.id}] {document.title or document.id}"
                 for document in sources
             ),
-            evidence_refs=frozenset(
-                [*(f"memory:{entry.id}" for entry in memories),
-                 *(f"conversation:{excerpt.id}" for excerpt in conversations),
-                 *(f"profile:{item.id}" for item in profiles),
-                 *(f"source:{document.id}" for document in sources)]
-            ),
+            evidence_refs=evidence_refs,
         )
 
     def _messages(
@@ -181,21 +184,23 @@ class IdeaCandidateGenerator:
         for item in output.candidates[:limit]:
             refs = tuple(dict.fromkeys(item.evidence_refs))
             if any(ref not in allowed_evidence for ref in refs):
-                raise ValueError("candidate cited evidence outside supplied context")
+                raise ValueError(
+                    "candidate cited evidence outside supplied context"
+                )
             candidates.append(
-            IdeaCandidate(
-                id=f"candidate-{prefix}-{now.microsecond:06d}",
-                title=item.title,
-                body=item.body,
-                candidate_type=item.candidate_type,
-                confidence=item.confidence,
-                novelty=item.novelty,
-                urgency=item.urgency,
-                interruption_cost=item.interruption_cost,
-                evidence_refs=refs,
-                source_summary="derived from " + ", ".join(refs),
-                created_at=utc_now_iso(),
-            )
+                IdeaCandidate(
+                    id=f"candidate-{prefix}-{now.microsecond:06d}",
+                    title=item.title,
+                    body=item.body,
+                    candidate_type=item.candidate_type,
+                    confidence=item.confidence,
+                    novelty=item.novelty,
+                    urgency=item.urgency,
+                    interruption_cost=item.interruption_cost,
+                    evidence_refs=refs,
+                    source_summary="derived from " + ", ".join(refs),
+                    created_at=utc_now_iso(),
+                )
             )
         return candidates
 
