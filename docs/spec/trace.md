@@ -323,6 +323,25 @@ Memory integration:
 - Creating a memory entry through the curator's auto-accept writes a `memory_update` trace.
 - The trace's `evidence_refs` links to the source `chat_turn` trace when available, enabling provenance from memory entry back to the original conversation.
 - The trace is recorded best-effort: failure does not prevent the memory entry from being saved.
+- Every newly accepted producer observation carries a stable source artifact
+  reference. Chat uses an interaction reference derived from the committed
+  conversation message range; Reason uses `reason_step:<id>`. When a source
+  trace exists, the observation also carries its trace id. Memory-update
+  traces retain the observation source artifact in `evidence_refs` and the
+  source trace as `trace:<id>`, so useful provenance does not disappear merely
+  because a chat answer had no retrieved evidence.
+
+Reflection integration records provenance rather than hidden reasoning:
+
+- Candidate-generation context labels every memory and bounded conversation
+  excerpt with a stable artifact reference.
+- Generated candidates must return only references from that supplied catalog;
+  unknown references reject the complete generated result.
+- A published reflection copies those references into its trace
+  `evidence_refs`. Its decision points contain bounded relevance/discussion
+  decisions, never provider chain-of-thought.
+- Reflection notification bodies render a bounded "Why this reflection"
+  section containing the cited artifact references and public decision points.
 
 ## CLI Contract
 

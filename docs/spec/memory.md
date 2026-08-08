@@ -322,6 +322,7 @@ The closed Memory curation taxonomy is:
 | `curator_contended` | `info` | `deferred` | observation |
 | `curator_deferred` | `info` | `deferred` | observation, source reference, zero processed count |
 | `curator_completed` | `info` | `completed` | observation, source reference, processed/create/update/ignore counts |
+| `memory_formed` | `info` | `created` or `updated` | memory, action, memory type, observation, source reference, nullable source trace |
 | `candidate_merged` | `info` | `created` | candidate, target, memory type |
 | `candidate_created` | `info` | `created` | candidate and memory type |
 | `candidate_updated` | `info` | `created` | candidate, target, memory type |
@@ -342,6 +343,12 @@ records. Post-chat completion is already represented by `curator_completed`;
 clients must not emit a second `curator_changed` record or copy its free-form
 summary into audit metadata. Chat trace failures use runtime context for
 conversation correlation rather than duplicating the conversation id.
+
+`memory_formed` is emitted once after each curator action has durably created
+or updated an accepted memory entry. The Memory domain owns this event for
+both chat- and Reason-origin observations. It contains identifiers and closed
+classification fields only; titles, bodies, evidence quotes, and model reasons
+remain out of logs. Log projection is best-effort and cannot undo memory.
 
 ## Candidate Review Queue
 

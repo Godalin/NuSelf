@@ -79,14 +79,20 @@ Trace fields:
 | `kind` | `"reflection"` |
 | `title` | Reflection title |
 | `summary` | Reflection body (2-4 sentences) |
-| `inputs` | `[]` — generated proactively, not from user input |
-| `evidence_refs` | `[]` (no direct evidence chain in v0.2.0) |
+| `inputs` | `[]` — generated proactively, not from direct user input |
+| `evidence_refs` | Validated artifact references selected from the bounded generation context |
 | `outputs` | `["reflection:{entry.id}"]` |
 | `participants` | `["reflection"]` |
 | `conversation_id` | Key used for link building or cross-referencing, e.g. `"reflections"` |
 | `visibility` | `"private"` |
 | `decision_points` | `["Relevance gate passed: composite=... threshold=...", "Persona discussion approved/rejected"]` |
 | `metadata` | `{"candidate_type": ..., "composite_score": ..., "discussion_approved": ...}` |
+
+The Inbox/Delivery notification body appends a bounded provenance explanation:
+the candidate's validated evidence references followed by the public relevance
+and persona-discussion decision points. This is an audit explanation, not
+hidden model chain-of-thought, and must not inline private memory bodies or raw
+conversation text.
 
 ## LLMRelevanceGate Scoring
 
