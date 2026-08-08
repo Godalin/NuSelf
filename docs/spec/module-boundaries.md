@@ -209,7 +209,7 @@ mutate instead of constructing them during an operation. Aggregate functions
 such as memory statistics receive repositories rather than resolving an
 authority. Memory composition owns the immutable repository bundle and reuses
 its instances behind `MemoryService`, `ProfileService`, and
-`MemoryWorkflowService`; `ApplicationGraph` does not expose the bundle.
+`MemoryService`; `ApplicationGraph` does not expose the bundle.
 `MemoryEntryRepository.compute_graph()` is the single one-shot symbolic graph
 projection used by both repository operations and external memory-query
 expansion. A private mirror with identical behavior is not a second capability.
@@ -466,10 +466,12 @@ composition graph. By contrast, `nuself.decorators` is the deliberate public
 spelling for the cohesive inert feature-declaration DSL and may re-export the
 policies and decorators owned by `runtime.feature.policy`.
 
-The application Chat completion service is the cross-domain use case joining
-one committed Chat result to Memory observation intake. It reports an optional
-observation identity only; CLI and daemon retain their distinct policies for
-running or scheduling curation and conversation compression.
+The application Chat projection adapter joins one committed Chat result to
+Memory's producer-neutral observation input. All authority-scoped Memory
+behavior is exposed through one `MemoryService`; there is no parallel workflow
+or Chat-completion Service. The adapter reports an optional observation
+identity only, while CLI and daemon retain their distinct policies for running
+or scheduling curation and conversation compression.
 
 `nuself.inbox` owns immutable attention records and `InboxService` persistence.
 `nuself.delivery` owns delivery records, adapter contracts, orchestration, and
