@@ -115,7 +115,7 @@ class DaemonState:
             tool_outcomes=LogToolOutcomeProjection(
                 component="chat",
                 project_root=self.authority_root,
-                live=self.activity_broker.publish,
+                activity_sink=self.activity_broker.publish,
             ),
         )
 

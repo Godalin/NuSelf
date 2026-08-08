@@ -215,6 +215,10 @@ broker explicitly because Tool execution may occur beyond the request thread's
 `ContextVar` boundary. Projection failure remains secondary to the Tool
 outcome.
 
+The log boundary separates durable persistence, identity-preserving activity
+delivery, and surface-owned visibility/rendering. Daemon transports structured
+`LogEvent` values; it never produces TUI text on behalf of a frontend.
+
 Major domains are:
 
 - **Memory and Source** — Memory owns chat-derived observations, authoritative

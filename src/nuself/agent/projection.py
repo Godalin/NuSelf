@@ -72,7 +72,7 @@ class LogToolOutcomeProjection:
 
     component: LogComponent
     project_root: Path | None
-    live: Callable[[LogEvent], None] | None = None
+    activity_sink: Callable[[LogEvent], None] | None = None
 
     def project_best_effort(
         self,
@@ -97,10 +97,10 @@ class LogToolOutcomeProjection:
             error=outcome.error,
             metadata=metadata,
         )
-        live = self.live
-        if event is not None and live is not None:
+        activity_sink = self.activity_sink
+        if event is not None and activity_sink is not None:
             run_observed_best_effort(
-                lambda: live(event),
+                lambda: activity_sink(event),
                 component=self.component,
                 event="tool_outcome_live_projection_failed",
                 message="Could not deliver live service Tool outcome",

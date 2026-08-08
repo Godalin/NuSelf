@@ -5,21 +5,29 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Idle — no active implementation goal.
+Active — seal structured activity delivery and frontend rendering boundaries.
 
 ## Objective
 
-None.
+Finish the current Tool/log architecture with explicit activity naming,
+identity-safe delivery, and an end-to-end frontend contract test.
 
 ## Next Steps
 
-Define the next objective, ordered steps, exclusions, and completion evidence
-before beginning non-trivial work.
+1. Specify durable persistence, live activity delivery, and frontend visibility.
+2. Rename the Tool outcome live callback to an explicit activity sink.
+3. Deduplicate repeated delivery of one `LogEvent` identity at the broker.
+4. Cover Tool execution through wire decoding and TUI rendering.
+5. Run full validation, commit in bounded steps, and update PR #4.
 
 ## Exclusions
 
-None.
+- Do not introduce a new event bus, frontend abstraction, or effect phase model.
+- Do not rename persisted event identities or change their wire schema.
 
 ## Completion Evidence
 
-None.
+- One event identity is queued at most once per activity subscription.
+- A decorated Tool outcome survives broker and wire transport and is rendered
+  from the decoded `LogEvent` by the TUI.
+- Full pytest, Pyright, build, wheel smoke, and diff checks pass.

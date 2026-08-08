@@ -44,6 +44,17 @@ containers; `to_record()` returns a separate ordinary JSON-safe dict/list tree.
 The audit sink, process-local observers, and live activity queues therefore
 observe one stable event snapshot.
 
+Three separate responsibilities must remain explicit:
+
+1. **Durable persistence** appends the canonical `LogEvent` as evidence.
+2. **Live activity delivery** transports that same event identity to subscribed
+   clients; it does not render or reconstruct the event.
+3. **Frontend visibility and rendering** select events appropriate to one
+   surface and present the decoded structured fields.
+
+Persistence does not imply visibility, and delivery does not imply a specific
+terminal, web, or graphical representation.
+
 ## Log Context
 
 `LogEvent` is append-only evidence. The authoritative ephemeral correlation

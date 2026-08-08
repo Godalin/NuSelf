@@ -289,7 +289,7 @@ def test_explicit_live_projection_crosses_worker_thread(
         outcomes=LogToolOutcomeProjection(
             component="chat",
             project_root=tmp_path,
-            live=live.append,
+            activity_sink=live.append,
         )
     )
 
