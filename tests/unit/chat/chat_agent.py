@@ -1384,8 +1384,8 @@ def test_reflection_list_pending_with_entries(tmp_path: Path) -> None:
     tool = _chat_tool(tmp_path, "reflection_list_pending", reflection_repository=repo)
     result = _invoke_chat_tool(tool)
     assert "Pending reflection ideas:" in result
-    assert "[0] Explore recursion in habits" in result
-    assert "[1] Sleep and creativity link" in result
+    assert "[0] id=r1 Explore recursion in habits" in result
+    assert "[1] id=r2 Sleep and creativity link" in result
 
 
 def test_reflection_list_pending_respects_limit(tmp_path: Path) -> None:
@@ -1473,7 +1473,7 @@ def test_reflection_dismiss_success(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 0})
+    result = _invoke_chat_tool(tool, {"entry_id": "r1"})
     assert "Dismissed" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
@@ -1486,8 +1486,8 @@ def test_reflection_dismiss_out_of_range(tmp_path: Path, monkeypatch: pytest.Mon
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 0})
-    assert "Invalid reflection index" in result
+    result = _invoke_chat_tool(tool, {"entry_id": "missing"})
+    assert "Error" in result
 
 
 def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1497,7 +1497,7 @@ def test_reflection_dismiss_invalid_index(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt="": "y")
     tool = _chat_tool(tmp_path, "reflection_dismiss", reflection_repository=repo)
-    assert "Error" in _invoke_chat_tool(tool, {"index": -1})
+    assert "Error" in _invoke_chat_tool(tool, {"entry_id": ""})
 
 
 def test_reflection_archive_success(tmp_path: Path) -> None:
@@ -1524,7 +1524,7 @@ def test_reflection_archive_success(tmp_path: Path) -> None:
         )
     )
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 0})
+    result = _invoke_chat_tool(tool, {"entry_id": "r1"})
     assert "Archived" in result
     assert "Explore recursion in habits" in result
     assert repo.list(status="pending") == []
@@ -1537,8 +1537,8 @@ def test_reflection_archive_out_of_range(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
-    result = _invoke_chat_tool(tool, {"index": 0})
-    assert "Invalid reflection index" in result
+    result = _invoke_chat_tool(tool, {"entry_id": "missing"})
+    assert "Error" in result
 
 
 def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
@@ -1546,7 +1546,7 @@ def test_reflection_archive_invalid_index(tmp_path: Path) -> None:
 
     repo = ReflectionRepository(runtime_paths(tmp_path), backend=owned_backend(tmp_path))
     tool = _chat_tool(tmp_path, "reflection_archive", reflection_repository=repo)
-    assert "Error" in _invoke_chat_tool(tool, {"index": -1})
+    assert "Error" in _invoke_chat_tool(tool, {"entry_id": ""})
 
 
 def test_chat_agent_includes_reflection_tools_in_system_prompt(tmp_path: Path) -> None:
@@ -1673,6 +1673,7 @@ def test_reason_propose_creates_conversation_after_confirmation(tmp_path: Path, 
     result = _invoke_chat_tool(
         tool,
         {
+            "operation_id": "chat-proposal-1",
             "topic": "What should I think about next?",
             "working_summary": "We should keep the conversation short.",
             "active_items": [{"label": "next step", "kind": "decision"}],
@@ -1725,6 +1726,7 @@ def test_reason_propose_creates_conversation_when_proposal_audit_is_unavailable(
     result = _invoke_chat_tool(
         _chat_tool(tmp_path, "reason_propose"),
         {
+            "operation_id": "chat-proposal-audit-failure",
             "topic": "What should I think about next?",
             "working_summary": "Keep it short.",
             "active_items": [{"label": "next step", "kind": "decision"}],

@@ -542,6 +542,10 @@ single-operation dependency rather than a second service graph.
 `ReasonRepository` owns persistence and decode diagnostics; it does not expose
 runtime paths so callers can reconstruct application composition from a
 repository instance.
+It also owns the internal `reason_operations` replay collection. A replay key,
+its normalized-input fingerprint, and the created thread are committed in one
+backend transaction; chat request ids and framework tool-call ids never serve
+as this domain identity.
 `ReasonService` itself receives repository, workspace store, and trace recorder
 as required dependencies for its own thread lifecycle. It exposes only
 Reason-owned thread artifact paths and workspace-owner enumeration needed by
@@ -551,6 +555,9 @@ stores its required recorder as a non-null capability;
 trace failure isolation must not be modeled as optional composition. Reason
 scheduling and output export receive the existing Reason service and do not
 receive its workspace store separately.
+Reason output job identity is derived from the durable thread id, selected step
+ids, and normalized export options. Replanning that identity may enqueue
+another wake-up message but must reuse the existing manifest and artifacts.
 The service does not retain a model advancer. An explicit advance operation
 receives either the narrow advancer protocol for that call or a structured step
 already produced by an orchestrator; dependency source must not vary between a

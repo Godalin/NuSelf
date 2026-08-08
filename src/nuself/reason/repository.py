@@ -8,8 +8,13 @@ from typing import Generator
 
 from nuself.runtime.handles import VisibleHandleError, resolve_visible_item
 from nuself.config.settings import RuntimePaths
-from nuself.reason.model import ACTIVE_STATUSES, ReasoningStep, ReasoningThread
-from nuself.reason.errors import ReasonNotFound
+from nuself.reason.model import (
+    ACTIVE_STATUSES,
+    ReasoningStep,
+    ReasoningThread,
+    ReasonOperation,
+)
+from nuself.reason.errors import ReasonNotFound, ReasonOperationConflict
 from nuself.runtime.observability import decode_observed_record
 from nuself.storage.contract import StorageBackend
 
@@ -28,6 +33,7 @@ class ReasonRepository:
         self._backend = backend
         self._threads = backend.collection("reason_threads")
         self._steps = backend.collection("reason_steps")
+        self._operations = backend.collection("reason_operations")
         self._paths = paths
 
     @contextmanager
@@ -43,6 +49,56 @@ class ReasonRepository:
         with _write_lock:
             self._threads.put(thread.id, thread.to_wire())
         return thread
+
+    def create_thread_once(
+        self,
+        thread: ReasoningThread,
+        *,
+        operation_id: str,
+        fingerprint: str,
+    ) -> tuple[ReasoningThread, bool]:
+        """Create a thread and its replay record in one transaction."""
+        key = operation_id.strip()
+        if not key:
+            raise ValueError("operation_id must not be blank")
+        with _write_lock:
+            with self._backend.transaction():
+                existing = self._operations.get(key)
+                if existing is not None:
+                    operation = ReasonOperation.from_wire(existing)
+                    if operation.fingerprint != fingerprint:
+                        raise ReasonOperationConflict(
+                            f"reason operation key conflicts: {key}"
+                        )
+                    return self.get_thread(operation.thread_id), False
+                self._threads.put(thread.id, thread.to_wire())
+                operation = ReasonOperation(
+                    id=key,
+                    fingerprint=fingerprint,
+                    thread_id=thread.id,
+                )
+                self._operations.put(key, operation.to_wire())
+        return thread, True
+
+    def replay_thread(
+        self,
+        *,
+        operation_id: str,
+        fingerprint: str,
+    ) -> ReasoningThread | None:
+        """Return a completed creation replay, rejecting key conflicts."""
+        key = operation_id.strip()
+        if not key:
+            raise ValueError("operation_id must not be blank")
+        existing = self._operations.get(key)
+        if existing is None:
+            return None
+        operation = ReasonOperation.from_wire(existing)
+        if operation.fingerprint != fingerprint:
+            raise ReasonOperationConflict(
+                f"reason operation key conflicts: {key}"
+            )
+        return self.get_thread(operation.thread_id)
 
     def get_thread(self, thread_id: str) -> ReasoningThread:
         raw = self._threads.get(thread_id)

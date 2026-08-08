@@ -17,6 +17,7 @@ from nuself.reason.output_contracts import (
 from reason_output_fixtures import ReasonOutputService
 from nuself.reason.errors import ReasonNotFound
 from nuself.reason.repository import ReasonRepository
+from nuself.runtime.job.message import JobMessage
 from reason_fixtures import ReasonService
 from tests.backend import owned_backend
 
@@ -100,6 +101,42 @@ def test_reason_output_plan_and_compose(tmp_path: Path, monkeypatch: pytest.Monk
     assert "Chapter 1: First" in combined
     assert "First output" in combined
     assert "Second output" in combined
+
+
+def test_reason_output_replan_preserves_existing_artifacts(
+    tmp_path: Path,
+) -> None:
+    service = _reason_service(tmp_path)
+    thread = service.start_thread("Replay export")
+    service.advance_thread(
+        thread.id,
+        step=_step(thread.id, "First", "Output", "Delta"),
+    )
+    output_service = ReasonOutputService(
+        project_root=tmp_path,
+        reason_service=service,
+    )
+    jobs: list[JobMessage] = []
+    first = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=jobs.append,
+    )
+    paths = output_service.job_paths(thread.id, first.job_id)
+    paths.chunks_dir.mkdir(parents=True, exist_ok=True)
+    marker = paths.chunks_dir / "existing.md"
+    marker.write_text("preserve me", encoding="utf-8")
+
+    replay = output_service.plan_job(
+        thread.id,
+        segment_size=1,
+        job_sink=jobs.append,
+    )
+
+    assert replay == first
+    assert marker.read_text(encoding="utf-8") == "preserve me"
+    assert len(jobs) == 2
+    assert jobs[0].job_id == jobs[1].job_id == first.job_id
 
 
 def test_reason_output_section_plan_is_independent_of_chunk_size(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

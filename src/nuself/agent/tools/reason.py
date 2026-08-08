@@ -245,6 +245,7 @@ def build_reason_tools(
     @confirmed(action="create", resource="reason thread")
     @observed
     def reason_propose(
+        operation_id: str,
         topic: str,
         working_summary: str,
         active_items: list[dict[str, object]],
@@ -271,8 +272,9 @@ def build_reason_tools(
                 "mandate_count": len(mandates),
             },
         )
-        thread = service.start_thread(
-            topic=topic,
+        thread = service.start_thread_once(
+            operation_id,
+            topic,
             working_summary=working_summary,
             active_items=tuple(active_items),
             mandates=tuple(mandates),

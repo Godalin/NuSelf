@@ -702,6 +702,7 @@ Proposes a reasoning thread through the approval-decorator path. The decorated t
 
 ```python
 def reason_propose(
+    operation_id: str,
     topic: str,
     working_summary: str,
     active_items: list[dict],
@@ -720,6 +721,11 @@ Parameters:
   per step" unless the user explicitly wants larger batches.
 
 `reason_propose` does not accept arbitrary `evidence_refs` from chat. This prevents proposal ids, stale cross-thread refs, or unverified source refs from leaking into durable reason state. Evidence promotion should happen through explicit service paths.
+
+`operation_id` identifies the logical proposal independently of a request,
+turn, or LangChain tool-call id. The Reason service commits an internal replay
+record with the new thread. Same-key/same-input replay returns the original
+thread; same-key/different-input reuse raises a domain conflict.
 
 Returns and decorated wrapper semantics:
 

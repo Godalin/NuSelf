@@ -685,15 +685,21 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 
 #### `reflection_dismiss`
 
-- **Args**: `index: int` (0-based index from `reflection_list_pending` output)
-- **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.dismiss(entry.id)`, and returns confirmation.
+- **Args**: `entry_id: str` (the durable id returned by
+  `reflection_list_pending`)
+- **Behavior**: Resolves that exact entry through `ReflectionService`, marks it
+  dismissed, and returns confirmation. Numeric list positions are presentation
+  only and must never cross an approval or mutation boundary.
 - **Returns**: Confirmation or error message.
 - **When to use**: After the user explicitly declines interest in a suggested reflection topic.
 
 #### `reflection_archive`
 
-- **Args**: `index: int` (0-based index from `reflection_list_pending` output)
-- **Behavior**: Looks up the pending entry at the given index, calls `ReflectionRepository.archive(entry.id)`, and returns confirmation.
+- **Args**: `entry_id: str` (the durable id returned by
+  `reflection_list_pending`)
+- **Behavior**: Resolves that exact entry through `ReflectionService`, marks it
+  archived, and returns confirmation. Numeric list positions are presentation
+  only and must never cross an approval or mutation boundary.
 - **Returns**: Confirmation with entry title, or error if not found.
 - **When to use**: After the user has engaged with a reflection idea and the discussion feels complete.
 
@@ -777,7 +783,8 @@ Tools that emit durable operational logs, such as export flows and other long-ru
 
 #### `reason_propose`
 
-- **Args**: `topic: str`, `working_summary: str`, `active_items: list[dict]`, `mandates: list[str]`
+- **Args**: `operation_id: str`, `topic: str`, `working_summary: str`,
+  `active_items: list[dict]`, `mandates: list[str]`
 - **Behavior**: Requests confirmation through the injected approval port and
   creates the reasoning thread only after an affirmative decision.
 - **Returns**: The thread id. Confirmation policy does not wrap or change the
@@ -786,6 +793,34 @@ Tools that emit durable operational logs, such as export flows and other long-ru
   agent must provide initial tracked items and mandates, even if either list is
   empty.
 - **Evidence**: The tool does not accept arbitrary `evidence_refs`; durable evidence refs must be added through explicit service paths.
+- **Replay**: `operation_id` is a caller-chosen stable key for this proposed
+  creation, not a chat request or tool-call id. Repeating the key with the same
+  normalized creation input returns the original thread. Reusing it with
+  different input fails explicitly. The Reason service owns this rule and
+  persists the key with the thread; approval and transport layers do not claim
+  exactly-once execution.
+
+#### Durable mutation identity and replay
+
+Agent transports, approval effects, and LangGraph checkpoints may repeat a
+tool invocation after its side effect has started. They therefore do not own
+idempotency. A non-idempotent domain operation must accept a stable operation
+key when no existing resource identity already makes the request idempotent,
+and its service must persist or derive the durable result atomically with the
+authoritative mutation.
+
+- Stable resource ids are sufficient for reflection lifecycle transitions;
+  shifting numeric handles are forbidden at mutation boundaries.
+- Reason thread creation persists its operation key on the created thread.
+  Same-key/same-input replay returns that thread; same-key/different-input reuse
+  is an error.
+- Reason export planning is content-addressed by thread, selected durable step
+  ids, and export options. Replanning the same job returns its existing
+  manifest and may re-emit the idempotent wake-up message, but must not delete
+  chunks, progress, or completed output.
+- Request ids, turn ids, and LangChain tool-call ids remain observability and
+  transport identities. They must not be substituted for a domain operation
+  key because a logical operation can survive a new request or tool call.
 
 ### New: Trace Awareness Tools (Read-Only)
 
@@ -862,7 +897,7 @@ Example additions:
 - reflection_list_pending(limit: int = 5): View pending proactive ideas.
   Use when the user seems open to exploring new connections or questions,
   or when the conversation naturally pauses.
-- reflection_dismiss(index: int): Remove an idea from the active pool.
+- reflection_dismiss(entry_id: str): Remove the exact durable idea from the active pool.
   Use when the user explicitly says they are not interested in a topic.
 - reason_list_active(): View active reasoning threads.
   Use when the user asks about open questions or what they are

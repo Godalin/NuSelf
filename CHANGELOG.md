@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection agent mutations now target durable entry IDs rather than shifting
+  list indexes. Reason proposals have domain-owned replay keys, and identical
+  export planning reuses existing manifests and artifacts.
+
 - Source queries are now read-only over immutable imported revisions;
   append-only ingestion is a separate capability, changed content creates a
   new revision, and Source no longer exposes replacement or deletion.

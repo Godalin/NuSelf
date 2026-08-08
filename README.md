@@ -218,7 +218,7 @@ Important boundaries:
 - Default tests and CI do not read private project data.
 - Opt-in live API tests use fixed synthetic prompts.
 - Diagnostic configuration output redacts credentials.
-- Observed tools emit one privacy-safe `tool.activity` lifecycle; structured arguments and results appear once in the framework-owned outcome event.
+- Observed tools emit one privacy-safe `tool.activity` lifecycle; durable mutations use stable domain identities and replay existing results safely.
 - Thought packs and JSON exports are explicit portability tools; keep separate backups of the selected authority.
 
 See the [memory guide](docs/memory.md) and

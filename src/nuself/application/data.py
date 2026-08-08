@@ -32,6 +32,7 @@ _RESOURCES = (
     DataResource("persona", "persona_prompts"),
     DataResource("reason-threads", "reason_threads"),
     DataResource("reason-steps", "reason_steps"),
+    DataResource("reason_operations", "reason_operations", internal=True),
     DataResource("traces", "trace_nodes"),
     DataResource("trace-edges", "trace_edges"),
     DataResource("inbox", "inbox_items"),
