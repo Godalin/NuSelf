@@ -5,34 +5,21 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — seal repositories behind application services.
+Idle — no active implementation goal.
 
 ## Objective
 
-Remove the remaining cross-domain repository call path and enforce that
-production consumers cannot import repository implementations outside their
-own domain or an explicit composition root.
+None.
 
 ## Next Steps
 
-1. Specify the repository construction and consumption boundary.
-2. Change generic data administration to use `MemoryService` rather than
-   `MemoryEntryRepository`.
-3. Add an executable import-boundary test and an exact graph-field assertion
-   preventing repository exposure.
-4. Run focused and full validation, review, and merge through a short PR.
+Define the next objective, ordered steps, exclusions, and completion evidence
+before beginning non-trivial work.
 
 ## Exclusions
 
-- Moving repository-owned DTOs and domain errors into dedicated typed modules;
-  that belongs to the later typed-storage-contract step.
-- Hiding repository construction from same-domain composition modules.
-- Replacing repositories inside their owning services.
+None.
 
 ## Completion Evidence
 
-- No `ApplicationGraph` field is a repository.
-- No cross-domain production module imports a concrete `*Repository` except
-  an explicit composition root constructing the owning service.
-- Data administration updates/deletes Memory only through `MemoryService`.
-- Full tests, Pyright, builds, and CI pass.
+None.
