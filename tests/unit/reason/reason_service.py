@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from nuself.trace.composition import compose_trace_services
 from nuself.config.settings import runtime_paths
 from nuself.log.reader import read_log_events
-from nuself.reason.model import ReasoningStep
+from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.reason.errors import (
     ReasonAdvanceError,
     ReasonOperationConflict,
@@ -568,6 +568,34 @@ def test_advance_thread_records_trace(tmp_path: Path) -> None:
         f"reason_step:{steps[0].id}",
     )
     assert traces[0].metadata["step_kind"] == "progress"
+
+
+def test_advance_projects_committed_step_with_recorded_trace(
+    tmp_path: Path,
+) -> None:
+    observed: list[tuple[str, str, str | None]] = []
+
+    def observe_step(
+        thread: ReasoningThread,
+        step: ReasoningStep,
+        trace_id: str | None,
+    ) -> None:
+        observed.append((thread.id, step.id, trace_id))
+
+    service = _reason_service(
+        project_root=tmp_path,
+        step_observer=observe_step,
+    )
+    thread = service.start_thread("Project this step")
+    step = _test_step(thread.id)
+
+    service.advance_thread(thread.id, step=step)
+
+    [reason_trace] = compose_trace_services(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    ).query.list_traces(kind="reason_step")
+    assert observed == [(thread.id, step.id, reason_trace.id)]
 
 
 def test_advance_projections_cannot_replace_committed_step(

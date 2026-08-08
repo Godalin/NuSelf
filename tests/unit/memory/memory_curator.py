@@ -847,6 +847,13 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     assert "title" not in formed[0].metadata
     assert "body" not in formed[0].metadata
 
+    [memory_trace] = compose_trace_services(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    ).query.list_traces(kind="memory_update")
+    assert memory_trace.outputs == (f"memory:{entries[0].id}",)
+    assert memory_trace.evidence_refs == (candidates[0].source_refs[0],)
+
 
 def test_curator_audit_failure_cannot_replay_committed_candidate(
     tmp_path: Path,

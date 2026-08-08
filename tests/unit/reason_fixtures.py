@@ -12,6 +12,7 @@ from nuself.reason.scheduler import ReasonScheduler as _ReasonScheduler
 from nuself.reason.service import (
     ReasonAdvancerProtocol,
     ReasonService as _ReasonService,
+    ReasonStepObserver,
 )
 from tests.backend import owned_backend
 from nuself.trace.service import TraceRecorder
@@ -29,6 +30,7 @@ class ReasonService(_ReasonService):
         repository: ReasonRepository | None = None,
         workspace_store: PrivateWorkspaceStore | None = None,
         trace_recorder: TraceRecorder | None = None,
+        step_observer: ReasonStepObserver | None = None,
         prompt_generator: Callable[..., str] = lambda *args, **kwargs: (
             "Test-generated reasoning prompt."
         ),
@@ -59,6 +61,7 @@ class ReasonService(_ReasonService):
             trace_recorder=selected_trace,
             prompt_generator=prompt_generator,
             inbox=InboxService(runtime_paths(root), backend),
+            step_observer=step_observer,
         )
 
 
