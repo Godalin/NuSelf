@@ -48,6 +48,11 @@ confirmation before writing the proposal; the CLI may still surface the
 resulting `proposal_created` event as an audit log, but it should not ask for
 a second confirmation.
 
+Supply a stable, non-secret `operation_id` for the logical proposal and reuse
+it if that same proposal is retried. Do not use a request id, turn id, or tool
+call id. A short descriptive token such as `reason-career-tradeoff-2026-08`
+is sufficient; a different proposal must receive a different operation id.
+
 Tool return values: The decorated proposal tool returns a structured JSON
 string that preserves the underlying callable's result while indicating the
 user approval state. Example formats:
