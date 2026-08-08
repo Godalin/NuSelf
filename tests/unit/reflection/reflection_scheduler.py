@@ -37,6 +37,7 @@ from nuself.reflection.repository import ReflectionEntry
 from nuself.reflection.candidates import CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
+from nuself.trace.composition import compose_trace_services
 from tests.backend import owned_backend
 
 
@@ -92,6 +93,7 @@ _DEFAULT_CANDIDATES: list[dict[str, object]] = [
         "novelty": 0.9,
         "urgency": 0.3,
         "interruption_cost": 0.1,
+        "evidence_refs": ["memory:m1"],
     }
 ]
 
@@ -542,8 +544,27 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     inbox_items = cast(InboxService, scheduler._inbox).list()
     assert len(inbox_items) == 1
     assert inbox_items[0].title.startswith("New reflection:")
-    assert inbox_items[0].body == refl_entries[0].body
+    assert inbox_items[0].body.startswith(refl_entries[0].body)
+    assert "Why this reflection:" in inbox_items[0].body
+    assert "Evidence: memory:m1" in inbox_items[0].body
+    assert "Decision: Relevance gate passed" in inbox_items[0].body
     assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
+
+
+def test_reflect_trace_retains_validated_memory_evidence(
+    scheduler: ReflectionScheduler,
+    tmp_path: Path,
+) -> None:
+    assert scheduler.reflect(datetime(2024, 1, 1, 12, tzinfo=UTC)) is True
+
+    traces = compose_trace_services(
+        runtime_paths(tmp_path),
+        owned_backend(tmp_path),
+    ).query.traces_for_artifact("memory:m1")
+
+    assert len(traces) == 1
+    assert traces[0].kind == "reflection"
+    assert traces[0].evidence_refs == ("memory:m1",)
 
 
 def test_reflect_creates_inbox_without_delivery_by_default(
@@ -739,7 +760,9 @@ def test_quiet_hours_non_wrapping_range() -> None:
 
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
     """No conversations, no memory, no sources → no candidates."""
-    gen = _generator(tmp_path, agent=_CandidateAgent())
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["evidence_refs"] = ["conversation:default"]
+    gen = _generator(tmp_path, agent=_CandidateAgent([candidate]))
     candidates = gen.generate()
     assert candidates == []
 
@@ -748,7 +771,9 @@ def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
     """Memory entries alone should be enough to generate ideas."""
     _seed_memory(tmp_path)
 
-    gen = _generator(tmp_path, agent=_CandidateAgent())
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["evidence_refs"] = ["memory:m1"]
+    gen = _generator(tmp_path, agent=_CandidateAgent([candidate]))
     candidates = gen.generate()
     assert len(candidates) == 1
     assert candidates[0].title == "Proactive insight about memory patterns"
@@ -768,7 +793,9 @@ def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:
     )
     store.save(state)
 
-    gen = _generator(tmp_path, agent=_CandidateAgent())
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["evidence_refs"] = ["conversation:default"]
+    gen = _generator(tmp_path, agent=_CandidateAgent([candidate]))
     candidates = gen.generate()
     assert len(candidates) == 1
 
@@ -869,8 +896,8 @@ def test_generator_rejects_entire_malformed_candidate_batch(
 def test_generator_parses_multiple_candidates(tmp_path: Path) -> None:
     """LLM returning multiple candidates → all parsed."""
     multi_agent = _CandidateAgent(candidates=[
-        {"title": "Idea A", "body": "First idea", "candidate_type": "question", "confidence": 0.8, "novelty": 0.9, "urgency": 0.3, "interruption_cost": 0.1},
-        {"title": "Idea B", "body": "Second idea", "candidate_type": "connection", "confidence": 0.7, "novelty": 0.8, "urgency": 0.5, "interruption_cost": 0.2},
+            {"title": "Idea A", "body": "First idea", "candidate_type": "question", "confidence": 0.8, "novelty": 0.9, "urgency": 0.3, "interruption_cost": 0.1, "evidence_refs": ["memory:m1"]},
+            {"title": "Idea B", "body": "Second idea", "candidate_type": "connection", "confidence": 0.7, "novelty": 0.8, "urgency": 0.5, "interruption_cost": 0.2, "evidence_refs": ["memory:m1"]},
     ])
     _seed_memory(tmp_path)
 
@@ -879,6 +906,21 @@ def test_generator_parses_multiple_candidates(tmp_path: Path) -> None:
     assert len(candidates) == 2
     assert candidates[0].title == "Idea A"
     assert candidates[1].title == "Idea B"
+
+
+def test_generator_rejects_evidence_outside_supplied_context(
+    tmp_path: Path,
+) -> None:
+    _seed_memory(tmp_path)
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["evidence_refs"] = ["memory:not-supplied"]
+
+    generated = _generator(
+        tmp_path,
+        agent=_CandidateAgent([candidate]),
+    ).generate()
+
+    assert generated == []
 
 
 def test_generator_injects_language_instruction(tmp_path: Path) -> None:

@@ -835,6 +835,18 @@ def test_memory_curator_auto_accept_creates_entry(tmp_path: Path) -> None:
     assert len(candidates) == 1
     assert candidates[0].review_state == "accepted"
 
+    formed = [
+        event
+        for event in read_log_events(project_root=tmp_path, component="memory")
+        if event.event == "memory_formed"
+    ]
+    assert len(formed) == 1
+    assert formed[0].metadata is not None
+    assert formed[0].metadata["memory_id"] == entries[0].id
+    assert formed[0].metadata["source_ref"] == candidates[0].source_refs[0]
+    assert "title" not in formed[0].metadata
+    assert "body" not in formed[0].metadata
+
 
 def test_curator_audit_failure_cannot_replay_committed_candidate(
     tmp_path: Path,
