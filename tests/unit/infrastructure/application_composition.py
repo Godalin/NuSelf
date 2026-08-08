@@ -17,6 +17,7 @@ from nuself.config.scope import (
     scope_from_authority_root,
 )
 from nuself.storage.authority import auto_backend
+from nuself.reason.model import ReasoningStep
 
 
 def test_application_graph_reuses_one_authority_repository_graph(
@@ -120,3 +121,35 @@ def test_reason_prompt_models_are_composed_lazily(
 
     assert thread.reasoning_prompt == "Composed prompt."
     assert model_calls == 1
+
+
+def test_application_projects_committed_reason_step_into_memory(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    paths = runtime_paths(tmp_path)
+    backend = auto_backend(tmp_path)
+
+    def generate_prompt(*args: object, **kwargs: object) -> str:
+        del args, kwargs
+        return "Composed prompt."
+
+    monkeypatch.setattr(
+        "nuself.reason.composition.generate_reasoning_prompt",
+        generate_prompt,
+    )
+    graph = compose_application(paths, backend)
+    thread = graph.reason.start_thread("Trace this conclusion")
+    step = ReasoningStep(
+        thread_id=thread.id,
+        summary="A conclusion worth remembering",
+        new_findings_data=({"label": "Proven finding"},),
+    )
+
+    graph.reason.advance_thread(thread.id, step=step)
+
+    [observation] = graph.memory.pending_observations()
+    [trace] = graph.trace.query.list_traces(kind="reason_step")
+    assert observation.source_ref == f"reason_step:{step.id}"
+    assert observation.source_trace_id == trace.id
+    assert f"reason_step:{step.id}" in trace.outputs
