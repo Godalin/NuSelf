@@ -64,6 +64,7 @@ def compose_application(
     conversation_store = ConversationStore(paths, backend=backend)
     conversations = ConversationService(conversation_store)
     memory = compose_memory_repositories(paths, backend)
+    memory_service = MemoryService(memory.entries, memory.candidates)
     source_services = compose_source_services(paths, backend)
     trace = compose_trace_services(paths, backend)
     config = ConfigSystem.load_scope(paths.scope)
@@ -87,7 +88,7 @@ def compose_application(
         config=config,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
-        memory=MemoryService(memory.entries, memory.candidates),
+        memory=memory_service,
         profiles=ProfileService(memory.profile),
         memory_workflows=MemoryWorkflowService(paths, memory),
         sources=source_services.query,
@@ -106,6 +107,6 @@ def compose_application(
         data=DataAdminService(
             backend,
             conversations=conversation_store,
-            memories=memory.entries,
+            memories=memory_service,
         ),
     )

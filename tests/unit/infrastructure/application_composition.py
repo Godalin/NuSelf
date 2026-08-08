@@ -39,6 +39,7 @@ def test_application_graph_reuses_one_authority_repository_graph(
     memory = graph.memory_workflows._repositories
     assert memory.curator_plans._backend is backend
     assert graph.memory._repository is memory.entries
+    assert graph.data._memories is graph.memory
     assert memory.candidates._entry_repository is memory.entries
     assert memory.candidates._profile_repository is memory.profile
     assert not hasattr(graph.sources._repository, "_candidate_repository")
