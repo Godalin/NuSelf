@@ -126,7 +126,11 @@ message, or identifier.
 - `MemoryObservation` contains a stable `obs_...` ID, opaque source reference,
   ordered text fragments, observation time, optional trace correlation, and
   `pending`/`processed` status. `observe()` is idempotent and rejects an ID
-  collision with different content.
+  collision with different content. New Chat observations use the
+  `conversation_turn:<turn_id>` artifact reference exported by Conversation,
+  or a resolvable `conversation_range:...` reference when no turn ID exists;
+  Memory retains either form opaquely and never receives Conversation storage
+  or a Conversation service.
 - Before applying a ready model decision, persist one typed curator plan at
   `memory_curator_plans`. The plan owns the observation ID, opaque source
   reference, time, and structured actions. A plan write failure occurs before any
@@ -322,6 +326,7 @@ The closed Memory curation taxonomy is:
 | `curator_contended` | `info` | `deferred` | observation |
 | `curator_deferred` | `info` | `deferred` | observation, source reference, zero processed count |
 | `curator_completed` | `info` | `completed` | observation, source reference, processed/create/update/ignore counts |
+| `memory_formed` | `info` | `completed` | memory, action, memory type, observation, source reference, nullable source trace |
 | `candidate_merged` | `info` | `created` | candidate, target, memory type |
 | `candidate_created` | `info` | `created` | candidate and memory type |
 | `candidate_updated` | `info` | `created` | candidate, target, memory type |
@@ -333,6 +338,7 @@ The closed Memory curation taxonomy is:
 | `curator_failed` | `error` | `error` | required error, no metadata |
 | `post_chat_curation_failed` | `warning` | `degraded` | required error, no metadata |
 | `post_chat_observation_failed` | `warning` | `degraded` | required error, no metadata |
+| `post_reason_observation_failed` | `warning` | `degraded` | required error, no metadata |
 | `chat_trace_recording_failed` | `warning` | `degraded` | required error, no metadata |
 
 The sealed Memory audit registry owns these events even when a Chat client,
@@ -342,6 +348,12 @@ records. Post-chat completion is already represented by `curator_completed`;
 clients must not emit a second `curator_changed` record or copy its free-form
 summary into audit metadata. Chat trace failures use runtime context for
 conversation correlation rather than duplicating the conversation id.
+
+`memory_formed` is emitted once after each curator action has durably created
+or updated an accepted memory entry. The Memory domain owns this event for
+both chat- and Reason-origin observations. It contains identifiers and closed
+classification fields only; titles, bodies, evidence quotes, and model reasons
+remain out of logs. Log projection is best-effort and cannot undo memory.
 
 ## Candidate Review Queue
 

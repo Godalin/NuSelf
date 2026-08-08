@@ -230,6 +230,7 @@ class MemoryCurator:
                 outcome = self._create_candidate(
                     action,
                     source_ref,
+                    observation_id=observation.id,
                     candidate_id=candidate_id,
                     observed_at=plan.observed_at,
                     source_trace_id=observation.source_trace_id,
@@ -244,6 +245,7 @@ class MemoryCurator:
                 if self._update_candidate(
                     action,
                     source_ref,
+                    observation_id=observation.id,
                     candidate_id=candidate_id,
                     observed_at=plan.observed_at,
                     source_trace_id=observation.source_trace_id,
@@ -353,12 +355,14 @@ class MemoryCurator:
         action: MemoryAction,
         source_ref: str,
         *,
+        observation_id: str,
         candidate_id: str,
         observed_at: str,
         source_trace_id: str | None,
     ) -> MemoryActionType:
         staged = self._staged_candidate(
             candidate_id,
+            observation_id=observation_id,
             source_ref=source_ref,
             source_trace_id=source_trace_id,
         )
@@ -405,6 +409,7 @@ class MemoryCurator:
                 self._candidate_repository.save(candidate)
                 self._auto_accept(
                     candidate,
+                    observation_id=observation_id,
                     source_trace_id=source_trace_id,
                 )
                 MEMORY_AUDIT.write(
@@ -441,6 +446,7 @@ class MemoryCurator:
         self._candidate_repository.save(candidate)
         self._auto_accept(
             candidate,
+            observation_id=observation_id,
             source_trace_id=source_trace_id,
         )
         MEMORY_AUDIT.write(
@@ -459,12 +465,14 @@ class MemoryCurator:
         action: MemoryAction,
         source_ref: str,
         *,
+        observation_id: str,
         candidate_id: str,
         observed_at: str,
         source_trace_id: str | None,
     ) -> bool:
         if self._staged_candidate(
             candidate_id,
+            observation_id=observation_id,
             source_ref=source_ref,
             source_trace_id=source_trace_id,
         ) is not None:
@@ -504,6 +512,7 @@ class MemoryCurator:
         self._candidate_repository.save(candidate)
         self._auto_accept(
             candidate,
+            observation_id=observation_id,
             source_trace_id=source_trace_id,
         )
         MEMORY_AUDIT.write(
@@ -522,6 +531,7 @@ class MemoryCurator:
         self,
         candidate_id: str,
         *,
+        observation_id: str,
         source_ref: str,
         source_trace_id: str | None,
     ) -> MemoryCandidate | None:
@@ -537,6 +547,7 @@ class MemoryCurator:
         if candidate.review_state == "pending":
             self._auto_accept(
                 candidate,
+                observation_id=observation_id,
                 source_trace_id=source_trace_id,
             )
         return candidate
@@ -545,6 +556,7 @@ class MemoryCurator:
         self,
         candidate: MemoryCandidate,
         *,
+        observation_id: str,
         source_trace_id: str | None,
     ) -> None:
         if not self._settings.auto_accept:
@@ -570,7 +582,22 @@ class MemoryCurator:
             self._record_memory_update_trace(
                 result,
                 action=candidate.action,
+                observation_id=observation_id,
+                source_ref=candidate.source_refs[0],
                 source_trace_id=source_trace_id,
+            )
+            MEMORY_AUDIT.write(
+                "memory_formed",
+                "Durable memory formed from an observation",
+                project_root=self._paths.authority_root,
+                metadata={
+                    "memory_id": result.id,
+                    "action": candidate.action,
+                    "memory_type": result.type,
+                    "observation_id": observation_id,
+                    "source_ref": candidate.source_refs[0],
+                    "source_trace_id": source_trace_id,
+                },
             )
 
     def _record_memory_update_trace(
@@ -578,6 +605,8 @@ class MemoryCurator:
         entry: MemoryEntry,
         *,
         action: str,
+        observation_id: str,
+        source_ref: str,
         source_trace_id: str | None,
     ) -> None:
         MEMORY_AUDIT.observe(
@@ -588,6 +617,7 @@ class MemoryCurator:
                 memory_type=entry.type,
                 action=action,
                 confidence=entry.confidence,
+                source_ref=source_ref,
                 source_trace_id=source_trace_id,
             ),
             event="trace_recording_failed",

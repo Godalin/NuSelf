@@ -25,6 +25,10 @@ from nuself.inbox.service import InboxService
 
 _MAX_EVIDENCE_REFS = 20
 
+type ReasonStepObserver = Callable[
+    [ReasoningThread, ReasoningStep, str | None], object
+]
+
 
 def _step_requires_attention(step: ReasoningStep) -> bool:
     """Keep internal no-op advancement out of the user's Inbox."""
@@ -82,6 +86,7 @@ class ReasonService:
         trace_recorder: TraceRecorder,
         prompt_generator: Callable[..., str],
         inbox: InboxService,
+        step_observer: ReasonStepObserver | None = None,
     ) -> None:
         self._repository = repository
         self._project_root = project_root
@@ -89,6 +94,7 @@ class ReasonService:
         self._trace_recorder = trace_recorder
         self._prompt_generator = prompt_generator
         self._inbox = inbox
+        self._step_observer = step_observer
 
     # ── Read ───────────────────────────────────────────────────────
 
@@ -344,7 +350,7 @@ class ReasonService:
                     idempotency_key=f"reason-step-{step.id}",
                 )
             )
-        REASON_AUDIT.observe(
+        trace = REASON_AUDIT.observe(
             lambda: self._trace_recorder.record_reason_step(
                 thread=updated,
                 step=step,
@@ -357,6 +363,12 @@ class ReasonService:
                 "step_id": step.id,
             },
         )
+        if self._step_observer is not None:
+            self._step_observer(
+                updated,
+                step,
+                trace.id if trace is not None else None,
+            )
 
         REASON_AUDIT.write(
             "advance_completed",

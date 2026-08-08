@@ -72,6 +72,7 @@ class ReflectionTraceRecorder(Protocol):
         candidate_type: str,
         composite_score: float,
         discussion_approved: bool | None,
+        evidence_refs: list[str] | None = None,
         conversation_id: str | None = None,
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
@@ -203,23 +204,31 @@ class ReflectionScheduler:
             discussion_trace=discussion_trace,
         )
         self._reflection_service.save_generated_entry(entry)
+        decision_points: list[str] = [
+            "Relevance gate passed: "
+            f"composite={score.composite:.2f} "
+            f"threshold={self._config.gate.relevance_threshold}",
+            f"Novelty={score.novelty:.2f} "
+            f"confidence={score.confidence:.2f} "
+            f"urgency={score.urgency:.2f}",
+        ]
+        if discussion_approved is not None:
+            decision_points.extend(
+                [
+                    "Persona discussion threshold met "
+                    "(composite >= "
+                    f"{self._config.gate.persona_discussion_threshold})",
+                    "Persona discussion "
+                    f"{'approved' if discussion_approved else 'rejected'}",
+                ]
+            )
+        else:
+            decision_points.append(
+                "Below persona discussion threshold "
+                f"({self._config.gate.persona_discussion_threshold}), "
+                "no discussion triggered"
+            )
         try:
-            decision_points: list[str] = [
-                f"Relevance gate passed: composite={score.composite:.2f} threshold={self._config.gate.relevance_threshold}",
-                f"Novelty={score.novelty:.2f} confidence={score.confidence:.2f} urgency={score.urgency:.2f}",
-            ]
-            if discussion_approved is not None:
-                decision_points.append(
-                    f"Persona discussion threshold met (composite >= {self._config.gate.persona_discussion_threshold})"
-                )
-                decision_points.append(
-                    f"Persona discussion {'approved' if discussion_approved else 'rejected'}"
-                )
-            else:
-                decision_points.append(
-                    f"Below persona discussion threshold ({self._config.gate.persona_discussion_threshold}), no discussion triggered"
-                )
-
             self._trace_recorder.record_reflection_created(
                 reflection_id=entry.id,
                 title=entry.title,
@@ -227,6 +236,7 @@ class ReflectionScheduler:
                 candidate_type=entry.candidate_type,
                 composite_score=entry.composite_score,
                 discussion_approved=entry.discussion_approved,
+                evidence_refs=list(best.evidence_refs),
                 decision_points=decision_points,
             )
         except Exception as exc:
@@ -240,7 +250,12 @@ class ReflectionScheduler:
         self._organize_pending_reflections()
         self._write_last_reflection(now, title=title, body=body)
 
-        self._publish_inbox(entry, deliver=self._config.auto_notify)
+        self._publish_inbox(
+            entry,
+            deliver=self._config.auto_notify,
+            evidence_refs=best.evidence_refs,
+            decision_points=tuple(decision_points),
+        )
 
         REFLECTION_AUDIT.write(
             "cycle_completed",
@@ -398,13 +413,25 @@ class ReflectionScheduler:
             reviewed_at=None,
         )
 
-    def _publish_inbox(self, entry: ReflectionEntry, *, deliver: bool) -> None:
+    def _publish_inbox(
+        self,
+        entry: ReflectionEntry,
+        *,
+        deliver: bool,
+        evidence_refs: tuple[str, ...],
+        decision_points: tuple[str, ...],
+    ) -> None:
+        explanation = ["", "Why this reflection:"]
+        explanation.extend(f"- Evidence: {ref}" for ref in evidence_refs[:6])
+        explanation.extend(
+            f"- Decision: {point}" for point in decision_points[:4]
+        )
         item = self._inbox.add(InboxItem(
             id=f"inbox-{entry.id}",
             kind="reflection",
             source_id=entry.id,
             title=f"New reflection: {entry.title}",
-            body=entry.body,
+            body="\n".join([entry.body, *explanation]),
             idempotency_key=f"reflection-{entry.id}",
             deep_link=entry.deep_link,
         ))

@@ -240,6 +240,13 @@ Major domains are:
   [`spec/reason.md`](spec/reason.md), [`spec/trace.md`](spec/trace.md), and
   [`spec/workspace.md`](spec/workspace.md).
 
+Cross-domain provenance is projected one way through narrow services. Committed
+Chat turns and Reason steps publish producer-neutral Memory observations;
+Memory curation records the source artifact and optional source trace, while
+Reflection candidates may cite only stable references present in their bounded
+input catalog. Memory receives `TraceRecorder` once during application
+composition and never imports or exposes Trace persistence.
+
 ## Persistence And Privacy
 
 Installed NuSelf defaults to a durable user authority under `~/.nuself`.

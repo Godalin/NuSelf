@@ -18,7 +18,6 @@ from nuself.memory.optimizer import (
 def handle_memory_update(args: argparse.Namespace) -> int:
     application = cli_application()
     curator = application.memory.curator(
-        application.trace.recorder,
         application.config,
     )
     pending = application.memory.pending_observations()

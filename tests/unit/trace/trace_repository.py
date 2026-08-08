@@ -97,6 +97,28 @@ def test_trace_repository_finds_related_artifact_references(tmp_path: Path) -> N
     assert repo.links_for_artifact("memory:mem_123") == [link]
 
 
+def test_memory_trace_links_source_artifact_and_source_trace(
+    tmp_path: Path,
+) -> None:
+    recorder = TraceRecorder(_repository(tmp_path))
+
+    trace = recorder.record_memory_update(
+        memory_id="mem_1",
+        title="Remembered result",
+        summary="A reason step formed this memory.",
+        memory_type="concept",
+        action="create",
+        confidence=0.9,
+        source_ref="reason_step:step_1",
+        source_trace_id="trace_reason_1",
+    )
+
+    assert trace.evidence_refs == (
+        "reason_step:step_1",
+        "trace:trace_reason_1",
+    )
+
+
 def test_trace_repository_hides_internal_records_by_default(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
     private = repo.save_trace(

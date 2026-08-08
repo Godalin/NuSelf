@@ -22,6 +22,17 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
         },
     ),
     (
+        "memory_formed",
+        {
+            "memory_id": "memory-1",
+            "action": "create",
+            "memory_type": "episode",
+            "observation_id": "obs_1",
+            "source_ref": "interaction:opaque",
+            "source_trace_id": None,
+        },
+    ),
+    (
         "curator_completed",
         {
             "observation_id": "obs_1",
@@ -81,6 +92,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     ("curator_failed", {}),
     ("post_chat_curation_failed", {}),
     ("post_chat_observation_failed", {}),
+    ("post_reason_observation_failed", {}),
     ("chat_trace_recording_failed", {}),
 )
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Protocol
-from uuid import NAMESPACE_URL, uuid5
 
 from nuself.conversation import CompletedTurn
 from nuself.memory.observation import MemoryObservation
+from nuself.reason.model import ReasoningStep, ReasoningThread
 from nuself.memory.repository import MemorySearchFilters
 from nuself.memory.service import MemoryService
 from nuself.memory.audit import MEMORY_AUDIT
@@ -28,14 +28,10 @@ def publish_chat_observation(
 ) -> MemoryObservation | None:
     """Project one committed turn into memory's producer-neutral API."""
 
-    source_identity = (
-        f"{turn.conversation_id}:{turn.start_index}:{turn.end_index}"
-    )
-    source_ref = f"interaction:{uuid5(NAMESPACE_URL, source_identity).hex}"
     try:
         return observer.observe(
             MemoryObservation.create(
-                source_ref=source_ref,
+                source_ref=turn.artifact_ref,
                 fragments=(
                     f"user: {turn.user_content}",
                     f"assistant: {turn.assistant_content}",
@@ -47,6 +43,39 @@ def publish_chat_observation(
         MEMORY_AUDIT.failure(
             exc,
             event="post_chat_observation_failed",
+            project_root=project_root,
+        )
+        return None
+
+
+def publish_reason_observation(
+    observer: MemoryObserver,
+    *,
+    thread: ReasoningThread,
+    step: ReasoningStep,
+    source_trace_id: str | None = None,
+    project_root: Path | None = None,
+) -> MemoryObservation | None:
+    """Project one committed Reason step into Memory's observation API."""
+
+    fragments = [f"reason topic: {thread.topic}", f"reason summary: {step.summary}"]
+    fragments.extend(
+        f"reason finding: {item.get('label', '')}"
+        for item in step.new_findings_data
+        if item.get("label")
+    )
+    try:
+        return observer.observe(
+            MemoryObservation.create(
+                source_ref=f"reason_step:{step.id}",
+                fragments=tuple(fragments),
+                source_trace_id=source_trace_id,
+            )
+        )
+    except Exception as exc:
+        MEMORY_AUDIT.failure(
+            exc,
+            event="post_reason_observation_failed",
             project_root=project_root,
         )
         return None

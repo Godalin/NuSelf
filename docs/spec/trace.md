@@ -231,7 +231,16 @@ Artifact references:
 
 - `traces_for_artifact(artifact_ref)` returns traces that directly mention the exact artifact reference in `inputs`, `evidence_refs`, `derived_from`, `outputs`, or string metadata values.
 - `links_for_artifact(artifact_ref)` returns trace links whose `source_id` or `target_id` exactly equals the artifact reference.
-- Artifact references are stable strings such as `memory:<entry_id>`, `reflection:<entry_id>`, `reason:<thread_id>`, `reason_step:<step_id>`, `persona_prompt:<prompt_id>`, and `trace:<trace_id>`.
+- Artifact references are stable strings such as `memory:<entry_id>`,
+  `conversation_turn:<turn_id>`,
+  `conversation_range:<encoded-conversation-id>:<start>:<end>`, `reflection:<entry_id>`,
+  `reason:<thread_id>`, `reason_step:<step_id>`,
+  `persona_prompt:<prompt_id>`, and `trace:<trace_id>`. New chat turns use the
+  persisted turn ID when present, otherwise an encoded conversation ID and
+  absolute message range. Neither form uses an irreversible digest;
+  Conversation's read-only service API resolves the reference back to the
+  committed message pair while the pair remains retained. Missing or compacted
+  turns are tombstones, not permission to fabricate provenance.
 - Artifact lookup is a read/query feature. It does not imply ownership or deletion authority.
 
 ## Service And Tool-Facing Interface
@@ -323,6 +332,26 @@ Memory integration:
 - Creating a memory entry through the curator's auto-accept writes a `memory_update` trace.
 - The trace's `evidence_refs` links to the source `chat_turn` trace when available, enabling provenance from memory entry back to the original conversation.
 - The trace is recorded best-effort: failure does not prevent the memory entry from being saved.
+- Every newly accepted producer observation carries a stable source artifact
+  reference. Chat uses `conversation_turn:<turn_id>` or its resolvable
+  `conversation_range:...` fallback for the committed message pair; Reason uses
+  `reason_step:<id>`. When a source
+  trace exists, the observation also carries its trace id. Memory-update
+  traces retain the observation source artifact in `evidence_refs` and the
+  source trace as `trace:<id>`, so useful provenance does not disappear merely
+  because a chat answer had no retrieved evidence.
+
+Reflection integration records provenance rather than hidden reasoning:
+
+- Candidate-generation context labels every memory and bounded conversation
+  excerpt with a stable artifact reference.
+- Generated candidates must return only references from that supplied catalog;
+  unknown references reject the complete generated result.
+- A published reflection copies those references into its trace
+  `evidence_refs`. Its decision points contain bounded relevance/discussion
+  decisions, never provider chain-of-thought.
+- Reflection notification bodies render a bounded "Why this reflection"
+  section containing the cited artifact references and public decision points.
 
 ## CLI Contract
 

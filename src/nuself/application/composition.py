@@ -27,6 +27,8 @@ from nuself.persona.service import PersonaService
 from nuself.reflection.composition import compose_reflection_service
 from nuself.reflection.service import ReflectionService
 from nuself.reason.service import ReasonService
+from nuself.reason.model import ReasoningStep, ReasoningThread
+from nuself.application.projection import publish_reason_observation
 from nuself.storage.contract import StorageBackend
 from nuself.source.composition import compose_source_services
 from nuself.source.importer import SourceImporter
@@ -63,18 +65,33 @@ def compose_application(
     conversation_store = ConversationStore(paths, backend=backend)
     conversations = ConversationService(conversation_store)
     memory = compose_memory_repositories(paths, backend)
-    memory_service = compose_memory_service(paths, memory)
     source_services = compose_source_services(paths, backend)
     trace = compose_trace_services(paths, backend)
+    memory_service = compose_memory_service(paths, memory, trace.recorder)
     config = ConfigSystem.load_scope(paths.scope)
     inbox = InboxService(paths, backend)
     deliveries = DeliveryService(DeliveryStore(paths, backend))
+
+    def observe_reason_step(
+        thread: ReasoningThread,
+        step: ReasoningStep,
+        trace_id: str | None,
+    ) -> object:
+        return publish_reason_observation(
+            memory_service,
+            thread=thread,
+            step=step,
+            source_trace_id=trace_id,
+            project_root=paths.authority_root,
+        )
+
     reason = compose_reason_service(
         paths,
         backend,
         trace.recorder,
         config,
         inbox,
+        step_observer=observe_reason_step,
     )
     reflection = compose_reflection_service(
         paths,

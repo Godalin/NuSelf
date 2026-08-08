@@ -8,6 +8,12 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
+- Added resolvable provenance from committed Chat turns and Reason steps into
+  Memory curation and from validated Memory/context evidence into Reflection
+  traces. Every formed durable memory now emits a payload-safe structured log,
+  and Reflection notifications include bounded evidence references and public
+  decision points without exposing hidden model reasoning.
+
 ### Changed
 
 - Interactive Chat now leaves one blank line between the NuSelf reply and the

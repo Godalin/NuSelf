@@ -32,6 +32,7 @@ class CandidateItemOutput(BaseModel):
     novelty: float = Field(ge=0, le=1)
     urgency: float = Field(ge=0, le=1)
     interruption_cost: float = Field(ge=0, le=1)
+    evidence_refs: list[str] = Field(min_length=1, max_length=6)
 
 
 class CandidateListOutput(BaseModel):
@@ -99,7 +100,11 @@ class IdeaCandidateGenerator:
             )
             return []
         try:
-            candidates = self._convert(output, max_candidates)
+            candidates = self._convert(
+                output,
+                max_candidates,
+                allowed_evidence=context.evidence_refs,
+            )
         except ValueError as exc:
             REFLECTION_AUDIT.failure(
                 exc,
@@ -119,20 +124,33 @@ class IdeaCandidateGenerator:
         return candidates
 
     def _collect_context(self) -> _ThinkingContext:
+        memories = self._memory_service.list_entries()[-8:]
+        conversations = self._conversation_history.recent()
+        profiles = self._profile_service.list_items()[:10]
+        sources = self._source_service.list()[-5:]
+        evidence_refs = frozenset(
+            (
+                *(f"memory:{entry.id}" for entry in memories),
+                *(f"conversation:{excerpt.id}" for excerpt in conversations),
+                *(f"profile:{item.id}" for item in profiles),
+                *(f"source:{document.id}" for document in sources),
+            )
+        )
         return _ThinkingContext(
-            conversations=_render_history(self._conversation_history.recent()),
+            conversations=_render_history(conversations),
             memories="\n".join(
-                f"- [{entry.type}] {entry.title}: {entry.body[:120]}"
-                for entry in self._memory_service.list_entries()[-8:]
+                f"- [memory:{entry.id}] [{entry.type}] {entry.title}: {entry.body[:120]}"
+                for entry in memories
             ),
             profile="\n".join(
-                f"- [{item.type}] {item.title}: {item.body[:120]}"
-                for item in self._profile_service.list_items()[:10]
+                f"- [profile:{item.id}] [{item.type}] {item.title}: {item.body[:120]}"
+                for item in profiles
             ),
             sources="\n".join(
-                f"- {document.title or document.id}"
-                for document in self._source_service.list()[-5:]
+                f"- [source:{document.id}] {document.title or document.id}"
+                for document in sources
             ),
+            evidence_refs=evidence_refs,
         )
 
     def _messages(
@@ -143,6 +161,8 @@ class IdeaCandidateGenerator:
             "Generate genuinely new connections, contradictions, questions, "
             "actions, or unnoticed patterns from the supplied private context. "
             "Do not summarize existing content or return generic observations."
+            " Every candidate must cite one or more bracketed evidence references "
+            "from the supplied context; copy those references exactly."
         )
         if self._language_preference != "en":
             system += f"\n\nRespond in {self._language_preference}."
@@ -155,25 +175,34 @@ class IdeaCandidateGenerator:
     def _convert(
         output: CandidateListOutput,
         limit: int,
+        *,
+        allowed_evidence: frozenset[str],
     ) -> list[IdeaCandidate]:
         now = datetime.now(UTC)
         prefix = now.strftime("%Y%m%d-%H%M%S")
-        return [
-            IdeaCandidate(
-                id=f"candidate-{prefix}-{now.microsecond:06d}",
-                title=item.title,
-                body=item.body,
-                candidate_type=item.candidate_type,
-                confidence=item.confidence,
-                novelty=item.novelty,
-                urgency=item.urgency,
-                interruption_cost=item.interruption_cost,
-                evidence_refs=(),
-                source_summary="llm-generated",
-                created_at=utc_now_iso(),
+        candidates: list[IdeaCandidate] = []
+        for item in output.candidates[:limit]:
+            refs = tuple(dict.fromkeys(item.evidence_refs))
+            if any(ref not in allowed_evidence for ref in refs):
+                raise ValueError(
+                    "candidate cited evidence outside supplied context"
+                )
+            candidates.append(
+                IdeaCandidate(
+                    id=f"candidate-{prefix}-{now.microsecond:06d}",
+                    title=item.title,
+                    body=item.body,
+                    candidate_type=item.candidate_type,
+                    confidence=item.confidence,
+                    novelty=item.novelty,
+                    urgency=item.urgency,
+                    interruption_cost=item.interruption_cost,
+                    evidence_refs=refs,
+                    source_summary="derived from " + ", ".join(refs),
+                    created_at=utc_now_iso(),
+                )
             )
-            for item in output.candidates[:limit]
-        ]
+        return candidates
 
 
 @dataclass(frozen=True)
@@ -182,6 +211,7 @@ class _ThinkingContext:
     memories: str
     profile: str
     sources: str
+    evidence_refs: frozenset[str]
 
     def is_empty(self) -> bool:
         return not any(
@@ -203,7 +233,7 @@ class _ThinkingContext:
 def _render_history(excerpts: tuple[ConversationHistoryExcerpt, ...]) -> str:
     lines: list[str] = []
     for excerpt in excerpts:
-        lines.append(f"Conversation {excerpt.id}:")
+        lines.append(f"Conversation [conversation:{excerpt.id}]:")
         lines.extend(
             f"  {message.role}: {message.content[:120]}"
             for message in excerpt.messages
