@@ -496,6 +496,16 @@ runtime correlation, storage records, logs, and traces use `conversation_id`.
 The word `thread` remains valid only for operating-system/Python threads and
 the separately specified reason-domain concept.
 
+Conversation records, archive state, branches, and identities are authoritative
+only in the selected SQLite backend. Rename acquires both identity locks and
+changes the old/new records in one transaction; branch creates its new record
+in one transaction; archive, unarchive, and delete each mutate one record in
+one transaction. A crash exposes either the state before commit or the complete
+state after commit—never a filesystem move or partially applied lifecycle
+state. Files under `runtime/conversation-locks/` are advisory cross-process
+coordination only; their continued existence carries no conversation state and
+requires no recovery or directory synchronization.
+
 The package root is the stable public import boundary. Runtime implementation,
 context preparation, state management, persona orchestration, conversation
 types, and thread persistence live in separate modules beneath it.

@@ -246,7 +246,7 @@ def test_list_ignores_archived_threads(tmp_path: Path) -> None:
     assert store.list() == ["active"]
 
 
-def test_rename_moves_thread_file(tmp_path: Path) -> None:
+def test_rename_changes_the_authoritative_record_identity(tmp_path: Path) -> None:
     store = ConversationStore(tmp_path)
     store.save(ConversationState.empty("old"))
     store.rename("old", "new")
@@ -272,6 +272,27 @@ def test_rename_preserves_messages_and_summary(tmp_path: Path) -> None:
     assert loaded.messages[0].content == "hello"
     assert loaded.message_start_index == 0
     assert loaded.next_message_index == 1
+
+
+def test_rename_rolls_back_new_identity_when_old_delete_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ConversationStore(tmp_path)
+    expected = ConversationState.empty("old")
+    store.save(expected)
+
+    def fail_delete(_record_id: str) -> None:
+        raise OSError("delete failed")
+
+    monkeypatch.setattr(store._collection, "delete", fail_delete)
+
+    with pytest.raises(OSError, match="delete failed"):
+        store.rename("old", "new")
+
+    assert store.list() == ["old"]
+    assert store.load("old") == expected
+    assert store.load("new") == ConversationState.empty("new")
 
 
 def test_rename_waits_for_update_and_moves_latest_snapshot(
@@ -554,13 +575,61 @@ def test_thread_lifecycle_preserves_or_excludes_pending_turns(
     assert store.load("renamed").pending_turns == (pending,)
 
 
-def test_archive_moves_thread_to_subdir(tmp_path: Path) -> None:
+def test_archive_changes_authoritative_record_state(tmp_path: Path) -> None:
     store = ConversationStore(tmp_path)
     store.save(ConversationState.empty("old"))
     store.archive("old")
     assert store.list() == []
     assert store.list_archived() == ["old"]
     assert store.load("old").archived is True
+
+
+@pytest.mark.parametrize("operation", ["branch", "archive", "unarchive"])
+def test_lifecycle_record_write_failure_exposes_only_prior_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    store = ConversationStore(tmp_path)
+    store.save(ConversationState.empty("source"))
+    if operation == "unarchive":
+        store.archive("source")
+    expected = store.load("source")
+
+    def fail_put(_record_id: str, _value: dict[str, object]) -> None:
+        raise OSError("put failed")
+
+    monkeypatch.setattr(store._collection, "put", fail_put)
+
+    with pytest.raises(OSError, match="put failed"):
+        if operation == "branch":
+            store.branch("source", "target")
+        elif operation == "archive":
+            store.archive("source")
+        else:
+            store.unarchive("source")
+
+    assert store.load("source") == expected
+    assert store.load("target") == ConversationState.empty("target")
+
+
+def test_delete_failure_preserves_authoritative_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ConversationStore(tmp_path)
+    expected = ConversationState.empty("source")
+    store.save(expected)
+
+    def fail_delete(_record_id: str) -> None:
+        raise OSError("delete failed")
+
+    monkeypatch.setattr(store._collection, "delete", fail_delete)
+
+    with pytest.raises(OSError, match="delete failed"):
+        store.delete("source")
+
+    assert store.load("source") == expected
 
 
 def test_archive_missing_thread_raises(tmp_path: Path) -> None:
