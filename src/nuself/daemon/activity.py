@@ -27,6 +27,8 @@ class ActivityBatch:
 class _ActivitySubscription:
     turn_id: str
     events: deque[LogEvent] = field(default_factory=lambda: deque[LogEvent]())
+    recent_event_ids: deque[str] = field(default_factory=lambda: deque[str]())
+    recent_event_id_set: set[str] = field(default_factory=lambda: set[str]())
     dropped_count: int = 0
     last_access_at: float = field(default_factory=time.monotonic)
 
@@ -69,7 +71,19 @@ class ActivityBroker:
             for subscription in self._subscriptions.values():
                 if subscription.turn_id != event.turn_id:
                     continue
+                event_id = event.event_id
+                if (
+                    event_id is not None
+                    and event_id in subscription.recent_event_id_set
+                ):
+                    continue
                 subscription.events.append(event)
+                if event_id is not None:
+                    subscription.recent_event_ids.append(event_id)
+                    subscription.recent_event_id_set.add(event_id)
+                    while len(subscription.recent_event_ids) > self._max_events:
+                        expired_event_id = subscription.recent_event_ids.popleft()
+                        subscription.recent_event_id_set.remove(expired_event_id)
                 while len(subscription.events) > self._max_events:
                     subscription.events.popleft()
                     subscription.dropped_count += 1

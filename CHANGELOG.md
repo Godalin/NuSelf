@@ -13,6 +13,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 - Shortened the public Tool confirmation declaration from
   `@requires_confirmation(...)` to `@confirmed(...)`; internal approval effect
   and protocol names remain unchanged.
+- Separated durable logging, identity-preserving activity delivery, and
+  frontend rendering contracts; Tool outcome composition now names its
+  explicit `activity_sink`, and daemon subscriptions suppress duplicate recent
+  `LogEvent` identities from converging projection paths.
 
 - Feature audit ports now declare an explicit non-raising best-effort
   projection contract; concrete adapters own observable persistence-failure

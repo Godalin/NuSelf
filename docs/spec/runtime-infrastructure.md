@@ -837,6 +837,12 @@ composition dependency. Scheduler workers therefore forward the exact
 persisted `service_tool_called` event without relying on request-thread
 `ContextVar` propagation and without writing a duplicate event.
 
+Activity subscriptions retain a bounded recent identity window and deliver a
+non-legacy `LogEvent.event_id` at most once while it remains in that window.
+Multiple valid projection paths may converge on the broker, but immediately
+repeating the same immutable event identity is not a second activity occurrence
+and must not consume queue capacity or appear twice in a frontend.
+
 Each activity batch carries exact `events` and `dropped_count` fields. The
 count is a non-negative integer recording events evicted from that subscription
 since its previous read; booleans are invalid. A positive count is a stream
