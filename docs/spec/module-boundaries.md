@@ -399,6 +399,14 @@ when they enforce adapter-specific authority or capability rules.
 adapters may borrow domain-facing capabilities from it, but raw
 `StorageBackend`, `StorageCollection`, and repository construction remain
 inside application composition, storage administration, and migrations.
+Concrete `*Repository` types are private implementation dependencies of their
+owning domain. Same-domain services and composition modules may construct or
+call them; the top-level application composition may connect those finished
+domain components. Other production packages must consume a Service or a
+consumer-owned narrow Protocol and may not import a concrete Repository type.
+Generic data administration is not an escape hatch: it uses the relevant
+domain Service for validated mutation, while raw backend access remains
+limited to explicit inspection/export/migration infrastructure.
 Its frozen annotated field set is an executable architecture contract. Adding
 or changing a field requires an intentional update to the exact structural
 gate and the governing boundary rationale in the same PR. The graph defines no

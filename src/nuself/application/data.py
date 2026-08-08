@@ -7,7 +7,7 @@ from typing import Callable
 
 from nuself.conversation import ConversationState, ConversationStore
 from nuself.memory.model import MemoryEntry
-from nuself.memory.repository import MemoryEntryRepository
+from nuself.memory.service import MemoryService
 from nuself.storage.contract import COLLECTION_NAMES, StorageBackend
 
 type Record = dict[str, object]
@@ -52,7 +52,7 @@ class DataAdminService:
         backend: StorageBackend,
         *,
         conversations: ConversationStore,
-        memories: MemoryEntryRepository,
+        memories: MemoryService,
     ) -> None:
         self._backend = backend
         self._conversations = conversations
@@ -101,7 +101,7 @@ class DataAdminService:
         decoded = self._decoder(resource)(record)
         if resource.collection == "memory_entries":
             assert isinstance(decoded, MemoryEntry)
-            self._memories.save(decoded)
+            self._memories.save_entry(decoded)
             return
         assert isinstance(decoded, ConversationState)
         self._conversations.save(decoded)
@@ -110,7 +110,7 @@ class DataAdminService:
         if not resource.editable:
             raise ValueError(f"data resource is read-only: {resource.name}")
         if resource.collection == "memory_entries":
-            self._memories.delete(record_id)
+            self._memories.delete_entry(record_id)
             return
         self._conversations.delete(record_id)
 

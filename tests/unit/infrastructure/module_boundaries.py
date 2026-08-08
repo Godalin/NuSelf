@@ -326,12 +326,7 @@ def test_application_graph_exposes_services_not_persistence() -> None:
         "ConversationStore",
         "DeliveryStore",
         "MemoryRepositories",
-        "MemoryEntryRepository",
-        "MemoryCandidateRepository",
-        "PersonaPromptRepository",
         "PrivateWorkspaceStore",
-        "ProfileItemRepository",
-        "ReflectionRepository",
     }
     exposed = {
         node.annotation.id
@@ -340,6 +335,26 @@ def test_application_graph_exposes_services_not_persistence() -> None:
         and isinstance(node.annotation, ast.Name)
     }
     assert exposed.isdisjoint(forbidden)
+    assert not any(name.endswith("Repository") for name in exposed)
+
+
+def test_concrete_repositories_do_not_cross_runtime_package_boundaries() -> None:
+    violations: list[str] = []
+    for path in sorted(_SOURCE_ROOT.rglob("*.py")):
+        source_package = path.relative_to(_SOURCE_ROOT).parts[0]
+        for module, name in _from_imports(path):
+            if not name.endswith("Repository"):
+                continue
+            parts = module.split(".")
+            imported_package = parts[1] if len(parts) > 1 else ""
+            if source_package == imported_package:
+                continue
+            if path.name == "composition.py":
+                continue
+            violations.append(
+                f"{path.relative_to(_SOURCE_ROOT)} -> {module}.{name}"
+            )
+    assert violations == []
 
 
 def test_application_graph_is_a_finite_typed_composition_result() -> None:

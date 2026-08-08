@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Generic data administration now mutates Memory through `MemoryService`, and
+  executable module-boundary checks prevent concrete repositories from being
+  imported across production package boundaries outside composition roots.
+
 - Reflection agent mutations now target durable entry IDs rather than shifting
   list indexes. Reason proposals have domain-owned replay keys, and identical
   export planning reuses existing manifests and artifacts.
