@@ -9,6 +9,7 @@ import pytest
 from nuself.agent.chat.types import ChatResult
 from nuself.application.lifecycle import open_application_runtime, use_application_runtime
 from nuself.cli import chat
+from nuself.cli.application import cli_application
 from nuself.conversation import CompletedTurn
 from nuself.daemon.client import (
     DaemonApplicationError,
@@ -574,6 +575,48 @@ def test_one_shot_success_runs_curator_after_reply(
     assert event.turn_id == "turn-1"
     assert event.trace_id == "trace-1"
     assert event.source == "client"
+
+
+def test_one_shot_delivers_reply_when_observation_projection_degrades(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _use_stub_runtime(
+        monkeypatch,
+        _StubConversationRuntime(
+            lambda message, conversation_id, turn_id: _chat_result(
+                conversation_id=conversation_id,
+                turn_id=turn_id,
+            )
+        ),
+    )
+    def skip_observation(_result: ChatResult) -> None:
+        return None
+
+    monkeypatch.setattr(
+        cli_application().chat_completion,
+        "complete",
+        skip_observation,
+    )
+    curated: list[str] = []
+
+    def curate(
+        _project_root: Path | None,
+        observation_id: str,
+    ) -> None:
+        curated.append(observation_id)
+
+    monkeypatch.setattr(
+        chat,
+        "run_memory_curator",
+        curate,
+    )
+
+    result = chat.send_one_shot_chat_interactive("hello", tmp_path)
+
+    assert result.code == 0
+    assert result.reply == "done"
+    assert curated == []
 
 
 def test_one_shot_reuses_runtime_for_after_reply_compression(

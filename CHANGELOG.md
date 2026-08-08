@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- One-shot and daemon Chat now share one post-commit completion service for
+  durable Memory observation; observation failure is reported as degraded and
+  can no longer replace an already committed assistant reply.
+
 - Generic data administration now mutates Memory through `MemoryService`, and
   executable module-boundary checks prevent concrete repositories from being
   imported across production package boundaries outside composition roots.

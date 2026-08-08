@@ -373,6 +373,36 @@ def test_daemon_chat_requests_curation_without_running_it_inline(
     assert requested[0].startswith("obs_")
 
 
+def test_daemon_chat_delivers_reply_when_observation_projection_degrades(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = DaemonState(tmp_path)
+    def skip_observation(_result: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        state.chat_completion,
+        "complete",
+        skip_observation,
+    )
+    curated: list[str] = []
+    compressed: list[str] = []
+    state._request_memory_curation = curated.append  # type: ignore[method-assign]
+    state._request_conversation_compression = compressed.append  # type: ignore[method-assign]
+    request = DaemonRequest(
+        type="chat",
+        payload={"message": "remember this"},
+        request_id="chat-observation-degraded",
+    )
+
+    response = handle_request(request, state)
+
+    assert response.status == "ok"
+    assert curated == []
+    assert compressed == ["default"]
+
+
 def test_daemon_chat_requests_curation_for_non_default_thread(
     tmp_path: Path,
 ) -> None:

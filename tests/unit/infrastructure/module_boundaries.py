@@ -387,6 +387,7 @@ def test_application_graph_is_a_finite_typed_composition_result() -> None:
         "reflection": "ReflectionService",
         "trace": "TraceServices",
         "data": "DataAdminService",
+        "chat_completion": "ChatCompletionService",
     }
     assert not any(
         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
