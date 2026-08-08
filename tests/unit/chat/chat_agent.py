@@ -744,7 +744,11 @@ def test_conversation_runtime_executes_direct_typed_stages(tmp_path: Path) -> No
     assert trace.conversation_id == "committed"
     assert trace.evidence_refs == ("mem_graph",)
     assert trace.inputs == ("committed runtime",)
-    assert trace.outputs == ("Graph driver reply.",)
+    assert chat_result.completed_turn is not None
+    assert trace.outputs == (
+        "Graph driver reply.",
+        chat_result.completed_turn.artifact_ref,
+    )
     assert trace.participants == ("chat_agent",)
     assert trace.metadata["node_trace"] == tuple(node_trace)
 

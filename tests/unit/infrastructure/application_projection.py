@@ -44,6 +44,8 @@ def test_chat_projection_returns_durable_observation(
 
     assert result is not None
     assert result.id.startswith("obs_")
+    assert result.source_ref == "conversation_turn:turn-1"
+    assert result.source_trace_id == "trace-1"
 
 
 def test_chat_projection_failure_does_not_replace_reply(

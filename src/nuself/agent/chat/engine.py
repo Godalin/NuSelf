@@ -414,6 +414,11 @@ class ConversationGraphRuntime:
                 summary="Assistant reply used retrieved context cited by the final response.",
                 user_input=trace_summary(user_message),
                 assistant_output=trace_summary(result.answer),
+                turn_ref=(
+                    result.completed_turn.artifact_ref
+                    if result.completed_turn is not None
+                    else None
+                ),
                 conversation_id=conversation_id,
                 evidence_refs=evidence_refs,
                 participants=["chat_agent"],

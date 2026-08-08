@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from urllib.parse import quote
 import hashlib
 from typing import Literal, cast
 
@@ -231,3 +232,15 @@ class CompletedTurn:
     user_content: str
     assistant_content: str
     turn_id: str | None = None
+
+    @property
+    def artifact_ref(self) -> str:
+        """Return the stable reference for a persisted conversation turn."""
+
+        if self.turn_id is not None:
+            return f"conversation_turn:{self.turn_id}"
+        conversation_id = quote(self.conversation_id, safe="")
+        return (
+            f"conversation_range:{conversation_id}:"
+            f"{self.start_index}:{self.end_index}"
+        )

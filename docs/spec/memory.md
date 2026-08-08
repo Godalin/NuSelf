@@ -126,7 +126,11 @@ message, or identifier.
 - `MemoryObservation` contains a stable `obs_...` ID, opaque source reference,
   ordered text fragments, observation time, optional trace correlation, and
   `pending`/`processed` status. `observe()` is idempotent and rejects an ID
-  collision with different content.
+  collision with different content. New Chat observations use the
+  `conversation_turn:<turn_id>` artifact reference exported by Conversation,
+  or a resolvable `conversation_range:...` reference when no turn ID exists;
+  Memory retains either form opaquely and never receives Conversation storage
+  or a Conversation service.
 - Before applying a ready model decision, persist one typed curator plan at
   `memory_curator_plans`. The plan owns the observation ID, opaque source
   reference, time, and structured actions. A plan write failure occurs before any
