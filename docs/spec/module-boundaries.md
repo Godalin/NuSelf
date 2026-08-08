@@ -466,6 +466,11 @@ composition graph. By contrast, `nuself.decorators` is the deliberate public
 spelling for the cohesive inert feature-declaration DSL and may re-export the
 policies and decorators owned by `runtime.feature.policy`.
 
+The application Chat completion service is the cross-domain use case joining
+one committed Chat result to Memory observation intake. It reports an optional
+observation identity only; CLI and daemon retain their distinct policies for
+running or scheduling curation and conversation compression.
+
 `nuself.inbox` owns immutable attention records and `InboxService` persistence.
 `nuself.delivery` owns delivery records, adapter contracts, orchestration, and
 concrete external-channel adapters. Delivery may read Inbox items through the

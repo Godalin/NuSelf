@@ -21,6 +21,7 @@ from nuself.delivery.store import DeliveryStore
 from nuself.delivery.service import DeliveryService
 from nuself.inbox.service import InboxService
 from nuself.memory.service import MemoryService
+from nuself.application.completion import ChatCompletionService
 from nuself.profile.service import ProfileService
 from nuself.persona.prompt_repo import PersonaPromptRepository
 from nuself.persona.service import PersonaService
@@ -53,6 +54,7 @@ class ApplicationGraph:
     reflection: ReflectionService
     trace: TraceServices
     data: DataAdminService
+    chat_completion: ChatCompletionService
 
 
 def compose_application(
@@ -65,6 +67,7 @@ def compose_application(
     conversations = ConversationService(conversation_store)
     memory = compose_memory_repositories(paths, backend)
     memory_service = MemoryService(memory.entries, memory.candidates)
+    memory_workflows = MemoryWorkflowService(paths, memory)
     source_services = compose_source_services(paths, backend)
     trace = compose_trace_services(paths, backend)
     config = ConfigSystem.load_scope(paths.scope)
@@ -90,7 +93,7 @@ def compose_application(
         conversation_history=ConversationHistoryService(conversations),
         memory=memory_service,
         profiles=ProfileService(memory.profile),
-        memory_workflows=MemoryWorkflowService(paths, memory),
+        memory_workflows=memory_workflows,
         sources=source_services.query,
         source_importer=source_services.importer,
         inbox=inbox,
@@ -108,5 +111,9 @@ def compose_application(
             backend,
             conversations=conversation_store,
             memories=memory_service,
+        ),
+        chat_completion=ChatCompletionService(
+            memory_workflows,
+            project_root=paths.authority_root,
         ),
     )

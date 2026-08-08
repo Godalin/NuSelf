@@ -7,7 +7,6 @@ from dataclasses import dataclass, replace
 from uuid import uuid4
 
 from nuself.agent.chat.composition import compose_conversation_runtime
-from nuself.application.projection import publish_chat_observation
 from nuself.application.composition import ApplicationGraph
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.reason.composition import compose_reason_advancer
@@ -93,6 +92,7 @@ class DaemonState:
                 component="reasoning",
             ),
         )
+        self.chat_completion = application.chat_completion
         self.conversation_runtime = compose_conversation_runtime(
             paths,
             config,
@@ -289,12 +289,9 @@ class DaemonState:
             )
         except ToolEffectRequired as exc:
             return ChatSuspended(exc.request)
-        observation = publish_chat_observation(
-            self._memory_workflows,
-            turn=result.require_completed_turn(),
-            source_trace_id=result.trace_id,
-        )
-        self._request_memory_curation(observation.id)
+        observation_id = self.chat_completion.complete(result)
+        if observation_id is not None:
+            self._request_memory_curation(observation_id)
         self._request_conversation_compression(result.conversation_id)
         return ChatCompleted(result)
 
