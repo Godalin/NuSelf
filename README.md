@@ -145,15 +145,12 @@ uv run nuself memory preview
 uv run nuself memory update
 ```
 
-### Import personal notes
+### Import immutable personal-note revisions
 
 ```bash
 uv run nuself source ingest ~/notes.md --tag notes
 uv run nuself source list
 ```
-
-Imported Source revisions are immutable: unchanged imports are reused and
-changed content is appended under a new source ID.
 
 ### Continue a long-running question
 
