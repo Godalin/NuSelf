@@ -120,7 +120,6 @@ class DaemonState:
         )
 
         self.memory_curator = application.memory.curator(
-            application.trace.recorder,
             config,
             langchain_models=langchain_models,
         )

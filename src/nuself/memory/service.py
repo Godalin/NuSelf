@@ -14,7 +14,6 @@ from nuself.memory.curator.worker import MemoryCurator
 from nuself.memory.curator.plan import MemoryCuratorPlan, MemoryCuratorPlanStore
 from nuself.memory.observation import MemoryObservation, MemoryObservationRepository
 from nuself.memory.optimizer import MemoryOptimizer, MemoryOptimizerSettings
-from nuself.trace.service import TraceRecorder
 from nuself.memory.repository import (
     MemoryCandidateRepository,
     MemoryEntryRepository,
@@ -67,7 +66,7 @@ class MemoryService:
         observation_repository: MemoryObservationRepository | None = None,
         curator_plan_store: MemoryCuratorPlanStore | None = None,
         curator_factory: Callable[
-            [TraceRecorder, SystemConfig, tuple[LangChainLLMEndpoint, ...] | None],
+            [SystemConfig, tuple[LangChainLLMEndpoint, ...] | None],
             MemoryCurator,
         ]
         | None = None,
@@ -260,7 +259,6 @@ class MemoryService:
 
     def curator(
         self,
-        trace_recorder: TraceRecorder,
         config: SystemConfig,
         *,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None = None,
@@ -269,7 +267,6 @@ class MemoryService:
         if self._curator_factory is None:
             raise RuntimeError("memory curation is unavailable")
         return self._curator_factory(
-            trace_recorder,
             config,
             langchain_models,
         )

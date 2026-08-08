@@ -69,11 +69,11 @@ def compose_memory_repositories(
 def compose_memory_service(
     paths: RuntimePaths,
     repositories: MemoryRepositories,
+    trace_recorder: TraceRecorder,
 ) -> MemoryService:
     """Compose the single public Memory boundary over one authority graph."""
 
     def curator_factory(
-        trace_recorder: TraceRecorder,
         config: SystemConfig,
         langchain_models: tuple[LangChainLLMEndpoint, ...] | None,
     ) -> MemoryCurator:

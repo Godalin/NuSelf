@@ -244,7 +244,6 @@ def run_memory_curator(
     try:
         application = cli_application()
         result = application.memory.curator(
-            application.trace.recorder,
             application.config,
         ).run_once(observation_id)
     except RuntimeError as exc:

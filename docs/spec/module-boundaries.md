@@ -537,6 +537,11 @@ policy and model adapters, never persistence or authority selection.
 The required trace recorder remains non-null for the curator's complete
 lifetime; curation isolates recorder failures through the memory observability
 policy rather than retaining an unreachable no-recorder branch.
+Application composition passes `TraceRecorder` once to
+`compose_memory_service`; the resulting Memory service closes over that narrow
+service capability for every curator it creates. CLI, chat, and daemon callers
+request curation without accepting, locating, or forwarding Trace themselves.
+Memory never receives or constructs `TraceRepository`.
 Daemon request handling may only request curation for a durable observation.
 The unified daemon scheduler owns execution, retry isolation, and periodic
 recovery across pending observation IDs; request handlers must not invoke the curator
