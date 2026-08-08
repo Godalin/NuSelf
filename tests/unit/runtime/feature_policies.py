@@ -38,12 +38,12 @@ from nuself.runtime.feature.policy import (
     audited,
     compact,
     component,
+    confirmed,
     effect,
     feature_spec,
     mutating,
     observed,
     readonly,
-    requires_confirmation,
     tool,
 )
 from nuself.log.reader import read_log_events
@@ -185,7 +185,7 @@ def test_orthogonal_decorators_compose_without_wrapping_function() -> None:
 
     decorated = audited("memory_archived")(
         compact(observed(
-            requires_confirmation(
+            confirmed(
                 action="archive",
                 resource="memory",
             )(
@@ -214,9 +214,9 @@ def test_effect_collection_is_canonical_across_decorator_order() -> None:
         pass
 
     observed(audited("changed")(
-        requires_confirmation(action="change", resource="memory")(first)
+        confirmed(action="change", resource="memory")(first)
     ))
-    audited("changed")(requires_confirmation(
+    audited("changed")(confirmed(
         action="change",
         resource="memory",
     )(observed(second)))
@@ -294,7 +294,7 @@ def test_conflicting_effect_declarations_fail_at_composition() -> None:
         mutating(feature)
 
 
-def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
+def test_all_declared_effects_compose_through_generic_executor() -> None:
     events = EventPublisher()
     captured: list[RuntimeEnvelope] = []
     events.attach_projection(captured.append)
@@ -303,7 +303,7 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
     @tool(name="memory_archive")
     @component("memory")
     @mutating
-    @requires_confirmation(action="archive", resource="memory")
+    @confirmed(action="archive", resource="memory")
     @observed
     @audited("memory_archived")
     def archive(secret: str) -> str:
@@ -320,6 +320,12 @@ def test_executor_uses_ports_and_emits_safe_events_and_audit() -> None:
     payloads = [
         RuntimeLogEventPayload.from_mapping(event.payload)
         for event in captured
+    ]
+    assert [payload.status for payload in payloads] == [
+        "pending",
+        "decided",
+        "started",
+        "completed",
     ]
     assert all(payload.metadata is not None for payload in payloads)
     assert [
@@ -420,7 +426,7 @@ def test_declined_confirmation_does_not_call_feature() -> None:
     @tool
     @component("memory")
     @mutating
-    @requires_confirmation(action="archive", resource="memory")
+    @confirmed(action="archive", resource="memory")
     def archive() -> None:
         nonlocal called
         called = True
@@ -435,7 +441,7 @@ def test_missing_approval_frontend_is_not_reported_as_user_decline() -> None:
     @tool
     @component("memory")
     @mutating
-    @requires_confirmation(action="create", resource="memory")
+    @confirmed(action="create", resource="memory")
     def create() -> str:
         return "created"
 

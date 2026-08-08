@@ -10,6 +10,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Shortened the public Tool confirmation declaration from
+  `@requires_confirmation(...)` to `@confirmed(...)`; internal approval effect
+  and protocol names remain unchanged.
+
 - Feature audit ports now declare an explicit non-raising best-effort
   projection contract; concrete adapters own observable persistence-failure
   reporting instead of effects silently swallowing sink errors.

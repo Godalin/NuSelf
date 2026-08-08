@@ -6,13 +6,13 @@ from nuself.runtime.feature.policy import (
     FeatureSpec,
     audited,
     component,
+    confirmed,
     compact,
     effect,
     feature_spec,
     mutating,
     observed,
     readonly,
-    requires_confirmation,
     tool,
 )
 
@@ -22,12 +22,12 @@ __all__ = [
     "FeatureSpec",
     "audited",
     "component",
+    "confirmed",
     "compact",
     "effect",
     "feature_spec",
     "mutating",
     "observed",
     "readonly",
-    "requires_confirmation",
     "tool",
 ]

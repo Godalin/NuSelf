@@ -9,11 +9,11 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import (
+    confirmed,
     component,
     mutating,
     observed,
     readonly,
-    requires_confirmation,
     tool,
 )
 from nuself.runtime.handles import VisibleHandleError, parse_visible_index
@@ -242,7 +242,7 @@ def build_reason_tools(
     )
     @component("reasoning")
     @mutating
-    @requires_confirmation(action="create", resource="reason thread")
+    @confirmed(action="create", resource="reason thread")
     @observed
     def reason_propose(
         topic: str,
@@ -299,7 +299,7 @@ def build_reason_tools(
     )
     @component("reasoning")
     @mutating
-    @requires_confirmation(action="export", resource="reason output")
+    @confirmed(action="export", resource="reason output")
     @observed
     def reason_export(
         thread_id: str,

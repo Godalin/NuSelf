@@ -26,7 +26,7 @@ A feature function composes one-purpose decorators:
 @tool
 @component("memory")
 @mutating
-@requires_confirmation(action="archive", resource="memory")
+@confirmed(action="archive", resource="memory")
 @observed
 @compact
 @audited("memory_archived")
@@ -95,6 +95,12 @@ safe component, operation, status, duration, execution classification, and
 error type by default; arbitrary arguments, results, and raw errors are not
 logged. `@compact` is independent presentation metadata and neither enables nor
 suppresses observation.
+
+The public approval declaration is spelled `@confirmed(...)`: it states that
+execution is confirmation-gated without implying that decoration performs the
+interaction. Internal request, resolution, codec, and effect types retain the
+precise `Approval*` vocabulary.
+
 For an `@observed` function, the shared executor publishes `tool.activity`
 with `status="started"` followed by exactly one `tool.activity` with
 `status="completed"` or `status="failed"`. The terminal activity is the outcome

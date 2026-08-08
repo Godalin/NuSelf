@@ -9,11 +9,11 @@ from langchain_core.tools import BaseTool
 
 from nuself.agent.tools.decorated import materialize_tool
 from nuself.decorators import (
+    confirmed,
     component,
     mutating,
     observed,
     readonly,
-    requires_confirmation,
     tool,
 )
 from nuself.memory.model import MemoryEntry, MemoryEntryType
@@ -161,7 +161,7 @@ def build_memory_tool_set(
     )
     @component("memory")
     @mutating
-    @requires_confirmation(
+    @confirmed(
         action="create",
         resource="memory",
         summary=_create_memory_summary,
