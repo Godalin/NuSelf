@@ -14,7 +14,7 @@ from nuself.agent.endpoint import (
 from nuself.reason.advancer import ReasonAdvancer, default_reason_advancer
 from nuself.reason.prompt import generate_reasoning_prompt
 from nuself.reason.repository import ReasonRepository
-from nuself.reason.service import ReasonService
+from nuself.reason.service import ReasonService, ReasonStepObserver
 from nuself.persona.service import PersonaService
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
@@ -31,6 +31,8 @@ def compose_reason_service(
     trace_recorder: TraceRecorder,
     config: "SystemConfig",
     inbox: InboxService,
+    *,
+    step_observer: ReasonStepObserver | None = None,
 ) -> ReasonService:
     """Compose Reason's authority-scoped service."""
 
@@ -43,6 +45,7 @@ def compose_reason_service(
         trace_recorder=trace_recorder,
         prompt_generator=compose_reason_prompt_generator(paths, config),
         inbox=inbox,
+        step_observer=step_observer,
     )
 
 

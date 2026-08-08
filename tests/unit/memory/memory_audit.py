@@ -92,6 +92,7 @@ _CANONICAL: tuple[tuple[str, dict[str, object]], ...] = (
     ("curator_failed", {}),
     ("post_chat_curation_failed", {}),
     ("post_chat_observation_failed", {}),
+    ("post_reason_observation_failed", {}),
     ("chat_trace_recording_failed", {}),
 )
 

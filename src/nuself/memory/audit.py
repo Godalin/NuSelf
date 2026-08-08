@@ -28,6 +28,7 @@ type MemoryAuditEvent = Literal[
     "curator_failed",
     "post_chat_curation_failed",
     "post_chat_observation_failed",
+    "post_reason_observation_failed",
     "chat_trace_recording_failed",
 ]
 _FAILURE_MESSAGES: dict[MemoryAuditEvent, str] = {
@@ -36,6 +37,7 @@ _FAILURE_MESSAGES: dict[MemoryAuditEvent, str] = {
     "curator_failed": "Memory curator failed",
     "post_chat_curation_failed": "Post-chat memory curation failed",
     "post_chat_observation_failed": "Post-chat memory observation failed",
+    "post_reason_observation_failed": "Post-reason memory observation failed",
     "chat_trace_recording_failed": "Chat trace recording failed",
 }
 
@@ -204,7 +206,7 @@ def _definitions() -> tuple[AuditEventDefinition, ...]:
             metadata_validator=_curator_completed,
         ),
         AuditEventDefinition(
-            "memory", "memory_formed", "info", "created",
+            "memory", "memory_formed", "info", "completed",
             metadata_validator=_memory_formed,
         ),
         AuditEventDefinition(
@@ -251,6 +253,10 @@ def _definitions() -> tuple[AuditEventDefinition, ...]:
         ),
         AuditEventDefinition(
             "memory", "post_chat_observation_failed", "warning", "degraded",
+            error_policy="required",
+        ),
+        AuditEventDefinition(
+            "memory", "post_reason_observation_failed", "warning", "degraded",
             error_policy="required",
         ),
         AuditEventDefinition(

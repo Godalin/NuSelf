@@ -322,7 +322,7 @@ The closed Memory curation taxonomy is:
 | `curator_contended` | `info` | `deferred` | observation |
 | `curator_deferred` | `info` | `deferred` | observation, source reference, zero processed count |
 | `curator_completed` | `info` | `completed` | observation, source reference, processed/create/update/ignore counts |
-| `memory_formed` | `info` | `created` or `updated` | memory, action, memory type, observation, source reference, nullable source trace |
+| `memory_formed` | `info` | `completed` | memory, action, memory type, observation, source reference, nullable source trace |
 | `candidate_merged` | `info` | `created` | candidate, target, memory type |
 | `candidate_created` | `info` | `created` | candidate and memory type |
 | `candidate_updated` | `info` | `created` | candidate, target, memory type |
@@ -334,6 +334,7 @@ The closed Memory curation taxonomy is:
 | `curator_failed` | `error` | `error` | required error, no metadata |
 | `post_chat_curation_failed` | `warning` | `degraded` | required error, no metadata |
 | `post_chat_observation_failed` | `warning` | `degraded` | required error, no metadata |
+| `post_reason_observation_failed` | `warning` | `degraded` | required error, no metadata |
 | `chat_trace_recording_failed` | `warning` | `degraded` | required error, no metadata |
 
 The sealed Memory audit registry owns these events even when a Chat client,
