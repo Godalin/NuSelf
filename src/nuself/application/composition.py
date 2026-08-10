@@ -10,7 +10,9 @@ from nuself.memory.composition import (
 )
 from nuself.reason.composition import compose_reason_service
 from nuself.application.data import DataAdminService
+from nuself.application.provenance import compose_provenance_service
 from nuself.trace.composition import TraceServices, compose_trace_services
+from nuself.trace.provenance import ProvenanceService
 from nuself.config.settings import ConfigSystem, RuntimePaths, SystemConfig
 from nuself.conversation import (
     ConversationHistoryService,
@@ -53,6 +55,7 @@ class ApplicationGraph:
     reason: ReasonService
     reflection: ReflectionService
     trace: TraceServices
+    provenance: ProvenanceService
     data: DataAdminService
 
 
@@ -99,13 +102,23 @@ def compose_application(
         reason,
         trace.recorder,
     )
+    profiles = ProfileService(memory.profile)
+    provenance = compose_provenance_service(
+        trace.query,
+        conversations=conversations,
+        memory=memory_service,
+        profiles=profiles,
+        sources=source_services.query,
+        reason=reason,
+        reflection=reflection,
+    )
     return ApplicationGraph(
         paths=paths,
         config=config,
         conversations=conversations,
         conversation_history=ConversationHistoryService(conversations),
         memory=memory_service,
-        profiles=ProfileService(memory.profile),
+        profiles=profiles,
         sources=source_services.query,
         source_importer=source_services.importer,
         inbox=inbox,
@@ -119,6 +132,7 @@ def compose_application(
         reason=reason,
         reflection=reflection,
         trace=trace,
+        provenance=provenance,
         data=DataAdminService(
             backend,
             conversations=conversation_store,
