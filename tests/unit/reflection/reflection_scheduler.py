@@ -545,9 +545,18 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     assert len(inbox_items) == 1
     assert inbox_items[0].title.startswith("New reflection:")
     assert inbox_items[0].body.startswith(refl_entries[0].body)
-    assert "Why this reflection:" in inbox_items[0].body
-    assert "Evidence: memory:m1" in inbox_items[0].body
-    assert "Decision: Relevance gate passed" in inbox_items[0].body
+    lines = inbox_items[0].body.splitlines()
+    assert lines[-5] == "Trace:"
+    assert lines[-4] == (
+        "memory:m1  Test belief: A test entry for proactive generation."
+    )
+    assert lines[-3].startswith(
+        "decision:relevance  Relevance gate passed"
+    )
+    assert lines[-2].startswith("decision:scores  Novelty=")
+    assert lines[-1].startswith(
+        "decision:discussion  Below persona discussion threshold"
+    )
     assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
 
 
@@ -777,6 +786,10 @@ def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
     candidates = gen.generate()
     assert len(candidates) == 1
     assert candidates[0].title == "Proactive insight about memory patterns"
+    assert candidates[0].evidence_excerpts[0].ref == "memory:m1"
+    assert candidates[0].evidence_excerpts[0].body == (
+        "Test belief: A test entry for proactive generation."
+    )
 
 
 def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:
@@ -798,6 +811,10 @@ def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:
     gen = _generator(tmp_path, agent=_CandidateAgent([candidate]))
     candidates = gen.generate()
     assert len(candidates) == 1
+    assert candidates[0].evidence_excerpts[0].ref == "conversation:default"
+    assert candidates[0].evidence_excerpts[0].body == (
+        "user: What is consciousness?"
+    )
 
 
 def test_generator_llm_error_returns_empty(tmp_path: Path) -> None:

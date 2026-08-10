@@ -88,11 +88,14 @@ Trace fields:
 | `decision_points` | `["Relevance gate passed: composite=... threshold=...", "Persona discussion approved/rejected"]` |
 | `metadata` | `{"candidate_type": ..., "composite_score": ..., "discussion_approved": ...}` |
 
-The Inbox/Delivery notification body appends a bounded provenance explanation:
-the candidate's validated evidence references followed by the public relevance
-and persona-discussion decision points. This is an audit explanation, not
-hidden model chain-of-thought, and must not inline private memory bodies or raw
-conversation text.
+The Inbox/Delivery notification body ends with one bounded `Trace` section.
+Every trace item occupies exactly one logical line in the form
+`<stable-id>  <bounded-body>`. Evidence lines use the candidate's validated
+artifact reference and a single-line excerpt from the exact bounded context
+that was supplied during generation. Decision lines use stable
+`decision:<name>` IDs and public relevance/persona-discussion summaries.
+The section never contains raw persona discussion traces, full source bodies,
+or hidden model chain-of-thought.
 
 ## LLMRelevanceGate Scoring
 
@@ -241,7 +244,8 @@ still exists, but no macOS/email/log delivery is requested.
 
 Email and macOS adapters display this body directly. A delivery surface may
 visually truncate long text, but NuSelf must not shorten the stored projection
-or substitute a command-only message.
+or substitute a command-only message. HTML email must preserve the same line
+breaks and ordering as the authoritative plain-text body.
 
 ## Audit Log Events
 

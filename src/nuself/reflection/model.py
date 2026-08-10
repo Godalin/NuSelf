@@ -16,6 +16,17 @@ type IdeaCandidateType = Literal[
 
 
 @dataclass(frozen=True)
+class EvidenceExcerpt:
+    """One validated artifact reference and its bounded display excerpt."""
+
+    ref: str
+    body: str
+
+    def to_wire(self) -> dict[str, str]:
+        return {"ref": self.ref, "body": self.body}
+
+
+@dataclass(frozen=True)
 class IdeaCandidate:
     """One proactive idea proposed for user attention."""
 
@@ -30,6 +41,7 @@ class IdeaCandidate:
     evidence_refs: tuple[str, ...]
     source_summary: str
     created_at: str
+    evidence_excerpts: tuple[EvidenceExcerpt, ...] = ()
 
     def to_wire(self) -> dict[str, object]:
         wire: dict[str, object] = {
@@ -44,6 +56,9 @@ class IdeaCandidate:
             "evidence_refs": list(self.evidence_refs),
             "source_summary": self.source_summary,
             "created_at": self.created_at,
+            "evidence_excerpts": [
+                excerpt.to_wire() for excerpt in self.evidence_excerpts
+            ],
         }
         return wire
 
@@ -61,6 +76,9 @@ class IdeaCandidate:
             evidence_refs=_string_tuple(data.get("evidence_refs")),
             source_summary=_expect_str(data, "source_summary"),
             created_at=_expect_str(data, "created_at"),
+            evidence_excerpts=_evidence_excerpts(
+                data.get("evidence_excerpts")
+            ),
         )
 
 
@@ -127,6 +145,25 @@ def _expect_bool(data: dict[str, object], field_name: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"field '{field_name}' must be a boolean")
     return value
+
+
+def _evidence_excerpts(value: object) -> tuple[EvidenceExcerpt, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError("field 'evidence_excerpts' must be a list")
+    excerpts: list[EvidenceExcerpt] = []
+    for raw_item in cast(list[object], value):
+        if not isinstance(raw_item, dict):
+            raise ValueError("evidence excerpt must be an object")
+        item = cast(dict[str, object], raw_item)
+        excerpts.append(
+            EvidenceExcerpt(
+                ref=_expect_str(item, "ref"),
+                body=_expect_str(item, "body"),
+            )
+        )
+    return tuple(excerpts)
 
 
 def _string_tuple(value: object) -> tuple[str, ...]:

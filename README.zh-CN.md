@@ -28,7 +28,7 @@ NuSelf 仍在激进开发中。v0.3 系列建立了运行时、存储、Agent �
 - 独立的 Markdown 与纯文本外部知识库
 - 长期推理线程，以及可解析的“对话/推理 → 记忆 → 反思”来源链
 - 通过独立 API 连接的会话历史、记忆观察与顶级反思控制
-- 统一 Inbox，并通过独立的日志、邮件和 macOS 适配器投递反思正文及有界证据/决策解释
+- 统一 Inbox，并通过独立的日志、邮件和 macOS 适配器投递反思正文及逐行证据/决策 trace
 - 本地 SQLite authority、迁移工具和可移植 thought pack
 - 瞬时重试及有序 OpenAI-compatible / Anthropic 端点切换
 - 自动隐藏凭据的结构化诊断
