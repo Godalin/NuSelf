@@ -24,6 +24,7 @@ type ReflectionAuditEvent = Literal[
     "candidate_generation_failed",
     "schedule_state_corrupt",
     "trace_recording_failed",
+    "notification_provenance_failed",
     "organizer_failed",
     "organizer_completed",
 ]
@@ -143,6 +144,11 @@ def _definitions() -> tuple[AuditEventDefinition, ...]:
         ),
         AuditEventDefinition(
             "reflection", "trace_recording_failed", "error", "failed",
+            error_policy="required",
+            metadata_validator=_validate_reflection_id,
+        ),
+        AuditEventDefinition(
+            "reflection", "notification_provenance_failed", "warning", "degraded",
             error_policy="required",
             metadata_validator=_validate_reflection_id,
         ),

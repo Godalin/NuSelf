@@ -8,6 +8,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Added
 
+- Added a bounded, cycle-safe provenance-chain query that orders Conversation
+  or Reason sources, ThoughtTrace records, Memory, and Reflection nodes for
+  notification rendering through public service boundaries.
+
 - Added resolvable provenance from committed Chat turns and Reason steps into
   Memory curation and from validated Memory/context evidence into Reflection
   traces. Every formed durable memory now emits a payload-safe structured log,

@@ -247,6 +247,12 @@ Reflection candidates may cite only stable references present in their bounded
 input catalog. Memory receives `TraceRecorder` once during application
 composition and never imports or exposes Trace persistence.
 
+Ordered provenance inspection is composed separately from recording. Trace
+owns bounded, cycle-safe graph traversal; an application-owned resolver supplies
+artifact summaries through public Conversation, Memory, Profile, Source,
+Reason, and Reflection services. Consumers such as Reflection receive only the
+resulting chain reader and do not reconstruct cross-domain graphs themselves.
+
 ## Persistence And Privacy
 
 Installed NuSelf defaults to a durable user authority under `~/.nuself`.

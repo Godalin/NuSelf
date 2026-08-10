@@ -19,6 +19,7 @@ from nuself.persona.discussion import SharedPersonaDiscussionService
 from nuself.reason.service import ReasonService
 from nuself.storage.contract import StorageBackend
 from nuself.trace.service import TraceRecorder
+from nuself.trace.provenance import ProvenanceService
 from nuself.source.service import SourceService
 
 
@@ -52,6 +53,7 @@ def compose_reflection_scheduler(
     inbox: InboxService,
     deliveries: DeliveryService,
     trace_recorder: TraceRecorder,
+    provenance: ProvenanceService,
     *,
     config: ReflectionSettings,
     language_preference: str,
@@ -81,6 +83,7 @@ def compose_reflection_scheduler(
         inbox=inbox,
         deliveries=deliveries,
         trace_recorder=trace_recorder,
+        provenance=provenance,
         candidate_generator=generator,
         relevance_gate=gate,
         organizer=service,

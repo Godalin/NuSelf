@@ -88,12 +88,14 @@ Trace fields:
 | `decision_points` | `["Relevance gate passed: composite=... threshold=...", "Persona discussion approved/rejected"]` |
 | `metadata` | `{"candidate_type": ..., "composite_score": ..., "discussion_approved": ...}` |
 
-The Inbox/Delivery notification body ends with one bounded `Trace` section.
-Every trace item occupies exactly one logical line in the form
-`<stable-id>  <bounded-body>`. Evidence lines use the candidate's validated
-artifact reference and a single-line excerpt from the exact bounded context
-that was supplied during generation. Decision lines use stable
-`decision:<name>` IDs and public relevance/persona-discussion summaries.
+The Inbox/Delivery notification body ends with one bounded `Provenance chain`
+section. Reflection requests the ordered chain for its own
+`reflection:<id>` artifact from the injected provenance query service; it does
+not merge evidence or visit Trace records itself. Every artifact or ThoughtTrace
+node occupies exactly one logical line in the form
+`<stable-id>  <bounded-body>`, ordered from original Conversation/Reason source
+through Memory to the Reflection. Public decision summaries may be included in
+the Reflection trace node body, but `decision:*` pseudo-nodes are forbidden.
 The section never contains raw persona discussion traces, full source bodies,
 or hidden model chain-of-thought.
 
@@ -271,6 +273,7 @@ All events below are visible through
 | `candidate_generation_failed` | `warning` | `error` | required error, no metadata |
 | `schedule_state_corrupt` | `warning` | `degraded` | required error, non-empty `record` |
 | `trace_recording_failed` | `error` | `failed` | required error, non-empty `reflection_id` |
+| `notification_provenance_failed` | `warning` | `degraded` | required error, non-empty `reflection_id` |
 | `organizer_failed` | `error` | `failed` | required error, no metadata |
 | `organizer_completed` | `info` | `completed` | non-negative `merged_groups` and `archived_entries` |
 

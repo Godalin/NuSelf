@@ -133,6 +133,7 @@ class DaemonState:
             application.inbox,
             application.deliveries,
             application.trace.recorder,
+            application.provenance,
             config=config.reflection,
             language_preference=config.chat.language_preference,
             langchain_models=langchain_models,

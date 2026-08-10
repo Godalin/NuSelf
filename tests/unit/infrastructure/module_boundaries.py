@@ -399,6 +399,7 @@ def test_application_graph_is_a_finite_typed_composition_result() -> None:
         "reason": "ReasonService",
         "reflection": "ReflectionService",
         "trace": "TraceServices",
+        "provenance": "ProvenanceService",
         "data": "DataAdminService",
     }
     assert not any(
