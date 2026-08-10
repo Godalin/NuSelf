@@ -90,7 +90,10 @@ def _build_email_message(
     msg.set_content(entry.body)
     if entry.deep_link is not None:
         canonical_link = DeepLink.parse(entry.deep_link).to_url()
-        escaped_body = escape(entry.body)
+        escaped_body = "<br>\n".join(
+            escape(line) if line else "&nbsp;"
+            for line in entry.body.splitlines()
+        )
         escaped_link = escape(canonical_link, quote=True)
         msg.add_alternative(
             "<html><body>"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nuself.reflection.model import IdeaCandidate, RelevanceScore
+from nuself.reflection.model import EvidenceExcerpt, IdeaCandidate, RelevanceScore
 
 
 def test_idea_candidate_round_trip() -> None:
@@ -20,6 +20,10 @@ def test_idea_candidate_round_trip() -> None:
         evidence_refs=("ref-1", "ref-2"),
         source_summary="summary",
         created_at="2024-01-01T00:00:00",
+        evidence_excerpts=(
+            EvidenceExcerpt("ref-1", "First evidence excerpt"),
+            EvidenceExcerpt("ref-2", "Second evidence excerpt"),
+        ),
     )
     wire = original.to_wire()
     restored = IdeaCandidate.from_wire(wire)

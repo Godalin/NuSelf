@@ -15,7 +15,11 @@ from nuself.agent.structured import StructuredAgent, default_structured_agent
 from nuself.runtime.clock import utc_now_iso
 from nuself.agent.endpoint import LangChainLLMEndpoint
 from nuself.conversation import ConversationHistoryExcerpt
-from nuself.reflection.model import IdeaCandidate, IdeaCandidateType
+from nuself.reflection.model import (
+    EvidenceExcerpt,
+    IdeaCandidate,
+    IdeaCandidateType,
+)
 from nuself.memory.service import MemoryService
 from nuself.source.service import SourceService
 from nuself.profile.service import ProfileService
@@ -103,7 +107,7 @@ class IdeaCandidateGenerator:
             candidates = self._convert(
                 output,
                 max_candidates,
-                allowed_evidence=context.evidence_refs,
+                evidence_catalog=context.evidence_catalog,
             )
         except ValueError as exc:
             REFLECTION_AUDIT.failure(
@@ -128,14 +132,30 @@ class IdeaCandidateGenerator:
         conversations = self._conversation_history.recent()
         profiles = self._profile_service.list_items()[:10]
         sources = self._source_service.list()[-5:]
-        evidence_refs = frozenset(
-            (
-                *(f"memory:{entry.id}" for entry in memories),
-                *(f"conversation:{excerpt.id}" for excerpt in conversations),
-                *(f"profile:{item.id}" for item in profiles),
-                *(f"source:{document.id}" for document in sources),
-            )
-        )
+        evidence_catalog = {
+            **{
+                f"memory:{entry.id}": _single_line(
+                    f"{entry.title}: {entry.body[:120]}"
+                )
+                for entry in memories
+            },
+            **{
+                f"conversation:{excerpt.id}": _conversation_excerpt(excerpt)
+                for excerpt in conversations
+            },
+            **{
+                f"profile:{item.id}": _single_line(
+                    f"{item.title}: {item.body[:120]}"
+                )
+                for item in profiles
+            },
+            **{
+                f"source:{document.id}": _single_line(
+                    document.title or document.id
+                )
+                for document in sources
+            },
+        }
         return _ThinkingContext(
             conversations=_render_history(conversations),
             memories="\n".join(
@@ -150,7 +170,7 @@ class IdeaCandidateGenerator:
                 f"- [source:{document.id}] {document.title or document.id}"
                 for document in sources
             ),
-            evidence_refs=evidence_refs,
+            evidence_catalog=evidence_catalog,
         )
 
     def _messages(
@@ -176,14 +196,14 @@ class IdeaCandidateGenerator:
         output: CandidateListOutput,
         limit: int,
         *,
-        allowed_evidence: frozenset[str],
+        evidence_catalog: dict[str, str],
     ) -> list[IdeaCandidate]:
         now = datetime.now(UTC)
         prefix = now.strftime("%Y%m%d-%H%M%S")
         candidates: list[IdeaCandidate] = []
         for item in output.candidates[:limit]:
             refs = tuple(dict.fromkeys(item.evidence_refs))
-            if any(ref not in allowed_evidence for ref in refs):
+            if any(ref not in evidence_catalog for ref in refs):
                 raise ValueError(
                     "candidate cited evidence outside supplied context"
                 )
@@ -200,6 +220,10 @@ class IdeaCandidateGenerator:
                     evidence_refs=refs,
                     source_summary="derived from " + ", ".join(refs),
                     created_at=utc_now_iso(),
+                    evidence_excerpts=tuple(
+                        EvidenceExcerpt(ref, evidence_catalog[ref])
+                        for ref in refs
+                    ),
                 )
             )
         return candidates
@@ -211,7 +235,7 @@ class _ThinkingContext:
     memories: str
     profile: str
     sources: str
-    evidence_refs: frozenset[str]
+    evidence_catalog: dict[str, str]
 
     def is_empty(self) -> bool:
         return not any(
@@ -239,3 +263,19 @@ def _render_history(excerpts: tuple[ConversationHistoryExcerpt, ...]) -> str:
             for message in excerpt.messages
         )
     return "\n".join(lines)
+
+
+def _conversation_excerpt(excerpt: ConversationHistoryExcerpt) -> str:
+    return _single_line(
+        " | ".join(
+            f"{message.role}: {message.content[:120]}"
+            for message in excerpt.messages
+        )
+    )
+
+
+def _single_line(value: str, *, limit: int = 240) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 1].rstrip() + "…"
