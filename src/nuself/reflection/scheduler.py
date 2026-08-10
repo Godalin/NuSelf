@@ -8,11 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.config.settings import ReflectionSettings
-from nuself.reflection.model import (
-    EvidenceExcerpt,
-    IdeaCandidate,
-    RelevanceScore,
-)
+from nuself.reflection.model import IdeaCandidate, RelevanceScore
 from nuself.inbox.link import DeepLink
 from nuself.inbox.model import InboxItem
 from nuself.runtime.context import RuntimeContext
@@ -26,6 +22,7 @@ from nuself.reflection.schedule_state import (
     ReflectionScheduleState,
     ReflectionScheduleStateError,
 )
+from nuself.trace.provenance import ProvenanceChain
 
 
 class CandidateGenerator(Protocol):
@@ -83,6 +80,10 @@ class ReflectionTraceRecorder(Protocol):
     ) -> object: ...
 
 
+class ReflectionProvenanceReader(Protocol):
+    def chain_for(self, artifact_ref: str) -> ProvenanceChain: ...
+
+
 @dataclass(frozen=True)
 class ReflectionScheduleStatus:
     """User-facing snapshot of deterministic Reflection scheduling gates."""
@@ -105,6 +106,7 @@ class ReflectionScheduler:
         inbox: ReflectionPublisher,
         deliveries: DeliveryRequester,
         trace_recorder: ReflectionTraceRecorder,
+        provenance: ReflectionProvenanceReader,
         candidate_generator: CandidateGenerator,
         relevance_gate: RelevanceGate,
         organizer: PendingReflectionOrganizer,
@@ -116,6 +118,7 @@ class ReflectionScheduler:
         self._inbox = inbox
         self._deliveries = deliveries
         self._trace_recorder = trace_recorder
+        self._provenance = provenance
         self._candidate_generator = candidate_generator
         self._relevance_gate = relevance_gate
         self._organizer = organizer
@@ -208,46 +211,30 @@ class ReflectionScheduler:
             discussion_trace=discussion_trace,
         )
         self._reflection_service.save_generated_entry(entry)
-        decision_items: list[tuple[str, str]] = [
-            (
-                "decision:relevance",
-                "Relevance gate passed: "
-                f"composite={score.composite:.2f} "
-                f"threshold={self._config.gate.relevance_threshold}",
-            ),
-            (
-                "decision:scores",
-                f"Novelty={score.novelty:.2f} "
-                f"confidence={score.confidence:.2f} "
-                f"urgency={score.urgency:.2f}",
-            ),
+        decision_points: list[str] = [
+            "Relevance gate passed: "
+            f"composite={score.composite:.2f} "
+            f"threshold={self._config.gate.relevance_threshold}",
+            f"Novelty={score.novelty:.2f} "
+            f"confidence={score.confidence:.2f} "
+            f"urgency={score.urgency:.2f}",
         ]
         if discussion_approved is not None:
-            decision_items.extend(
+            decision_points.extend(
                 [
-                    (
-                        "decision:discussion-threshold",
-                        "Persona discussion threshold met "
-                        "(composite >= "
-                        f"{self._config.gate.persona_discussion_threshold})",
-                    ),
-                    (
-                        "decision:discussion-result",
-                        "Persona discussion "
-                        f"{'approved' if discussion_approved else 'rejected'}",
-                    ),
+                    "Persona discussion threshold met "
+                    "(composite >= "
+                    f"{self._config.gate.persona_discussion_threshold})",
+                    "Persona discussion "
+                    f"{'approved' if discussion_approved else 'rejected'}",
                 ]
             )
         else:
-            decision_items.append(
-                (
-                    "decision:discussion",
-                    "Below persona discussion threshold "
-                    f"({self._config.gate.persona_discussion_threshold}), "
-                    "no discussion triggered",
-                )
+            decision_points.append(
+                "Below persona discussion threshold "
+                f"({self._config.gate.persona_discussion_threshold}), "
+                "no discussion triggered"
             )
-        decision_points = [body for _, body in decision_items]
         try:
             self._trace_recorder.record_reflection_created(
                 reflection_id=entry.id,
@@ -273,8 +260,6 @@ class ReflectionScheduler:
         self._publish_inbox(
             entry,
             deliver=self._config.auto_notify,
-            evidence_excerpts=best.evidence_excerpts,
-            decision_items=tuple(decision_items),
         )
 
         REFLECTION_AUDIT.write(
@@ -438,18 +423,29 @@ class ReflectionScheduler:
         entry: ReflectionEntry,
         *,
         deliver: bool,
-        evidence_excerpts: tuple[EvidenceExcerpt, ...],
-        decision_items: tuple[tuple[str, str], ...],
     ) -> None:
-        trace = ["", "Trace:"]
-        trace.extend(
-            f"{excerpt.ref}  {excerpt.body}"
-            for excerpt in evidence_excerpts[:6]
-        )
-        trace.extend(
-            f"{item_id}  {body}"
-            for item_id, body in decision_items[:4]
-        )
+        try:
+            chain = self._provenance.chain_for(f"reflection:{entry.id}")
+            heading = (
+                "Provenance chain (truncated):"
+                if chain.truncated
+                else "Provenance chain:"
+            )
+            trace = ["", heading]
+            trace.extend(f"{node.ref}  {node.body}" for node in chain.nodes)
+        except Exception as exc:
+            REFLECTION_AUDIT.failure(
+                exc,
+                event="notification_provenance_failed",
+                message="Failed to resolve Reflection notification provenance",
+                project_root=self._project_root,
+                metadata={"reflection_id": entry.id},
+            )
+            trace = [
+                "",
+                "Provenance chain:",
+                f"reflection:{entry.id}  {entry.title}: {entry.body}",
+            ]
         item = self._inbox.add(InboxItem(
             id=f"inbox-{entry.id}",
             kind="reflection",

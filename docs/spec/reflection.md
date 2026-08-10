@@ -273,6 +273,7 @@ All events below are visible through
 | `candidate_generation_failed` | `warning` | `error` | required error, no metadata |
 | `schedule_state_corrupt` | `warning` | `degraded` | required error, non-empty `record` |
 | `trace_recording_failed` | `error` | `failed` | required error, non-empty `reflection_id` |
+| `notification_provenance_failed` | `warning` | `degraded` | required error, non-empty `reflection_id` |
 | `organizer_failed` | `error` | `failed` | required error, no metadata |
 | `organizer_completed` | `info` | `completed` | non-negative `merged_groups` and `archived_entries` |
 

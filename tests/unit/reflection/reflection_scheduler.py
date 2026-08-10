@@ -159,6 +159,12 @@ class _BrokenAgent:
         raise AgentModelUnavailableError("simulated LLM failure")
 
 
+class _BrokenProvenance:
+    def chain_for(self, artifact_ref: str) -> Never:
+        del artifact_ref
+        raise RuntimeError("simulated provenance failure")
+
+
 def _fake_structured_agent(
     schema: type[BaseModel],
     *,
@@ -285,6 +291,7 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
         application.inbox,
         application.deliveries,
         application.trace.recorder,
+        application.provenance,
         config=config,
         language_preference="en",
         langchain_models=(),
@@ -546,17 +553,15 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     assert inbox_items[0].title.startswith("New reflection:")
     assert inbox_items[0].body.startswith(refl_entries[0].body)
     lines = inbox_items[0].body.splitlines()
-    assert lines[-5] == "Trace:"
-    assert lines[-4] == (
+    assert lines[-4] == "Provenance chain:"
+    assert lines[-3] == (
         "memory:m1  Test belief: A test entry for proactive generation."
     )
-    assert lines[-3].startswith(
-        "decision:relevance  Relevance gate passed"
-    )
-    assert lines[-2].startswith("decision:scores  Novelty=")
-    assert lines[-1].startswith(
-        "decision:discussion  Below persona discussion threshold"
-    )
+    assert lines[-2].startswith("trace:trace-")
+    assert "reflection:" in lines[-2]
+    assert "decisions: Relevance gate passed" in lines[-2]
+    assert lines[-1].startswith("reflection:reflection-")
+    assert not any(line.startswith("decision:") for line in lines)
     assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
 
 
@@ -583,6 +588,35 @@ def test_reflect_creates_inbox_without_delivery_by_default(
 
     assert len(cast(InboxService, scheduler._inbox).list()) == 1
     assert cast(DeliveryStore, scheduler._deliveries).list() == []
+
+
+def test_reflect_publishes_with_fallback_when_provenance_fails(
+    scheduler: ReflectionScheduler,
+) -> None:
+    scheduler._provenance = _BrokenProvenance()
+
+    assert scheduler.reflect(datetime(2024, 1, 1, 12, 0, tzinfo=UTC)) is True
+
+    [reflection] = scheduler._reflection_service.list_entries()
+    [item] = cast(InboxService, scheduler._inbox).list()
+    assert item.body.splitlines()[-2:] == [
+        "Provenance chain:",
+        (
+            f"reflection:{reflection.id}  "
+            f"{reflection.title}: {reflection.body}"
+        ),
+    ]
+    events = read_log_events(
+        project_root=scheduler._project_root,
+        component="reflection",
+    )
+    [failure] = [
+        event
+        for event in events
+        if event.event == "notification_provenance_failed"
+    ]
+    assert failure.status == "degraded"
+    assert failure.metadata == {"reflection_id": reflection.id}
 
 
 def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionScheduler) -> None:

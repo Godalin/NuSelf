@@ -28,6 +28,7 @@ def test_reflection_audit_registry_owns_complete_taxonomy() -> None:
         "candidate_generation_failed",
         "schedule_state_corrupt",
         "trace_recording_failed",
+        "notification_provenance_failed",
         "organizer_failed",
         "organizer_completed",
     }
@@ -63,6 +64,10 @@ def test_reflection_audit_registry_owns_complete_taxonomy() -> None:
         ("candidate_generation_failed", {}),
         ("schedule_state_corrupt", {"record": "last_reflection.json"}),
         ("trace_recording_failed", {"reflection_id": "reflection-1"}),
+        (
+            "notification_provenance_failed",
+            {"reflection_id": "reflection-1"},
+        ),
         ("organizer_failed", {}),
         (
             "organizer_completed",

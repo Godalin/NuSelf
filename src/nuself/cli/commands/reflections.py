@@ -110,6 +110,7 @@ def reflection_scheduler() -> ReflectionScheduler:
         application.inbox,
         application.deliveries,
         application.trace.recorder,
+        application.provenance,
         config=application.config.reflection,
         language_preference=application.config.chat.language_preference,
         langchain_models=configured_langchain_chat_models(
