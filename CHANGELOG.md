@@ -16,6 +16,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection notifications now place provenance in a final line-oriented trace
+  section, with each validated evidence or decision ID followed by its bounded
+  explanation; HTML email preserves the same line breaks.
+
 - Interactive Chat now leaves one blank line between the NuSelf reply and the
   following session/daemon status header.
 

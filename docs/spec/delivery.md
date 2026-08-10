@@ -37,3 +37,8 @@ external adapter is enabled. Adapters receive an immutable Inbox item and
 render its title and body directly, then return only delivery success. They
 never write Inbox or source-domain state. Channel UI may truncate long text;
 the adapter does not replace the body with a generic source lookup message.
+
+Email's plain-text part is authoritative. When an HTML alternative is added,
+it must escape every body line and preserve the same ordering, blank lines,
+and line boundaries. In particular, a Reflection's final line-oriented trace
+must not collapse into one HTML paragraph.
