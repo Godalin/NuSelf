@@ -542,6 +542,12 @@ Application composition passes `TraceRecorder` once to
 service capability for every curator it creates. CLI, chat, and daemon callers
 request curation without accepting, locating, or forwarding Trace themselves.
 Memory never receives or constructs `TraceRepository`.
+
+Application composition builds one `ProvenanceService` from Trace's public
+query service and an application-owned artifact-summary resolver. The resolver
+uses only public domain services. Reflection receives the resulting narrow
+chain reader during scheduler composition; it never receives Conversation,
+Memory, Reason, or Trace repositories and never performs graph traversal.
 Daemon request handling may only request curation for a durable observation.
 The unified daemon scheduler owns execution, retry isolation, and periodic
 recovery across pending observation IDs; request handlers must not invoke the curator

@@ -243,6 +243,26 @@ Artifact references:
   turns are tombstones, not permission to fabricate provenance.
 - Artifact lookup is a read/query feature. It does not imply ownership or deletion authority.
 
+### Ordered Provenance Chains
+
+`ProvenanceService.chain_for(<artifact-ref>)` resolves the producer graph for
+one output artifact and returns a deterministic topological ordering of
+artifact and `trace:<id>` nodes. It walks producer traces through
+`evidence_refs` and `derived_from`, deduplicates shared ancestors, rejects
+cycles by identity, and applies explicit depth/node limits. Source artifacts
+appear before the traces that consume them; each producer trace appears before
+its output artifact.
+
+The Trace package owns graph traversal but not foreign-domain persistence. It
+accepts a narrow artifact-summary resolver composed at the application root.
+That resolver may call public Conversation, Memory, Profile, Source, Reason,
+or Reflection services; it must never receive their repositories. If an
+artifact cannot be resolved because it is legacy, compacted, or deleted, the
+chain retains its ID with an explicit unavailable/tombstone summary.
+
+Decision points remain annotations of the relevant ThoughtTrace. They are not
+separate provenance artifacts and therefore do not become chain nodes.
+
 ## Service And Tool-Facing Interface
 
 Trace is a subsystem service, not only a repository.
