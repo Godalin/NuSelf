@@ -93,11 +93,14 @@ def test_chain_orders_turn_traces_memory_and_reflection(tmp_path: Path) -> None:
         f"trace:{reflection.id}",
         "reflection:refl-1",
     ]
-    assert chain.nodes[-2].body.startswith(
-        "Generated connection Reflection · evidence=1 · score=0.80"
-    )
-    assert "decisions: Relevance gate passed." in chain.nodes[-2].body
-    assert "Discussion not required." in chain.nodes[-2].body
+    assert chain.nodes[-2].body.splitlines()[:4] == [
+        "Generated connection Reflection",
+        "Basis: 1 referenced artifact(s)",
+        "Assessment: score=0.80 · discussion=not required",
+        "Decisions:",
+    ]
+    assert "- Relevance gate passed." in chain.nodes[-2].body
+    assert "- Discussion not required." in chain.nodes[-2].body
     assert "A new connection." not in chain.nodes[-2].body
     assert chain.nodes[-1].body == "Connection: a new connection"
     assert chain.truncated is False

@@ -158,24 +158,30 @@ def _reflection_trace_body(trace: ThoughtTrace) -> str:
     candidate_type = trace.metadata.get("candidate_type")
     if not isinstance(candidate_type, str) or not candidate_type:
         candidate_type = "unknown"
-    parts = [
+    lines = [
         f"Generated {candidate_type} Reflection",
-        f"evidence={len(trace.evidence_refs)}",
+        f"Basis: {len(trace.evidence_refs)} referenced artifact(s)",
     ]
+    assessment: list[str] = []
     composite_score = trace.metadata.get("composite_score")
     if isinstance(composite_score, (int, float)) and not isinstance(
         composite_score,
         bool,
     ):
-        parts.append(f"score={float(composite_score):.2f}")
+        assessment.append(f"score={float(composite_score):.2f}")
     discussion = trace.metadata.get("discussion_approved")
     if isinstance(discussion, bool):
-        parts.append(f"discussion={'approved' if discussion else 'rejected'}")
+        assessment.append(
+            f"discussion={'approved' if discussion else 'rejected'}"
+        )
     elif discussion is None:
-        parts.append("discussion=not required")
+        assessment.append("discussion=not required")
+    if assessment:
+        lines.append("Assessment: " + " · ".join(assessment))
     if trace.decision_points:
-        parts.append("decisions: " + " | ".join(trace.decision_points))
-    return _normalized_body(" · ".join(parts))
+        lines.append("Decisions:")
+        lines.extend(f"- {decision}" for decision in trace.decision_points)
+    return "\n".join(lines)
 
 
 def _is_artifact_ref(value: str) -> bool:

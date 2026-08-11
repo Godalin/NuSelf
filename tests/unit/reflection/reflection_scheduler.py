@@ -590,7 +590,7 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     assert inbox_items[0].title.startswith("New reflection:")
     assert inbox_items[0].body.startswith(refl_entries[0].body)
     blocks = inbox_items[0].body.split("\n\n")[1:]
-    assert len(blocks) == 3
+    assert len(blocks) == 2
     for block in blocks:
         lines = block.splitlines()
         assert "-" in lines[0]
@@ -598,17 +598,19 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
         assert lines[-1].startswith("中文：")
     assert blocks[0].splitlines()[0].startswith("mem-")
     assert blocks[1].splitlines()[0].startswith("trace-")
-    assert blocks[2].splitlines()[0].startswith("refl-")
     assert blocks[0].splitlines()[1] == (
         "Test belief: A test entry for proactive generation."
     )
-    trace_body = blocks[1].splitlines()[1]
-    assert trace_body.startswith(
-        "Generated connection Reflection · evidence=1 · score=0.80"
-    )
-    assert "decisions: Relevance gate passed" in trace_body
-    assert refl_entries[0].body not in trace_body
-    assert refl_entries[0].title in blocks[2].splitlines()[1]
+    trace_lines = blocks[1].splitlines()
+    assert trace_lines[1:5] == [
+        "Generated connection Reflection",
+        "Basis: 1 referenced artifact(s)",
+        "Assessment: score=0.80 · discussion=not required",
+        "Decisions:",
+    ]
+    assert trace_lines[5].startswith("- Relevance gate passed")
+    assert refl_entries[0].body not in "\n".join(trace_lines)
+    assert not any(block.startswith("refl-") for block in blocks)
     assert "memory:m1" not in inbox_items[0].body
     assert "trace:trace-" not in inbox_items[0].body
     assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
@@ -648,11 +650,7 @@ def test_reflect_publishes_with_fallback_when_provenance_fails(
 
     [reflection] = scheduler._reflection_service.list_entries()
     [item] = cast(InboxService, scheduler._inbox).list()
-    [block] = item.body.split("\n\n")[1:]
-    assert block.splitlines()[0].startswith("refl-")
-    assert len(block.splitlines()[0]) == 11
-    assert block.splitlines()[1] == f"{reflection.title}: {reflection.body}"
-    assert block.splitlines()[2].startswith("中文：")
+    assert item.body == reflection.body
     events = read_log_events(
         project_root=scheduler._project_root,
         component="reflection",
