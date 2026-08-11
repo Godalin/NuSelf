@@ -263,6 +263,12 @@ chain retains its ID with an explicit unavailable/tombstone summary.
 Decision points remain annotations of the relevant ThoughtTrace. They are not
 separate provenance artifacts and therefore do not become chain nodes.
 
+Canonical node references remain unchanged in storage and query results.
+Notification renderers may derive a Git-like hexadecimal display ID from the
+complete reference. The display ID starts at six characters and expands only
+to resolve a collision within the rendered chain; it is presentation-only and
+must never be accepted as a replacement persistence identity.
+
 ## Service And Tool-Facing Interface
 
 Trace is a subsystem service, not only a repository.
