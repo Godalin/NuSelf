@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal, cast
+
+_BRACKETED_EVIDENCE_REF = re.compile(
+    r"\s*\[(?:memory|profile|source|conversation):[^\]\r\n]+\]"
+)
 
 type IdeaCandidateType = Literal[
     "contradiction",
@@ -13,6 +18,14 @@ type IdeaCandidateType = Literal[
     "profile_update",
     "share_bundle",
 ]
+
+
+def without_evidence_annotations(value: str) -> str:
+    """Remove machine-readable evidence annotations from user prose."""
+
+    cleaned = _BRACKETED_EVIDENCE_REF.sub("", value)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return cleaned.strip()
 
 
 @dataclass(frozen=True)

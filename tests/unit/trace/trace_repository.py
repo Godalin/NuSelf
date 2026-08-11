@@ -119,6 +119,26 @@ def test_memory_trace_links_source_artifact_and_source_trace(
     )
 
 
+def test_reflection_trace_records_derivation_not_final_body(
+    tmp_path: Path,
+) -> None:
+    recorder = TraceRecorder(_repository(tmp_path))
+
+    trace = recorder.record_reflection_created(
+        reflection_id="reflection-1",
+        candidate_type="connection",
+        composite_score=0.82,
+        discussion_approved=None,
+        evidence_refs=["memory:mem-1", "profile:profile-1"],
+        decision_points=["Relevance gate passed."],
+    )
+
+    assert trace.summary == (
+        "Generated connection Reflection from 2 evidence artifact(s)."
+    )
+    assert trace.evidence_refs == ("memory:mem-1", "profile:profile-1")
+
+
 def test_trace_repository_hides_internal_records_by_default(tmp_path: Path) -> None:
     repo = _repository(tmp_path)
     private = repo.save_trace(

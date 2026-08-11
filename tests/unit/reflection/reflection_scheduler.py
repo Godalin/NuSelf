@@ -602,7 +602,12 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     assert blocks[0].splitlines()[1] == (
         "Test belief: A test entry for proactive generation."
     )
-    assert "decisions: Relevance gate passed" in blocks[1].splitlines()[1]
+    trace_body = blocks[1].splitlines()[1]
+    assert trace_body.startswith(
+        "Generated connection Reflection · evidence=1 · score=0.80"
+    )
+    assert "decisions: Relevance gate passed" in trace_body
+    assert refl_entries[0].body not in trace_body
     assert refl_entries[0].title in blocks[2].splitlines()[1]
     assert "memory:m1" not in inbox_items[0].body
     assert "trace:trace-" not in inbox_items[0].body
@@ -887,6 +892,28 @@ def test_generator_produces_ideas_from_memory(tmp_path: Path) -> None:
     assert candidates[0].evidence_excerpts[0].body == (
         "Test belief: A test entry for proactive generation."
     )
+
+
+def test_generator_keeps_structured_evidence_out_of_candidate_prose(
+    tmp_path: Path,
+) -> None:
+    _seed_memory(tmp_path)
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["body"] = (
+        "A useful connection. [memory:m1] "
+        "It remains readable. [profile:profile_ignored]"
+    )
+    candidate["evidence_refs"] = ["memory:m1"]
+    agent = _CandidateAgent([candidate])
+    gen = _generator(tmp_path, agent=agent)
+
+    [generated] = gen.generate()
+
+    assert generated.body == "A useful connection. It remains readable."
+    assert generated.evidence_refs == ("memory:m1",)
+    system_prompt = str(agent.messages[0][0].content)
+    assert "evidence_refs field" in system_prompt
+    assert "Do not append artifact references" in system_prompt
 
 
 def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:

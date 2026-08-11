@@ -143,11 +143,37 @@ class ProvenanceService:
 
 
 def _trace_body(trace: ThoughtTrace) -> str:
+    if trace.kind == "reflection":
+        return _reflection_trace_body(trace)
     body = f"{trace.kind}: {trace.summary}"
     if trace.decision_points:
         decisions = " | ".join(trace.decision_points[:3])
         body = f"{body} | decisions: {decisions}"
     return _single_line(body)
+
+
+def _reflection_trace_body(trace: ThoughtTrace) -> str:
+    candidate_type = trace.metadata.get("candidate_type")
+    if not isinstance(candidate_type, str) or not candidate_type:
+        candidate_type = "unknown"
+    parts = [
+        f"Generated {candidate_type} Reflection",
+        f"evidence={len(trace.evidence_refs)}",
+    ]
+    composite_score = trace.metadata.get("composite_score")
+    if isinstance(composite_score, (int, float)) and not isinstance(
+        composite_score,
+        bool,
+    ):
+        parts.append(f"score={float(composite_score):.2f}")
+    discussion = trace.metadata.get("discussion_approved")
+    if isinstance(discussion, bool):
+        parts.append(f"discussion={'approved' if discussion else 'rejected'}")
+    elif discussion is None:
+        parts.append("discussion=not required")
+    if trace.decision_points:
+        parts.append("decisions: " + " | ".join(trace.decision_points[:3]))
+    return _single_line(" · ".join(parts))
 
 
 def _is_artifact_ref(value: str) -> bool:
