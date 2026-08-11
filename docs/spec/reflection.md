@@ -142,6 +142,15 @@ Profile, Source, or Conversation references are removed from candidate prose
 after their structured `evidence_refs` have been validated. NuSelf never
 recovers or infers evidence from prose.
 
+Evidence selection is resolved only against the closed catalog supplied to the
+same model invocation. A returned canonical reference is accepted unchanged.
+A returned bare artifact ID may be canonicalized only when it exactly equals
+the suffix after `:` of one and only one catalog reference. Unknown values and
+ambiguous suffixes reject the complete generated batch. This normalization is
+identity recovery inside a closed set, not fuzzy matching or evidence
+inference; every materialized candidate and persisted ThoughtTrace retains the
+catalog's canonical reference.
+
 A malformed item rejects the complete generated batch and produces the
 existing empty result plus `candidate_generation_failed`. Candidate text is
 not parsed, missing fields are not defaulted, and scores are not clamped.

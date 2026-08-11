@@ -79,6 +79,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Fixed
 
+- Qwen Reflection candidates may return a real catalog artifact as its bare
+  object ID; NuSelf now restores the canonical namespace only through a unique
+  exact closed-catalog match while continuing to reject unknown or ambiguous
+  evidence references.
+
 - Restored production `service_tool_called` projection so completed and failed
   framework Tool executions again expose structured arguments and result/error
   in live activity and logs without adding payloads to lifecycle observation;
