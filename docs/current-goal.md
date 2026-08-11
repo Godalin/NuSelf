@@ -15,14 +15,14 @@ assessment, and decisions easy to scan.
 
 ## Next Steps
 
-1. Specify the distinction between the stored provenance graph and its
-   Reflection notification projection.
-2. Omit the terminal Reflection artifact block when the notification body
-   already presents that artifact.
-3. Render Reflection generation Trace details as labeled multiline fields and
-   decision bullets.
-4. Verify focused/full tests, diff review, CI, and merge a feature PR into
-   `dev/v0.4.x`.
+1. [Complete] Specify the distinction between the stored provenance graph and
+   its Reflection notification projection.
+2. [Complete] Omit the terminal Reflection artifact block when the
+   notification body already presents that artifact.
+3. [Complete] Render Reflection generation Trace details as labeled multiline
+   fields and decision bullets.
+4. [In progress] Verify focused/full tests, diff review, CI, and merge a
+   feature PR into `dev/v0.4.x`.
 
 ## Exclusions
 
