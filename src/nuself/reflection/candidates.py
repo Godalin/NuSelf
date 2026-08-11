@@ -204,11 +204,10 @@ class IdeaCandidateGenerator:
         prefix = now.strftime("%Y%m%d-%H%M%S")
         candidates: list[IdeaCandidate] = []
         for item in output.candidates[:limit]:
-            refs = tuple(dict.fromkeys(item.evidence_refs))
-            if any(ref not in evidence_catalog for ref in refs):
-                raise ValueError(
-                    "candidate cited evidence outside supplied context"
-                )
+            refs = _resolve_evidence_refs(
+                item.evidence_refs,
+                evidence_catalog=evidence_catalog,
+            )
             title = without_evidence_annotations(item.title)
             body = without_evidence_annotations(item.body)
             if not title or not body:
@@ -235,6 +234,33 @@ class IdeaCandidateGenerator:
                 )
             )
         return candidates
+
+
+def _resolve_evidence_refs(
+    returned_refs: list[str],
+    *,
+    evidence_catalog: dict[str, str],
+) -> tuple[str, ...]:
+    aliases: dict[str, list[str]] = {}
+    for canonical_ref in evidence_catalog:
+        _, separator, artifact_id = canonical_ref.partition(":")
+        if separator:
+            aliases.setdefault(artifact_id, []).append(canonical_ref)
+
+    resolved: list[str] = []
+    for returned_ref in returned_refs:
+        if returned_ref in evidence_catalog:
+            canonical_ref = returned_ref
+        else:
+            matches = aliases.get(returned_ref, ())
+            if len(matches) != 1:
+                raise ValueError(
+                    "candidate cited evidence outside supplied context"
+                )
+            canonical_ref = matches[0]
+        if canonical_ref not in resolved:
+            resolved.append(canonical_ref)
+    return tuple(resolved)
 
 
 @dataclass(frozen=True)

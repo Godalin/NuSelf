@@ -34,7 +34,7 @@ from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
-from nuself.reflection.candidates import CandidateListOutput
+from nuself.reflection.candidates import CandidateItemOutput, CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
 from nuself.reflection.rendering import TranslationItem, TranslationOutput
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
@@ -914,6 +914,51 @@ def test_generator_keeps_structured_evidence_out_of_candidate_prose(
     system_prompt = str(agent.messages[0][0].content)
     assert "evidence_refs field" in system_prompt
     assert "Do not append artifact references" in system_prompt
+
+
+def test_generator_canonicalizes_unique_bare_catalog_ids(
+    tmp_path: Path,
+) -> None:
+    _seed_memory(tmp_path)
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["evidence_refs"] = ["m1"]
+
+    generated = _generator(
+        tmp_path,
+        agent=_CandidateAgent([candidate]),
+    ).generate()
+
+    assert generated[0].evidence_refs == ("memory:m1",)
+
+
+def test_generator_rejects_ambiguous_bare_catalog_ids() -> None:
+    output = CandidateListOutput(
+        candidates=[
+            CandidateItemOutput(
+                title="Ambiguous evidence",
+                body="This candidate must not guess an evidence namespace.",
+                candidate_type="question",
+                confidence=0.8,
+                novelty=0.8,
+                urgency=0.4,
+                interruption_cost=0.2,
+                evidence_refs=["shared"],
+            )
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="outside supplied context",
+    ):
+        IdeaCandidateGenerator._convert(
+            output,
+            3,
+            evidence_catalog={
+                "memory:shared": "Memory evidence.",
+                "profile:shared": "Profile evidence.",
+            },
+        )
 
 
 def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:
