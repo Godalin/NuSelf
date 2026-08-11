@@ -36,6 +36,7 @@ from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
 from nuself.reflection.candidates import CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
+from nuself.reflection.rendering import TranslationItem, TranslationOutput
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
 from nuself.trace.composition import compose_trace_services
 from tests.backend import owned_backend
@@ -165,6 +166,36 @@ class _BrokenProvenance:
         raise RuntimeError("simulated provenance failure")
 
 
+class _TranslationAgent:
+    def invoke(
+        self,
+        messages: Sequence[BaseMessage],
+    ) -> TranslationOutput:
+        content = str(messages[-1].content)
+        positions = [
+            int(line.split("]", 1)[0].removeprefix("["))
+            for line in content.splitlines()
+            if line.startswith("[")
+        ]
+        return TranslationOutput(
+            translations=[
+                TranslationItem(
+                    position=position,
+                    chinese=f"第 {position + 1} 个节点的中文翻译。",
+                )
+                for position in positions
+            ]
+        )
+
+
+class _FailingTranslationRenderer:
+    def render(self, chain: object, *, translate: bool = True) -> str:
+        del chain
+        if translate:
+            raise RuntimeError("simulated translation failure")
+        return "abc123\nOriginal provenance body."
+
+
 def _fake_structured_agent(
     schema: type[BaseModel],
     *,
@@ -177,6 +208,8 @@ def _fake_structured_agent(
         return _CandidateAgent()
     if schema is RelevanceScoreOutput:
         return _RelevanceAgent()
+    if schema is TranslationOutput:
+        return _TranslationAgent()
     raise AssertionError(f"unexpected schema: {schema.__name__}")
 
 
@@ -263,6 +296,10 @@ def scheduler(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReflectionSche
     )
     monkeypatch.setattr(
         "nuself.reflection.relevance.default_structured_agent",
+        _fake_structured_agent,
+    )
+    monkeypatch.setattr(
+        "nuself.reflection.rendering.default_structured_agent",
         _fake_structured_agent,
     )
     # Seed data so generator has context
@@ -552,16 +589,20 @@ def test_reflect_creates_inbox_and_auto_notify_requests_delivery(scheduler: Refl
     assert len(inbox_items) == 1
     assert inbox_items[0].title.startswith("New reflection:")
     assert inbox_items[0].body.startswith(refl_entries[0].body)
-    lines = inbox_items[0].body.splitlines()
-    assert lines[-4] == "Provenance chain:"
-    assert lines[-3] == (
-        "memory:m1  Test belief: A test entry for proactive generation."
+    blocks = inbox_items[0].body.split("\n\n")[1:]
+    assert len(blocks) == 3
+    for block in blocks:
+        lines = block.splitlines()
+        assert len(lines[0]) == 6
+        assert lines[0].isalnum()
+        assert lines[-1].startswith("中文：")
+    assert blocks[0].splitlines()[1] == (
+        "Test belief: A test entry for proactive generation."
     )
-    assert lines[-2].startswith("trace:trace-")
-    assert "reflection:" in lines[-2]
-    assert "decisions: Relevance gate passed" in lines[-2]
-    assert lines[-1].startswith("reflection:reflection-")
-    assert not any(line.startswith("decision:") for line in lines)
+    assert "decisions: Relevance gate passed" in blocks[1].splitlines()[1]
+    assert refl_entries[0].title in blocks[2].splitlines()[1]
+    assert "memory:m1" not in inbox_items[0].body
+    assert "trace:trace-" not in inbox_items[0].body
     assert len(cast(DeliveryStore, scheduler._deliveries).list()) == 1
 
 
@@ -599,13 +640,10 @@ def test_reflect_publishes_with_fallback_when_provenance_fails(
 
     [reflection] = scheduler._reflection_service.list_entries()
     [item] = cast(InboxService, scheduler._inbox).list()
-    assert item.body.splitlines()[-2:] == [
-        "Provenance chain:",
-        (
-            f"reflection:{reflection.id}  "
-            f"{reflection.title}: {reflection.body}"
-        ),
-    ]
+    [block] = item.body.split("\n\n")[1:]
+    assert len(block.splitlines()[0]) == 6
+    assert block.splitlines()[1] == f"{reflection.title}: {reflection.body}"
+    assert block.splitlines()[2].startswith("中文：")
     events = read_log_events(
         project_root=scheduler._project_root,
         component="reflection",
@@ -617,6 +655,27 @@ def test_reflect_publishes_with_fallback_when_provenance_fails(
     ]
     assert failure.status == "degraded"
     assert failure.metadata == {"reflection_id": reflection.id}
+
+
+def test_reflect_publishes_original_chain_when_translation_fails(
+    scheduler: ReflectionScheduler,
+) -> None:
+    scheduler._provenance_renderer = _FailingTranslationRenderer()
+
+    assert scheduler.reflect(datetime(2024, 1, 1, 12, 0, tzinfo=UTC)) is True
+
+    [item] = cast(InboxService, scheduler._inbox).list()
+    assert item.body.endswith("abc123\nOriginal provenance body.")
+    events = read_log_events(
+        project_root=scheduler._project_root,
+        component="reflection",
+    )
+    [failure] = [
+        event
+        for event in events
+        if event.event == "notification_translation_failed"
+    ]
+    assert failure.status == "degraded"
 
 
 def test_reflect_returns_false_when_schedule_blocked(scheduler: ReflectionScheduler) -> None:

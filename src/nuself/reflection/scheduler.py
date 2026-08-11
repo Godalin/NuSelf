@@ -22,7 +22,7 @@ from nuself.reflection.schedule_state import (
     ReflectionScheduleState,
     ReflectionScheduleStateError,
 )
-from nuself.trace.provenance import ProvenanceChain
+from nuself.trace.provenance import ProvenanceChain, ProvenanceNode
 
 
 class CandidateGenerator(Protocol):
@@ -84,6 +84,15 @@ class ReflectionProvenanceReader(Protocol):
     def chain_for(self, artifact_ref: str) -> ProvenanceChain: ...
 
 
+class ReflectionProvenanceRenderer(Protocol):
+    def render(
+        self,
+        chain: ProvenanceChain,
+        *,
+        translate: bool = True,
+    ) -> str: ...
+
+
 @dataclass(frozen=True)
 class ReflectionScheduleStatus:
     """User-facing snapshot of deterministic Reflection scheduling gates."""
@@ -107,6 +116,7 @@ class ReflectionScheduler:
         deliveries: DeliveryRequester,
         trace_recorder: ReflectionTraceRecorder,
         provenance: ReflectionProvenanceReader,
+        provenance_renderer: ReflectionProvenanceRenderer,
         candidate_generator: CandidateGenerator,
         relevance_gate: RelevanceGate,
         organizer: PendingReflectionOrganizer,
@@ -119,6 +129,7 @@ class ReflectionScheduler:
         self._deliveries = deliveries
         self._trace_recorder = trace_recorder
         self._provenance = provenance
+        self._provenance_renderer = provenance_renderer
         self._candidate_generator = candidate_generator
         self._relevance_gate = relevance_gate
         self._organizer = organizer
@@ -426,13 +437,6 @@ class ReflectionScheduler:
     ) -> None:
         try:
             chain = self._provenance.chain_for(f"reflection:{entry.id}")
-            heading = (
-                "Provenance chain (truncated):"
-                if chain.truncated
-                else "Provenance chain:"
-            )
-            trace = ["", heading]
-            trace.extend(f"{node.ref}  {node.body}" for node in chain.nodes)
         except Exception as exc:
             REFLECTION_AUDIT.failure(
                 exc,
@@ -441,17 +445,32 @@ class ReflectionScheduler:
                 project_root=self._project_root,
                 metadata={"reflection_id": entry.id},
             )
-            trace = [
-                "",
-                "Provenance chain:",
-                f"reflection:{entry.id}  {entry.title}: {entry.body}",
-            ]
+            chain = ProvenanceChain((
+                ProvenanceNode(
+                    f"reflection:{entry.id}",
+                    f"{entry.title}: {entry.body}",
+                ),
+            ))
+        try:
+            rendered_provenance = self._provenance_renderer.render(chain)
+        except Exception as exc:
+            REFLECTION_AUDIT.failure(
+                exc,
+                event="notification_translation_failed",
+                message="Failed to translate Reflection notification provenance",
+                project_root=self._project_root,
+                metadata={"reflection_id": entry.id},
+            )
+            rendered_provenance = self._provenance_renderer.render(
+                chain,
+                translate=False,
+            )
         item = self._inbox.add(InboxItem(
             id=f"inbox-{entry.id}",
             kind="reflection",
             source_id=entry.id,
             title=f"New reflection: {entry.title}",
-            body="\n".join([entry.body, *trace]),
+            body="\n\n".join([entry.body, rendered_provenance]),
             idempotency_key=f"reflection-{entry.id}",
             deep_link=entry.deep_link,
         ))

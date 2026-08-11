@@ -29,6 +29,7 @@ def test_reflection_audit_registry_owns_complete_taxonomy() -> None:
         "schedule_state_corrupt",
         "trace_recording_failed",
         "notification_provenance_failed",
+        "notification_translation_failed",
         "organizer_failed",
         "organizer_completed",
     }
@@ -66,6 +67,10 @@ def test_reflection_audit_registry_owns_complete_taxonomy() -> None:
         ("trace_recording_failed", {"reflection_id": "reflection-1"}),
         (
             "notification_provenance_failed",
+            {"reflection_id": "reflection-1"},
+        ),
+        (
+            "notification_translation_failed",
             {"reflection_id": "reflection-1"},
         ),
         ("organizer_failed", {}),

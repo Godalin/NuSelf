@@ -20,6 +20,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection provenance in Inbox and email now uses spaced Git-like node
+  blocks with stable short display IDs and best-effort Chinese translations
+  for English summaries, while retaining canonical IDs internally.
+
 - Reflection notifications now place provenance in a final line-oriented trace
   section, with each validated evidence or decision ID followed by its bounded
   explanation; HTML email preserves the same line breaks.
