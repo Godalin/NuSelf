@@ -265,9 +265,12 @@ separate provenance artifacts and therefore do not become chain nodes.
 
 Canonical node references remain unchanged in storage and query results.
 Notification renderers may derive a Git-like hexadecimal display ID from the
-complete reference. The display ID starts at six characters and expands only
-to resolve a collision within the rendered chain; it is presentation-only and
-must never be accepted as a replacement persistence identity.
+complete reference. Its hexadecimal portion starts at six characters and
+expands only to resolve a collision within the rendered chain; it is
+presentation-only and must never be accepted as a replacement persistence
+identity. The hexadecimal abbreviation is prefixed with a compact node kind such as
+`mem-`, `trace-`, `turn-`, or `refl-` so readers can identify the node without
+recovering its canonical reference.
 
 ## Service And Tool-Facing Interface
 

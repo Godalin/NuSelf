@@ -48,13 +48,14 @@ def test_renderer_uses_short_ids_spacing_and_selective_translation() -> None:
     blocks = rendered.split("\n\n")
 
     assert len(blocks) == 2
-    assert blocks[0].splitlines()[0].isalnum()
-    assert len(blocks[0].splitlines()[0]) == 6
+    assert blocks[0].splitlines()[0].startswith("mem-")
+    assert len(blocks[0].splitlines()[0]) == 10
     assert blocks[0].splitlines()[1:] == [
         "An English memory summary.",
         "中文：英文节点的中文翻译。",
     ]
     assert blocks[1].splitlines()[1:] == ["已经是中文正文。"]
+    assert blocks[1].splitlines()[0].startswith("refl-")
     assert translator.inputs == [("An English memory summary.",)]
 
 

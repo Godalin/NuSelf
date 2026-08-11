@@ -17,6 +17,18 @@ from nuself.trace.provenance import ProvenanceChain
 
 _ASCII_LETTER = re.compile(r"[A-Za-z]")
 _HAN_CHARACTER = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+_DISPLAY_KINDS = {
+    "conversation_range": "range",
+    "conversation_turn": "turn",
+    "memory": "mem",
+    "persona_prompt": "persona",
+    "profile": "profile",
+    "reason": "reason",
+    "reason_step": "step",
+    "reflection": "refl",
+    "source": "source",
+    "trace": "trace",
+}
 
 
 class TranslationItem(BaseModel):
@@ -132,7 +144,11 @@ class ProvenanceRenderer:
 
 
 def _display_ids(refs: Iterable[str]) -> tuple[str, ...]:
-    digests = tuple(sha256(ref.encode("utf-8")).hexdigest() for ref in refs)
+    canonical_refs = tuple(refs)
+    digests = tuple(
+        sha256(ref.encode("utf-8")).hexdigest()
+        for ref in canonical_refs
+    )
     lengths = [6] * len(digests)
     while True:
         groups: dict[str, list[int]] = {}
@@ -141,8 +157,13 @@ def _display_ids(refs: Iterable[str]) -> tuple[str, ...]:
         collisions = [positions for positions in groups.values() if len(positions) > 1]
         if not collisions:
             return tuple(
-                digest[:length]
-                for digest, length in zip(digests, lengths, strict=True)
+                f"{_display_kind(ref)}-{digest[:length]}"
+                for ref, digest, length in zip(
+                    canonical_refs,
+                    digests,
+                    lengths,
+                    strict=True,
+                )
             )
         for positions in collisions:
             for position in positions:
@@ -153,3 +174,10 @@ def _display_ids(refs: Iterable[str]) -> tuple[str, ...]:
 
 def _is_english(body: str) -> bool:
     return bool(_ASCII_LETTER.search(body)) and not _HAN_CHARACTER.search(body)
+
+
+def _display_kind(ref: str) -> str:
+    namespace, separator, _ = ref.partition(":")
+    if not separator:
+        return "node"
+    return _DISPLAY_KINDS.get(namespace, "node")
