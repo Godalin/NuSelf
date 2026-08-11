@@ -11,6 +11,7 @@ from nuself.delivery.service import DeliveryService
 from nuself.inbox.service import InboxService
 from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
+from nuself.reflection.rendering import LLMChineseTranslator, ProvenanceRenderer
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionRepository
 from nuself.reflection.service import ReflectionService
@@ -84,6 +85,12 @@ def compose_reflection_scheduler(
         deliveries=deliveries,
         trace_recorder=trace_recorder,
         provenance=provenance,
+        provenance_renderer=ProvenanceRenderer(
+            LLMChineseTranslator(
+                paths.authority_root,
+                langchain_models=langchain_models,
+            )
+        ),
         candidate_generator=generator,
         relevance_gate=gate,
         organizer=service,
