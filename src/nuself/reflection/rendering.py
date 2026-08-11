@@ -25,7 +25,7 @@ class TranslationItem(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     position: int = Field(ge=0)
-    chinese: str = Field(min_length=1)
+    chinese: str = Field(min_length=1, max_length=400)
 
 
 class TranslationOutput(BaseModel):
@@ -33,7 +33,7 @@ class TranslationOutput(BaseModel):
 
     model_config = ConfigDict(strict=True, extra="forbid")
 
-    translations: list[TranslationItem]
+    translations: list[TranslationItem] = Field(max_length=24)
 
 
 class ChineseTranslator(Protocol):
