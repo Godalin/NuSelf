@@ -138,9 +138,11 @@ scheduler does not re-export it.
 `evidence_refs` is the only candidate field that carries artifact references.
 The generation prompt must tell the model not to append references to `title`
 or `body`. As a defensive presentation normalization, bracketed Memory,
-Profile, Source, or Conversation references are removed from candidate prose
-after their structured `evidence_refs` have been validated. NuSelf never
-recovers or infers evidence from prose.
+Profile, Source, or Conversation references are removed from candidate prose.
+After structured `evidence_refs` have been validated, their exact canonical
+references and exact bare artifact IDs are also removed from generated or
+discussion-revised prose. NuSelf never recovers or infers evidence from prose,
+and it does not remove an unvalidated bare value through fuzzy matching.
 
 Evidence selection is resolved only against the closed catalog supplied to the
 same model invocation. A returned canonical reference is accepted unchanged.

@@ -208,8 +208,14 @@ class IdeaCandidateGenerator:
                 item.evidence_refs,
                 evidence_catalog=evidence_catalog,
             )
-            title = without_evidence_annotations(item.title)
-            body = without_evidence_annotations(item.body)
+            title = without_evidence_annotations(
+                item.title,
+                evidence_refs=refs,
+            )
+            body = without_evidence_annotations(
+                item.body,
+                evidence_refs=refs,
+            )
             if not title or not body:
                 raise ValueError(
                     "candidate prose cannot consist only of evidence references"

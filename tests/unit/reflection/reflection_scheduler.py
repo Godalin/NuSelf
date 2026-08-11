@@ -26,7 +26,7 @@ from nuself.application.composition import compose_application
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.config.settings import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.config.settings import runtime_paths
-from nuself.reflection.model import IdeaCandidate
+from nuself.reflection.model import IdeaCandidate, without_evidence_annotations
 from nuself.log.reader import read_log_events
 from nuself.inbox.service import InboxService
 from nuself.delivery.store import DeliveryStore
@@ -869,6 +869,15 @@ def test_quiet_hours_non_wrapping_range() -> None:
 
 # --- IdeaCandidateGenerator tests ---
 
+def test_evidence_annotation_cleanup_handles_validated_ids_and_punctuation() -> None:
+    cleaned = without_evidence_annotations(
+        "中文（m1，m2），English (memory:m1, m2). Keep unknown-id.",
+        evidence_refs=("memory:m1", "profile:m2"),
+    )
+
+    assert cleaned == "中文，English. Keep unknown-id."
+
+
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
     """No conversations, no memory, no sources → no candidates."""
     candidate = dict(_DEFAULT_CANDIDATES[0])
@@ -900,7 +909,7 @@ def test_generator_keeps_structured_evidence_out_of_candidate_prose(
     _seed_memory(tmp_path)
     candidate = dict(_DEFAULT_CANDIDATES[0])
     candidate["body"] = (
-        "A useful connection. [memory:m1] "
+        "A useful connection (m1). [memory:m1] "
         "It remains readable. [profile:profile_ignored]"
     )
     candidate["evidence_refs"] = ["memory:m1"]

@@ -218,8 +218,14 @@ class ReflectionScheduler:
             title = result.revised_title
             body = result.revised_body
 
-        title = without_evidence_annotations(title)
-        body = without_evidence_annotations(body)
+        title = without_evidence_annotations(
+            title,
+            evidence_refs=tuple(best.evidence_refs),
+        )
+        body = without_evidence_annotations(
+            body,
+            evidence_refs=tuple(best.evidence_refs),
+        )
         if not title or not body:
             REFLECTION_AUDIT.write(
                 "cycle_filtered",
