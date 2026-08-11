@@ -35,7 +35,7 @@ locks and Unix-domain sockets.
 - Durable memory with review, search, relations, and symbolic graph views
 - Independent Markdown and plain-text external knowledge library
 - Long-run reasoning threads and ordered, resolvable conversation/reason → memory → reflection provenance chains
-- API-separated conversation history, memory observations, and top-level reflection controls
+- API-separated conversation history, memory observations, and top-level reflection controls with closed-catalog evidence identity validation
 - Unified Inbox with log, email, and macOS delivery of reflection text plus complete provenance nodes that separate derivation facts from final prose
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover

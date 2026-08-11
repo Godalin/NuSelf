@@ -26,7 +26,7 @@ from nuself.application.composition import compose_application
 from nuself.reflection.composition import compose_reflection_scheduler
 from nuself.config.settings import ReflectionDiscussionConfig, ReflectionGateConfig, ReflectionModeratorConfig, ReflectionSchedulerConfig, ReflectionSettings
 from nuself.config.settings import runtime_paths
-from nuself.reflection.model import IdeaCandidate
+from nuself.reflection.model import IdeaCandidate, without_evidence_annotations
 from nuself.log.reader import read_log_events
 from nuself.inbox.service import InboxService
 from nuself.delivery.store import DeliveryStore
@@ -34,7 +34,7 @@ from nuself.reflection.candidates import IdeaCandidateGenerator
 from nuself.reflection.relevance import LLMRelevanceGate
 from nuself.reflection.scheduler import ReflectionScheduler
 from nuself.reflection.repository import ReflectionEntry
-from nuself.reflection.candidates import CandidateListOutput
+from nuself.reflection.candidates import CandidateItemOutput, CandidateListOutput
 from nuself.reflection.relevance import RelevanceScoreOutput
 from nuself.reflection.rendering import TranslationItem, TranslationOutput
 from nuself.reflection.schedule_state import ReflectionScheduleStateError
@@ -869,6 +869,15 @@ def test_quiet_hours_non_wrapping_range() -> None:
 
 # --- IdeaCandidateGenerator tests ---
 
+def test_evidence_annotation_cleanup_handles_validated_ids_and_punctuation() -> None:
+    cleaned = without_evidence_annotations(
+        "中文（m1，m2），English (memory:m1, m2). Keep unknown-id and xm1x.",
+        evidence_refs=("memory:m1", "profile:m2"),
+    )
+
+    assert cleaned == "中文，English. Keep unknown-id and xm1x."
+
+
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
     """No conversations, no memory, no sources → no candidates."""
     candidate = dict(_DEFAULT_CANDIDATES[0])
@@ -900,7 +909,7 @@ def test_generator_keeps_structured_evidence_out_of_candidate_prose(
     _seed_memory(tmp_path)
     candidate = dict(_DEFAULT_CANDIDATES[0])
     candidate["body"] = (
-        "A useful connection. [memory:m1] "
+        "A useful connection (m1). [memory:m1] "
         "It remains readable. [profile:profile_ignored]"
     )
     candidate["evidence_refs"] = ["memory:m1"]
@@ -912,8 +921,56 @@ def test_generator_keeps_structured_evidence_out_of_candidate_prose(
     assert generated.body == "A useful connection. It remains readable."
     assert generated.evidence_refs == ("memory:m1",)
     system_prompt = str(agent.messages[0][0].content)
+    context_prompt = str(agent.messages[0][1].content)
     assert "evidence_refs field" in system_prompt
     assert "Do not append artifact references" in system_prompt
+    assert "- memory:m1 |" in context_prompt
+    assert "[memory:m1]" not in context_prompt
+
+
+def test_generator_canonicalizes_unique_bare_catalog_ids(
+    tmp_path: Path,
+) -> None:
+    _seed_memory(tmp_path)
+    candidate = dict(_DEFAULT_CANDIDATES[0])
+    candidate["evidence_refs"] = ["m1"]
+
+    generated = _generator(
+        tmp_path,
+        agent=_CandidateAgent([candidate]),
+    ).generate()
+
+    assert generated[0].evidence_refs == ("memory:m1",)
+
+
+def test_generator_rejects_ambiguous_bare_catalog_ids() -> None:
+    output = CandidateListOutput(
+        candidates=[
+            CandidateItemOutput(
+                title="Ambiguous evidence",
+                body="This candidate must not guess an evidence namespace.",
+                candidate_type="question",
+                confidence=0.8,
+                novelty=0.8,
+                urgency=0.4,
+                interruption_cost=0.2,
+                evidence_refs=["shared"],
+            )
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="outside supplied context",
+    ):
+        IdeaCandidateGenerator._convert(
+            output,
+            3,
+            evidence_catalog={
+                "memory:shared": "Memory evidence.",
+                "profile:shared": "Profile evidence.",
+            },
+        )
 
 
 def test_generator_produces_ideas_from_conversations(tmp_path: Path) -> None:

@@ -138,9 +138,23 @@ scheduler does not re-export it.
 `evidence_refs` is the only candidate field that carries artifact references.
 The generation prompt must tell the model not to append references to `title`
 or `body`. As a defensive presentation normalization, bracketed Memory,
-Profile, Source, or Conversation references are removed from candidate prose
-after their structured `evidence_refs` have been validated. NuSelf never
-recovers or infers evidence from prose.
+Profile, Source, or Conversation references are removed from candidate prose.
+After structured `evidence_refs` have been validated, their exact canonical
+references and exact bare artifact IDs are also removed from generated or
+discussion-revised prose. NuSelf never recovers or infers evidence from prose,
+and it does not remove an unvalidated bare value through fuzzy matching.
+
+Evidence selection is resolved only against the closed catalog supplied to the
+same model invocation. A returned canonical reference is accepted unchanged.
+A candidate-generation prompt presents each catalog reference as an unwrapped
+`namespace:id | content` field so its human-readable form is identical to the
+machine value the model must return.
+A returned bare artifact ID may be canonicalized only when it exactly equals
+the suffix after `:` of one and only one catalog reference. Unknown values and
+ambiguous suffixes reject the complete generated batch. This normalization is
+identity recovery inside a closed set, not fuzzy matching or evidence
+inference; every materialized candidate and persisted ThoughtTrace retains the
+catalog's canonical reference.
 
 A malformed item rejects the complete generated batch and produces the
 existing empty result plus `candidate_generation_failed`. Candidate text is
