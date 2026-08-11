@@ -134,7 +134,9 @@ class ProvenanceService:
             append(
                 ProvenanceNode(
                     ref,
-                    _single_line(resolved or "Artifact unavailable (tombstone)."),
+                    _normalized_body(
+                        resolved or "Artifact unavailable (tombstone)."
+                    ),
                 )
             )
 
@@ -147,9 +149,9 @@ def _trace_body(trace: ThoughtTrace) -> str:
         return _reflection_trace_body(trace)
     body = f"{trace.kind}: {trace.summary}"
     if trace.decision_points:
-        decisions = " | ".join(trace.decision_points[:3])
+        decisions = " | ".join(trace.decision_points)
         body = f"{body} | decisions: {decisions}"
-    return _single_line(body)
+    return _normalized_body(body)
 
 
 def _reflection_trace_body(trace: ThoughtTrace) -> str:
@@ -172,16 +174,13 @@ def _reflection_trace_body(trace: ThoughtTrace) -> str:
     elif discussion is None:
         parts.append("discussion=not required")
     if trace.decision_points:
-        parts.append("decisions: " + " | ".join(trace.decision_points[:3]))
-    return _single_line(" · ".join(parts))
+        parts.append("decisions: " + " | ".join(trace.decision_points))
+    return _normalized_body(" · ".join(parts))
 
 
 def _is_artifact_ref(value: str) -> bool:
     return value.startswith(_ARTIFACT_PREFIXES)
 
 
-def _single_line(value: str, *, limit: int = 240) -> str:
-    normalized = " ".join(value.split())
-    if len(normalized) <= limit:
-        return normalized
-    return normalized[: limit - 1].rstrip() + "…"
+def _normalized_body(value: str) -> str:
+    return " ".join(value.split())

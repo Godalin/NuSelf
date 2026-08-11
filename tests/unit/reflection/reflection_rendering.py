@@ -93,3 +93,17 @@ def test_llm_translator_requires_complete_position_preserving_output(
         "第二条。",
     )
     assert "[0] First." in str(agent.messages[0][-1].content)
+
+
+def test_renderer_preserves_long_original_and_translation() -> None:
+    original = "Long original evidence. " * 30
+    translated = "完整中文翻译。" * 100
+    renderer = ProvenanceRenderer(_Translator((translated,)))
+
+    rendered = renderer.render(
+        ProvenanceChain((ProvenanceNode("memory:long", original),))
+    )
+
+    assert original in rendered
+    assert f"中文：{translated}" in rendered
+    assert "…" not in rendered

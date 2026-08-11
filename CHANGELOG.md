@@ -20,6 +20,10 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Provenance queries now preserve complete node bodies internally; character
+  abbreviation belongs only to explicit presentation policies, and Reflection
+  Inbox/email renders complete original text and Chinese translations.
+
 - Reflection provenance now separates the final artifact from its producer
   Trace: the artifact owns title/body, while Trace shows only derivation facts
   and public decisions. Structured evidence references no longer repeat in
