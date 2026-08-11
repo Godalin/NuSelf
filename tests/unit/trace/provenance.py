@@ -196,3 +196,17 @@ def test_chain_keeps_an_explicit_tombstone(tmp_path: Path) -> None:
 
     assert chain.nodes[0].ref == "memory:missing"
     assert "tombstone" in chain.nodes[0].body
+
+
+def test_chain_preserves_complete_normalized_artifact_body(tmp_path: Path) -> None:
+    body = "First paragraph.\n\n" + "complete evidence " * 40
+    service = ProvenanceService(
+        TraceQueryService(_repository(tmp_path)),
+        artifact_resolver=_Resolver({"memory:long": body}),
+    )
+
+    chain = service.chain_for("memory:long")
+
+    assert chain.nodes[0].body == " ".join(body.split())
+    assert len(chain.nodes[0].body) > 240
+    assert not chain.nodes[0].body.endswith("…")

@@ -37,7 +37,7 @@ class TranslationItem(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     position: int = Field(ge=0)
-    chinese: str = Field(min_length=1, max_length=400)
+    chinese: str = Field(min_length=1)
 
 
 class TranslationOutput(BaseModel):
@@ -81,9 +81,10 @@ class LLMChineseTranslator:
                 SystemMessage(
                     content=(
                         "Translate every numbered provenance summary into "
-                        "concise, natural Simplified Chinese. Preserve names, "
-                        "IDs, numbers, and technical meaning. Return exactly "
-                        "one translation for every input position."
+                        "natural Simplified Chinese without omitting or "
+                        "summarizing any content. Preserve names, IDs, numbers, "
+                        "and technical meaning. Return exactly one complete "
+                        "translation for every input position."
                     )
                 ),
                 HumanMessage(content=numbered),
