@@ -19,6 +19,7 @@ from nuself.reflection.model import (
     EvidenceExcerpt,
     IdeaCandidate,
     IdeaCandidateType,
+    without_evidence_annotations,
 )
 from nuself.memory.service import MemoryService
 from nuself.source.service import SourceService
@@ -181,8 +182,9 @@ class IdeaCandidateGenerator:
             "Generate genuinely new connections, contradictions, questions, "
             "actions, or unnoticed patterns from the supplied private context. "
             "Do not summarize existing content or return generic observations."
-            " Every candidate must cite one or more bracketed evidence references "
-            "from the supplied context; copy those references exactly."
+            " Every candidate must copy one or more evidence references exactly "
+            "into its evidence_refs field. Do not append artifact references to "
+            "the candidate title or body."
         )
         if self._language_preference != "en":
             system += f"\n\nRespond in {self._language_preference}."
@@ -207,11 +209,17 @@ class IdeaCandidateGenerator:
                 raise ValueError(
                     "candidate cited evidence outside supplied context"
                 )
+            title = without_evidence_annotations(item.title)
+            body = without_evidence_annotations(item.body)
+            if not title or not body:
+                raise ValueError(
+                    "candidate prose cannot consist only of evidence references"
+                )
             candidates.append(
                 IdeaCandidate(
                     id=f"candidate-{prefix}-{now.microsecond:06d}",
-                    title=item.title,
-                    body=item.body,
+                    title=title,
+                    body=body,
                     candidate_type=item.candidate_type,
                     confidence=item.confidence,
                     novelty=item.novelty,

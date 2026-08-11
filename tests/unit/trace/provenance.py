@@ -60,6 +60,11 @@ def test_chain_orders_turn_traces_memory_and_reflection(tmp_path: Path) -> None:
             evidence_refs=("memory:mem-1",),
             outputs=("reflection:refl-1",),
             decision_points=("Relevance gate passed.",),
+            metadata={
+                "candidate_type": "connection",
+                "composite_score": 0.8,
+                "discussion_approved": None,
+            },
         )
     )
     service = ProvenanceService(
@@ -83,7 +88,12 @@ def test_chain_orders_turn_traces_memory_and_reflection(tmp_path: Path) -> None:
         f"trace:{reflection.id}",
         "reflection:refl-1",
     ]
+    assert chain.nodes[-2].body.startswith(
+        "Generated connection Reflection · evidence=1 · score=0.80"
+    )
     assert "decisions: Relevance gate passed." in chain.nodes[-2].body
+    assert "A new connection." not in chain.nodes[-2].body
+    assert chain.nodes[-1].body == "Connection: a new connection"
     assert chain.truncated is False
 
 

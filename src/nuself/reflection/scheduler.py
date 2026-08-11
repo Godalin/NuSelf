@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Protocol
 
 from nuself.config.settings import ReflectionSettings
-from nuself.reflection.model import IdeaCandidate, RelevanceScore
+from nuself.reflection.model import (
+    IdeaCandidate,
+    RelevanceScore,
+    without_evidence_annotations,
+)
 from nuself.inbox.link import DeepLink
 from nuself.inbox.model import InboxItem
 from nuself.runtime.context import RuntimeContext
@@ -68,8 +72,6 @@ class ReflectionTraceRecorder(Protocol):
         self,
         *,
         reflection_id: str,
-        title: str,
-        body: str,
         candidate_type: str,
         composite_score: float,
         discussion_approved: bool | None,
@@ -215,6 +217,20 @@ class ReflectionScheduler:
                 return False
             title = result.revised_title
             body = result.revised_body
+
+        title = without_evidence_annotations(title)
+        body = without_evidence_annotations(body)
+        if not title or not body:
+            REFLECTION_AUDIT.write(
+                "cycle_filtered",
+                "reflection prose contained only evidence annotations",
+                project_root=self._project_root,
+                metadata={
+                    "reason": "empty_prose",
+                    "score": float(score.composite),
+                },
+            )
+            return False
         
         entry = self._candidate_to_reflection_entry(
             best, now, score, title=title, body=body,
@@ -249,8 +265,6 @@ class ReflectionScheduler:
         try:
             self._trace_recorder.record_reflection_created(
                 reflection_id=entry.id,
-                title=entry.title,
-                body=entry.body,
                 candidate_type=entry.candidate_type,
                 composite_score=entry.composite_score,
                 discussion_approved=entry.discussion_approved,

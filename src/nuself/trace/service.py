@@ -126,8 +126,6 @@ class TraceRecorder:
         self,
         *,
         reflection_id: str,
-        title: str,
-        body: str,
         candidate_type: str,
         composite_score: float,
         discussion_approved: bool | None,
@@ -136,12 +134,16 @@ class TraceRecorder:
         decision_points: list[str] | None = None,
         metadata: dict[str, object] | None = None,
     ) -> ThoughtTrace:
+        validated_evidence = evidence_refs or []
         return self._record(
             kind="reflection",
-            title=title,
-            summary=body,
+            title=f"{candidate_type.replace('_', ' ').title()} Reflection generated",
+            summary=(
+                f"Generated {candidate_type} Reflection from "
+                f"{len(validated_evidence)} evidence artifact(s)."
+            ),
             outputs=[f"reflection:{reflection_id}"],
-            evidence_refs=evidence_refs or [],
+            evidence_refs=validated_evidence,
             participants=["reflection"],
             conversation_id=conversation_id,
             decision_points=decision_points or [],
