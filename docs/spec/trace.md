@@ -255,9 +255,10 @@ its output artifact.
 
 Traversal bounds apply to graph depth and node count, not to the content of an
 emitted node. `ProvenanceService` normalizes body whitespace but preserves the
-complete resolved body and complete public derivation summary. Character-level
-abbreviation is a presentation policy owned by a concrete renderer; it must
-not be applied to or persisted in the shared provenance query model.
+complete resolved body, public derivation summary, and public decision-point
+sequence. Character-level or list-length abbreviation is a presentation policy
+owned by a concrete renderer; it must not be applied to or persisted in the
+shared provenance query model.
 
 The Trace package owns graph traversal but not foreign-domain persistence. It
 accepts a narrow artifact-summary resolver composed at the application root.

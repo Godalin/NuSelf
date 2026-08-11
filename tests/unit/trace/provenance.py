@@ -59,7 +59,12 @@ def test_chain_orders_turn_traces_memory_and_reflection(tmp_path: Path) -> None:
             summary="A new connection.",
             evidence_refs=("memory:mem-1",),
             outputs=("reflection:refl-1",),
-            decision_points=("Relevance gate passed.",),
+            decision_points=(
+                "Relevance gate passed.",
+                "Novelty accepted.",
+                "Confidence accepted.",
+                "Discussion not required.",
+            ),
             metadata={
                 "candidate_type": "connection",
                 "composite_score": 0.8,
@@ -92,6 +97,7 @@ def test_chain_orders_turn_traces_memory_and_reflection(tmp_path: Path) -> None:
         "Generated connection Reflection · evidence=1 · score=0.80"
     )
     assert "decisions: Relevance gate passed." in chain.nodes[-2].body
+    assert "Discussion not required." in chain.nodes[-2].body
     assert "A new connection." not in chain.nodes[-2].body
     assert chain.nodes[-1].body == "Connection: a new connection"
     assert chain.truncated is False

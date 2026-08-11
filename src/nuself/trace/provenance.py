@@ -149,7 +149,7 @@ def _trace_body(trace: ThoughtTrace) -> str:
         return _reflection_trace_body(trace)
     body = f"{trace.kind}: {trace.summary}"
     if trace.decision_points:
-        decisions = " | ".join(trace.decision_points[:3])
+        decisions = " | ".join(trace.decision_points)
         body = f"{body} | decisions: {decisions}"
     return _normalized_body(body)
 
@@ -174,7 +174,7 @@ def _reflection_trace_body(trace: ThoughtTrace) -> str:
     elif discussion is None:
         parts.append("discussion=not required")
     if trace.decision_points:
-        parts.append("decisions: " + " | ".join(trace.decision_points[:3]))
+        parts.append("decisions: " + " | ".join(trace.decision_points))
     return _normalized_body(" · ".join(parts))
 
 
