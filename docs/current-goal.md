@@ -15,11 +15,16 @@ prove the complete local Reflection → Trace → Inbox → email flow succeeds.
 
 ## Next Steps
 
-1. Capture the exact Qwen/catalog reference mismatch without logging prose.
-2. Specify canonical and uniquely resolvable catalog reference forms.
-3. Implement closed-catalog normalization with strict unknown/ambiguity rejection.
-4. Validate against unit/full tests and the real local Qwen endpoint.
-5. Review, merge a feature PR, verify delivery, and return this file to Idle.
+1. [Complete] Capture the exact Qwen/catalog reference mismatch without
+   logging prose.
+2. [Complete] Specify canonical and uniquely resolvable catalog reference
+   forms.
+3. [Complete] Implement closed-catalog normalization with strict
+   unknown/ambiguity rejection and exact prose cleanup.
+4. [Complete] Validate focused/full tests and the real local Qwen endpoint;
+   confirm full Reflection → Trace → Inbox output and email/macOS delivery.
+5. [In progress] Review and merge the feature PR, then return this file to
+   Idle.
 
 ## Exclusions
 
