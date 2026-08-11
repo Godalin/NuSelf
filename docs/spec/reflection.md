@@ -146,6 +146,9 @@ and it does not remove an unvalidated bare value through fuzzy matching.
 
 Evidence selection is resolved only against the closed catalog supplied to the
 same model invocation. A returned canonical reference is accepted unchanged.
+A candidate-generation prompt presents each catalog reference as an unwrapped
+`namespace:id | content` field so its human-readable form is identical to the
+machine value the model must return.
 A returned bare artifact ID may be canonicalized only when it exactly equals
 the suffix after `:` of one and only one catalog reference. Unknown values and
 ambiguous suffixes reject the complete generated batch. This normalization is

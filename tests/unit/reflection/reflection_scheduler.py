@@ -921,8 +921,11 @@ def test_generator_keeps_structured_evidence_out_of_candidate_prose(
     assert generated.body == "A useful connection. It remains readable."
     assert generated.evidence_refs == ("memory:m1",)
     system_prompt = str(agent.messages[0][0].content)
+    context_prompt = str(agent.messages[0][1].content)
     assert "evidence_refs field" in system_prompt
     assert "Do not append artifact references" in system_prompt
+    assert "- memory:m1 |" in context_prompt
+    assert "[memory:m1]" not in context_prompt
 
 
 def test_generator_canonicalizes_unique_bare_catalog_ids(

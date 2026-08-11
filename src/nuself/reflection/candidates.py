@@ -160,15 +160,17 @@ class IdeaCandidateGenerator:
         return _ThinkingContext(
             conversations=_render_history(conversations),
             memories="\n".join(
-                f"- [memory:{entry.id}] [{entry.type}] {entry.title}: {entry.body[:120]}"
+                f"- memory:{entry.id} | [{entry.type}] "
+                f"{entry.title}: {entry.body[:120]}"
                 for entry in memories
             ),
             profile="\n".join(
-                f"- [profile:{item.id}] [{item.type}] {item.title}: {item.body[:120]}"
+                f"- profile:{item.id} | [{item.type}] "
+                f"{item.title}: {item.body[:120]}"
                 for item in profiles
             ),
             sources="\n".join(
-                f"- [source:{document.id}] {document.title or document.id}"
+                f"- source:{document.id} | {document.title or document.id}"
                 for document in sources
             ),
             evidence_catalog=evidence_catalog,
@@ -297,7 +299,7 @@ class _ThinkingContext:
 def _render_history(excerpts: tuple[ConversationHistoryExcerpt, ...]) -> str:
     lines: list[str] = []
     for excerpt in excerpts:
-        lines.append(f"Conversation [conversation:{excerpt.id}]:")
+        lines.append(f"Conversation conversation:{excerpt.id} |")
         lines.extend(
             f"  {message.role}: {message.content[:120]}"
             for message in excerpt.messages
