@@ -5,36 +5,21 @@ NuSelf's short-lived execution board. Completed history belongs in Git and
 
 ## Status
 
-Active — readable Reflection email provenance projection.
+Idle — no active implementation goal.
 
 ## Objective
 
-Keep the complete Memory → Trace → Reflection provenance graph while making
-Reflection Inbox/email output non-repetitive and making generation evidence,
-assessment, and decisions easy to scan.
+None.
 
 ## Next Steps
 
-1. [Complete] Specify the distinction between the stored provenance graph and
-   its Reflection notification projection.
-2. [Complete] Omit the terminal Reflection artifact block when the
-   notification body already presents that artifact.
-3. [Complete] Render Reflection generation Trace details as labeled multiline
-   fields and decision bullets.
-4. [In progress] Verify focused/full tests, diff review, CI, and merge a
-   feature PR into `dev/v0.4.x`.
+Define the next objective, ordered steps, exclusions, and completion evidence
+before beginning non-trivial work.
 
 ## Exclusions
 
-- Do not remove the terminal Reflection node from the provenance graph.
-- Do not merge the process Trace with the Reflection artifact.
-- Do not truncate evidence, decision points, or translations.
-- Do not introduce provider-specific rendering behavior.
+None.
 
 ## Completion Evidence
 
-- Stored provenance still resolves Memory → Trace → Reflection.
-- Reflection Inbox/email contains the Reflection body once.
-- The Trace block separates summary, evidence count, assessment, and each
-  decision without parsing or inferring evidence from prose.
-- Focused tests, Pyright, full suite, CI, and diff review pass.
+None.

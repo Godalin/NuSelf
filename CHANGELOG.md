@@ -20,6 +20,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection Inbox/email now presents the final Reflection body only once and
+  renders its producer Trace as labeled generation, basis, assessment, and
+  per-decision lines; the stored provenance graph still retains its terminal
+  Reflection artifact.
+
 - Provenance queries now preserve complete node bodies internally; character
   abbreviation belongs only to explicit presentation policies, and Reflection
   Inbox/email renders complete original text and Chinese translations.
