@@ -36,7 +36,7 @@ locks and Unix-domain sockets.
 - Independent Markdown and plain-text external knowledge library
 - Long-run reasoning threads and ordered, resolvable conversation/reason → memory → reflection provenance chains
 - API-separated conversation history, memory observations, and top-level reflection controls
-- Unified Inbox with log, email, and macOS delivery of reflection text plus compact provenance nodes that separate derivation facts from final prose
+- Unified Inbox with log, email, and macOS delivery of reflection text plus complete provenance nodes that separate derivation facts from final prose
 - Local SQLite authority, migration tooling, and portable thought packs
 - Transient retry plus ordered OpenAI-compatible/Anthropic endpoint failover
 - Structured diagnostics with credential redaction

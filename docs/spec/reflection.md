@@ -258,10 +258,16 @@ breaks and ordering as the authoritative plain-text body.
 
 The final provenance projection uses compact node blocks rather than a dense
 one-line list or a repeated section heading. Each block contains the node's
-stable short display ID on its first line and its bounded original body on its
+stable short display ID on its first line and its complete original body on its
 second line, followed by a Chinese translation line only when the original is
 English. One empty line separates adjacent nodes. If traversal was bounded, a
 final concise truncation marker follows the blocks.
+
+For Reflection Inbox and email, "bounded" refers only to provenance graph node
+count and depth. These renderers do not abbreviate node bodies or translations
+by character count; mail clients may wrap them visually without changing the
+stored Inbox projection. Other frontends may define their own explicit
+abbreviation policy without changing `ProvenanceService` output.
 
 English-node translation is one batched, structured model operation over the
 already bounded public summaries. Output must map exactly to the requested
