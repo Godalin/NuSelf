@@ -83,8 +83,9 @@ class LLMChineseTranslator:
                         "Translate every numbered provenance summary into "
                         "natural Simplified Chinese without omitting or "
                         "summarizing any content. Preserve names, IDs, numbers, "
-                        "and technical meaning. Return exactly one complete "
-                        "translation for every input position."
+                        "technical meaning, line breaks, labels, and bullet "
+                        "structure. Return exactly one complete translation "
+                        "for every input position."
                     )
                 ),
                 HumanMessage(content=numbered),

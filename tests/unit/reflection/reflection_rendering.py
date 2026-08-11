@@ -93,6 +93,9 @@ def test_llm_translator_requires_complete_position_preserving_output(
         "第二条。",
     )
     assert "[0] First." in str(agent.messages[0][-1].content)
+    assert "line breaks, labels, and bullet structure" in str(
+        agent.messages[0][0].content
+    )
 
 
 def test_renderer_preserves_long_original_and_translation() -> None:

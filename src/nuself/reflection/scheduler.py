@@ -471,8 +471,9 @@ class ReflectionScheduler:
                     f"{entry.title}: {entry.body}",
                 ),
             ))
+        notification_chain = _without_terminal_reflection(chain)
         try:
-            rendered_provenance = self._provenance_renderer.render(chain)
+            rendered_provenance = self._provenance_renderer.render(notification_chain)
         except Exception as exc:
             REFLECTION_AUDIT.failure(
                 exc,
@@ -482,7 +483,7 @@ class ReflectionScheduler:
                 metadata={"reflection_id": entry.id},
             )
             rendered_provenance = self._provenance_renderer.render(
-                chain,
+                notification_chain,
                 translate=False,
             )
         item = self._inbox.add(InboxItem(
@@ -490,9 +491,19 @@ class ReflectionScheduler:
             kind="reflection",
             source_id=entry.id,
             title=f"New reflection: {entry.title}",
-            body="\n\n".join([entry.body, rendered_provenance]),
+            body="\n\n".join(
+                part for part in (entry.body, rendered_provenance) if part
+            ),
             idempotency_key=f"reflection-{entry.id}",
             deep_link=entry.deep_link,
         ))
         if deliver:
             self._deliveries.request(item.id, context=item.context)
+
+
+def _without_terminal_reflection(chain: ProvenanceChain) -> ProvenanceChain:
+    """Project a chain for a notification whose body already is the root."""
+
+    if chain.nodes and chain.nodes[-1].ref.startswith("reflection:"):
+        return ProvenanceChain(chain.nodes[:-1], truncated=chain.truncated)
+    return chain
