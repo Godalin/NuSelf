@@ -30,9 +30,9 @@ def without_evidence_annotations(
     cleaned = _BRACKETED_EVIDENCE_REF.sub("", value)
     for canonical_ref in evidence_refs:
         _, separator, artifact_id = canonical_ref.partition(":")
-        cleaned = cleaned.replace(canonical_ref, "")
+        cleaned = _remove_exact_evidence_id(cleaned, canonical_ref)
         if separator:
-            cleaned = cleaned.replace(artifact_id, "")
+            cleaned = _remove_exact_evidence_id(cleaned, artifact_id)
     cleaned = re.sub(r"\(\s*(?:[,，]\s*)*\)", "", cleaned)
     cleaned = re.sub(r"（\s*(?:[,，]\s*)*）", "", cleaned)
     cleaned = re.sub(r"\s+([,，])", r"\1", cleaned)
@@ -40,6 +40,15 @@ def without_evidence_annotations(
     cleaned = re.sub(r"\s+([.!?。！？])", r"\1", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     return cleaned.strip()
+
+
+def _remove_exact_evidence_id(value: str, evidence_id: str) -> str:
+    boundary = r"A-Za-z0-9_-"
+    return re.sub(
+        rf"(?<![{boundary}]){re.escape(evidence_id)}(?![{boundary}])",
+        "",
+        value,
+    )
 
 
 @dataclass(frozen=True)

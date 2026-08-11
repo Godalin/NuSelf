@@ -871,11 +871,11 @@ def test_quiet_hours_non_wrapping_range() -> None:
 
 def test_evidence_annotation_cleanup_handles_validated_ids_and_punctuation() -> None:
     cleaned = without_evidence_annotations(
-        "中文（m1，m2），English (memory:m1, m2). Keep unknown-id.",
+        "中文（m1，m2），English (memory:m1, m2). Keep unknown-id and xm1x.",
         evidence_refs=("memory:m1", "profile:m2"),
     )
 
-    assert cleaned == "中文，English. Keep unknown-id."
+    assert cleaned == "中文，English. Keep unknown-id and xm1x."
 
 
 def test_generator_returns_empty_with_no_data(tmp_path: Path) -> None:
