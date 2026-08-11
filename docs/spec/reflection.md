@@ -135,6 +135,13 @@ contains at most three items.
 The model is owned and imported from `nuself.reflection.candidates`; the
 scheduler does not re-export it.
 
+`evidence_refs` is the only candidate field that carries artifact references.
+The generation prompt must tell the model not to append references to `title`
+or `body`. As a defensive presentation normalization, bracketed Memory,
+Profile, Source, or Conversation references are removed from candidate prose
+after their structured `evidence_refs` have been validated. NuSelf never
+recovers or infers evidence from prose.
+
 A malformed item rejects the complete generated batch and produces the
 existing empty result plus `candidate_generation_failed`. Candidate text is
 not parsed, missing fields are not defaulted, and scores are not clamped.

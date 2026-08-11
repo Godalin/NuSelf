@@ -20,6 +20,11 @@ This project follows the versioning rules in [`docs/spec/versioning.md`](docs/sp
 
 ### Changed
 
+- Reflection provenance now separates the final artifact from its producer
+  Trace: the artifact owns title/body, while Trace shows only derivation facts
+  and public decisions. Structured evidence references no longer repeat in
+  generated Reflection prose.
+
 - Reflection provenance in Inbox and email now uses spaced Git-like node
   blocks with typed stable short display IDs such as `mem-a1b2c3` and
   `trace-d4e5f6`, plus best-effort Chinese translations for English summaries,

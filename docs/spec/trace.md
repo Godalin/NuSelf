@@ -379,8 +379,15 @@ Reflection integration records provenance rather than hidden reasoning:
 - A published reflection copies those references into its trace
   `evidence_refs`. Its decision points contain bounded relevance/discussion
   decisions, never provider chain-of-thought.
-- Reflection notification bodies render a bounded "Why this reflection"
-  section containing the cited artifact references and public decision points.
+- The final Reflection artifact exclusively owns and renders its title/body.
+  Its producer Trace summary records derivation facts instead of copying that
+  prose: candidate type, evidence count, composite score, discussion
+  disposition, and bounded public decision points.
+- Ordered provenance applies that semantic projection to legacy Reflection
+  traces whose persisted summary copied the artifact body; no migration or
+  record rewrite is required.
+- Reflection notification bodies render the cited artifact chain and public
+  decision points without repeating the final Reflection prose.
 
 ## CLI Contract
 
