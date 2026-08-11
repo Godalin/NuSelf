@@ -271,11 +271,18 @@ or substitute a command-only message. HTML email must preserve the same line
 breaks and ordering as the authoritative plain-text body.
 
 The final provenance projection uses compact node blocks rather than a dense
-one-line list or a repeated section heading. Each block contains the node's
-stable short display ID on its first line and its complete original body on its
-second line, followed by a Chinese translation line only when the original is
-English. One empty line separates adjacent nodes. If traversal was bounded, a
-final concise truncation marker follows the blocks.
+one-line list or a repeated section heading. The persisted graph retains the
+terminal Reflection artifact, but a Reflection notification omits that final
+node because its complete body already opens the notification. This is a
+presentation rule only and does not modify provenance traversal or storage.
+
+Each remaining block contains the node's stable short display ID on its first
+line and its complete original body after it, followed by a Chinese translation
+only when the original is English. Reflection generation Trace bodies use
+separate labeled lines for the generation summary, evidence count, assessment,
+and decisions; each decision occupies its own bullet line. One empty line
+separates adjacent nodes. If traversal was bounded, a final concise truncation
+marker follows the blocks.
 
 For Reflection Inbox and email, "bounded" refers only to provenance graph node
 count and depth. These renderers do not abbreviate node bodies or translations
